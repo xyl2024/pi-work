@@ -20,13 +20,6 @@ interface NumericFieldProps {
   ariaLabel?: string;
 }
 
-/**
- * Styled integer setting field with deferred validation.
- *
- * Unlike NumberStepper, this component keeps a draft while editing and only
- * commits on blur/Enter. Invalid values roll back to the last accepted value,
- * which makes it suitable for settings backed by an API.
- */
 export function NumericField({
   value,
   onCommit,

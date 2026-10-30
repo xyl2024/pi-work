@@ -6,7 +6,6 @@ export type ThemePreset = "light" | "dark";
 
 export const PRESETS: ThemePreset[] = ["light", "dark"];
 
-/** Whether a preset uses dark background tones — used for syntax-highlighter themes. */
 export const PRESET_IS_DARK: Record<ThemePreset, boolean> = {
   light: false,
   dark: true,
@@ -43,12 +42,11 @@ export function useTheme() {
 
   const setPreset = useCallback((next: ThemePreset, origin?: ToggleOrigin) => {
     const apply = () => {
-      // Remove all preset classes, then add the new one
       for (const cls of Object.values(PRESET_CLASS)) {
         document.documentElement.classList.remove(cls);
       }
       document.documentElement.classList.add(PRESET_CLASS[next]);
-      try { localStorage.setItem("pi-theme", next); } catch { /* ignore */ }
+      try { localStorage.setItem("pi-theme", next); } catch {}
       listeners.forEach((cb) => cb());
     };
 
@@ -81,7 +79,7 @@ export function useTheme() {
           },
         );
       })
-      .catch(() => { /* transition cancelled — ignore */ });
+      .catch(() => {});
   }, []);
 
   return {

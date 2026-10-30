@@ -1,5 +1,3 @@
-// Terminal panel (bottom panel of AppShell, ttyd-backed).
-
 export const terminal = {
   "Terminal": "终端",
   "Open terminal": "打开终端",

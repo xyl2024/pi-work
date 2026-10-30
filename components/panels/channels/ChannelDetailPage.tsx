@@ -27,7 +27,6 @@ function shortenPath(p: string, max = 36): string {
   return "…" + p.slice(p.length - max + 1);
 }
 
-/** "12s" / "3m" / "1.2h" since an ISO timestamp. */
 function fmtAgo(iso: string): string {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
   if (s < 60) return `${Math.floor(s)}s`;
@@ -36,32 +35,17 @@ function fmtAgo(iso: string): string {
   return `${(m / 60).toFixed(1)}h`;
 }
 
-/** A retry countdown in seconds / ms. */
 function retryIn(retryInMs: number | null): string {
   if (retryInMs == null) return "0s";
   return retryInMs >= 1000 ? `${Math.round(retryInMs / 1000)}s` : `${Math.round(retryInMs)}ms`;
 }
 
-/**
- * The channels panel's detail page: one channel, one vertical scroll —
- * status / actions, identity, workspace, and (added by the following tickets)
- * the scan-login card, health block and activity feed. Full width, with a back
- * control and the live actions (rename, enable / disable, delete) up top.
- *
- * Every field here is a write-through item (ADR-0009): rename, enable / disable
- * and the workspace switch all land immediately, so this page has no save bar
- * and no unsaved-changes marker. The selected channel and the page stack live
- * in the module store, so a tab switch keeps the page.
- */
 export function ChannelDetailPage({ channelId }: { channelId: string }) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const { channels, busy, login: loginState } = useChannelsStore();
   const channel = channels.find((item) => item.id === channelId) ?? null;
-  // The live login session, only when it belongs to the channel on screen. A
-  // session for another channel keeps polling in the background but is not
-  // rendered here.
   const login = loginState.channelId === channelId ? loginState : null;
 
   const [renaming, setRenaming] = useState(false);
@@ -71,14 +55,10 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
   const [status, setStatus] = useState<ChannelStatusDetail | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Live channel status (identity + workspace + worker heartbeat). Volatile, so
-  // it stays on this page — not in the module store — and stops when the page
-  // unmounts (a tab switch or backing out to the list).
   const refreshStatus = useCallback(async () => {
     try {
       setStatus(await fetchChannelStatus(channelId));
     } catch {
-      // transient — the interval retries
     }
   }, [channelId]);
 
@@ -92,12 +72,10 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
     void fetchRecentCwds().then(setRecentCwds);
   }, []);
 
-  // When the channel is renamed (here or elsewhere) re-seed the rename input.
   useEffect(() => {
     setNameDraft(channel?.name ?? "");
   }, [channel?.name]);
 
-  // Close the workspace menu on outside click.
   useEffect(() => {
     if (!workspaceMenuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -109,8 +87,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [workspaceMenuOpen]);
 
-  // Toast the two terminal phases the user cares about; the list refresh on
-  // `confirmed` already happened in the store's poll.
   const loginPhase = loginState.channelId === channelId ? loginState.phase : null;
   useEffect(() => {
     if (loginPhase === "confirmed") {
@@ -149,8 +125,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
       setWorkspaceMenuOpen(false);
       const result = await setChannelWorkspace(channel.id, workspaceId);
       if (!result.ok) {
-        // Server machine codes (workspace_not_found …) are not i18n keys, so
-        // they pass through untranslated — same as the scheduler's errors.
         toast.show({ kind: "error", message: result.error ?? t("channels.operationFailed") });
         return;
       }
@@ -200,16 +174,11 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
     );
   }
 
-  // Prefer the live status over the possibly-stale record for identity /
-  // workspace, matching what the worker actually has.
   const userId = status?.userId ?? channel.userId;
   const accountId = status?.accountId ?? channel.accountId;
   const workspace = status?.currentWorkspaceId ?? channel.workspaceId;
   const workspaceBroken = status?.workspaceAvailable === false;
   const health = status?.health;
-  // All four health fields are always on screen (ticket #142): the worker line,
-  // then last poll · failures · next retry, with an em dash where the server has
-  // no value yet — a healthy channel shows "0 连续失败" rather than hiding it.
   const lastPollLine = health?.lastPollAt
     ? `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(health.lastPollAt) })}`
     : `${t("channels.healthLastPoll")} —`;
@@ -220,7 +189,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Header: back + name / rename + status */}
       <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <ChannelsBackButton />
         {renaming ? (
@@ -283,9 +251,7 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
         )}
       </div>
 
-      {/* One vertical scroll for the whole page body. */}
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, padding: "0 14px 18px" }}>
-        {/* Identity */}
         <section style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "4px 12px", padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
           <span style={{ color: "var(--text-muted)" }}>{t("channels.channelId")}</span>
           <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{channel.id}</code>
@@ -295,7 +261,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountId ?? "—"}</code>
         </section>
 
-        {/* Health: worker heartbeat, last poll, failures, retry countdown. */}
         <section style={{ display: "flex", flexDirection: "column", gap: 6, padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.healthWorker")}</span>
@@ -309,7 +274,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           </div>
         </section>
 
-        {/* Workspace */}
         <section ref={workspaceMenuRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 8, background: "var(--bg)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
             <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.currentWorkspace")}:</span>
@@ -376,7 +340,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           )}
         </section>
 
-        {/* Actions */}
         <section style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {channel.status === "connected" ? (
             <button
@@ -427,8 +390,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           </button>
         </section>
 
-        {/* Scan login: the QR code and phase live in the module store, so
-            switching tabs or collapsing the panel does not lose them. */}
         {login && login.sessionKey && (
           <section style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", padding: 12, borderRadius: 8, background: "var(--bg)" }}>
             {login.qrDataUrl && (
@@ -499,9 +460,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           </section>
         )}
 
-        {/* Activity feed: folded open by default, re-read on its own cadence.
-            It is volatile data, so it lives in the feed component — not the
-            module store — and reloads whenever this page remounts. */}
         <ChannelActivityFeed channelId={channel.id} />
       </div>
     </div>

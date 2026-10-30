@@ -5,18 +5,6 @@ import { join } from "node:path";
 import type { ProviderCallInsert } from "@/lib/shared/llm-audit-types";
 import type { ModelCallInsert } from "@/lib/shared/token-audit-types";
 
-/**
- * The download seam: given the assistant message the chat is showing
- * (`sessionId` + `message.timestamp`), find the HTTP request body that
- * produced it, formatted and named for a file download.
- *
- * The two facts live in two databases — the audit log knows requests and the
- * call id, the token-audit log knows which call produced which message — so
- * this is exercised against real temporary SQLite files. A missing/old record
- * must come back as `null` (the button reports "nothing captured") instead of
- * throwing or downloading an empty file.
- */
-
 const MESSAGE_ID = "1700000000000";
 const SESSION_ID = "session-1";
 
@@ -142,8 +130,6 @@ describe("getMessageRequestBody", () => {
   it("ignores requests of other calls and of the same message id in another session", () => {
     mods.recordModelCall(modelCall());
     mods.insertProviderCall(providerCall({ callId: "call-other", requestBody: `{"wrong":"call"}` }));
-    // Same message id, different session: the call id decides, so this one is
-    // not part of the message's call list.
     mods.recordModelCall(modelCall({ callId: "call-2", sessionId: "session-2" }));
     mods.insertProviderCall(
       providerCall({ callId: "call-2", sessionId: "session-2", requestBody: `{"wrong":"session"}` }),
@@ -153,7 +139,6 @@ describe("getMessageRequestBody", () => {
   });
 
   it("returns null for a message whose call predates request-body capture", () => {
-    // Old rows exist without a call id, so nothing can be attributed.
     mods.recordModelCall(modelCall({ callId: "call-legacy" }));
     mods.insertProviderCall(providerCall({ callId: null, requestBody: `{"legacy":true}` }));
 

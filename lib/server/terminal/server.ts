@@ -1,31 +1,3 @@
-/**
- * Standalone WebSocket terminal server for Pi Work.
- *
- * Runs on its own port (default 30142, override with PI_WORK_TERMINAL_PORT)
- * so the Next.js App Router — whose route handlers cannot accept WebSocket
- * upgrades — never needs a custom server. The frontend fetches { port, token }
- * from `GET /api/terminal` and connects with `?token=...` in the URL.
- *
- * Security: every connection is gated by a per-process random token. The
- * token is exposed only through the authenticated-enough `/api/terminal`
- * route (same trust boundary as the rest of Pi Work). The default bind host is
- * loopback; set PI_WORK_TERMINAL_HOST=0.0.0.0 to let LAN clients reach it with
- * the token. Desktop mode (PI_WORK_DESKTOP) forces loopback regardless — see
- * lib/shared/trust-boundary.ts.
- *
- * Protocol (JSON text frames):
- *   client → server: { type: "start", cwd, sessionId? } | { type: "data", data }
- *                    | { type: "resize", cols, rows } | { type: "kill", sessionId? }
- *   server → client: { type: "data", data } | { type: "exit", code }
- *                    | { type: "error", message }
- *
- * Sessions survive WebSocket disconnects: each `start` names a client-chosen
- * `sessionId`; the server keeps the pty alive (plus a scrollback ring buffer)
- * in a registry so a page refresh can re-attach by sending `start` with the
- * same `sessionId` — the buffered output is replayed first. A pty is only
- * killed by an explicit `kill` message or when it exits on its own.
- */
-
 import { createServer, type Server } from "http";
 import { randomBytes } from "crypto";
 import { existsSync, statSync } from "fs";
@@ -49,40 +21,30 @@ export interface TerminalServerInfo {
   token: string;
 }
 
-// The runtime lives on globalThis — like rpc-manager's __piSessions — so a
-// dev-mode hot reload (which re-evaluates this module) never double-binds the
-// port: a stale module instance sees the existing runtime and reuses it.
 interface TerminalRuntime {
   httpServer: Server;
   wss: WebSocketServer;
   info: TerminalServerInfo;
-  /** sessionId → live pty session; survives page refreshes and ws reconnects. */
   sessions: Map<string, TerminalSession>;
 }
 
 interface TerminalSession {
   pty: pty.IPty;
-  /** Scrollback replay buffer (joined chunks, capped at MAX_BUFFER_BYTES). */
   buffer: string[];
   bufferSize: number;
-  /** Currently attached WebSocket clients (may be 0 while the tab is hidden). */
   clients: Set<WebSocket>;
   createdAt: number;
 }
 
-/** Cap on the replayed scrollback per session (bytes of UTF-16 string data). */
 const MAX_BUFFER_BYTES = 512 * 1024;
-/** Cap on simultaneously kept-alive sessions; the oldest is reaped first. */
 const MAX_SESSIONS = 50;
 
 const g = globalThis as unknown as { __piTerminalRuntime?: TerminalRuntime };
 
-/** Info the frontend needs to connect: the WS port plus the auth token. */
 export function getTerminalInfo(): TerminalServerInfo | null {
   return g.__piTerminalRuntime?.info ?? null;
 }
 
-/** Expand a leading "~" to the home dir; reject non-absolute, missing or non-dir paths. */
 function normalizeCwd(cwd: string): { ok: true; path: string } | { ok: false; message: string } {
   const expanded = cwd === "~" || cwd.startsWith("~/") ? cwd.replace(/^~/, homedir()) : cwd;
   if (!isAbsolute(expanded)) {
@@ -122,13 +84,11 @@ function killSession(sessions: Map<string, TerminalSession>, sessionId: string):
   try {
     session.pty.kill();
   } catch {
-    // already dead
   }
 }
 
 function handleConnection(ws: WebSocket): void {
   const sessions = g.__piTerminalRuntime?.sessions;
-  /** Sessions this connection currently has attached (for cleanup on close). */
   const attached = new Set<TerminalSession>();
 
   const send = (obj: Record<string, unknown>): void => {
@@ -144,20 +104,6 @@ function handleConnection(ws: WebSocket): void {
 
   const spawnSession = (sessionId: string, cwdPath: string): TerminalSession | null => {
     if (!sessions) return null;
-    // We explicitly build the pty env from a sanitised copy of
-    // `process.env` rather than passing `{ ...process.env }`:
-    // the launcher (`pi-work-start`) injects `NODE_ENV=production`,
-    // `PORT=14514`, `HOSTNAME`, internal tokens, WSL/Win interop
-    // vars, and a long `PATH` that includes Windows-side bins.
-    // Without this scrub the user opens their terminal and
-    // immediately finds `npm`/`git`/`code` behave as if they're
-    // running inside the Pi Work production server.
-    //
-    // Build the env explicitly so this code path remains safe even
-    // when instrumentation is skipped (e.g. NEXT_RUNTIME !== "nodejs").
-    // `TERM` is forced to `xterm-256color` because that's what the
-    // front-end xterm.js advertises; preserving the host's TERM
-    // can mislead the shell into 16-colour mode.
     let ptyProcess: pty.IPty;
     const shell = currentInteractiveShell();
     try {
@@ -188,7 +134,6 @@ function handleConnection(ws: WebSocket): void {
       broadcast(session, { type: "data", data });
     });
     ptyProcess.onExit(({ exitCode }) => {
-      // Session is gone once its shell exits — clear the registry entry.
       if (sessions.get(sessionId) === session) sessions.delete(sessionId);
       attached.delete(session);
       session.clients.clear();
@@ -201,8 +146,6 @@ function handleConnection(ws: WebSocket): void {
   const attachSession = (sessionId: string, session: TerminalSession): void => {
     session.clients.add(ws);
     attached.add(session);
-    // Replay the scrollback first; the JS event loop guarantees no pty `data`
-    // event interleaves between the replay and the return of this handler.
     if (session.buffer.length > 0) send({ type: "data", data: session.buffer.join("") });
   };
 
@@ -224,8 +167,6 @@ function handleConnection(ws: WebSocket): void {
         }
         const existing = sessions?.get(sessionId);
         if (existing) {
-          // Re-attach: keep the live shell and replay its scrollback. The
-          // client follows up with `resize` to match its current dimensions.
           attachSession(sessionId, existing);
           return;
         }
@@ -241,12 +182,10 @@ function handleConnection(ws: WebSocket): void {
       case "data": {
         const data = msg.data;
         if (typeof data !== "string") break;
-        // Write to every attached session (in practice exactly one).
         for (const session of attached) {
           try {
             session.pty.write(data);
           } catch {
-            // shell may be mid-exit — ignore
           }
         }
         break;
@@ -259,7 +198,6 @@ function handleConnection(ws: WebSocket): void {
           try {
             session.pty.resize(cols, rows);
           } catch {
-            // shell may be mid-exit — ignore
           }
         }
         break;
@@ -269,7 +207,6 @@ function handleConnection(ws: WebSocket): void {
         if (sessionId) {
           killSession(sessions ?? new Map(), sessionId);
         } else {
-          // Legacy/no-id kill: tear down everything this connection attached.
           if (sessions) for (const session of attached) {
             for (const [key, value] of sessions) if (value === session) killSession(sessions, key);
           }
@@ -282,9 +219,6 @@ function handleConnection(ws: WebSocket): void {
     }
   });
 
-  // Disconnecting does NOT kill the pty — sessions are kept alive so the
-  // frontend can re-attach after a page refresh. Clients send an explicit
-  // `kill` when they really want the shell gone.
   ws.on("close", () => {
     for (const session of attached) session.clients.delete(ws);
     attached.clear();
@@ -295,17 +229,12 @@ function handleConnection(ws: WebSocket): void {
   });
 }
 
-/**
- * Boot the terminal server. Idempotent — safe to call from both
- * `instrumentation.ts` and the `/api/terminal` route.
- */
 export async function startTerminalServer(): Promise<TerminalServerInfo> {
   if (g.__piTerminalRuntime) return g.__piTerminalRuntime.info;
 
   const token = randomBytes(32).toString("hex");
   const wss = new WebSocketServer({ noServer: true });
   const httpServer: Server = createServer((_req, res) => {
-    // Minimal HTTP endpoint so the port is easy to probe/health-check.
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
   });

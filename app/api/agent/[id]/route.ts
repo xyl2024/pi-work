@@ -14,7 +14,6 @@ import { openSubagentChildSession } from "@/lib/server/subagent-tasks";
 
 const log = createLogger("api/agent/[id]");
 
-/** HTTP status for one manual-input refusal. */
 const MANUAL_ERROR_STATUS: Record<SubagentManualInputError["code"], number> = {
   "not-subagent": 404,
   busy: 409,
@@ -23,13 +22,6 @@ const MANUAL_ERROR_STATUS: Record<SubagentManualInputError["code"], number> = {
   invalid: 400,
 };
 
-/**
- * A child session's own chat input and stop button are the same kind of work as
- * the parent agent's `subagent` action: they go through the task manager, never
- * through a raw prompt/abort on the session. Anything else about the child
- * session (state reads, tool changes, an explicit permission-mode switch) keeps
- * the normal path — the child stays a subagent but remains inspectable.
- */
 function handleSubagentChildCommand(
   id: string,
   body: { type: string; [key: string]: unknown },
@@ -39,10 +31,6 @@ function handleSubagentChildCommand(
   if (!owner) return null;
 
   if (body.type === "abort") {
-    // Stop the task this session is running, not a raw abort: the task stays
-    // `stopping` until the turn confirms, and a later task is never touched.
-    // With nothing tracked there is nothing for the manager to stop, so the
-    // command falls through to the session (a compaction, for example).
     const stopped = stopSubagentTaskForChildSession(id);
     if (!stopped) return null;
     return NextResponse.json({ success: true, data: { stopped: true, ...stopped } });
@@ -57,7 +45,6 @@ function handleSubagentChildCommand(
   return NextResponse.json({ success: true, data: submitted });
 }
 
-// POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -70,9 +57,6 @@ export async function POST(
     const commandType = typeof body.type === "string" ? body.type : "unknown";
     log.info("agent command requested", { id, commandType });
 
-    // Before touching a wrapper: a known child session's input and stop belong
-    // to the task manager (one unfinished task per child, the global queue,
-    // dedupe and the parent's stop-all all apply).
     const manual = handleSubagentChildCommand(id, body);
     if (manual) {
       log.info("agent command handled as subagent task", {
@@ -83,17 +67,12 @@ export async function POST(
       return manual;
     }
 
-    // Resolve the wrapper that will process this command: reuse a live one, or
-    // cold-start from the session file when it isn't in memory yet.
     let sendWrapper: AgentSessionWrapper | null = null;
     let sessionSource = "existing";
     const existing = getRpcSession(id);
     if (existing?.isAlive()) {
       sendWrapper = existing;
     } else {
-      // A child session reopens with the configuration frozen when it was
-      // created and keeps its subagent identity (no subagent tool, no ordinary
-      // user session); anything else follows the ordinary start path.
       const childSession = await openSubagentChildSession(id);
       if (childSession) {
         sendWrapper = childSession;
@@ -133,13 +112,6 @@ export async function POST(
   }
 }
 
-// GET /api/agent/[id] - Get current agent state
-//
-// Lazy-boots the RPC session when it isn't alive yet (mirrors the events
-// endpoint). Without this, a freshly-started server that loads an existing
-// session reports { running: false } with no `state`, so the client never
-// learns the session's systemPrompt and the Context panel stays stuck on
-// "main session initializing…" until it is fetched again.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -162,9 +134,6 @@ export async function GET(
           ?? (await startRpcSession(id, filePath, cwd)).session;
         log.debug("agent state started session", { id, durationMs: elapsedMs(startedAt) });
       } catch (startError) {
-        // Boot failed — degrade to the old calm response instead of 500
-        // so read-only consumers (readiness gates, refresh buttons) can
-        // retry later once the wrapper is alive.
         log.warn("agent state failed to start session", { id, error: String(startError), durationMs: elapsedMs(startedAt) });
         return NextResponse.json({ running: false });
       }

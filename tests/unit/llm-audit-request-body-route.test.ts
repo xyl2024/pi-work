@@ -5,14 +5,6 @@ import { join } from "node:path";
 import type { ProviderCallInsert } from "@/lib/shared/llm-audit-types";
 import type { ModelCallInsert } from "@/lib/shared/token-audit-types";
 
-/**
- * `GET /api/llm-audit/messages/[messageId]/request-body?sessionId=…` — the
- * chat's download action. Driven at the route level (real `Request`, real temp
- * SQLite files) because the contract that matters is the HTTP one: an
- * attachment a browser will save, and a clear 404 when the request was never
- * captured (so the button can say so instead of downloading an empty file).
- */
-
 const MESSAGE_ID = "1700000000000";
 const SESSION_ID = "session-1";
 

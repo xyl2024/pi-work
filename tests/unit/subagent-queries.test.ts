@@ -30,16 +30,6 @@ import {
   type SubagentTaskManager,
 } from "@/lib/server/subagent-tasks";
 
-/**
- * Read-side behavior of the subagent lifecycle: list grouping/paging/filtering,
- * task and session lookups, bounded windows, ownership and the "effective"
- * status that keeps a dead `running` row from being polled forever.
- *
- * Rows live in a temp `subagents.db`; the transcript/activity cases write a real
- * child session JSONL under a temp agent dir. Neither `~/.pi` nor `~/.pi-work`
- * is touched.
- */
-
 let dir: string;
 let agentDir: string;
 let savedAgentDir: string | undefined;
@@ -80,8 +70,6 @@ afterAll(() => {
 beforeEach(() => {
   resetGlobals();
   live.clear();
-  // A manager that manages nothing: any non-terminal row the test leaves behind
-  // must then be reported as interrupted, not as running.
   const manager: SubagentTaskManager = {
     spawn() {
       throw new Error("spawn is not used by the query tests");
@@ -110,7 +98,6 @@ afterEach(() => {
   setSubagentTaskManagerForTests(null);
 });
 
-/** A child session file the way pi writes it: header + message entries. */
 function writeChildSession(
   sessionId: string,
   messages: Array<{ role: string; content: unknown }>,
@@ -151,7 +138,6 @@ interface SeedInput {
   error?: string;
 }
 
-/** Create one persisted task in the requested state. */
 function seedTask(input: SeedInput): string {
   const taskId = `subagent:${randomUUID()}`;
   createSubagentTask({
@@ -257,7 +243,6 @@ describe("list", () => {
     seedTask({ parent, child: "child-done", status: "completed" });
     const running = seedTask({ parent, child: "child-live", status: "running" });
     live.set(running, "running");
-    // A row left behind by a dead process is not "running" any more.
     seedTask({ parent, child: "child-stale", status: "running" });
 
     const runningList = listSubagentSessions({ parentSessionId: parent, status: "running" });
@@ -284,8 +269,6 @@ describe("effective status", () => {
 
     expect(resolveSubagentTaskStatus(row)).toBe("interrupted");
     expect(toSubagentTaskView(row).status).toBe("interrupted");
-    // This query only reports; rewriting stale rows is the manager's job when
-    // it starts (`reconcileInterruptedSubagentTasks`).
     expect(findSubagentTask(taskId)!.status).toBe("running");
   });
 
@@ -326,8 +309,6 @@ describe("get by task_id", () => {
       taskId,
       resultOffset: first.result!.nextOffset!,
     });
-    // The tail still "skips" the earlier window: the caller can tell that this
-    // is not the whole result, and there is nothing left to read.
     expect(rest.result).toMatchObject({
       offset: SUBAGENT_RESULT_WINDOW_DEFAULT,
       skipped: SUBAGENT_RESULT_WINDOW_DEFAULT,
@@ -396,8 +377,6 @@ describe("get by task_id", () => {
     expect(detail.activities.map((activity) => activity.toolName)).toEqual(["read", "codemode"]);
     expect(detail.activities[0].summary).toBe("/b.ts");
 
-    // The reader caches by session mtime, so a second, narrower read must still
-    // get its own slice (and a zero window must not leak the cached array).
     const narrower = await getSubagentTaskDetail({ parentSessionId: parent, taskId, activityLimit: 1 });
     expect(narrower.activities).toHaveLength(1);
     expect(narrower.activityCount).toBe(3);
@@ -431,7 +410,6 @@ describe("get by task_id", () => {
     expect(page.transcript!.messages[1].text).toHaveLength(2_000);
     expect(page.transcript!.messages[1]).toMatchObject({ totalLength: 2_500, skipped: 0, nextCharOffset: 2_000 });
 
-    // Continuing the truncated message: same message index, bumped char offset.
     const messageRest = await getSubagentTaskDetail({
       parentSessionId: parent,
       taskId,

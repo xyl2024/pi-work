@@ -1,11 +1,6 @@
-// Settings modal — all of ~/.pi-work/config.yaml sections plus Agent
-// retry settings and file preview size limits.
-
 export const settings = {
-  // System prompt replacements
   "Settings": "设置",
   "Settings sections": "设置项导航",
-  // Settings modal groups (registry.ts)
   "Personal": "个人",
   "Interface & appearance": "界面与外观",
   "Agent": "Agent",
@@ -93,7 +88,6 @@ export const settings = {
   "search": "搜索字符串",
   "replace": "替换为",
 
-  // System prompt: append file (~/.pi/agent/APPEND_SYSTEM.md) + loader toggles
   "System Prompt": "系统提示词",
   "Append System Prompt": "追加系统提示词",
   "Loading on": "已启用加载",
@@ -103,22 +97,18 @@ export const settings = {
   "Append system prompt saved": "追加系统提示词已保存",
   "Failed to save append system prompt": "保存追加系统提示词失败",
 
-  // Pi documentation loader toggle (~/.pi-work/config.yaml → load_pi_docs)
   "Pi documentation": "Pi 文档",
 
-  // Right-side button bar: visibility + order share one list
   "Right-side buttons": "右侧按钮",
   "Button order": "按钮顺序",
   "Enable button": "启用",
   "Disable button": "关闭",
-  // Order-list groups (the column stacks session-bound and other buttons)
   "All buttons": "全部按钮",
   "Session-bound buttons": "会话绑定按钮",
   "Other buttons": "其他按钮",
   "top section": "上方",
   "bottom section": "下方",
 
-  // Session-bound button vertical alignment
   "Session-bound button alignment": "会话绑定按钮对齐",
   "Align session-bound buttons to the top": "会话绑定按钮顶部对齐",
   "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
@@ -127,7 +117,6 @@ export const settings = {
   "Ask User Questions": "Ask User Questions（向用户提问）",
   "No tools available": "此项目下没有可用工具",
 
-  // File preview size limits (Settings modal + file viewer 413)
   "File preview limits": "文件预览大小",
   "Max size for text / code files": "文本 / 代码文件最大大小",
   "Max size for image files": "图片文件最大大小",
@@ -140,11 +129,6 @@ export const settings = {
   "Text (file kind)": "文本",
   "PDF (file kind)": "PDF",
 
-  // Agent retry settings (~/.pi/agent/settings.json → retry.*)
-  // Note: a generic "Retry" key already exists for the HTTP debug panel
-  // button. We use "Agent retry" for this section to avoid the
-  // object-literal duplicate-key error while keeping the existing
-  // button label untouched.
   "Agent retry": "异常重试",
   "Enable retry": "启用重试",
   "Max retries": "最大重试次数",
@@ -159,7 +143,6 @@ export const settings = {
   "{seconds}s, {seconds2}s, {seconds3}s… (exponential, max {max} retries)": "{seconds}s, {seconds2}s, {seconds3}s…（指数退避，最多 {max} 次）",
   "Applies to new sessions only — active sessions keep their current settings.": "只对新会话生效——当前会话仍使用原有设置。",
 
-  // UI sounds
   "UI Sounds": "界面音效",
   "Restore sound defaults": "恢复音效默认",
   "Sound defaults restored": "音效默认已恢复",
@@ -185,7 +168,6 @@ export const settings = {
   "sea-breeze": "海风",
   "celebration": "欢庆",
 
-  // Network proxy (~/.pi-work/config.yaml → network_proxy)
   "Network proxy": "网络代理",
   "Use proxy": "启用代理",
   "Enter a proxy address first — it is required to enable or test the proxy.":

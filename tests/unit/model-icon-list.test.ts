@@ -4,8 +4,6 @@ import {
   shouldCollapseModelIconList,
 } from "@/lib/shared/model-icon-list";
 
-/** Collapse rule for a provider detail page's model list — plain data, no DOM. */
-
 describe("shouldCollapseModelIconList", () => {
   it("keeps short lists fully expanded", () => {
     expect(shouldCollapseModelIconList(0)).toBe(false);

@@ -6,22 +6,13 @@ import { getSlashQuery, rankSlashResources, type SlashResource } from "@/lib/sha
 import { BUILTIN_SLASH_ACTIONS, SLASH_PAGE_SIZE } from "../constants";
 
 export interface UseSlashMenuOptions {
-  /** Active session id — used as a reset trigger for the slash menu state. */
   slashResourceKey: string | undefined;
-  /** Slash resources catalog from the backend. */
   slashResources: SlashResource[];
-  /** Parent-callback for built-in actions like "new" / "compact". */
   onSlashAction?: (action: string) => void;
-  /** Current textarea value, kept in sync with the parent's `setValue`. */
   value: string;
-  /** Current caret position. */
   cursorPosition: number;
-  /** Callback to update the parent's value (used when applying a slash
-   *  command, which strips the typed prefix). */
   setValue: (next: string | ((prev: string) => string)) => void;
   setCursorPosition: (pos: number) => void;
-  /** Ref to the textarea so the hook can refocus + reset its height after
-   *  applying a slash command. */
   textareaRef: RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -37,27 +28,11 @@ export interface UseSlashMenuResult {
   slashCurrentPage: number;
   setSlashMenuOpen: (open: boolean) => void;
   setSelectedSlashResource: (resource: SlashResource | null) => void;
-  /** Apply a slash resource: for built-in actions, fires `onSlashAction`
-   *  directly; for skills, records it as the selected resource
-   *  so `formatSlashContent` runs at send time. */
   selectSlashResource: (item: SlashResource) => void;
-  /** Handle arrow / enter / escape keys while the slash menu is open.
-   *  Returns `true` if the event was consumed (the parent should early-return). */
   handleSlashKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
-  /** Sync the menu open/close state after a text edit or caret move
-   *  (typing also fires `select`). The menu only appears when the caret
-   *  sits right after a freshly typed `/`; while it is open, further
-   *  edits / caret moves keep it up as long as a slash token is still
-   *  active at the caret (filtering), otherwise it closes. */
   syncSlashMenuForEdit: (value: string, cursor: number) => void;
 }
 
-/**
- * Slash-command menu: filter the catalog by the typed prefix, paginate the
- * results, and own the cursor / keyboard navigation. Built-in `/new` and
- * `/compact` actions fire through `onSlashAction` instead of being
- * recorded as a selected resource.
- */
 export function useSlashMenu({
   slashResourceKey,
   slashResources,
@@ -73,9 +48,6 @@ export function useSlashMenu({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [slashPage, setSlashPage] = useState(0);
 
-  // Reset menu state when the slash catalog key changes (the parent keys
-  // the catalog by session id + a refetch counter; resets here mean the
-  // user never sees stale items after switching projects or refreshing).
   useEffect(() => {
     setSelectedSlashResource(null);
     setSlashMenuOpen(false);
@@ -120,7 +92,6 @@ export function useSlashMenu({
         const ta = textareaRef.current;
         const cursor = ta?.selectionStart ?? cursorPosition;
         const query = getSlashQuery(value, cursor);
-        // Strip just the typed `/token`, keeping any surrounding text.
         const nextValue = query ? value.slice(0, query.start) + value.slice(cursor) : "";
         setValue(nextValue);
         setCursorPosition(query ? query.start : 0);
@@ -159,9 +130,6 @@ export function useSlashMenu({
     [cursorPosition, value, onSlashAction, textareaRef, setValue, setCursorPosition],
   );
 
-  /** Re-evaluate the menu after a user edit or caret move: open only when
-   *  a `/` was just typed at the caret; keep open (filtering) while the
-   *  caret is still at the end of the same slash token; close otherwise. */
   const syncSlashMenuForEdit = useCallback(
     (v: string, cursor: number) => {
       setSlashMenuOpen((prev) => {
@@ -189,14 +157,12 @@ export function useSlashMenu({
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        // Wrap around: right past the last page lands on the first page.
         setSlashPage((page) => (page >= slashPageCount - 1 ? 0 : page + 1));
         setSlashActiveIndex(0);
         return true;
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        // Wrap around: left past the first page lands on the last page.
         setSlashPage((page) => (page <= 0 ? slashPageCount - 1 : page - 1));
         setSlashActiveIndex(0);
         return true;

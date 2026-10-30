@@ -6,13 +6,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/cwd-aliases");
 
-/**
- * Per-cwd display alias mapping (absolute cwd path → user-set alias),
- * stored in ~/.pi-work/config.yaml under `cwd_aliases`. Reads and writes
- * bypass the full SettingsModal flow because these are set per-project
- * from the sidebar, not from the settings modal.
- */
-
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -36,8 +29,6 @@ export async function POST(req: Request) {
     const config = readConfig();
     const next: Record<string, string> = { ...config.cwd_aliases };
 
-    // alias === null/undefined/empty clears the override; otherwise must be
-    // a non-empty string (trimmed, bounded to keep config.yaml sane).
     const alias = typeof body.alias === "string" ? body.alias.trim() : "";
     if (alias.length === 0) {
       delete next[body.cwd];

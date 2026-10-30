@@ -13,8 +13,6 @@ import { SUN, MOON } from "@/lib/client/icon-paths";
 interface Props {
   onOpenSettings?: () => void;
   refreshKey?: number;
-  /** Sign-out entry (POST /api/auth/session/logout + reload). Rendered only
-   *  when provided. */
   onLogout?: () => void;
 }
 
@@ -58,10 +56,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  // Hover-driven open: hovering the avatar (or the popup itself) opens
-  // the menu; leaving both triggers a delayed close so the cursor has time
-  // to traverse the gap between them. Click still toggles for keyboard /
-  // touch users — it's the accessibility fallback, not the primary trigger.
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const HOVER_CLOSE_DELAY_MS = 250;
 
@@ -85,9 +79,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
     setMenuOpen(true);
   }, [cancelClose]);
 
-  // Theme toggle: flip between light/dark, passing the button's screen
-  // coords to setPreset so the global startViewTransition clip-path can
-  // radiate from the click instead of the viewport center.
   const handleToggleTheme = useCallback((e: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setPreset(isDark ? "light" : "dark", {
@@ -96,8 +87,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
     });
   }, [isDark, setPreset]);
 
-  // Tooltip / aria text spells out the destination language: the glyph only
-  // shows where you are, so the label has to say where the click takes you.
   const nextLocaleLabel = `${t("Switch language")} → ${t(locale === "zh" ? "English" : "Chinese")}`;
 
   useEffect(() => () => cancelClose(), [cancelClose]);
@@ -123,14 +112,11 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  // Optimistically try to load the avatar on every refreshKey change.
-  // If the server has no avatar (404), the onError handler clears avatarOk.
   useEffect(() => {
     setAvatarAttempted((n) => n + 1);
     setAvatarOk(true);
   }, [refreshKey]);
 
-  // Close the menu on outside click.
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -159,10 +145,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
         alignItems: "center",
         gap: 8,
         background: "var(--bg-panel)",
-        // Always stick to the bottom of the sidebar: when every collapsible
-        // section is folded the sections contribute no flex-grow, so this
-        // auto margin absorbs the leftover space instead of leaving the row
-        // dangling above an empty gap.
         marginTop: "auto",
       }}
     >
@@ -246,12 +228,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
         </span>
       </button>
 
-      {/* Language toggle — icon-only, two-state glyph: 「中」 while the UI is
-          Chinese, 「英」 while it is English, so the button always shows the
-          current language and clicking swaps to the other one. Keyed by
-          `locale` so React remounts the glyph and replays the lang-swap-in
-          entrance (same animation as TranslatePanel's target-language
-          toggle). */}
       <Tooltip content={nextLocaleLabel}>
         <button
           onClick={toggleLocale}
@@ -283,9 +259,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
         </button>
       </Tooltip>
 
-      {/* Theme toggle — morphs sun↔moon with morphicons so the icon swap
-          animates alongside the global startViewTransition. `active` is the
-          dark state because the morph drives from → to when active flips. */}
       <Tooltip content={t("Switch theme")}>
         <button
           onClick={handleToggleTheme}
@@ -327,12 +300,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
         </Tooltip>
       )}
 
-      {/* Always-mounted menu — `menuOpen` toggles the scale/fade transition
-          so both open and close animate (conditional render would snap).
-          Width matches the sidebar content column (left/right 10px padding,
-          same as the avatar row) so the menu reads as sidebar-width, not a
-          stray 160px chip. transform-origin: bottom left makes it visibly
-          grow out of the avatar instead of the page center. */}
       {hasAnyEntry && (
         <div
           role="menu"
@@ -346,14 +313,9 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
             left: 10,
             right: 10,
             zIndex: 100,
-            // Acrylic (frosted glass): semi-transparent panel tint over a
-            // backdrop blur. Standard sidebar popover material.
             background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
-            // Edge matches the surrounding sidebar/chat/right-panel cards
-            // (var(--border)) so the translucent popover reads as part of
-            // the same family rather than a heavier overlay.
             border: "1px solid var(--border)",
             borderRadius: 10,
             padding: 4,

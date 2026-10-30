@@ -9,15 +9,6 @@ import { Field, TextInput, Check, SectionTitle, IconField, Select } from "./form
 import { ThinkingLevelMapEditor } from "./ThinkingLevelMapEditor";
 import { hasDeepseekCompat, setDeepseekCompat } from "./utils";
 
-/**
- * The editable model fields — id, display name, icon, API override, reasoning /
- * image flags, the DeepSeek compat toggle, the thinking-level map, the context
- * and output limits and the four cost columns.
- *
- * It carries no header actions and no raw-JSON view: the panel's model page
- * wraps it with the actions that fit its surface, the same way `ProviderFields`
- * is shared.
- */
 export function ModelFields({
   model,
   onChange,

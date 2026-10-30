@@ -1,15 +1,3 @@
-// The Electron shell's server process: electron-shell/server-process.js decides
-// whether this launch needs one, what it is launched with (configured env +
-// command line), how the window is signed for, and how it is stopped.
-// Every fact it needs arrives as an argument, so all of it can be driven from
-// here without Electron, a server or a spawn (same shape as
-// tests/unit/electron-shell-window-rules.test.ts).
-//
-// Two of those facts are *duplicated* from the server side on purpose — the
-// shell is plain CommonJS with no bundler, so it cannot import
-// lib/server/auth.ts. The drift is caught here instead: the last describe block
-// feeds a shell-signed token to the server's own verifier and compares the
-// cookie name/TTL with the ones the server exports.
 import { existsSync, readFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -36,17 +24,14 @@ const PI_WORK_BIN = path.join(APP_ROOT, "bin", "pi-work.js");
 const SERVER_PROCESS = path.join(APP_ROOT, "electron-shell", "server-process.js");
 const LINUX_RUNTIME = path.join("/opt/pi-work/resources/runtime", "node");
 
-/** A `existsSync` stand-in: only the listed paths exist. */
 const onlyExisting =
   (...paths: string[]) =>
   (candidate: unknown) =>
     paths.includes(String(candidate));
 
-/** The env builder returns a plain bag of strings; index it as one. */
 const asEnv = (env: unknown): Record<string, string | undefined> =>
   env as Record<string, string | undefined>;
 
-/** Bind the port for real, then release it — proves it was actually free. */
 function bindAndClose(port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -65,8 +50,6 @@ describe("shouldSpawnServer", () => {
   });
 
   it("leaves an explicitly handed-over port alone", () => {
-    // `PI_PORT` means "a server is already running, point at it" — that is the
-    // documented way to attach the shell to a server someone else started.
     expect(shouldSpawnServer({ dev: false, env: { PI_PORT: "30141" } })).toBe(false);
   });
 
@@ -132,12 +115,8 @@ describe("buildServerEnv", () => {
       })
     );
 
-    // PI_PORT is the shell's input, not the server's (it reads PORT).
     expect(env.PI_PORT).toBeUndefined();
-    // The child must be a real Node, never an Electron binary in Node mode.
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined();
-    // Desktop mode has no login page, so it must not carry credentials that a
-    // fallback could resurrect when PI_WORK_DESKTOP_SECRET is empty.
     expect(env.PI_WORK_AUTH_PASSWORD).toBeUndefined();
     expect(env.PI_WORK_AUTH_USERNAME).toBeUndefined();
   });
@@ -281,9 +260,6 @@ describe("waitForServer", () => {
   });
 });
 
-// The shell duplicates the cookie name, the TTL and the token format: it is
-// plain CommonJS and cannot import lib/server/auth.ts. A silent drift here
-// locks the packaged app out of its own server, which no other test can see.
 describe("the shell's session contract matches the server's", () => {
   const saved: Record<string, string | undefined> = {};
 
@@ -333,23 +309,15 @@ describe("the commands the shell builds really exist", () => {
   });
 
   it("bin/pi-work.js honours --no-open", () => {
-    // Spawning it must not also open a browser tab (it does that for humans),
-    // so the flag has to be read *and* the open-on-ready branch behind it.
     const source = readFileSync(PI_WORK_BIN, "utf8");
     expect(source).toMatch(/const openBrowser = cliArgs\["no-open"\] !== true;/);
     expect(source).toMatch(/if \(openBrowser && !browserOpened/);
   });
 });
 
-// ADR-0003: a rule-core module takes its dependencies as parameters instead of
-// reading them. Here that is what lets `platform: "win32"` be driven from Linux
-// (the Windows branch of killPlan/serverCommand), and it is why main.js — the
-// half that cannot be unit-tested — is the only place that reads process.*.
 describe("server-process.js stays a rule module", () => {
   it("never reads process.platform or process.env itself", () => {
     const source = readFileSync(SERVER_PROCESS, "utf8");
-    // Comments legitimately discuss both ("never reads process.platform",
-    // "no fallback to process.execPath"), so only code lines are checked.
     const code = source
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))

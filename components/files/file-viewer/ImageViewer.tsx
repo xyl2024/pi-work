@@ -47,7 +47,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
         if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+      } catch {}
       setBust((b) => b + 1);
     });
     es.addEventListener("error", () => setWatching(false));
@@ -57,10 +57,6 @@ export function ImageViewer({ filePath }: { filePath: string }) {
       es.close();
       esRef.current = null;
     };
-    // `lightbox` itself re-creates every render (the hook returns a new
-    // memo object whenever `images` changes), so depending on it would
-    // re-run this effect on every file-watch event. `lightbox.close` is
-    // a stable `useCallback([])`, so it's the right dep to capture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, lightbox.close]);
 

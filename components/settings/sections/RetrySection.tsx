@@ -16,7 +16,6 @@ import {
 import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 import { useSettingsPageData } from "../use-page-data";
 
-/** One read of the retry config; the modal's page-data cache keeps it for the modal's lifetime. */
 async function loadRetryConfig(): Promise<AgentRetryConfig> {
   const response = await fetch("/api/agent-settings/retry");
   const data = (await response.json().catch(() => ({}))) as AgentRetryConfig & { error?: string };
@@ -24,24 +23,9 @@ async function loadRetryConfig(): Promise<AgentRetryConfig> {
   return data;
 }
 
-/**
- * Section 11: Agent retry (~/.pi/agent/settings.json).
- *
- * Independent state machine — the retry config lives in the pi SDK's
- * settings.json, NOT in ~/.pi-work/config.yaml. Reads/writes go
- * through /api/agent-settings/retry, and the SDK picks up the change
- * only at session start.
- *
- * Each RetryNumberRow owns its own draft + range validation; on
- * commit we PUT through `pushRetry` which preserves any unset
- * provider fields so a partial update doesn't blank the rest.
- */
 export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }) {
   const { t } = useI18n();
   const toast = useToast();
-  // First entry loads; later entries inside the same modal reuse the cached
-  // value, so the page never flashes "Loading…" again. Writes go through
-  // `mutate` so a re-entry sees them instead of the pre-save snapshot.
   const {
     data: retryConfig,
     loading: retryLoading,
@@ -50,13 +34,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
   const [retryResetting, setRetryResetting] = useState(false);
   const [retryResetOk, flashRetryResetOk] = useTransientFlag();
 
-  // The initial load lives in `useSettingsPageData` (cached per modal).
-
-  // Each RetryNumberRow commits (or rolls back) against `retryConfig`,
-  // and the server-side PUT handler enforces the same range rules.
-  // On success we trust the server's response and update the cached value;
-  // on failure we keep the previous `retryConfig` so the row's draft
-  // rolls back to the last accepted value via its own useEffect.
   const pushRetry = useCallback(async (
     next: Partial<AgentRetryConfig>,
   ): Promise<{ ok: boolean; error?: string }> => {
@@ -67,16 +44,11 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
       baseDelayMs: next.baseDelayMs ?? retryConfig.baseDelayMs,
       provider: {
         ...(next.provider ?? {}),
-        // Preserve unset keys from the previous value. `next.provider`
-        // is allowed to be a partial (e.g. only `maxRetries`) so the
-        // row's "null means unset" commit flows through cleanly.
         timeoutMs: next.provider?.timeoutMs ?? retryConfig.provider.timeoutMs,
         maxRetries: next.provider?.maxRetries ?? retryConfig.provider.maxRetries,
         maxRetryDelayMs: next.provider?.maxRetryDelayMs ?? retryConfig.provider.maxRetryDelayMs,
       },
     };
-    // Drop provider fields that are undefined so the server knows to
-    // omit them from settings.json (= SDK default).
     const payload: Record<string, unknown> = {
       enabled: merged.enabled,
       maxRetries: merged.maxRetries,
@@ -114,7 +86,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
   }, [pushRetry, t, toast]);
 
   const handleRetryMaxRetriesChange = useCallback(async (next: number | null) => {
-    if (next === null) return; // required field; RetryNumberRow's validation prevents this
+    if (next === null) return;
     const result = await pushRetry({ maxRetries: next });
     if (!result.ok) toast.show({ kind: "error", message: result.error ?? t("Failed to save retry config") });
   }, [pushRetry, t, toast]);
@@ -146,9 +118,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      // Reset means "drop the override" — server removes the retry
-      // key entirely. Locally we re-fetch defaults so every row's
-      // draft snaps to its placeholder.
       mutateRetryConfig(DEFAULT_AGENT_RETRY);
       flashRetryResetOk();
       toast.show({ kind: "success", message: t("Reset retry config") });
@@ -184,7 +153,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
         <div style={{ fontSize: 12, color: "var(--error)" }}>{t("Failed to load settings")}</div>
       ) : (
         <>
-          {/* Master toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <span style={{ fontSize: 13, color: "var(--text)" }}>{t("Enable retry")}</span>
             <ToggleSwitch
@@ -216,7 +184,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
             />
           </div>
 
-          {/* Backoff preview — derives from current input values, not SDK defaults */}
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 18 }}>
             {(() => {
               const { shown, total } = formatBackoffPreview(retryConfig.baseDelayMs, retryConfig.maxRetries);
@@ -227,7 +194,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
             })()}
           </div>
 
-          {/* Provider-level (advanced) */}
           <h4 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 10px 0", textTransform: "uppercase", letterSpacing: 0.5 }}>
             {t("Provider retry settings (advanced)")}
           </h4>

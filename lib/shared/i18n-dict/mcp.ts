@@ -1,6 +1,3 @@
-// Strings for the MCP panel. Namespaced (`mcp.*`) so this new feature cannot
-// collide with an existing label in the flat dictionary — the same convention
-// the channels feature uses.
 export const mcp = {
   "mcp.open": "打开 MCP 服务器",
   "mcp.title": "MCP 服务器",

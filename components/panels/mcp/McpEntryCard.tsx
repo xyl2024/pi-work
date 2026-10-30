@@ -9,17 +9,6 @@ import { isEntryDirty, type McpDraftEntry } from "@/lib/shared/mcp-draft";
 import { isMcpOverride } from "@/lib/shared/mcp-panel";
 import { exposureOf, isEnabled, summarizeEntry } from "./utils";
 
-/**
- * One MCP server entry as a card in the panel's grid — deliberately the same
- * anatomy as SkillCard: avatar, mono name, inline enable toggle, clamped
- * summary line. Clicking the card opens the entry's form; the toggle edits the
- * draft in place (nothing is written until Save).
- *
- * The form is the place that explains *why* an entry is invalid; the card only
- * carries a red dot (reason in its `title`). The remaining badges are the states
- * a user has to act on: override / disabled / unsaved / new / deleting.
- */
-
 const CLAMP_STYLE: CSSProperties = {
   display: "-webkit-box",
   WebkitLineClamp: 2,
@@ -58,7 +47,6 @@ export function McpEntryCard({
   entry: McpDraftEntry;
   onOpen: () => void;
   onToggleEnabled: (enabled: boolean) => void;
-  /** Present on a global entry that this working directory can override. */
   onDisableInProject?: () => void;
 }) {
   const { t } = useI18n();
@@ -183,7 +171,6 @@ export function McpEntryCard({
         <button
           type="button"
           onClick={(event) => {
-            // The card itself opens the entry page; this action must not.
             event.stopPropagation();
             onDisableInProject();
           }}

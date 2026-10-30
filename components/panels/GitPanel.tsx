@@ -10,24 +10,13 @@ import { GitLogView } from "./GitLogView";
 
 interface Props {
   cwd: string | null;
-  /** Changes whenever the panel is opened, so opening it refreshes status. */
   openRefreshToken?: number;
-  /** Called when the Log view becomes active so the shell can widen the
-   *  right panel (same "expanded" state the Canvas panel uses). */
   onExpandPanel?: () => void;
-  /** Whether the host right panel is currently expanded. */
   isPanelExpanded?: boolean;
 }
 
 type Mode = "diff" | "log";
 
-/**
- * Git panel: the single entry rendered by the AppShell tab bar for a repo.
- * Owns the shared header (repo info + branch dropdown + Diff/Log mode
- * toggle + refresh) and delegates the rest to two self-contained views:
- *   - GitDiffView — worktree / staged changes
- *   - GitLogView  — branch-aware commit history + commit file diffs
- */
 export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpanded = false }: Props) {
   const { t } = useI18n();
   const toast = useToast();
@@ -37,12 +26,9 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Log-mode state: branch dropdown options + the selected branch.
-  // `branch: null` means "current HEAD" (also covers detached HEAD).
   const [branches, setBranches] = useState<string[] | null>(null);
   const [branchLoading, setBranchLoading] = useState(false);
   const [branch, setBranch] = useState<string | null>(null);
-  // Bumped by the refresh button; GitLogView resets to page 1 on change.
   const [refreshToken, setRefreshToken] = useState(0);
 
   const loadStatus = useCallback(async () => {
@@ -75,15 +61,11 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
       const data = (await res.json()) as { branches: string[] };
       setBranches(data.branches);
     } catch {
-      // Best-effort: the log list still works on HEAD without the dropdown.
     } finally {
       setBranchLoading(false);
     }
   }, [cwd]);
 
-  // Reset + load the overview when the cwd changes, on mount, or when the
-  // panel is opened again. This keeps the status fresh after changes made
-  // while the panel was closed.
   useEffect(() => {
     setStatus(null);
     setError(null);
@@ -93,14 +75,10 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
     if (cwd) void loadStatus();
   }, [cwd, loadStatus, openRefreshToken]);
 
-  // Lazy-load the branch list the first time Log mode is entered.
   useEffect(() => {
     if (mode === "log" && cwd && branches === null) void loadBranches();
   }, [mode, cwd, branches, loadBranches]);
 
-  // Switching to the Log view widens the panel.
-  // Fires only on the diff→log transition (mode starts as "diff"), so
-  // session switches while already in Log mode don't re-expand.
   useEffect(() => {
     if (mode === "log") onExpandPanel?.();
   }, [mode, onExpandPanel]);
@@ -117,7 +95,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
 
   const busy = loading || branchLoading;
   const repoName = status?.repoRoot ? status.repoRoot.split("/").pop() || status.repoRoot : null;
-  // Selection shown in the header dropdown = explicit pick, else current checkout.
   const activeBranch = branch ?? status?.branch ?? null;
 
   return (
@@ -125,7 +102,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
       display: "flex", flexDirection: "column", height: "100%",
       background: "transparent",
     }}>
-      {/* Header: repo info + branch dropdown + mode toggle + refresh */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         padding: "8px 10px",
@@ -154,7 +130,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
         )}
         <div style={{ flex: 1 }} />
 
-        {/* Branch dropdown — Log mode only, has no effect on Diff status */}
         {mode === "log" && status?.repoRoot && (
           <select
             value={activeBranch ?? ""}
@@ -175,7 +150,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
           </select>
         )}
 
-        {/* Diff / Log mode toggle */}
         {(["diff", "log"] as const).map((m) => (
           <button
             key={m}
@@ -197,8 +171,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
           onClick={handleRefresh}
           disabled={!cwd || busy}
           label={t("Refresh")}
-          // Visually aligned with the bordered Diff/Log mode toggles
-          // directly to the left.
           style={{
             background: "var(--bg)",
             border: "1px solid var(--border)",
@@ -210,7 +182,6 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
         />
       </div>
 
-      {/* Body — shared states live here; ready state delegates to the view */}
       {!cwd ? (
         <div style={{ padding: "24px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
           {t("Open a session first")}

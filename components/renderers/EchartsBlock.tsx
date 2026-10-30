@@ -8,20 +8,12 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { copyText } from "@/lib/client/clipboard";
 import { FullscreenOverlay } from "@/components/ui/FullscreenOverlay";
 
-// Dynamic import keeps echarts (~MB) out of the initial bundle — only fetched
-// the first time an echarts block actually renders. The module promise is
-// memoized so subsequent blocks reuse the same load.
 let libPromise: Promise<typeof echarts> | null = null;
 function loadLib(): Promise<typeof echarts> {
   if (!libPromise) libPromise = import("echarts");
   return libPromise;
 }
 
-// Read the current --bg CSS variable so the chart canvas can match the active
-// theme. ECharts' built-in "dark" theme paints the canvas with #100C2A, which
-// clashes with the dark variant here — inject our own backgroundColor at
-// setOption time instead (exported so EchartsChart can use the same source of
-// truth).
 export function readThemeBg(isDark: boolean): string {
   if (typeof document === "undefined") return isDark ? "#1a1a1a" : "#ffffff";
   const v = getComputedStyle(document.documentElement)
@@ -30,32 +22,11 @@ export function readThemeBg(isDark: boolean): string {
   return v || (isDark ? "#1a1a1a" : "#ffffff");
 }
 
-// Evaluate the code block as JS that produces an ECharts `option`.
-//
-// SECURITY: this runs LLM-generated JavaScript via `new Function` (never
-// `eval`). pi-work is a local single-user tool and the content originates from
-// the user's own assistant session, so the trust boundary is the same as any
-// other rendered assistant output. Every evaluation is wrapped in try/catch so
-// a malformed option can never take down the surrounding page.
-//
-// Returns a Promise so the caller can `await` uniformly. The async
-// statement-body path wraps the block in an async IIFE, which unlocks
-// `await` inside the block — `const data = await fetch(...); option = {
-// series: [{ data }] };` renders the chart once the fetch settles.
 async function evalOption(code: string, lib: typeof echarts): Promise<unknown> {
   try {
-    // Fast path: bare expression — `{ ... }`, `[...]`, an identifier, etc.
-    // Parens make an object literal parse as a value, not a block. Stays
-    // sync so the common case pays no async IIFE overhead.
     return new Function("echarts", `return (${code})`)(lib);
   } catch {
-    // Not a valid expression — fall through to the async statement-body path.
   }
-  // Async statement body: the IIFE wrapper lets the user `await`, and the
-  // appended `return option` propagates the final value once any awaits
-  // settle. `typeof` against an undeclared identifier returns `"undefined"`
-  // without throwing, so it's safe even when the block never references
-  // `option`.
   return new Function(
     "echarts",
     `return (async () => { ${code}\n;return typeof option !== "undefined" ? option : undefined; })();`,
@@ -66,30 +37,9 @@ const CHART_HEIGHT = 400;
 
 interface Props {
   code: string;
-  /**
-   * When true (parent is mid-stream), suppresses the error banner so partial
-   * syntax during streaming doesn't flash "Failed to render" on every token.
-   * A complete ```echarts ... ``` block switches to a chart as soon as the
-   * last line is written — even if the rest of the message is still streaming.
-   */
   isStreaming?: boolean;
 }
 
-/**
- * Renders an `echarts` fenced code block as a canvas chart. Used by
- * MessageView and FileViewer to detect
- * ```echarts blocks and replace react-markdown's default `pre > code` fallback
- * with an actual ECharts chart. The block body is JS that evaluates to an
- * ECharts `option` object — either a bare expression (`{ ... }`, `[...]`,
- * etc.) or a statement body that assigns to `option`. Statement bodies may
- * declare helpers above the assignment and don't need a trailing
- * `return option;` — the final value of `option` is returned automatically.
- *
- * `await` is supported: the block body is wrapped in an async IIFE so users
- * can write `const data = await fetch(...); option = { series: [{ data }]
- * };` and have the chart render once the await settles. Until then the
- * block shows a "Rendering…" placeholder.
- */
 export function EchartsBlock({ code, isStreaming }: Props) {
   const { t } = useI18n();
   const { preset, isDark } = useTheme();
@@ -98,16 +48,12 @@ export function EchartsBlock({ code, isStreaming }: Props) {
   const [copied, flashCopied] = useTransientFlag();
   const [renderError, setRenderError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"rendered" | "source">("rendered");
-  // Eval result is state, not a useMemo, because eval is async — `await`
-  // inside the block makes the result a Promise.
   const [option, setOption] = useState<object | null>(null);
   const [evalError, setEvalError] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
-  // One-time load of the echarts lib. The loaded module identity is stable for
-  // the lifetime of the page.
   useEffect(() => {
     let cancelled = false;
     loadLib().then((m) => {
@@ -118,14 +64,8 @@ export function EchartsBlock({ code, isStreaming }: Props) {
     };
   }, []);
 
-  // Resolve the theme background so exported PNGs and the (opaque) chart area
-  // match the surrounding UI. `preset` is read so this re-runs on theme change.
   const bg = useMemo(() => readThemeBg(isDark), [isDark]);
 
-  // Evaluate the code into an option object whenever `code` or `lib` changes.
-  // Reset to `null` first so a previous chart doesn't flash while the new
-  // eval settles. The `cancelled` flag discards stale results when `code`
-  // changes mid-flight (e.g. fast token stream during streaming).
   useEffect(() => {
     if (!lib) return;
     setOption(null);
@@ -149,9 +89,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
     };
   }, [code, lib]);
 
-  // Init / update the chart whenever the option, theme, or view mode changes.
-  // echarts binds its theme at init time, so a theme switch means dispose +
-  // re-init (cheap; setOption is synchronous).
   useEffect(() => {
     setRenderError(null);
     if (!lib || !option || viewMode !== "rendered") return;
@@ -160,9 +97,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
     const chart = lib.init(el, isDark ? "dark" : undefined, { renderer: "canvas" });
     chartRef.current = chart;
     try {
-      // Inject the theme background so echarts' built-in "dark" theme
-      // (#100C2A) doesn't punch through. Spread `option` after our default so
-      // a user-supplied backgroundColor still wins.
       const merged: echarts.EChartsCoreOption = {
         backgroundColor: bg,
         ...(option as echarts.EChartsCoreOption),
@@ -188,8 +122,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
     });
   }, [code, flashCopied]);
 
-  // Export a PNG via an off-screen chart so download works regardless of the
-  // current view mode (in "source" mode the on-screen chart is disposed).
   const onDownload = useCallback(() => {
     if (!lib || !option) return;
     const w = containerRef.current?.clientWidth || 800;
@@ -207,7 +139,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
       a.click();
       a.remove();
     } catch {
-      // ignore — the on-screen error banner already covers render failures
     } finally {
       chart.dispose();
       off.remove();
@@ -221,8 +152,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
       <div ref={containerRef} style={{ width: "100%", height: CHART_HEIGHT }} />
     </div>
   ) : viewMode === "rendered" ? (
-    // Loading / streaming / error placeholder — keeps layout stable and, while
-    // streaming, avoids flashing the source or an error on every token.
     <div
       style={{
         height: CHART_HEIGHT,
@@ -303,8 +232,6 @@ export function EchartsBlock({ code, isStreaming }: Props) {
   );
 }
 
-// A second, independent chart instance sized to the fullscreen overlay. Canvas
-// charts can't be moved in the DOM the way an SVG can, so we re-init here.
 function EchartsFullscreen({
   lib,
   option,
@@ -328,7 +255,6 @@ function EchartsFullscreen({
       };
       chart.setOption(merged);
     } catch {
-      // ignore — the inline block already surfaces render errors
     }
     const ro = new ResizeObserver(() => chart.resize());
     ro.observe(el);
@@ -475,5 +401,3 @@ function HeaderButton({
     </button>
   );
 }
-
-

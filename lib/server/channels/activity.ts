@@ -1,31 +1,10 @@
-/**
- * Per-channel activity feed, persisted to `channels.db`.
- *
- * Every meaningful lifecycle event (message received, cold start, sent to
- * the agent, agent done / error, reply, token expiry, worker start/stop)
- * is recorded keyed by `channelId`, so the channel details UI can show
- * "what is happening right now" without reading server logs.
- *
- * Storage is deliberately SQLite (same file as channel metadata) rather
- * than an in-memory Map: Next.js may load instrumentation (worker side)
- * and route handlers (API side) as separate module instances, each with
- * its own module-scope singletons. In-memory state written on one side
- * would be invisible to the other. Because `db()` is a globalThis-cached
- * handle to a single file, persisting to the DB makes every instance read
- * the same data.
- *
- * Old rows are pruned opportunistically (a rolling time window) so the
- * table doesn't grow without bound.
- */
 import { db } from "./db";
 import type { ChannelActivity } from "@/lib/shared/channels/types";
 import { createLogger } from "@/lib/server/logger";
 
 const log = createLogger("channels/activity");
 
-/** Keep events within a rolling window; older rows are pruned lazily. */
 const PRUNE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-/** Prune roughly once per N inserts. */
 const PRUNE_EVERY = 100;
 let insertCounter = 0;
 
@@ -45,7 +24,6 @@ function ensureTable(): void {
   handle.exec(`CREATE INDEX IF NOT EXISTS idx_channel_activity_channel_ts ON channel_activity(channel_id, ts);`);
 }
 
-/** Record one lifecycle event for a channel. Never throws. */
 export function pushActivity(channelId: string, event: Omit<ChannelActivity, "ts" | "kind"> & { kind: ChannelActivity["kind"] }): void {
   try {
     ensureTable();
@@ -70,17 +48,14 @@ export function pushActivity(channelId: string, event: Omit<ChannelActivity, "ts
         try {
           prune(PRUNE_WINDOW_MS);
         } catch {
-          // best effort
         }
       }
     }
   } catch {
-    // never let activity recording break the message flow
     log.debug("pushActivity failed", { channelId });
   }
 }
 
-/** Return the most recent events for a channel, newest first. */
 export function listActivity(channelId: string, limit = 50): ChannelActivity[] {
   try {
     ensureTable();
@@ -111,7 +86,6 @@ export function listActivity(channelId: string, limit = 50): ChannelActivity[] {
   }
 }
 
-/** Remove rows older than `olderThanMs`; returns the number removed. */
 export function prune(olderThanMs: number): number {
   const cutoff = new Date(Date.now() - olderThanMs).toISOString();
   const result = db()

@@ -6,12 +6,6 @@ import {
   type McpPanelData,
 } from "@/lib/shared/mcp-panel";
 
-/**
- * The list page's error projection (lib/shared/mcp-panel.ts): the panel's three
- * error sources collapse into one de-duplicated list that keeps the
- * file-level (save refused) vs entry-level (server skipped) distinction.
- */
-
 function file(scope: "global" | "project", partial: Partial<McpPanelData["files"][number]> = {}) {
   return {
     scope,

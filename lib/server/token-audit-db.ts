@@ -1,18 +1,3 @@
-/**
- * SQLite-backed storage for token usage audit.
- *
- * Mirrors the singleton pattern in `lib/scheduler-db.ts`: `better-sqlite3` is
- * imported only here, the handle is cached on `globalThis` so Next.js dev-mode
- * HMR doesn't reopen it on every reload. Separate file from scheduler.db
- * because the audit log's lifecycle and access pattern
- * (continuous INSERT per pi `message_end`, no cascade) shouldn't entangle with
- * any other domain.
- *
- * File location: the data root's `token-audit.db` by default
- * (`~/.pi-work`, or `PI_WORK_DATA_DIR`), override with
- * `PI_WORK_TOKEN_AUDIT_DB` env var.
- */
-
 import Database from "better-sqlite3";
 import { dirname } from "path";
 import { mkdirSync } from "fs";

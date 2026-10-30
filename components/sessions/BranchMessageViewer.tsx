@@ -10,19 +10,11 @@ import { useToast } from "../ui/Toast";
 import { exportMessageAsPng } from "@/lib/client/export-message-card";
 
 interface Props {
-  /** The clicked card's entry id — used to look up the one message this card represents. */
   entryId: string;
-  /** Full session tree (roots). Walked to find the entry by id. */
   branchTree: SessionTreeNode[];
   onClose: () => void;
 }
 
-/**
- * Find the single AgentMessage that the clicked card represents. The
- * conversation-tree panel emits user/assistant/compaction cards (see
- * `buildConversationTree`), so this returns either a regular message
- * or the summary that belongs to a compaction card.
- */
 function findEntry(
   entryId: string,
   roots: SessionTreeNode[],
@@ -31,9 +23,6 @@ function findEntry(
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (node.entry.id !== entryId) {
-      // Push in reverse so the leftmost child is popped first; matters
-      // only when an id happens to be reused, which shouldn't happen but
-      // keeps the walk order predictable.
       for (let i = node.children.length - 1; i >= 0; i--) {
         stack.push(node.children[i]);
       }
@@ -50,12 +39,6 @@ function findEntry(
   return null;
 }
 
-/**
- * Full-screen modal that renders the single message represented by the
- * clicked card — no truncation, full Markdown / thinking / tool-call
- * rendering via the same MessageView the main chat uses. Click backdrop
- * or press Esc to close. Body scroll is locked while open.
- */
 export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   const { t } = useI18n();
   const toast = useToast();
@@ -70,7 +53,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
       await exportMessageAsPng(source);
       toast.show({ kind: "success", message: t("Message card exported") });
     } catch (err) {
-      // Cross-origin images without CORS headers are the usual culprit.
       console.warn("export message card failed:", err);
       toast.show({ kind: "error", message: t("Failed to export image") });
     } finally {
@@ -83,7 +65,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
     [entryId, branchTree],
   );
 
-  // Lock body scroll while the modal is open.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -92,8 +73,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
     };
   }, []);
 
-  // Esc to close. Skip when focus is in a text input so we don't fight the
-  // search box / textarea / contenteditable.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
@@ -109,9 +88,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   }, [onClose]);
 
   if (!data) {
-    // Defensive: the card id wasn't found in the tree. Close rather than
-    // render an empty modal — the panel's state will reset on the next
-    // tree update.
     return null;
   }
 
@@ -130,8 +106,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   return (
     <div
       onClick={(e) => {
-        // Click on the dim backdrop closes; clicks on the panel itself
-        // are caught by the panel's own click handler below.
         if (e.target === e.currentTarget) onClose();
       }}
       style={{
@@ -161,7 +135,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -295,8 +268,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
           </button>
         </div>
 
-        {/* Scrollable message body — ref'd so the export can clone exactly
-            this region and re-render it as a standalone card. */}
         <div
           ref={bodyRef}
           data-scroll-wide
@@ -315,15 +286,6 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   );
 }
 
-/**
- * Full-screen modal for a compaction entry. Renders the kernel's summary
- * (the `summary` string from the JSONL `compaction` entry) plus the
- * metadata the kernel stores alongside it: tokens before, the first kept
- * entry id, and the usage of the summarization call.
- *
- * Same chrome as BranchMessageViewer (backdrop click / Esc to close) but
- * no PNG export — the summary is a raw string, not a message bubble.
- */
 function CompactionSummaryView({
   entry,
   onClose,
@@ -333,7 +295,6 @@ function CompactionSummaryView({
 }) {
   const { t } = useI18n();
 
-  // Lock body scroll while the modal is open.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -342,7 +303,6 @@ function CompactionSummaryView({
     };
   }, []);
 
-  // Esc to close (same skip-for-inputs rule as BranchMessageViewer).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
@@ -359,9 +319,6 @@ function CompactionSummaryView({
 
   const tokenStr = entry.tokensBefore.toLocaleString();
   const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
-  // `details` on disk is `{ readFiles, modifiedFiles }` for pi-generated
-  // entries (extension-generated ones carry arbitrary payloads). Parse it
-  // defensively so the footer never crashes on a malformed/unknown shape.
   const details =
     entry.details && typeof entry.details === "object" && !Array.isArray(entry.details)
       ? (entry.details as CompactionEntryDetails)
@@ -401,7 +358,6 @@ function CompactionSummaryView({
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -475,8 +431,6 @@ function CompactionSummaryView({
           </button>
         </div>
 
-        {/* Scrollable body — the raw summary rendered as Markdown, then
-            metadata rows. */}
         <div
           data-scroll-wide
           style={{
@@ -536,7 +490,6 @@ function CompactionSummaryView({
             {entry.summary}
           </ReactMarkdown>
 
-          {/* Metadata footer */}
           <div
             style={{
               display: "flex",

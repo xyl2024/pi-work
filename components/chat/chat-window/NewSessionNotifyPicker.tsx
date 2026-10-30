@@ -1,14 +1,5 @@
 "use client";
 
-/**
- * NewSessionNotifyPicker — icon-only bell button that picks the messaging
- * channel (from the Channels page, WeChat for now) which should receive this
- * session's assistant replies. Rendered in the chat input's bottom toolbar,
- * right of the tools picker, and only while the session is still empty (a
- * session with messages binds its channel through the More menu instead).
- * Only connected channels with a bound user are selectable; choosing none
- * means "don't notify".
- */
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../../ui/Tooltip";
@@ -43,12 +34,10 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
         if (!cancelled) setChannels(d.channels ?? []);
       })
       .catch(() => {
-        // transient — keep the picker usable with an empty list
       });
     return () => { cancelled = true; };
   }, []);
 
-  // Close the menu on outside click / Escape.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent | TouchEvent) => {

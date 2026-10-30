@@ -37,7 +37,6 @@ async function poll() {
       publish(data.sessions ?? []);
     }
   } catch {
-    // Best effort; retain the last known snapshot.
   } finally {
     inFlight = false;
     if (started) timer = setTimeout(poll, 3000);

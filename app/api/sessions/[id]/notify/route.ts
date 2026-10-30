@@ -11,17 +11,11 @@ const log = createLogger("api/sessions/notify");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// GET /api/sessions/[id]/notify
-// Returns the session's notification-channel config, or null when unset.
 export async function GET(_req: Request, { params }: RouteContext) {
   const { id } = await params;
   return NextResponse.json({ config: readSessionNotify(id) });
 }
 
-// PUT /api/sessions/[id]/notify  body: { channelId: string }
-// Validate the channel (must be a connected WeChat channel with a bound user),
-// then persist it as this session's reply-notification target. An empty
-// channelId clears the config.
 export async function PUT(req: Request, { params }: RouteContext) {
   const { id } = await params;
   try {
@@ -59,7 +53,6 @@ export async function PUT(req: Request, { params }: RouteContext) {
   }
 }
 
-// DELETE /api/sessions/[id]/notify — clear the session's notification target.
 export async function DELETE(_req: Request, { params }: RouteContext) {
   const { id } = await params;
   deleteSessionNotify(id);

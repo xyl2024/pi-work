@@ -16,13 +16,6 @@ import {
   type SessionRuntimeState,
 } from "@/lib/shared/session-runtime-state";
 
-// Pure unit tests for the session-event protocol (#58). The module is types +
-// constants only, so this file checks the one runtime property the compile
-// time checks cannot: that the two disposition lists and the enumerable type
-// list agree with each other. If any of them drifts, the client would claim to
-// have an opinion about an event it does not know, or silently ignore one it
-// never decided about.
-
 const reducedTypes = Object.keys(REDUCED_SESSION_EVENTS);
 const ignoredTypes = Object.keys(IGNORED_SESSION_EVENTS);
 const allTypes: readonly string[] = SESSION_EVENT_TYPES;
@@ -67,13 +60,6 @@ describe("session event protocol", () => {
   });
 });
 
-// ── The reducer (#60) ────────────────────────────────────────────────────
-//
-// The first slice of the port sends two real paths through the pure reducer:
-// the dangerous-command confirmation and the ask-user-questions card. These
-// tests assert the contract the adapter relies on — state transition plus the
-// effects to perform — with no React, DOM or store involved.
-
 const permissionEvent = {
   type: "permission_request",
   toolCallId: "call-1",
@@ -99,7 +85,6 @@ function askEvent(toolCallId: string, ts = 1_700_000_000_000): Extract<SessionEv
   };
 }
 
-/** A batch whose only question has no options — the old handler dropped it. */
 const malformedAskEvent = {
   type: "ask_user_questions_request",
   toolCallId: "ask-bad",
@@ -113,8 +98,6 @@ describe("session event reducer", () => {
 
     const reduction = reduceSessionEvent(state, permissionEvent);
 
-    // Claiming the id mutates the ledger in place, so the state object is
-    // unchanged while the ledger now remembers the request.
     expect(reduction.state).toBe(state);
     expect(state.seenPermissionRequestToolCallIds.has("call-1")).toBe(true);
     expect(reduction.effects).toEqual([
@@ -131,8 +114,6 @@ describe("session event reducer", () => {
   it("does not ring twice when the server replays a pending permission request", () => {
     const first = reduceSessionEvent(createSessionRuntimeState(), permissionEvent);
 
-    // A reconnect re-delivers every pending confirmation; the reducer must
-    // neither re-enqueue nor re-ring for an id it already announced.
     const replay = reduceSessionEvent(first.state, permissionEvent);
 
     expect(replay.state).toBe(first.state);
@@ -166,9 +147,6 @@ describe("session event reducer", () => {
   it("does not ring twice when the server replays the same pending request", () => {
     const first = reduceSessionEvent(createSessionRuntimeState(), askEvent("ask-1"));
 
-    // SSE reconnect re-emits every pending request; a replay must claim the
-    // same id again and therefore ask for nothing. This is the test that pins
-    // "reconnect is silent".
     const replay = reduceSessionEvent(first.state, askEvent("ask-1"));
 
     expect(replay.state).toBe(first.state);
@@ -190,9 +168,6 @@ describe("session event reducer", () => {
     const b = createSessionRuntimeState();
     reduceSessionEvent(a, askEvent("ask-1"));
 
-    // The id already announced in session A must not suppress a first-time
-    // question in session B — the ledger lives in the state, not at module
-    // scope.
     expect(a.seenAskUserQuestionsToolCallIds.has("ask-1")).toBe(true);
     expect(b.seenAskUserQuestionsToolCallIds.has("ask-1")).toBe(false);
     const inB = reduceSessionEvent(b, askEvent("ask-1"));
@@ -219,9 +194,6 @@ describe("session event reducer", () => {
   });
 
   it("recognises exactly the reduced events as reduced", () => {
-    // The reducer's routing question: yes for every reduced type, no for every
-    // deliberately-ignored one. That is also the partition the total
-    // `reduceSessionEvent` relies on, so no ignored event can reach a branch.
     for (const type of reducedTypes) {
       expect(isReducedSessionEvent({ type } as SessionEvent)).toBe(true);
     }
@@ -230,14 +202,6 @@ describe("session event reducer", () => {
     }
   });
 });
-
-// ── The tool-execution group (#61) ───────────────────────────────────────
-//
-// Start / partial result / end, and every side effect they used to fire
-// inline. The load-bearing test here is the git one: the end event carries no
-// arguments, so "did this bash touch git?" can only be answered from the
-// arguments recorded when the call started. That rule had no test before the
-// port and is the easiest thing to break silently while moving code.
 
 type StartEvent = Extract<SessionEvent, { type: "tool_execution_start" }>;
 type UpdateEvent = Extract<SessionEvent, { type: "tool_execution_update" }>;
@@ -255,7 +219,6 @@ function toolEnd(toolCallId: string, toolName: string, result: unknown = undefin
   return { type: "tool_execution_end", toolCallId, toolName, result, isError };
 }
 
-/** Fold a whole event sequence, collecting every requested effect in order. */
 function reduceAll(state: SessionRuntimeState, events: SessionEvent[]) {
   let current = state;
   const effects: SessionEventEffect[] = [];
@@ -305,8 +268,6 @@ describe("session event reducer: tool execution", () => {
       toolUpdate("call-1", "bash", { content: [{ type: "text", text: "partial" }] }),
     );
 
-    // SSE reconnect replays the start; the output that already streamed in
-    // must survive it, and the phase chip must not gain a duplicate entry.
     const replayed = reduceSessionEvent(streaming.state, start);
 
     expect(replayed.state.inFlightTools.get("call-1")?.result?.content)
@@ -387,7 +348,6 @@ describe("session event reducer: tool execution", () => {
   });
 
   it("decides git invalidation from the args recorded at start, not from the end event", () => {
-    // `tool_execution_end` carries no args at all — this is the whole point.
     const committed = reduceAll(createSessionRuntimeState(), [
       toolStart("call-1", "bash", { command: "git commit -m wip" }),
       toolEnd("call-1", "bash", { content: [{ type: "text", text: "done" }] }),
@@ -423,8 +383,6 @@ describe("session event reducer: tool execution", () => {
 
     expect(first.effects).toContainEqual({ kind: "celebrate", details });
 
-    // SSE reconnect replays the same end event: the ledger already holds the
-    // id, so the overlay must not fire a second time.
     const replay = reduceSessionEvent(first.state, toolEnd("call-1", "celebrate", { details }, false));
     expect(kindsOf(replay.effects)).not.toContain("celebrate");
   });
@@ -476,23 +434,11 @@ describe("session event reducer: tool execution", () => {
   });
 });
 
-// ── The message / conversation-tree group (#62) ──────────────────────────
-//
-// What the user stares at the longest: the streaming bubble, the message once
-// it settles, the conversation tree and its active leaf, and the context-usage
-// ring after each assistant message. Two rules here are easy to break silently
-// and therefore have their own tests: a replayed `message_end` (SSE reconnect
-// or a compaction replay) must not enqueue the same assistant message twice,
-// and the brand-new-session "first assistant landed" callback must fire exactly
-// once. The context refresh is an *effect* — the reducer asks for it, the
-// adapter performs it.
-
 type MessageStartEvent = Extract<SessionEvent, { type: "message_start" }>;
 type MessageUpdateEvent = Extract<SessionEvent, { type: "message_update" }>;
 type MessageEndEvent = Extract<SessionEvent, { type: "message_end" }>;
 type TreeUpdateEvent = Extract<SessionEvent, { type: "session_tree_update" }>;
 
-/** A pi-shaped assistant message (raw blocks, before normalization). */
 function assistantMessage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     role: "assistant",
@@ -534,8 +480,6 @@ describe("session event reducer: messages and the conversation tree", () => {
   it("leaves the leaf alone when the update carries a null leaf", () => {
     const anchored = patchSessionRuntimeState(createSessionRuntimeState(), "activeLeafId", "e1");
 
-    // A null leaf is deliberately not applied: the tree panel falls back to
-    // the leaf loaded from disk, exactly as the previous handler did.
     const reduction = reduceSessionEvent(anchored, treeUpdate(undefined, null));
 
     expect(reduction.state).toBe(anchored);
@@ -557,8 +501,6 @@ describe("session event reducer: messages and the conversation tree", () => {
 
     const reduction = reduceSessionEvent(state, messageUpdate(assistantMessage()));
 
-    // The streamed snapshot goes to the streaming store (its own module), not
-    // into the committed message list.
     expect(reduction.effects).toEqual([{ kind: "stream_message", message: assistantMessage() }]);
     expect(reduction.state.messages).toEqual([]);
     expect(reduction.state.agentPhase).toBeNull();
@@ -595,8 +537,6 @@ describe("session event reducer: messages and the conversation tree", () => {
     const start = reduceSessionEvent(createSessionRuntimeState(), messageStart(raw));
     expect(kindsOf(start.effects)).toContain("refresh_subagent_panel");
 
-    // Every subsequent token re-announces the same tool call; the ledger must
-    // absorb it.
     const update = reduceSessionEvent(start.state, messageUpdate(raw));
     expect(kindsOf(update.effects)).not.toContain("refresh_subagent_panel");
   });
@@ -616,8 +556,6 @@ describe("session event reducer: messages and the conversation tree", () => {
   });
 
   it("does not enqueue the same assistant message twice when message_end is replayed", () => {
-    // SSE reconnect and compaction both replay the end of a message; the
-    // replayed payload is equal but not identical.
     const message = assistantMessage();
     const first = reduceSessionEvent(createSessionRuntimeState(), messageEnd(message));
 
@@ -631,9 +569,6 @@ describe("session event reducer: messages and the conversation tree", () => {
   });
 
   it("keeps two genuinely different settled messages apart", () => {
-    // The dedupe is identity, not a one-slot guard: a multi-step turn's
-    // successive assistant messages (different timestamps) and a turn's
-    // several tool results (different tool-call ids) all have to land.
     const first = reduceSessionEvent(createSessionRuntimeState(), messageEnd(assistantMessage()));
     const second = reduceSessionEvent(first.state, messageEnd(assistantMessage({ timestamp: 2 })));
     expect(second.state.messages).toHaveLength(2);
@@ -660,8 +595,6 @@ describe("session event reducer: messages and the conversation tree", () => {
     expect(kindsOf(first.effects)).toContain("first_assistant_ready");
     expect(first.state.awaitingFirstAssistant).toBe(false);
 
-    // A second assistant message (or a replay of the first) sees the flag
-    // cleared and stays silent.
     const second = reduceSessionEvent(first.state, messageEnd(assistantMessage({ timestamp: 2 })));
     expect(kindsOf(second.effects)).not.toContain("first_assistant_ready");
   });
@@ -735,7 +668,6 @@ describe("session event reducer: messages and the conversation tree", () => {
 
     const reduction = reduceSessionEvent(state, messageEnd(assistantMessage()));
 
-    // The request is the adapter's job; the reducer only decides it is time.
     expect(kindsOf(reduction.effects)).toContain("refresh_context_usage");
     expect(reduction.state.contextUsage).toBe(state.contextUsage);
     expect(reduction.state.contextComposition).toBe(state.contextComposition);
@@ -748,16 +680,6 @@ describe("session event reducer: messages and the conversation tree", () => {
     expect(isReducedSessionEvent(treeUpdate([], null))).toBe(true);
   });
 });
-
-// ── The turn / phase group (#63) ─────────────────────────────────────────
-//
-// The last group: when a turn starts and ends, when compaction starts and
-// ends, auto-retry, a send failure, and the thinking level. These decide the
-// "still running / compacting / waiting for the model / retrying" indicators
-// the user waits on, plus the sound, Pi Bot reaction and error toast at the
-// end of a turn. The port is behaviour-frozen: the chat still closes its turn
-// on `agent_end` (ADR-0004 revisits that separately), and `agent_settled`
-// stays deliberately ignored.
 
 type AgentStartEvent = Extract<SessionEvent, { type: "agent_start" }>;
 type AgentEndEvent = Extract<SessionEvent, { type: "agent_end" }>;
@@ -775,7 +697,6 @@ function compactionEnd(overrides: Partial<CompactionEndEvent> = {}): CompactionE
   return { type: "compaction_end", reason: "threshold", result: undefined, aborted: false, willRetry: false, ...overrides };
 }
 
-/** A session that was mid-turn with the turn's body-answer scratchpad set. */
 function midTurn(overrides: Partial<SessionRuntimeState> = {}): SessionRuntimeState {
   return createSessionRuntimeState({
     agentRunning: true,
@@ -809,8 +730,6 @@ describe("session event reducer: turn and phase", () => {
   });
 
   it("does not clear a pending error when a new turn starts", () => {
-    // The old handler only reset the body-answer scratchpad here; a pending
-    // error survives until it is surfaced (or an auto-retry gives up).
     const state = createSessionRuntimeState({ pendingAssistantError: "boom" });
 
     const reduction = reduceSessionEvent(state, agentStart);
@@ -860,9 +779,6 @@ describe("session event reducer: turn and phase", () => {
   });
 
   it("counts an empty pending error as a failed turn but shows no toast", () => {
-    // The old handler treated "a pending error exists" and "the error has
-    // text" separately: an empty message still kept the streaming snapshot and
-    // rang the failure sound, but produced no runtime error and no toast.
     const state = midTurn({ pendingAssistantError: "", lastAssistantIsBody: true });
 
     const reduction = reduceSessionEvent(state, agentEnd());
@@ -1021,9 +937,6 @@ describe("session event reducer: turn and phase", () => {
   });
 
   it("leaves the permission mode alone when the wire value is not a mode", () => {
-    // The protocol types the field, but a frame from a mismatched server must
-    // not be able to move the indicator to something nothing understands — the
-    // failure direction is "keep asking", never "stop asking" (ADR-0021).
     const fullAccess = createSessionRuntimeState({ permissionMode: "full_access" });
     const reduction = reduceSessionEvent(fullAccess, {
       type: "permission_mode_changed",
@@ -1048,25 +961,6 @@ describe("session event reducer: turn and phase", () => {
   });
 });
 
-// ── The protocol tail (#64) ──────────────────────────────────────────────
-//
-// #64 closes the port. The adapter holds no routing guard and no per-event
-// `switch` any more: `reduceSessionEvent` is total over the protocol, so the
-// 11 events the client deliberately ignores come back with the state untouched
-// instead of being filtered out before the reducer. The three properties
-// ADR-0007 asks the unit layer to pin live here — protocol completeness (the
-// compiler plus the two disposition lists), replay idempotency, and the
-// terminal migration from "start" through "running" to "closed".
-
-/**
- * One sample of every deliberately-ignored event, i.e. of every protocol type
- * that is not in `REDUCED_SESSION_EVENTS`.
- *
- * The sample-per-type table is what keeps the written omission from becoming a
- * lie: moving a type between the two halves, or adding a new one to the ignored
- * list, fails the completeness assertion below until a sample is added — at
- * which point this test feeds it and asserts that nothing moves.
- */
 const IGNORED_EVENT_SAMPLES: SessionEvent[] = [
   { type: "agent_settled" },
   { type: "turn_start" },
@@ -1087,10 +981,6 @@ describe("session event protocol: the deliberately-ignored half", () => {
   });
 
   it("changes neither the state nor the effects, whatever the session was doing", () => {
-    // A session in the middle of everything the ignored events could plausibly
-    // have touched: running, compacting, with a message, a tool in flight and a
-    // context estimate. If any ignored branch ever grows an opinion, one of
-    // these fields moves and this test fails.
     const busy = midTurn({
       isCompacting: true,
       agentPhase: { kind: "running_tools", tools: [{ id: "call-1", name: "bash", args: { command: "ls" } }] },
@@ -1101,8 +991,6 @@ describe("session event protocol: the deliberately-ignored half", () => {
 
     for (const event of IGNORED_EVENT_SAMPLES) {
       const reduction = reduceSessionEvent(busy, event);
-      // Identity, not just equality: an ignored frame must not even churn the
-      // state object, or every one of them would re-render the chat.
       expect(reduction.state, event.type).toBe(busy);
       expect(reduction.effects, event.type).toEqual([]);
     }
@@ -1112,24 +1000,17 @@ describe("session event protocol: the deliberately-ignored half", () => {
 describe("session event reducer: replay idempotency", () => {
   it("leaves the state, and the effects, where they were when any reduced event is fed twice", () => {
     const started = reduceSessionEvent(midTurn(), toolStart("call-1", "bash", { command: "ls" })).state;
-    /** `replay: "silent"` marks the one event type whose replay must produce no
-     *  effect at all, because re-asking would be user-visible twice; every other
-     *  type re-asks for the same (idempotent) observations. */
     const cases: { name: string; state: SessionRuntimeState; event: SessionEvent; replay?: "silent" }[] = [
       {
         name: "permission_request",
         state: createSessionRuntimeState(),
         event: permissionEvent,
-        // A pending confirmation is re-delivered on reconnect; re-emitting
-        // `enqueue_permission_request` + `play_ui_sound` would ring twice.
         replay: "silent",
       },
       {
         name: "ask_user_questions_request",
         state: createSessionRuntimeState(),
         event: askEvent("ask-1"),
-        // The route re-sends a pending question on reconnect; re-emitting
-        // `set_pending_ask_user_questions` + `play_ui_sound` would ring twice.
         replay: "silent",
       },
       { name: "tool_execution_start", state: midTurn(), event: toolStart("call-1", "bash", { command: "ls" }) },
@@ -1174,16 +1055,11 @@ describe("session event reducer: replay idempotency", () => {
       },
     ];
 
-    // One row per reduced type: a new reduced event has to bring its own row, so
-    // the property cannot be claimed for a type nobody fed twice.
     expect(cases.map((entry) => entry.name).sort()).toEqual([...reducedTypes].sort());
 
     for (const entry of cases) {
       const first = reduceSessionEvent(entry.state, entry.event);
 
-      // An SSE reconnect (and a compaction replay) re-delivers frames; the same
-      // frame twice must leave the same belief and ask for the same work, not a
-      // second one.
       const replay = reduceSessionEvent(first.state, entry.event);
 
       expect(replay.state, entry.name).toEqual(first.state);
@@ -1201,9 +1077,6 @@ describe("session event reducer: replay idempotency", () => {
     const replay = reduceSessionEvent(first.state, messageEnd(assistantMessage()));
 
     expect(replay.state.messages).toEqual(first.state.messages);
-    // The effects are the same observations: the streaming store flushes the
-    // same final snapshot and the context refresh simply repeats. What must not
-    // happen — and does not — is a second committed message or a second ring.
     expect(replay.effects).toEqual(first.effects);
   });
 
@@ -1222,13 +1095,11 @@ describe("session event reducer: a turn from start to close", () => {
   it("walks 起 → 跑 → 收 and leaves nothing in flight", () => {
     let state = createSessionRuntimeState();
 
-    // 起 — a new turn opens clean and running.
     state = reduceSessionEvent(state, agentStart).state;
     expect(state.agentRunning).toBe(true);
     expect(state.isCompacting).toBe(false);
     expect(state.agentPhase).toEqual({ kind: "waiting_model" });
 
-    // 跑 — the assistant streams, a tool runs and finishes, the message settles.
     state = reduceSessionEvent(state, messageStart(assistantMessage())).state;
     expect(state.agentPhase).toBeNull();
 
@@ -1247,7 +1118,6 @@ describe("session event reducer: a turn from start to close", () => {
     expect(state.messages).toHaveLength(1);
     expect(state.agentRunning).toBe(true);
 
-    // 收 — agent_end closes every stage flag and leaves no tool behind.
     state = reduceSessionEvent(state, agentEnd()).state;
     expect(state.agentRunning).toBe(false);
     expect(state.isCompacting).toBe(false);

@@ -1,15 +1,10 @@
-// Generic UI vocabulary shared across the whole app.
-// Cancel / Save / Delete / OK / Close / Copy / Show / Hide / Loading / etc.
-
 export const common = {
-  // Identity / labels
   "Name": "名称",
   "Description": "描述",
   "Name already exists": "名称已存在",
   "Provider name": "提供商名称",
   "Provider name cannot be empty": "提供商名称不能为空",
 
-  // General actions
   "Cancel": "取消",
   "Save": "保存",
   "Saving...": "正在保存...",
@@ -226,8 +221,6 @@ export const common = {
   "html": "html",
   "Process exited": "进程已退出",
 
-  // ── Common-operation toasts ────────────────────────────────────────
-  // (success / error feedback for daily actions across the app)
   "Failed to send message": "发送消息失败",
   "Failed to connect to session events": "无法连接会话事件流",
   "Failed to stop agent": "停止会话失败",

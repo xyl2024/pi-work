@@ -5,11 +5,6 @@ import type { AgentMessage, ToolCallContent } from "@/lib/shared/types";
 export interface StreamingSnapshot {
   isStreaming: boolean;
   isThinking: boolean;
-  /** True once any streamed content (thinking/body/tool output) has
-   *  landed, false before the first token and after the stream closes.
-   *  Unlike `streamingMessage` it's a stable boolean that only flips on
-   *  content appear/disappear — chat loading indicators subscribe to it
-   *  without re-rendering on every token. */
   hasContent: boolean;
   streamingMessage: Partial<AgentMessage> | null;
 }
@@ -33,25 +28,16 @@ function isThinkingMessage(message: Partial<AgentMessage> | null): boolean {
   return block?.type === "thinking" && typeof block.thinking === "string";
 }
 
-/** True when the live assistant is currently emitting answer text rather than
- * thinking or assembling a tool call. Kept as a boolean selector so the chat
- * window does not re-render on every text token. */
 export function isStreamingBodyMessage(message: Partial<AgentMessage> | null): boolean {
   if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
   const block = message.content[message.content.length - 1];
   return block?.type === "text" && typeof block.text === "string";
 }
 
-/** True while the live assistant is assembling a tool call — its input JSON is
- *  still streaming in (block.type === "toolCall"). Treated as "executing the
- *  tool" for the loading indicator so a long argument payload doesn't show a
- *  blank/thinking loader before the tool actually runs. */
 export function isStreamingToolCallMessage(message: Partial<AgentMessage> | null): boolean {
   return streamingToolCallBlock(message) !== null;
 }
 
-/** The live assistant's last toolCall block while one is being streamed or
- *  executed, so the loading label can show the tool name and args. */
 export function streamingToolCallBlock(message: Partial<AgentMessage> | null): ToolCallContent | null {
   if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return null;
   const block = message.content[message.content.length - 1];

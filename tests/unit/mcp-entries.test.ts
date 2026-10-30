@@ -4,15 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyMcpPanelChanges, readMcpPanelData } from "@/lib/server/mcp-entries";
 
-/**
- * The MCP panel's read/write half (lib/server/mcp-entries.ts).
- *
- * These files are the user's real pi configuration, so the contract worth
- * pinning is not "the panel can write" but "writing does not lose anything else
- * in the file": unknown top-level keys, entries pi rejects, key order. See
- * ADR-0010.
- */
-
 const created: string[] = [];
 
 function sandbox(): { agentDir: string; cwd: string } {
@@ -281,8 +272,6 @@ describe("mcp-entries: project overrides", () => {
 
     const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
 
-    // `command` makes it a definition, not an override — so it is valid and does
-    // not shadow on the invalid path; the extra-key case is covered below.
     expect(data.entries.find((entry) => entry.scope === "project")?.override).toBe(false);
 
     write(projectPath(cwd), { mcpServers: { docs: { enabled: false, oauth: { clientId: "x" } } } });

@@ -6,15 +6,6 @@ import { listMessageCallMetrics, recordModelCall } from "@/lib/server/token-audi
 import type { ModelCallInsert } from "@/lib/shared/token-audit-types";
 import { GET } from "@/app/api/token-audit/message-metrics/route";
 
-/**
- * The chat footer's TTFT/TPS path: rows written by the model-call recorder are
- * read back per session, keyed by the message id the recorder stamps
- * (`String(message.timestamp)`), with throughput derived at read time.
- *
- * Process-internal (temporary SQLite, no HTTP instance): run with
- * `PI_WORK_TEST_SKIP_INSTANCE=1`.
- */
-
 let root: string;
 let dbCounter = 0;
 

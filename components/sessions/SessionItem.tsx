@@ -19,12 +19,6 @@ interface SessionItemProps {
   onDeleted?: (id: string) => void;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
-  /**
-   * Which "somebody needs you" dot this row shows, if any. The precedence
-   * (a pending command confirmation outranks a pending question) is resolved
-   * before the row renders — see `lib/shared/session-attention.ts` — so this
-   * component only paints the answer.
-   */
   attention?: SessionAttention;
 }
 
@@ -74,10 +68,6 @@ export function SessionItem({
     setMenuOpen(true);
   }, [cancelMenuClose]);
 
-  // Drive the pop-in transition: when `menuOpen` flips to true, the portal
-  // mounts in its pre-state (opacity 0, scale 0.96); the next animation
-  // frame flips `menuVisible` to trigger the transition. Without rAF the
-  // two setStates commit in the same batch and the transition never fires.
   useEffect(() => {
     if (!menuOpen) {
       setMenuVisible(false);
@@ -93,7 +83,6 @@ export function SessionItem({
     fn?.();
   }, [cancelMenuClose]);
 
-  // Close on outside mousedown / ESC / scroll / resize while open
   useEffect(() => {
     if (!menuOpen) return;
     const onMouseDown = (e: MouseEvent) => {
@@ -133,13 +122,8 @@ export function SessionItem({
 
   useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
-  // Shared rule (lib/shared/session-title.ts): name → first message → id stub.
   const title = sessionDisplayTitle(session);
 
-  // Hover time badge — relative for the last few days, `MM.DD` beyond that.
-  // Computed only while the badge is actually rendered (row hover / menu open)
-  // so "now" is fresh each time the user hovers. `null` = unparseable
-  // timestamp, in which case nothing is shown.
   const showActions = hovered || triggerHovered || menuOpen;
   const timeLabel = showActions ? sessionTimeLabel(session.modified, new Date()) : null;
   const timeText = timeLabel === null
@@ -207,14 +191,8 @@ export function SessionItem({
     setConfirmDelete(false);
   }, []);
 
-  // Fixed-height outer wrapper — content swaps in place so the list never reflows.
-  // The shared row height fits the 24px "..." trigger and 28px delete/rename
-  // controls while keeping them vertically centered.
   const ITEM_HEIGHT = SESSION_ROW_HEIGHT_PX;
 
-  // Selected / hover visual is now purely a background tint — no border ring,
-  // no bold text. The shadow on selected keeps a subtle "lift" cue without
-  // competing with neighbouring rows.
   const itemShadow = confirmDelete
     ? "none"
     : isSelected
@@ -230,11 +208,6 @@ export function SessionItem({
       onMouseLeave={() => { setHovered(false); }}
       style={{
         height: ITEM_HEIGHT,
-        // The list container is a flex column with overflow-y: auto, so this
-        // row is a flex item. Default flex-shrink:1 makes 50+ rows share the
-        // available height (each collapses to ~2px, e.g. /tmp with 395
-        // sessions). flex-shrink:0 keeps every row at ITEM_HEIGHT and lets
-        // the container scroll.
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
@@ -250,7 +223,6 @@ export function SessionItem({
       }}
     >
       {confirmDelete ? (
-        /* ── Delete confirmation: same height, two flat buttons ── */
         <>
           <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {t("Delete")} <span style={{ fontWeight: 600 }}>&ldquo;{title.slice(0, 22)}{title.length > 22 ? "…" : ""}&rdquo;</span>?
@@ -291,7 +263,6 @@ export function SessionItem({
           </div>
         </>
       ) : renaming ? (
-        /* ── Rename: input fills the same row ── */
         <input
           ref={inputRef}
           value={renameValue}
@@ -324,7 +295,6 @@ export function SessionItem({
             overflow: "hidden",
           }}
         >
-          {/* Static favorited indicator — visible without hover */}
           {isFavorited && (
             <span aria-hidden style={{ display: "flex", alignItems: "center", flexShrink: 0 }} title={t("Favorites")}>
               <svg width="9" height="9" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
@@ -332,15 +302,8 @@ export function SessionItem({
               </svg>
             </span>
           )}
-          {/* Running indicator — the title turns accent and breathes slowly
-              while the agent is between agent_start and agent_end (replaces
-              the old pulsing dot; see pi-running-title-breathe keyframes) */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }} aria-label={session.running ? `${title} (${t("running")})` : title}>
             {attention === "permission" && (
-              // Pending-confirmation dot: red rather than the question dot's
-              // amber, because the two ask different things ("approve this
-              // command" vs "answer me"). Same pulse keyframe, its own class
-              // so the reduced-motion rule can target it.
               <Tooltip content={t("Awaiting command approval")}>
                 <span
                   aria-label={t("Awaiting command approval")}
@@ -359,10 +322,6 @@ export function SessionItem({
               </Tooltip>
             )}
             {attention === "question" && (
-              // Pending-question dot: distinct color (amber) from the
-              // running indicator so users can tell "agent is busy" from
-              // "agent is asking me something". Tooltip names it so
-              // hovering explains the unfamiliar glyph.
               <Tooltip content={t("Awaiting your answer")}>
                 <span
                   aria-label={t("Awaiting your answer")}
@@ -397,8 +356,6 @@ export function SessionItem({
             </Tooltip>
           </div>
 
-          {/* Last-activity time + "..." trigger — both shown on row hover;
-              the trigger toggles the action menu on click (no hover-open). */}
           {showActions && (
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
               {timeText && (

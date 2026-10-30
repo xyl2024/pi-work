@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * Token audit panel — a small dashboard for `~/.pi-work/token-audit.db`.
- *
- * Fetches three parallel JSON snapshots from `/api/token-audit/summary` and
- * lays them out as a KPI strip + a 2-column ECharts grid. The `EchartsChart`
- * wrapper handles the dynamic import, dark-mode theme, and dispose/re-init
- * on option identity change, so each chart below is just a `useMemo` of an
- * `EChartsCoreOption`.
- */
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
@@ -26,8 +16,6 @@ import type {
 const RANGES: Range[] = ["today", "7d", "30d", "all"];
 
 const modelLabelKey = (bucket: SummaryBucket): string => bucket.key;
-
-// ── formatters ────────────────────────────────────────────────────────────
 
 function fmtNum(n: number, locale: "en" | "zh" = "en"): string {
   if (locale === "zh" && n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)}亿`;
@@ -51,17 +39,13 @@ function fmtMonthDay(ts: number): string {
 }
 
 function fmtDayKey(key: string): number | null {
-  // "YYYY-MM-DD" -> local midnight epoch-ms
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!m) return null;
   return new Date(+m[1], +m[2] - 1, +m[3], 0, 0, 0, 0).getTime();
 }
 
-// ── time-bucket zero-padding ──────────────────────────────────────────────
-
 const DAY_MS = 86_400_000;
 
-/** Fill gaps in a `SummaryBucket[]` keyed by YYYY-MM-DD between [from, to]. */
 function zeroPadDaySeries(fromTs: number, toTs: number, raw: SummaryBucket[]): SummaryBucket[] {
   if (!Number.isFinite(fromTs) || !Number.isFinite(toTs) || toTs < fromTs) return [];
   const byTs = new Map<number, SummaryBucket>();
@@ -97,9 +81,6 @@ function zeroPadDaySeries(fromTs: number, toTs: number, raw: SummaryBucket[]): S
   return out;
 }
 
-// ── shared echarts palette + style ────────────────────────────────────────
-
-// ECharts default categorical palette — high contrast in both light & dark themes.
 const PALETTE = [
   "#5470c6",
   "#91cc75",
@@ -115,9 +96,6 @@ function paletteColor(i: number): string {
   return PALETTE[i % PALETTE.length];
 }
 
-// ECharts axis/tooltip labels adopt the surrounding theme via a tiny inline
-// helper that reads CSS vars on the root. Memoized per theme so option identity
-// is stable across re-renders that don't change preset/isDark.
 function useChartTheme() {
   const { preset, isDark } = useTheme();
   return useMemo(() => {
@@ -136,8 +114,6 @@ function useChartTheme() {
     return { text, axis, tooltipBg, emptyCell, accent };
   }, [preset, isDark]);
 }
-
-// ── main component ────────────────────────────────────────────────────────
 
 interface FetchState {
   time: SummarizeResult | null;
@@ -165,7 +141,7 @@ export function TokensPanel() {
     void fetch("/api/workspaces?limit=10000")
       .then((res) => res.ok ? res.json() as Promise<{ workspaces?: Array<{ cwd?: string }> }> : Promise.reject(new Error("failed to load cwds")))
       .then((data) => setCwds((data.workspaces ?? []).map((workspace) => workspace.cwd).filter((cwd): cwd is string => !!cwd)))
-      .catch(() => { /* best-effort; the filter remains at all cwds */ });
+      .catch(() => {});
   }, []);
 
   const reload = useCallback(async () => {
@@ -174,8 +150,6 @@ export function TokensPanel() {
       const [timeRes, modelRes, heatmapRes] = await Promise.all([
         fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}${cwdParam}`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=model${cwdParam}`),
-        // The heatmap always covers the latest 30 days, independent of the
-        // range selected for the trend chart.
         fetch(`/api/token-audit/summary?range=30d&groupBy=day${cwdParam}`),
       ]);
       if (!timeRes.ok || !modelRes.ok || !heatmapRes.ok) {
@@ -190,7 +164,6 @@ export function TokensPanel() {
     } catch (e) {
       toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
     }
-    // timeGroupBy is derived in render from range; range triggers the refetch.
   }, [range, timeGroupBy, cwdFilter, toast, t]);
 
   useEffect(() => {
@@ -238,10 +211,6 @@ export function TokensPanel() {
     </div>
   );
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────
-
-// ── toolbar ───────────────────────────────────────────────────────────────
 
 interface ToolbarProps {
   range: Range;
@@ -301,8 +270,6 @@ function rangeLabel(r: Range, t: (k: string) => string): string {
   if (r === "30d") return t("Last 30 days");
   return t("All time");
 }
-
-// ── KPI strip ─────────────────────────────────────────────────────────────
 
 interface KpiStripProps {
   totals: SummaryBucket | undefined;
@@ -374,8 +341,6 @@ function KpiCard({
   );
 }
 
-// ── chart card wrapper ────────────────────────────────────────────────────
-
 function ChartCard({
   title,
   headerRight,
@@ -409,13 +374,8 @@ function ChartCard({
   );
 }
 
-// ── charts ────────────────────────────────────────────────────────────────
-
-/** Pad a series to align the chart x-axis to the range. */
 function padTimeBuckets(range: Range, raw: SummaryBucket[]): { ts: number; b: SummaryBucket }[] {
   if (range === "today") {
-    // Hour-of-day buckets are local time; the SQLite key is "YYYY-MM-DD HH:00".
-    // We don't have a tsMs field here so parse from the key.
     const parsed = raw
       .map((b) => {
         const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(b.key);
@@ -435,7 +395,6 @@ function padTimeBuckets(range: Range, raw: SummaryBucket[]): { ts: number; b: Su
     })
     .filter((x): x is { ts: number; b: SummaryBucket } => x !== null);
   parsed.sort((a, b) => a.ts - b.ts);
-  // Fill missing days in the visible window.
   const now = Date.now();
   let fromTs: number;
   if (range === "7d") fromTs = now - 7 * DAY_MS;
@@ -708,8 +667,6 @@ function CostByCategoryChart({
   return <EchartsChart option={option} height={260} ariaLabel={t("Cost by category")} />;
 }
 
-// ── atoms ─────────────────────────────────────────────────────────────────
-
 function ChipButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -732,8 +689,6 @@ function ChipButton({ active, onClick, label }: { active: boolean; onClick: () =
     </button>
   );
 }
-
-// ── shared helpers ────────────────────────────────────────────────────────
 
 function shortLabel(s: string, max = 32): string {
   if (s.length <= max) return s;
@@ -763,4 +718,3 @@ function emptyDonut(theme: ReturnType<typeof useChartTheme>, valueText: string, 
     ],
   };
 }
-

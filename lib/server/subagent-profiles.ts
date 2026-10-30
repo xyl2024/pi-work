@@ -19,16 +19,6 @@ import {
   type SubagentThinkingLevel,
 } from "../shared/subagent";
 
-/**
- * Subagent profiles: the user-defined agents the `subagent` tool can launch.
- * One row per profile in `subagents.db`; the built-in explorer/reviewer pair is
- * seeded on first use.
- *
- * Every write goes through `normalizeSubagentProfileInput`, so the DB never
- * holds a profile the tool would then have to defend against at spawn time.
- */
-
-/** Thrown for invalid profile input; the API route turns it into a 400. */
 export class SubagentProfileError extends Error {}
 
 const BUILTIN_EXPLORER_PROMPT = `You are now in explore mode.
@@ -57,11 +47,6 @@ Your task is to review the code you were pointed at and to support every conclus
 - Ground every finding in concrete evidence: quote the relevant code and cite file paths with line numbers when available.
 - Separate confirmed problems from suspicions, and say what you could not verify.`;
 
-/**
- * The built-in profiles. On a fresh database all of them are seeded; on an
- * existing database only the ones added by a later seed version are inserted
- * (see `seedBuiltinsIfEmpty`), so deleting a built-in stays permanent.
- */
 export const BUILTIN_SUBAGENT_SEEDS: readonly SubagentProfileInput[] = [
   {
     name: "codebase_explorer",
@@ -96,11 +81,6 @@ export const BUILTIN_SUBAGENT_SEEDS: readonly SubagentProfileInput[] = [
   },
 ];
 
-/**
- * Seed version for existing databases. Bump this whenever a new built-in is
- * added, and list the names introduced by that version below; the seed then
- * inserts exactly those (and nothing a user has deleted).
- */
 const SUBAGENT_SEED_VERSION = 1;
 const BUILTINS_ADDED_IN_VERSION_1: readonly string[] = ["implementer"];
 
@@ -132,8 +112,6 @@ function parseTools(raw: string): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Old rows may name the pre-rename subagent tool. Migrate on load; the
-    // child session still never registers it (recursion stays blocked).
     return migrateToolNames(parsed.filter((tool): tool is string => typeof tool === "string"));
   } catch {
     return [];
@@ -205,10 +183,6 @@ function normalizeBot(raw: unknown): SubagentBotAppearance {
   };
 }
 
-/**
- * Validate and normalize one profile payload. Throws `SubagentProfileError`
- * with a user-facing message on the first problem.
- */
 export function normalizeSubagentProfileInput(raw: unknown): NormalizedSubagentProfileInput {
   const obj = asRecord(raw);
   if (!obj) throw new SubagentProfileError("profile must be an object");
@@ -377,7 +351,6 @@ export function createSubagentProfile(input: SubagentProfileInput): SubagentProf
   return getSubagentProfile(input.name)!;
 }
 
-/** Update an existing profile by name; the name itself is immutable. */
 export function updateSubagentProfile(input: SubagentProfileInput): SubagentProfile {
   seedBuiltinsIfEmpty();
   if (!subagentProfileExists(input.name)) {

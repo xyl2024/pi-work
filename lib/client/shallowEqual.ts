@@ -1,15 +1,3 @@
-/**
- * Deep content-equality comparator. Two values are considered equal when
- * their visible content matches, even if they have different references.
- *
- * Used by the module stores (sessionUiStore)
- * to avoid spurious re-renders when an upstream hook recomputes a fresh
- * object on every render whose contents are identical to the previous one.
- *
- * Supports: primitives, plain objects, arrays, Maps, Dates, null, undefined.
- * Anything else (class instances, Sets, RegExp, …) falls back to reference
- * equality via the `a === b` short-circuit at the top.
- */
 export function isContentEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null || a === undefined || b === undefined) return false;

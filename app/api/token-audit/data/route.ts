@@ -1,9 +1,3 @@
-/**
- * DELETE /api/token-audit/data — bulk-wipe all recorded token usage.
- *
- * Mirrors the DELETE-shape in `app/api/scheduled-tasks/route.ts:87-106`:
- * always returns 200 with `{ ok: true, deleted }` on success.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { clearAllData } from "@/lib/server/token-audit-store";

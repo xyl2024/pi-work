@@ -31,7 +31,6 @@ interface SkillsApiResponse {
 }
 
 interface CachedQuery {
-  /** Enriched result set for the query, truncated to the requested limit. */
   results: SkillSearchResult[];
   expires: number;
 }
@@ -63,7 +62,6 @@ function parseSearchOutput(raw: string): SkillSearchResult[] {
   const lines = clean.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    // package line: "owner/repo@skill  NNK installs"
     const pkgMatch = line.match(/^([\w.\-]+\/[\w.\-@:]+)\s+([\d.,]+[KMB]?\s+installs)$/);
     if (pkgMatch) {
       const urlLine = lines[i + 1]?.trim().replace(/^└\s*/, "");
@@ -115,11 +113,6 @@ function parseInstallCount(installs: string): number {
   return value * multiplier;
 }
 
-/** Upstream skills.sh ignores offset/page/skip, so "load more" is implemented
- *  by asking for a larger `limit` each time (`pageSize * page`) and slicing the
- *  tail — deterministic because the ranking is stable. Descriptions are
- *  resolved for the whole truncated set and the result is cached per
- *  (source, query, limit) so re-scrolling within a session is free. */
 async function getResults(query: string, limit: number, source: "api" | "npx"): Promise<SkillSearchResult[]> {
   const cacheKey = `${source}::${query}::${limit}`;
   const cached = queryCache.get(cacheKey);
@@ -146,9 +139,6 @@ async function getResults(query: string, limit: number, source: "api" | "npx"): 
   return results;
 }
 
-// POST /api/skills/search  body: { query: string, page?: number, pageSize?: number }
-// Returns one page of the result set:
-//   { results, page, pageSize, hasMore }
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
@@ -163,14 +153,11 @@ export async function POST(req: Request) {
     const pageSize = parsePageSize(rawPageSize);
     const page = parsePage(rawPage);
     const trimmedQuery = query.trim();
-    // Each page asks upstream for one more page worth of results.
     const upstreamLimit = Math.min(MAX_LIMIT, page * pageSize);
 
     const respond = (all: SkillSearchResult[], source: "api" | "npx") => {
       const start = (page - 1) * pageSize;
       const results = all.slice(start, start + pageSize);
-      // `all.length === upstreamLimit` means upstream filled the request, so
-      // there may be more; a short response means the well is dry.
       const hasMore = all.length >= upstreamLimit && results.length > 0;
       log.info("skill search completed", {
         query: trimmedQuery,

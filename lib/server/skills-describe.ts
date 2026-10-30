@@ -1,22 +1,3 @@
-/**
- * Server-side helper: resolve skills.sh skill descriptions.
- *
- * The skills.sh *search* API only returns `id / name / installs / source`,
- * so a search result has no description. The skill's own detail page,
- * however, embeds a JSON-LD `SoftwareApplication` block whose `description`
- * is the full (untruncated) SKILL.md description:
- *
- *   <script type="application/ld+json">
- *     {"@context":"https://schema.org","@type":"SoftwareApplication",
- *      "name":"vercel-react-best-practices","description":"React and Next.js…"}
- *   </script>
- *
- * We fetch each page and pull that field out. Requests are pooled and the
- * results are memoized in-process so repeated searches (and the two lazy
- * fetches the panel can issue for the same result set) don't hammer the
- * directory.
- */
-
 import { createLogger, elapsedMs } from "./logger";
 
 const log = createLogger("server/skills-describe");
@@ -33,8 +14,6 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 
-/** A slug is the skills.sh page path, e.g. `owner/repo/skill-name`.
- *  Strict allow-list: path segments of URL-safe chars, no traversal. */
 function isSafeSlug(slug: string): boolean {
   if (!slug || slug.length > 300) return false;
   if (slug.includes("..") || slug.startsWith("/") || slug.includes("//")) return false;
@@ -55,7 +34,6 @@ function extractDescription(html: string): string {
         if (description) return description;
       }
     } catch {
-      // Malformed JSON-LD block — keep scanning the other blocks.
     }
   }
   return META_DESC_RE.exec(html)?.[1]?.trim() ?? "";
@@ -80,8 +58,6 @@ async function fetchOne(slug: string): Promise<string> {
   }
 }
 
-/** Run `fn` over `items` with a bounded number of concurrent workers,
- *  preserving input order in the result. */
 async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let cursor = 0;
@@ -96,11 +72,6 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
   return results;
 }
 
-/**
- * Resolve descriptions for a batch of slugs. Unknown / unsafe / unreachable
- * slugs resolve to an empty string (so the caller can render a placeholder
- * and stop waiting).
- */
 export async function fetchSkillDescriptions(slugs: string[]): Promise<Record<string, string>> {
   const startedAt = Date.now();
   const unique = [...new Set(slugs.map((s) => s.trim()).filter(Boolean))];

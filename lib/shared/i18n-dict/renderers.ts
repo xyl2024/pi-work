@@ -1,9 +1,4 @@
-// Mermaid + ECharts + Translate renderers.
-// Each block diagram / chart / translation in the assistant message
-// stream is rendered by one of these.
-
 export const renderers = {
-  // Mermaid
   "Failed to render Mermaid diagram": "Mermaid 图渲染失败",
   "Failed to render SVG": "SVG 渲染失败",
   "Download SVG": "下载 SVG",
@@ -12,12 +7,10 @@ export const renderers = {
   "View source": "查看源码",
   "View diagram": "查看图表",
 
-  // ECharts
   "Failed to render ECharts chart": "ECharts 图表渲染失败",
   "Download PNG": "下载 PNG",
   "Rendering…": "渲染中…",
 
-  // Translate panel (right-panel tab)
   "Translate": "翻译",
   "Translate (⌘+Enter)": "翻译 (⌘+Enter)",
   "Open translate": "打开翻译",

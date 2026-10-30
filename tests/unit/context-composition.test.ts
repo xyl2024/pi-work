@@ -9,17 +9,6 @@ import {
   type ContextMessage,
 } from "@/lib/shared/context-composition";
 
-// ── Fixtures ──
-//
-// `countTokens` is injected, so these tests can use a cheap deterministic fake.
-// The real tokenizer is a server-only dynamic import (see
-// `lib/server/context-tokenizer.ts`) and must never be reachable from here —
-// that is the whole point of the injection.
-
-/** One token per 4 characters, floored — enough to make the arithmetic
- *  checkable by hand without caring about real BPE ranks. Note it is *not*
- *  additive across a split (`floor(a/4) + floor(b/4) !== floor((a+b)/4)`),
- *  which is exactly the property prefix differencing has to handle. */
 const chars4 = (text: string) => Math.floor(text.length / 4);
 
 function composition(input: Partial<ContextCompositionInput>) {
@@ -153,8 +142,6 @@ describe("computeContextComposition", () => {
 
     expect(prompt.localTokens).toBeGreaterThan(0);
     expect(skills.localTokens).toBeGreaterThan(0);
-    // Prefix differencing telescopes: counting the slices independently would
-    // not add up, because `chars4` is not additive across a split.
     expect(prompt.localTokens + skills.localTokens).toBe(chars4(SYSTEM_PROMPT));
   });
 
@@ -170,11 +157,9 @@ describe("computeContextComposition", () => {
       "compaction-summary",
       "branch-summary",
     ]);
-    // user + bashExecution + custom land together in "user-side text" …
     expect(leaf(result, "messages", "user-text").localTokens).toBe(
       chars4("hello world") + chars4("lsa.ts") + chars4("custom note"),
     );
-    // … while the folded-into-user summaries stay their own buckets.
     expect(leaf(result, "messages", "compaction-summary").localTokens).toBe(chars4("a long summary"));
     expect(leaf(result, "messages", "branch-summary").localTokens).toBe(chars4("a branch summary"));
     expect(leaf(result, "messages", "tool-result").localTokens).toBe(chars4("file contents"));
@@ -189,9 +174,7 @@ describe("computeContextComposition", () => {
   });
 
   it("normalizes in both directions", () => {
-    // local 100 → total 1000 (k = 10)
     const up = composition({ tools: [{ name: "x", description: "y", parameters: {} }], anchoredTotalTokens: 1000, countTokens: () => 100 });
-    // local 100 → total 10 (k = 0.1)
     const down = composition({ tools: [{ name: "x", description: "y", parameters: {} }], anchoredTotalTokens: 10, countTokens: () => 100 });
 
     expect(bucket(up, "system-tools").localTokens).toBe(100);
@@ -219,8 +202,6 @@ describe("computeContextComposition", () => {
     expect(empty.buckets.every((candidate) => candidate.tokens === null && candidate.percent === null)).toBe(true);
     expect(zeroTotal.anchoredTotalTokens).toBeNull();
     expect(zeroTotal.buckets.every((candidate) => candidate.tokens === null && candidate.percent === null)).toBe(true);
-    // An anchor with nothing local to distribute degrades to unanchored rather
-    // than inventing a split that doesn't add up.
     expect(nothingToClassify.anchoredTotalTokens).toBeNull();
     for (const candidate of [...empty.buckets, ...zeroTotal.buckets, ...nothingToClassify.buckets]) {
       expect(Number.isFinite(candidate.localTokens)).toBe(true);
@@ -264,15 +245,7 @@ describe("computeContextComposition", () => {
   });
 });
 
-// The composition panel's Top-N list (`#38`). The list is a *projection of the
-// same transcript* the seven message leaves are counted from, so it lives in
-// the same pure module and is tested at the same seam: a deterministic injected
-// `countTokens`, no tokenizer, no request.
 describe("top tool results", () => {
-  /** A transcript of `count` read calls, each result one step bigger than the
-   *  last, so "biggest first" is checkable by id. Result `i` counts `10*(i+1)`
-   *  tokens under `chars4`. The call block uses pi's raw shape
-   *  (`id`/`name`/`arguments`) — that is what `agent.state.messages` holds. */
   function readTranscript(count: number): ContextMessage[] {
     const messages: ContextMessage[] = [];
     for (let index = 0; index < count; index += 1) {
@@ -322,8 +295,6 @@ describe("top tool results", () => {
   });
 
   it("treats a result whose call is not in the transcript as unjumpable", () => {
-    // An id with no matching call would make the panel render a button that
-    // scrolls nowhere, so "no target" is the honest answer.
     const result = composition({
       messages: [
         { role: "toolResult", toolCallId: "compacted-away", toolName: "read", content: [{ type: "text", text: "x".repeat(40) }] },
@@ -341,8 +312,6 @@ describe("top tool results", () => {
   });
 
   it("scales each listed result by the same global factor as the buckets", () => {
-    // Results only, no tool-call blocks: the denominator is exactly the three
-    // results (10 + 20 + 30 = 60), so k = 600 / 60 = 10.
     const resultsOnly: ContextMessage[] = [10, 20, 30].map((size, index) => ({
       role: "toolResult",
       toolCallId: `c${index}`,
@@ -377,9 +346,6 @@ describe("formatCompositionPercent", () => {
 
 describe("formatEstimatedTokens", () => {
   it("prefixes a local estimate with `≈`, the total's only tell apart", () => {
-    // ADR-0005: the provider total is printed bare, so every classified number
-    // goes through this helper — the ring tooltip and the composition panel
-    // must not each invent their own convention.
     expect(formatEstimatedTokens(12_300)).toBe("≈ 12.3K");
     expect(formatEstimatedTokens(0)).toBe("≈ 0.0K");
   });

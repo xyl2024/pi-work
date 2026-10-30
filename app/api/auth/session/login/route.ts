@@ -9,12 +9,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// POST /api/auth/session/login  body: { username, password }
-// Verifies credentials against PI_WORK_AUTH_USERNAME/PI_WORK_AUTH_PASSWORD
-// (defaults: admin/admin) and sets the HttpOnly session cookie.
-//
-// Desktop mode has no credential pair: the shell signs the cookie itself and
-// injects it into the window, so there is nothing to log in to here.
 export async function POST(req: Request) {
   if (!isLoginEnabled()) {
     return NextResponse.json({ error: "login is disabled in this deployment mode" }, { status: 403 });

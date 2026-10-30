@@ -9,21 +9,6 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
-/**
- * End-to-end check of the download chain, with no network:
- *
- *   wrapped ModelRuntime → audit fetch patch → `provider_calls.request_body`
- *   logical call id      → `model_calls.call_id` / `message_id`
- *   assistant message    → `getMessageRequestBody(...)`
- *
- * The only stub is the actual socket (`globalThis.fetch`), installed *before*
- * `llm-audit` loads so the audit patch wraps it like it wraps the real one.
- * Everything else — the ALS context, the metrics/audit wrappers, both SQLite
- * files, the join — is the production path. Without this, a break in the
- * call-id hand-off would still leave every unit test green while the chat's
- * download button reported "nothing captured" for every message.
- */
-
 const MODEL = { provider: "fake-provider", id: "fake-model", api: "fake-api" } as const;
 const SESSION_ID = "session-e2e";
 const MESSAGE = {
@@ -57,8 +42,6 @@ beforeAll(async () => {
   process.env.PI_WORK_TOKEN_AUDIT_DB = join(dir, "token-audit.db");
   process.env.PI_WORK_LLM_AUDIT_RETENTION_DAYS = "0";
 
-  // Stand-in socket. Installed before `llm-audit` is imported so the audit
-  // patch saves this as the "pristine" fetch it wraps.
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     fetchCalls.push(String(input));
     expect(init?.body).toBe(REQUEST_BODY);
@@ -78,7 +61,6 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** A runtime that plays the provider's part: one HTTP request, one reply. */
 function fakeRuntime(): ModelRuntime {
   return {
     getProviders: () => [
@@ -132,10 +114,8 @@ describe("request body download chain", () => {
     });
 
     expect(result).not.toBeNull();
-    // Named after the model and the capture time (UTC).
     expect(result?.fileName).toMatch(/^request-body-fake-model-\d{8}T\d{6}Z\.json$/);
     expect(JSON.parse(result?.content ?? "")).toEqual(JSON.parse(REQUEST_BODY));
-    // Readable: the stored single-line body was re-indented for the download.
     expect(result?.content).toContain('\n  "model": "fake-model"');
   });
 });

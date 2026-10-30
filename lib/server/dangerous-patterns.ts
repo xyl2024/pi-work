@@ -1,11 +1,3 @@
-/**
- * The server-side face of the dangerous-command gate: read the user's rules
- * out of `config.yaml`, put this platform's built-in set underneath them
- * (`lib/shared/dangerous-commands.ts`), compile the result, and match a shell
- * command against it. The rule *content*, the matching and the invalid-pattern
- * policy all live in the pure shared module; this file only supplies the
- * config, the platform, and one log line for a broken pattern.
- */
 import type { DangerousPatternRule, DangerousPatternsConfig } from "../shared/config-types";
 import {
   assembleDangerousRules,
@@ -23,14 +15,6 @@ import { matchSelfKillCommand } from "./self-protection";
 
 const log = createLogger("dangerous-patterns");
 
-/**
- * Compiled rules for the config they came from. `readConfig()` builds a fresh
- * object on every call, so the cache is keyed by the rules' own content (and
- * the platform) rather than by object identity — otherwise it would never hit,
- * as the pre-existing identity-keyed cache never did. Its real job is to keep
- * the "invalid pattern" warning to once per config change instead of once per
- * matched command.
- */
 let cachedKey: string | null = null;
 let cachedRules: CompiledSourcedDangerousRule[] = [];
 
@@ -39,8 +23,6 @@ function effectiveRules(): CompiledSourcedDangerousRule[] {
   const key = `${process.platform}\u0000${JSON.stringify(cfg.rules)}`;
   if (key === cachedKey) return cachedRules;
 
-  // One assembly for both consumers: the gate matches `compiled`, and the
-  // settings page lists the same set (built-ins + layer + invalid rules).
   const { compiled, invalidUserRules } = assembleDangerousRules(
     process.platform,
     cfg.rules,
@@ -53,57 +35,20 @@ function effectiveRules(): CompiledSourcedDangerousRule[] {
   return cachedRules;
 }
 
-/**
- * Match a command against the dangerous-command rules in force. Returns the
- * rule name of the first match plus the layer it came from, or null if no rule
- * matched.
- */
 export function matchDangerousPattern(command: string): SourcedDangerousCommandMatch | null {
   return matchDangerousCommand(command, effectiveRules());
 }
 
-/**
- * The full answer to "what happens if this command runs?": the self-protection
- * hard block first, then the promptable rule match filtered by the session's
- * permission mode.
- *
- * This is the one place that order is decided — and, since ADR-0021, the one
- * place the permission mode forks anything. The `tool_call` gate in
- * `lib/server/rpc-manager.ts` and the settings page's command tester both call
- * it, so "the box said it would ask" and "it asked" cannot diverge, and the
- * tester cannot claim a command is fine while the gate hard-blocks it. The
- * self-protection half needs this process's pid and listening port, which is
- * why the verdict is computed here rather than in the browser.
- *
- * Self-protection wins on purpose: its process-kill patterns are POSIX-shaped
- * (`pkill`, `fuser`, `$PPID`) and never match PowerShell syntax, while its
- * system-down ones (`shutdown`, `reboot`) apply to both agent shells — so the
- * check belongs before the match, not inside a per-shell branch. `full_access`
- * changes nothing about that: a session-level exemption from *asking* is not a
- * licence to kill the process that hosts every session, terminal and background
- * loop (ADR-0021). All it does is turn a rule match into `none`.
- *
- * An unknown / missing mode falls back to `confirm` — the failure direction is
- * "keep asking", never "stop asking". The settings tester omits the argument
- * because it answers "what does the rule set say", not "what does my session
- * say".
- */
 export function evaluateDangerousCommand(
   command: string,
   mode: PermissionMode = DEFAULT_PERMISSION_MODE,
 ): DangerousCommandVerdict {
   const effectiveMode = isPermissionMode(mode) ? mode : DEFAULT_PERMISSION_MODE;
-  // Nothing to match: an empty command cannot be a dangerous command. (An
-  // empty *pattern*, by contrast, compiles and matches everything — which is
-  // why the write path refuses one.) The page also skips the request for an
-  // empty box; the rule itself lives here so both answers are the same.
   if (command.trim() === "") return { kind: "none" };
 
   const selfKill = matchSelfKillCommand(command);
   if (selfKill) return { kind: "self_protected", reason: selfKill.reason };
 
-  // Full access: the command runs without asking. Not "skip the whole
-  // function" — self-protection above has already had its say.
   if (effectiveMode === "full_access") return { kind: "none" };
 
   const match = matchDangerousPattern(command);
@@ -111,33 +56,14 @@ export function evaluateDangerousCommand(
   return { kind: "matched", ruleName: match.ruleName, source: match.source };
 }
 
-/**
- * The effective set as the settings page reads it: this platform's built-in
- * rules and the user rules that do not compile. Read fresh from `config.yaml`,
- * so a hand edit shows up as soon as the file changes (the read cache is
- * mtime + size keyed — no session restart).
- */
 export function getEffectiveDangerousRuleSet(): DangerousRuleSetSnapshot {
   return buildDangerousRuleSetSnapshot(process.platform, readConfig().dangerous_patterns.rules);
 }
 
-/**
- * Get the configured timeout (ms) for permission requests.
- */
 export function getDangerousPatternTimeoutMs(): number {
   return readConfig().dangerous_patterns.timeout_ms;
 }
 
-/**
- * Write the user's rules — the settings page's save.
- *
- * Read-modify-write of the whole config file: only `dangerous_patterns` is
- * replaced, everything else on disk is carried over as it was. Callers must
- * have compiled the rules already (the shared draft module does); this function
- * does not validate, because the route is the one place that decides whether a
- * payload may land. `timeoutMs: null` means the write is about rules only, so
- * the timeout already on disk is kept instead of being reset to the default.
- */
 export function writeDangerousRules(
   rules: readonly DangerousPatternRule[],
   timeoutMs: number | null,

@@ -30,13 +30,10 @@ describe("sessionWorkspaceReducer open_session", () => {
   it("does not steal focus from the active tab when only syncing info", () => {
     let state = createSessionWorkspaceState();
     state = openSession(state, "a");
-    // "a" tab is active after a user-driven open; switch to the draft tab.
     const draftId = state.tabOrder[0];
     state = sessionWorkspaceReducer(state, { type: "activate", tabId: draftId });
     expect(state.activeTabId).toBe(draftId);
 
-    // Background info sync (e.g. agent finished in a background tab) must not
-    // yank the user back to the "a" tab.
     const synced = sessionWorkspaceReducer(state, {
       type: "open_session",
       session: { ...makeSession("a"), modified: "later" },

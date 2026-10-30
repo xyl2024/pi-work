@@ -1,7 +1,3 @@
-// 技能展开块（skill block）的共享纯函数：与 pi-coding-agent 的
-// `parseSkillBlock` / `_expandSkillCommand` 钉住同一正则。命中形状
-// （name / location / content / 可选尾随用户附加文字）、非技能文本
-// （含未展开的 `/skill:xxx` 原文）返回 null。
 import { describe, expect, it } from "vitest";
 
 import { parseSkillBlock } from "@/lib/shared/skill-block";

@@ -8,27 +8,11 @@ import { isContentEqual } from "@/lib/client/shallowEqual";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { SETTINGS_OWNED_KEYS, type SettingsPatch } from "@/lib/shared/settings-keys";
 
-/** The optimistic next state plus the exact patch to send for it. */
 export interface SettingsWrite {
-  /** Optimistic next state, published to the store before the request. */
   next: PiWorkConfig;
-  /** Patch to PUT; only keys in {@link SETTINGS_OWNED_KEYS} are honored. */
   patch: SettingsPatch;
 }
 
-/**
- * The single write entry for `~/.pi-work/config.yaml` settings.
- *
- * One implementation owns the optimistic store update, the rollback and the
- * success/error feedback:
- *
- * - {@link useSettingsWrite.apply} — an immediate setting: the caller computes
- *   the next config and the patch is derived from the top-level keys that
- *   actually changed. Only those keys are sent.
- *
- * Sections never `fetch("/api/settings")` themselves; bypasses lose optimistic
- * update and rollback and must not grow back.
- */
 export function useSettingsWrite() {
   const config = useSettings();
   const configRef = useRef<PiWorkConfig | null>(config);
@@ -61,7 +45,6 @@ export function useSettingsWrite() {
     }
   }, [toast, t]);
 
-  /** Immediate setting: derive the patch from the changed top-level keys. */
   const apply = useCallback(
     (computeNext: (prev: PiWorkConfig) => PiWorkConfig): Promise<boolean> => {
       const prev = configRef.current;
@@ -75,7 +58,6 @@ export function useSettingsWrite() {
   return { apply };
 }
 
-/** Top-level keys in {@link SETTINGS_OWNED_KEYS} whose content changed. */
 export function diffPatch(prev: PiWorkConfig, next: PiWorkConfig): SettingsPatch {
   const patch: Record<string, unknown> = {};
   for (const key of SETTINGS_OWNED_KEYS) {

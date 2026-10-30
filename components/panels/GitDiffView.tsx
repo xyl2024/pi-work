@@ -6,9 +6,7 @@ import type { GitDiffFile, GitStatusResponse } from "@/lib/shared/git-diff-types
 import { GitDiffViewer } from "./GitDiffViewer";
 
 interface Props {
-  /** Session cwd (always a validated repo, checked by GitPanel). */
   cwd: string;
-  /** Fresh repo status (files + per-file stats), owned by GitPanel. */
   status: GitStatusResponse;
 }
 
@@ -27,12 +25,6 @@ export const GIT_STATUS_COLOR: Record<GitDiffFile["status"], string> = {
   "??": "var(--text-dim)",
 };
 
-/**
- * Worktree / staged change view: Staged↔Unstaged toggle + per-file list +
- * per-file unified diff. The parent GitPanel renders the shared states
- * (loading / not a repo / no session) and owns the status fetch; this
- * view only tracks selection and the loaded diff for the selected file.
- */
 export function GitDiffView({ cwd, status }: Props) {
   const { t } = useI18n();
 
@@ -66,10 +58,6 @@ export function GitDiffView({ cwd, status }: Props) {
     }
   }, [cwd]);
 
-  // When the selection, staged side, or the status object itself changes
-  // (manual refresh in GitPanel), (re)load the diff for the selected file.
-  // Re-fetching on status change keeps the pane honest after the agent
-  // edits a file while it's still selected.
   useEffect(() => {
     if (!selectedPath) {
       setDiffText(null);
@@ -80,24 +68,18 @@ export function GitDiffView({ cwd, status }: Props) {
   }, [selectedPath, staged, status, loadDiff]);
 
   const handleSelectFile = useCallback((f: GitDiffFile) => {
-    // Default to the side that actually has changes for this file.
     if (f.status === "??") setStaged(false);
     else if (f.hasUnstaged && !f.hasStaged && staged) setStaged(false);
     else if (f.hasStaged && !f.hasUnstaged && !staged) setStaged(true);
     setSelectedPath(f.path);
   }, [staged]);
 
-  // Files visible under the current staged/unstaged filter.
-  // Untracked files (`??`) show only in the Unstaged view.
   const visibleFiles = useMemo(() => {
     return status.files.filter((f) =>
       staged ? f.hasStaged : (f.hasUnstaged || f.status === "??")
     );
   }, [status, staged]);
 
-  // When the staged toggle changes, clear the selection if the current file
-  // is no longer in the visible list (deleted from status, or moved to the
-  // other side).
   useEffect(() => {
     if (selectedPath && !visibleFiles.some((f) => f.path === selectedPath)) {
       setSelectedPath(null);
@@ -154,7 +136,6 @@ export function GitDiffView({ cwd, status }: Props) {
 
   return (
     <div ref={viewRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Staged/Unstaged toggle */}
       <div style={{
         display: "flex", alignItems: "center", gap: 4,
         padding: "6px 10px",
@@ -183,7 +164,6 @@ export function GitDiffView({ cwd, status }: Props) {
         </span>
       </div>
 
-      {/* File list */}
       <div style={{
         flex: fileListHeight === null ? "0 0 40%" : `0 0 ${fileListHeight}px`,
         minHeight: 80, overflowY: fileListHeight === null ? "auto" : "auto", overflowX: "hidden",
@@ -236,7 +216,6 @@ export function GitDiffView({ cwd, status }: Props) {
         )}
       </div>
 
-      {/* Resize handle + Diff view */}
       <div
         role="separator"
         aria-orientation="horizontal"

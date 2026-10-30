@@ -4,16 +4,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * Store-level tests for the user-defined subagent profiles: seeding the
- * built-ins into a fresh database, CRUD, and the one-shot rename of
- * `subagent_tasks.subagent_type` → `subagent_name` on a legacy database.
- *
- * The store caches its handle on globalThis and reads `PI_WORK_SUBAGENTS_DB`
- * on every open, so each test points the env var at its own temp file and
- * clears the cached globals before importing.
- */
-
 let dir: string;
 let dbPath: string;
 
@@ -97,7 +87,6 @@ describe("subagent profile store", () => {
     expect(implementer?.inheritSystemPrompt).toBe(true);
     expect(implementer?.tools).toEqual(["read", "edit", "write", "bash", "codemode"]);
 
-    // The upgrade runs once: a deleted built-in must not come back on restart.
     expect(deleteSubagentProfile("implementer")).toBe(true);
     resetStoreGlobals();
     const reloaded = (await import("@/lib/server/subagent-profiles")).listSubagentProfiles();
@@ -191,7 +180,6 @@ describe("subagent profile store", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].subagentName).toBe("codebase_explorer");
 
-    // Resetting the env back to this test file's DB for any later test.
     process.env.PI_WORK_SUBAGENTS_DB = dbPath;
     resetStoreGlobals();
   });
@@ -202,7 +190,6 @@ describe("profile tool-name migration", () => {
     resetStoreGlobals();
     const { getSubagentDb } = await import("@/lib/server/subagent-store");
     const { getSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
-    // Seeding happens on first read; make sure the table exists.
     listSubagentProfiles();
     getSubagentDb().prepare(`
       INSERT INTO subagent_profiles
@@ -212,8 +199,6 @@ describe("profile tool-name migration", () => {
               'off', '{}', 30000, 0, 1, 1)
     `).run();
 
-    // The old name may survive in an old row; it must never be handed to a
-    // child as an executable name (the child session does not register it).
     expect(getSubagentProfile("legacy_tools")!.tools).toEqual(["read", "subagent"]);
   });
 });

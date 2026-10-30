@@ -31,12 +31,6 @@ export async function GET(req: Request, { params }: RouteContext) {
         const state = await rpc.send({ type: "get_state" });
         agentState = { running: true, state };
       } else {
-        // Wrapper not alive (e.g. right after server boot) — lazily boot it so
-        // the client learns the session's real state (systemPrompt etc.) on
-        // this request instead of an empty `{ running: false }` that leaves
-        // Context panel stuck on "main session initializing…". Mirrors
-        // the events endpoint's lazy-start behavior. Boot failure degrades to
-        // the old calm response so session loading never breaks.
         try {
           const resolved = await startRpcSession(
             id,
@@ -74,7 +68,6 @@ export async function GET(req: Request, { params }: RouteContext) {
   }
 }
 
-// PATCH /api/sessions/[id]  body: { name: string }
 export async function PATCH(req: Request, { params }: RouteContext) {
   const { id } = await params;
   const startedAt = Date.now();
@@ -105,7 +98,6 @@ export async function PATCH(req: Request, { params }: RouteContext) {
   }
 }
 
-// DELETE /api/sessions/[id]
 export async function DELETE(_req: Request, { params }: RouteContext) {
   const { id } = await params;
   const startedAt = Date.now();

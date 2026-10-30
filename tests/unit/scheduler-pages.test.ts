@@ -11,12 +11,6 @@ import {
   type SchedulerPage,
 } from "@/lib/shared/scheduler-pages";
 
-/**
- * The scheduler panel's page stack (lib/shared/scheduler-pages.ts). Driven as
- * plain data — the store holds the current stack and the panel renders
- * `currentSchedulerPage`. No React, no DOM, no server.
- */
-
 function detail(taskId: string): SchedulerPage {
   return { kind: "detail", taskId };
 }

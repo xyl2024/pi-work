@@ -8,14 +8,6 @@ import {
   selectModelsConfigOpenAction,
 } from "@/lib/shared/models-config-close";
 
-/**
- * The models-config panel's close guard + reopen policy
- * (lib/shared/models-config-close.ts): whether closing the panel tab may lose
- * something, which confirmation to put on screen, and whether the next open
- * re-reads disk. Driven as plain data, no browser — the shell is the only
- * caller and it maps the returned i18n keys through `t()`.
- */
-
 const CLEAN = { dirty: false, oauthInProgress: false };
 
 describe("selectModelsConfigCloseConfirm", () => {

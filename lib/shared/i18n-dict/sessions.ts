@@ -1,9 +1,4 @@
-// Multi-cwd sidebar / favorites / activity.
-// Session chrome (Sessions, Commands, etc.) lives in chat.ts since they
-// share the sidebar component.
-
 export const sessions = {
-  // Multi-cwd sidebar
   "Loading projects...": "正在加载项目...",
   "No projects yet": "暂无项目",
   "Only today's sessions": "仅看今日会话",
@@ -17,7 +12,6 @@ export const sessions = {
   "Loading sessions...": "正在加载会话...",
   "End of results": "已加载全部会话",
 
-  // Favorites
   "Favorite session": "收藏会话",
   "Unfavorite session": "取消收藏",
   "Favorites": "收藏夹",
@@ -27,7 +21,6 @@ export const sessions = {
   "No favorites yet — click ☆ on any session to add one.":
     "暂无收藏会话 — 点击会话上的 ☆ 即可收藏",
 
-  // New-session welcome line (empty new-session screen greeting)
   "Hi, {name}, what shall we create together today?": "Hi，{name} 今天想一起创造什么？",
   "No activity in this workspace yet": "此工作区暂无活动",
   "Couldn't load activity": "无法加载活动数据",
@@ -35,7 +28,6 @@ export const sessions = {
   "sessions": "个会话",
   "+{n} more": "还有 {n} 条",
 
-  // Per-cwd custom icon
   "Set custom icon": "设置自定义图标",
   "Default folder icon": "默认文件夹图标",
   "Search icons...": "搜索图标…",
@@ -44,11 +36,9 @@ export const sessions = {
   "Emoji": "表情",
   "No icons match": "没有匹配的图标",
 
-  // Per-cwd default tools
   "Set default tools": "设置默认工具",
   "Default tools for this project": "此项目的默认工具",
 
-  // Per-cwd display alias
   "Set project alias": "设置项目别名",
   "Leave empty to clear the alias": "留空则清除别名",
   "Clear alias": "清除别名",

@@ -1,11 +1,3 @@
-/**
- * In-memory WeChat QR-login sessions.
- *
- * One session per active QR scan, keyed by a random `sessionKey` and bound
- * to a channel via `channelId`. Sessions are intentionally in-memory only:
- * if the server restarts mid-scan the user simply re-scans (matches the
- * original single-account behaviour). Nothing here touches the filesystem.
- */
 import { randomUUID } from "crypto";
 import type { LoginSession } from "../../shared/wechat/types";
 
@@ -19,7 +11,6 @@ function purgeExpired(): void {
   }
 }
 
-/** Start a new login session for a specific channel. */
 export function createSession(initial: Omit<LoginSession, "sessionKey" | "startedAt" | "phase">): LoginSession {
   purgeExpired();
   const session: LoginSession = {
@@ -50,7 +41,6 @@ export function updateSession(sessionKey: string, patch: Partial<LoginSession>):
   return merged;
 }
 
-/** Drop every login session bound to a channel (start-of-scan cleanup). */
 export function dropSessionsForChannel(channelId: string): void {
   for (const [key, session] of sessions) {
     if (session.channelId === channelId) sessions.delete(key);

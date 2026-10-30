@@ -7,11 +7,7 @@ type Translator = (key: string, params?: Record<string, string | number>) => str
 type UseAgentSessionTransportOptions = {
   refs: TransportRefs;
   handleAgentEventRef: EventHandlerRef;
-  /** Called once on SSE open when compensate=true; gives the data layer a
-   *  chance to refresh context/runtime state for the connected session. */
   onConnectCompensate: (sid: string) => Promise<void>;
-  /** Called after SSE close/error: the data layer can close its idle
-   *  EventSource if the agent is no longer running. */
   onConnectionClosed: () => void;
   t: Translator;
 };
@@ -41,8 +37,6 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
 
   const connectEvents = useCallback((sid: string, compensate = false) => {
     if (disposedRef.current) return;
-    // A live connection belongs to this controller, not to the active view.
-    // Repeated sends/compacts reuse it instead of tearing it down.
     if (eventSourceRef.current && eventSourceSessionRef.current === sid) return;
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -68,7 +62,6 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
         const event = JSON.parse(e.data) as SessionEvent;
         handleAgentEventRef.current?.(event);
       } catch {
-        // ignore malformed events
       }
     };
     es.onerror = () => {

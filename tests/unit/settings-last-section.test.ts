@@ -11,7 +11,6 @@ import {
   isSettingsSectionId,
 } from "@/components/settings/registry";
 
-/** Smallest possible in-memory Storage stand-in. */
 function memoryStorage(initial: Record<string, string> = {}) {
   const entries = new Map(Object.entries(initial));
   return {
@@ -23,7 +22,6 @@ function memoryStorage(initial: Record<string, string> = {}) {
   };
 }
 
-/** A storage whose every access throws, as in private mode / disabled storage. */
 const brokenStorage: SettingsSectionStorage = {
   getItem: () => {
     throw new Error("storage unavailable");

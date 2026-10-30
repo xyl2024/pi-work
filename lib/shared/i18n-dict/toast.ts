@@ -1,16 +1,6 @@
-// Toast notification UI — sidebar label, kind names, and Settings → Toast
-// Test preview strings.
-//
-// Mirrors the English source-key approach used by every other dictionary:
-// the key is the English string, the value is the Simplified Chinese
-// translation. Missing keys fall back to the literal key (see
-// hooks/useI18n.tsx).
-
 export const toast = {
-  // Sidebar nav label — appears in Settings.
   "Toast Test": "通知测试",
 
-  // Settings → Toast Test section
   "Kind": "类型",
   "success": "成功",
   "error": "失败",
@@ -29,16 +19,12 @@ export const toast = {
   "Optional description (multi-line)": "描述（可选，支持换行）",
   "Optional action label": "操作按钮文案（可选）",
 
-  // The actual notification copy used by the test buttons. Keeping these
-  // short and visually representative of the real-world UI so the preview
-  // matches what the user will see in daily use.
   "Test toast (default copy)": "这是一条通知",
   "Saved successfully": "已保存",
   "Failed to save": "保存失败",
   "New update available": "有可用更新",
   "Network is unstable": "网络不太稳定",
 
-  // Status / feedback after a test
   "Toast dispatched": "已发送通知",
   "Action clicked": "已点击操作",
 } as const;

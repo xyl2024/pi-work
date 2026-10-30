@@ -4,11 +4,6 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 
-/**
- * Small modal for editing a cwd's display alias. Empty input (or the
- * "clear" button) removes the alias; Saving persists via the caller,
- * which decides whether the dialog closes (only on success).
- */
 export function CwdAliasDialog({
   open,
   cwd,
@@ -18,7 +13,6 @@ export function CwdAliasDialog({
 }: {
   open: boolean;
   cwd: string;
-  /** Current alias (or null when unset). Re-seeds the input on open. */
   current: string | null;
   onSave: (alias: string | null) => Promise<boolean>;
   onClose: () => void;
@@ -32,7 +26,6 @@ export function CwdAliasDialog({
     setPortalEl(document.body);
   }, []);
 
-  // Re-seed the input each time the dialog opens.
   useEffect(() => {
     if (open) {
       setValue(current ?? "");
@@ -94,7 +87,6 @@ export function CwdAliasDialog({
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div style={{ padding: "14px 16px 10px", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>
             {t("Set project alias")}
@@ -119,7 +111,6 @@ export function CwdAliasDialog({
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ padding: "0 16px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {cwd}
@@ -145,7 +136,6 @@ export function CwdAliasDialog({
           />
         </div>
 
-        {/* Footer */}
         <div style={{ display: "flex", gap: 8, padding: "10px 16px 14px" }}>
           <button
             onClick={() => { setValue(""); void submit(); }}

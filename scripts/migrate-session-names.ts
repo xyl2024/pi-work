@@ -1,30 +1,4 @@
 #!/usr/bin/env node
-/**
- * One-shot backfill: for every `.jsonl` under
- * `~/.pi/agent/sessions/<workspace>/` scan the **whole file** for the
- * latest `session_info.name` and persist it into the sidecar index at
- * `~/.pi-work/session-names/<id>.json`.
- *
- * Why this exists: the sidebar's `/api/sessions?limit=N` endpoint only
- * reads the first 16 KB of each session file to recover metadata; if the
- * session's only `session_info` entry lives past that window (typical
- * for long conversations where the rename happened near the end), the
- * sidebar falls back to displaying `firstMessage.slice(0,50)` instead
- * of the user's chosen name. After this migration runs once, future
- * `/api/sessions` reads use the sidecar to recover the **latest**
- * name regardless of where it lands in the JSONL.
- *
- * Idempotent: existing sidecars are left untouched unless `--force` is
- * passed. Re-running after `setSessionName` calls is a no-op.
- *
- * Performance: ~1630 files × ~10 ms each, run with a 32-wide concurrent
- * batch — total ~3-5 s on the same host where the corresponding
- * `SessionManager.listAll()` benchmark took 1.8 s end-to-end.
- *
- * Usage:
- *   npx tsx scripts/migrate-session-names.ts
- *   npx tsx scripts/migrate-session-names.ts --force
- */
 
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
@@ -63,7 +37,6 @@ function scanFileForIdAndLatestName(filePath: string): ScanResult | null {
       pos += n;
       leftover += dec.write(buf.subarray(0, n));
       const lines = leftover.split("\n");
-      // Hold back any incomplete trailing fragment for the next chunk.
       leftover = lines.pop() ?? "";
       for (const line of lines) {
         if (!line) continue;
@@ -81,11 +54,10 @@ function scanFileForIdAndLatestName(filePath: string): ScanResult | null {
         }
         if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
           const trimmed = ((entry as { name: string }).name).trim();
-          if (trimmed) name = trimmed; // last-write wins — matches getSessionName()
+          if (trimmed) name = trimmed;
         }
       }
     }
-    // Drain any trailing fragment left after the loop.
     if (leftover) {
       try {
         const entry = JSON.parse(leftover) as Record<string, unknown>;
@@ -94,7 +66,6 @@ function scanFileForIdAndLatestName(filePath: string): ScanResult | null {
           if (trimmed) name = trimmed;
         }
       } catch {
-        // Trailing fragment wasn't valid JSON; nothing to recover.
       }
     }
     if (!id) return null;
@@ -126,7 +97,6 @@ async function listAllJsonlFiles(sessionsDir: string): Promise<string[]> {
         if (f.endsWith(".jsonl")) allFiles.push(join(dir, f));
       }
     } catch {
-      // Unreadable workspace subdir — skip.
     }
   }
   return allFiles;

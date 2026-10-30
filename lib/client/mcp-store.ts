@@ -1,32 +1,5 @@
 "use client";
 
-/**
- * Module-scoped holder for the MCP *panel view*.
- *
- * The panel card only renders the active tab's body, so switching panel tabs
- * unmounts the view; and collapsing the panel merely animates its width, so the
- * body can stay mounted while invisible. Everything the user would notice losing
- * therefore has to live outside that mount: the drafts, the page-stack position
- * and the last-read file snapshots. That is the whole reason this module exists.
- *
- * The rules stay pure and live in `lib/shared/mcp-drafts.ts` (per-cwd buckets),
- * `lib/shared/mcp-pages.ts` (page stack) and `lib/shared/mcp-close.ts` (close
- * guard + reopen policy). This file is only the wiring — requests, the
- * `useSyncExternalStore` subscription, the per-cwd load, the save, and the
- * bucket lifetime — which ADR-0003 rule 3 leaves to the manual checklist.
- *
- * Two policies matter, and ADR-0018 records why they differ from the
- * models-config / skills siblings:
- *
- *   • drafts and snapshots are bucketed by cwd. Leaving a cwd keeps its bucket;
- *     the badge and the close guard both read "any cwd dirty", because closing
- *     the tab releases every bucket.
- *   • a clean panel re-checks disk on every re-open (`selectMcpOpenAction`), but
- *     the first frame shows the held snapshot instead of blocking on the read.
- *     `mcp.json` has more than one writer, and every save is a read-modify-write
- *     that never assumes its own snapshot is current.
- */
-
 import { useSyncExternalStore } from "react";
 import { isContentEqual } from "./shallowEqual";
 import { fetchMcpPanelData, putMcpPanelChanges } from "./mcp-io";
@@ -65,21 +38,13 @@ import { selectMcpOpenAction } from "@/lib/shared/mcp-close";
 import type { McpScope } from "@/lib/shared/mcp-panel";
 
 export interface McpStoreState {
-  /** The working directory the panel is showing; null before the first read. */
   currentCwd: string | null;
-  /** Live drafts, keyed by cwd. Parked dirty buckets survive a session switch. */
   buckets: McpDraftBuckets;
-  /** The cwd whose read is in flight, null when none is. */
   loadingCwd: string | null;
-  /** The last read failed; shown only while `loadErrorCwd` is the current cwd. */
   loadError: string | null;
-  /** The cwd `loadError` belongs to. Keeps a stale error from another cwd off screen. */
   loadErrorCwd: string | null;
-  /** The save request is in flight. */
   saving: boolean;
-  /** The last save failed; the footer shows this. */
   saveError: string | null;
-  /** A save has succeeded at least once in this tab's lifetime. */
   savedOnce: boolean;
 }
 
@@ -97,14 +62,12 @@ const INITIAL: McpStoreState = {
 let state: McpStoreState = INITIAL;
 const listeners = new Set<() => void>();
 
-/** Bumped on every load and on release; a late response older than the bump is dropped. */
 let loadSeq = 0;
 
 function emit(): void {
   for (const listener of listeners) listener();
 }
 
-/** Content-equality guarded write — a no-op patch never re-renders. */
 function patch(partial: Partial<McpStoreState>): void {
   let changed = false;
   for (const key of Object.keys(partial) as (keyof McpStoreState)[]) {
@@ -141,13 +104,9 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// ── Loading ─────────────────────────────────────────────────────────────
-
 async function load(cwd: string, background = false): Promise<void> {
   const seq = ++loadSeq;
   if (background) {
-    // A snapshot is already on screen: show it with a "checking" hint instead of
-    // blanking the panel, and let the reconcile replace it when it lands.
     patch({
       loadingCwd: cwd,
       loadError: null,
@@ -161,8 +120,6 @@ async function load(cwd: string, background = false): Promise<void> {
     const data = await fetchMcpPanelData(cwd);
     if (seq !== loadSeq) return;
     const held = selectMcpBucket(state.buckets, cwd);
-    // The user edited this cwd while the read was in flight (a parked dirty
-    // draft came back). Their edits win; the next save / open re-reads.
     if (!shouldApplyMcpSnapshot(held)) {
       patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd });
       if (background) patch({ buckets: withMcpBucketVerified(state.buckets, cwd, true) });
@@ -180,8 +137,6 @@ async function load(cwd: string, background = false): Promise<void> {
     });
   } catch (e) {
     if (seq !== loadSeq) return;
-    // A reconcile behind a snapshot fails quietly: keeping the last read is
-    // better than replacing it with an error screen.
     if (background && selectMcpBucket(state.buckets, cwd)) {
       patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd, buckets: withMcpBucketVerified(state.buckets, cwd, true) });
       return;
@@ -190,11 +145,6 @@ async function load(cwd: string, background = false): Promise<void> {
   }
 }
 
-/**
- * Make the store's view `cwd`'s. A different cwd parks the previous one (only
- * when dirty); the same cwd with a dirty draft reuses it, while a clean one
- * re-reads — the panel never shows a snapshot it cannot prove is current.
- */
 export function ensureMcpLoaded(cwd: string | null): void {
   if (cwd === null) {
     if (state.currentCwd !== null) patch({ currentCwd: null, loadingCwd: null, loadError: null, loadErrorCwd: null });
@@ -206,26 +156,17 @@ export function ensureMcpLoaded(cwd: string | null): void {
   const action = selectMcpOpenAction({ loading, dirty: bucket?.dirty ?? false, hasSnapshot: bucket !== null });
 
   if (state.currentCwd !== cwd) {
-    // Leaving a cwd keeps its bucket: it is the snapshot the next visit shows,
-    // and only closing the tab releases the map (`releaseMcpState`).
     patch({ currentCwd: cwd, loadError: null, loadErrorCwd: null });
   }
   if (action === "reuse") return;
-  // A snapshot is shown immediately; only a cwd we have never read blocks.
   void load(cwd, action === "show-snapshot");
 }
 
-/** Force a fresh read of the current cwd — the list's retry affordance. */
 export function reloadMcp(): void {
   if (state.currentCwd === null) return;
   void load(state.currentCwd);
 }
 
-/**
- * Drop every bucket and the page stacks. Called by the shell when the MCP tab
- * closes: the tab is the lifetime of the store, so the next open reads disk
- * again. The dirty cases get here only after the close guard was confirmed.
- */
 export function releaseMcpState(): void {
   if (state === INITIAL) return;
   loadSeq += 1;
@@ -233,14 +174,10 @@ export function releaseMcpState(): void {
   emit();
 }
 
-// ── Dirty predicate (badge + close guard, one source) ───────────────────
-
-/** Whether any cwd holds unsaved changes. Read by the shell's close guard. */
 export function getMcpDirty(): boolean {
   return hasDirtyMcpBucket(state.buckets);
 }
 
-/** Same predicate, subscribed — drives the right-bar badge while collapsed. */
 export function useMcpDirty(): boolean {
   return useSyncExternalStore(
     subscribe,
@@ -248,8 +185,6 @@ export function useMcpDirty(): boolean {
     () => false,
   );
 }
-
-// ── Draft edits ─────────────────────────────────────────────────────────
 
 function currentBucket(): McpDraftBucket | null {
   return selectMcpBucket(state.buckets, state.currentCwd);
@@ -287,12 +222,10 @@ export function setMcpEntryDeleted(uid: string, deleted: boolean): void {
   mapEntry(uid, (entry) => ({ ...entry, deleted }));
 }
 
-/** Move a brand-new entry between the two files (the scope picker). */
 export function setMcpEntryScope(uid: string, scope: McpScope): void {
   mapEntry(uid, (entry) => ({ ...entry, scope }));
 }
 
-/** Drop a draft that was never on disk — a new server the user cancelled. */
 export function dropMcpEntry(uid: string): void {
   const bucket = currentBucket();
   if (!bucket) return;
@@ -317,7 +250,6 @@ export function setMcpAutoEnable(scope: McpScope, value: boolean): void {
   }));
 }
 
-/** Append a new server draft and open its entry page; returns the new uid. */
 export function addMcpServer(scope: McpScope): string | null {
   const bucket = currentBucket();
   if (!bucket) return null;
@@ -333,11 +265,6 @@ export function addMcpServer(scope: McpScope): string | null {
   return added.uid;
 }
 
-/**
- * Add a project override that turns a global server off for this working
- * directory, and open its page so the pending change (and the save button) are
- * visible. Nothing is written until Save, same as every other edit.
- */
 export function disableGlobalInProject(name: string): void {
   const bucket = currentBucket();
   if (!bucket) return;
@@ -352,22 +279,18 @@ export function disableGlobalInProject(name: string): void {
   });
 }
 
-// ── Navigation ──────────────────────────────────────────────────────────
-
 export function openMcpEntry(uid: string): void {
   const bucket = currentBucket();
   if (!bucket) return;
   patch({ buckets: withMcpBucket(state.buckets, { ...bucket, pages: openMcpEntryPage(uid) }) });
 }
 
-/** The entry page's back control: pop one level, never below the list. */
 export function backMcpPageAction(): void {
   const bucket = currentBucket();
   if (!bucket) return;
   patch({ buckets: withMcpBucket(state.buckets, { ...bucket, pages: backPageStack(bucket.pages) }) });
 }
 
-/** Escape at an entry page pops one level; at the list it leaves the panel. */
 export function escapeMcp(): { closePanel: boolean } {
   const bucket = currentBucket();
   if (!bucket || isMcpListPage(bucket.pages)) return { closePanel: true };
@@ -375,14 +298,6 @@ export function escapeMcp(): { closePanel: boolean } {
   return { closePanel: false };
 }
 
-// ── Save ────────────────────────────────────────────────────────────────
-
-/**
- * Write this cwd's pending changes in one request. The confirmation is shown by
- * the panel before calling; the server validates every change before touching a
- * single file, so a rejected save leaves the drafts in place and the files
- * untouched. A successful save draws the stack back to the list and re-reads.
- */
 export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }> {
   const bucket = currentBucket();
   if (!bucket) return { ok: false, error: "no data" };
@@ -394,16 +309,11 @@ export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }>
   patch({ saving: true, saveError: null });
   try {
     await putMcpPanelChanges(bucket.cwd, changes);
-    // A successful PUT means the draft now equals disk, so the bucket is clean —
-    // set that before the re-read, otherwise the load guard would mistake it for
-    // a user edit made mid-flight and keep the stale snapshot.
     patch({
       saving: false,
       savedOnce: true,
       buckets: withMcpBucket(state.buckets, { ...bucket, pages: mcpPagesAfterSave(), dirty: false }),
     });
-    // Only pull the fresh copy when this cwd is still the one on screen; a save
-    // that resolves after the user switched sessions must not yank them back.
     if (state.currentCwd === bucket.cwd) await load(bucket.cwd);
     return { ok: true };
   } catch (e) {

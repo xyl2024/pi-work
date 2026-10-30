@@ -8,10 +8,6 @@ export async function GET() {
   const oauthProviders = runtime.getProviders().filter((p: Provider) => p.auth.oauth);
 
   const EXCLUDED = new Set(["anthropic"]);
-  // Both ChatGPT options bill against a ChatGPT subscription, so the labels have
-  // to say which is which: `openai` is the new "Sign in with ChatGPT" provider
-  // (pi 0.99, see docs/providers.md), `openai-codex` is the legacy Codex
-  // provider pi itself now calls "OpenAI Codex (legacy)".
   const DISPLAY_NAMES: Record<string, string> = {
     "openai": "ChatGPT Subscription",
     "openai-codex": "ChatGPT Plus/Pro (legacy)",

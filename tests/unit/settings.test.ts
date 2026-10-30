@@ -2,11 +2,6 @@ import { afterAll, describe, expect, it } from "vitest";
 import { PANEL_TAB_KINDS } from "@/lib/shared/panelTabs";
 import { api, uniqueId, type Json } from "./helpers";
 
-/**
- * /api/settings reads/writes the isolated root's config.yaml.
- * Policy: snapshot the GET payload, apply a reversible toggle, verify,
- * restore the original config, then exercise the validation paths (400).
- */
 let original: Json | undefined;
 
 afterAll(async () => {
@@ -39,7 +34,6 @@ describe("settings api", () => {
   it("applies a reversible load_pi_docs toggle and restores", async () => {
     const before = await api("/api/settings");
     expect(before.status).toBe(200);
-    // Defaults to on so existing prompts keep pi's built-in Pi documentation.
     expect((before.body as Json).load_pi_docs).toBe(true);
 
     const put = await api("/api/settings", {
@@ -53,7 +47,6 @@ describe("settings api", () => {
     expect(off.status).toBe(200);
     expect((off.body as Json).load_pi_docs).toBe(false);
 
-    // Restore.
     const back = await api("/api/settings", {
       method: "PUT",
       body: JSON.stringify({ load_pi_docs: true }),
@@ -64,7 +57,6 @@ describe("settings api", () => {
   });
 
   it("rejects out-of-range file_viewer limits with 400", async () => {
-    // text max is 100 MB — 101 must fail
     const bad = await api("/api/settings", {
       method: "PUT",
       body: JSON.stringify({ file_viewer: { max_size_mb: { text: 101 } } }),
@@ -72,7 +64,6 @@ describe("settings api", () => {
     expect(bad.status).toBe(400);
     expect(String(bad.body.error)).toContain("text");
 
-    // non-integer must fail
     const nonInt = await api("/api/settings", {
       method: "PUT",
       body: JSON.stringify({ file_viewer: { max_size_mb: { image: 1.5 } } }),
@@ -90,14 +81,7 @@ describe("settings api", () => {
   });
 });
 
-/**
- * right_side_bar is the panel registry's slice of the config: the server
- * defaults are derived from `PANEL_TAB_SPEC_BY_KIND`, so every panel view is
- * configurable without touching the server, and the two deleted panels
- * (canvas / json) leave nothing behind.
- */
 describe("settings api: right side bar", () => {
-  /** Panels missing from the hand-kept defaults used to be un-toggleable. */
   const PREVIOUSLY_UNCONFIGURABLE = ["llmAudit"];
 
   async function snapshot(): Promise<Json> {
@@ -113,7 +97,6 @@ describe("settings api: right side bar", () => {
     for (const id of PANEL_TAB_KINDS) {
       expect(typeof rightSideBar[id], `right_side_bar.${id}`).toBe("boolean");
     }
-    // Panels that were deleted left no key behind.
     expect(rightSideBar.canvas).toBeUndefined();
     expect(rightSideBar.json).toBeUndefined();
   });
@@ -166,7 +149,6 @@ describe("settings api: right side bar", () => {
       const read = after.right_side_bar as Json;
       expect(read.canvas).toBeUndefined();
       expect(read.json).toBeUndefined();
-      // …and the real panel keys still parse alongside the stale ones.
       expect(typeof read.translate).toBe("boolean");
     } finally {
       await api("/api/settings", {
@@ -177,12 +159,6 @@ describe("settings api: right side bar", () => {
   });
 });
 
-/**
- * PUT /api/settings is a patch scoped to the keys it owns. A stale full-config
- * snapshot submitted by an old page must not be able to reset a key another
- * feature owns (here: `cwd_aliases`, planted through its own route). The
- * ignored keys are skipped, not rejected.
- */
 describe("settings api: PUT is a patch over owned keys", () => {
   const cwd = `/tmp/${uniqueId("settings-sentinel")}`;
   const alias = uniqueId("alias");
@@ -194,10 +170,8 @@ describe("settings api: PUT is a patch over owned keys", () => {
   }
 
   it("leaves another feature's key untouched when a stale full snapshot is PUT", async () => {
-    // 1. Snapshot the config *before* the other feature writes its key.
     const stale = (await api("/api/settings")).body;
 
-    // 2. The other feature writes cwd_aliases (sidebar-set alias).
     const planted = await api("/api/cwd-aliases", {
       method: "POST",
       body: JSON.stringify({ cwd, alias }),
@@ -207,17 +181,14 @@ describe("settings api: PUT is a patch over owned keys", () => {
 
     const beforeLoadPiDocs = stale.load_pi_docs;
     try {
-      // 3. An old page submits the whole config it remembers, without the alias.
       const put = await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify({ ...stale, load_pi_docs: !beforeLoadPiDocs }),
       });
       expect(put.status).toBe(200);
       expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(!beforeLoadPiDocs);
-      // …and the sentinel is still there.
       expect(await readAlias()).toBe(alias);
 
-      // 4. A single-key patch behaves the same.
       const patch = await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify({ load_pi_docs: beforeLoadPiDocs }),

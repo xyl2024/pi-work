@@ -1,12 +1,5 @@
 "use client";
 
-/**
- * Deterministic pastel palette for a name-initial avatar.
- *
- * Shared by the card grids that draw one (skills, MCP entries, models) so a
- * row always gets the same colour for the same name. Purely cosmetic.
- */
-
 const AVATAR_PALETTES: { bg: string; fg: string }[] = [
   { bg: "rgba(99,102,241,0.14)", fg: "#6366f1" },
   { bg: "rgba(20,184,166,0.14)", fg: "#0d9488" },

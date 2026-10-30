@@ -1,19 +1,3 @@
-/**
- * Scheduling loop for the background scheduler.
- *
- * Strategy mirrors `lib/wechat/monitor.ts`: a self-rescheduling
- * `setTimeout` (not `setInterval`, to avoid drift). Each tick:
- *
- *   1. Load all enabled tasks from the DB.
- *   2. Find the soonest `next_run_at`.
- *   3. setTimeout until that instant.
- *   4. On wake, fire any due tasks (in scheduled order), update each
- *      task's `next_run_at`, and re-arm.
- *
- * The API routes call `reschedule()` after any CRUD so newly-created or
- * edited tasks are picked up without waiting for the current timer.
- */
-
 import { Cron } from "croner";
 import { migrateToolName } from "../../shared/subagent";
 import { getSchedulerDb } from "./db";
@@ -26,7 +10,6 @@ const log = createLogger("scheduler/loop");
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Start the scheduling loop. Idempotent. */
 export function ensureLoop(): void {
   if (timer !== null) return;
   log.info("scheduler loop starting");
@@ -34,14 +17,6 @@ export function ensureLoop(): void {
   scheduleNext(0);
 }
 
-/**
- * On loop start, advance any task whose stored `next_run_at` is already in
- * the past to its next future trigger time. Skipping (not firing) missed
- * triggers is the policy here — the cron expression is the source of truth,
- * not "catch up to wherever we left off." Without this, restarting the
- * server (or otherwise being down across a trigger time) would fire every
- * task immediately on startup, even hours late.
- */
 function reconcileStaleTasks(now: number): void {
   const rows = getSchedulerDb()
     .prepare(
@@ -58,10 +33,6 @@ function reconcileStaleTasks(now: number): void {
   }
 }
 
-/**
- * Re-arm the timer as soon as possible. Called from the API after CRUD so
- * a newly-created task isn't held back by a long-pending timer.
- */
 export function reschedule(): void {
   if (timer === null) {
     ensureLoop();
@@ -107,15 +78,12 @@ function rowToTask(row: TaskRow): ScheduledTask {
   if (row.tool_names) {
     try {
       const parsed = JSON.parse(row.tool_names);
-      // Same on-load migration as the store: a task configured before the
-      // subagent tool rename must keep the tool it was saved with.
       if (Array.isArray(parsed)) {
         toolNames = parsed
           .filter((name): name is string => typeof name === "string")
           .map(migrateToolName);
       }
     } catch {
-      // ignore — store handles parse
     }
   }
   return {
@@ -165,8 +133,6 @@ function loadNextWake(): number | null {
 }
 
 function advanceNextRun(taskId: string, cron: string, timezone: string): void {
-  // Compute via croner and persist. If cron is invalid, leave next_run_at
-  // unchanged — the task will be re-evaluated next reschedule.
   try {
     const next = new Cron(cron, { timezone }).nextRun();
     getSchedulerDb()
@@ -192,14 +158,10 @@ async function tick(): Promise<void> {
     log.info("firing scheduled tasks", { count: due.length });
     for (const task of due) {
       const run = recordRunStart(task.id);
-      // Advance the task's next_run_at BEFORE running, so an overlapping
-      // tick (if any) doesn't see it as due again.
       advanceNextRun(task.id, task.cron, task.timezone);
-      // Fire-and-forget per task; runner.ts handles its own FIFO.
       void runTask(task, run.id);
     }
   }
-  // Re-arm
   const nextWake = loadNextWake();
   if (nextWake === null) {
     log.debug("no enabled tasks; loop idle");

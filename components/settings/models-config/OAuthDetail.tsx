@@ -16,11 +16,6 @@ import {
 } from "@/lib/client/oauth-login-store";
 import { isOAuthLoginWorking } from "@/lib/client/oauth-login";
 
-/**
- * The subscription view for one provider. The login session itself is held by
- * `lib/client/oauth-login-store.ts`, keyed by provider id, so this component can
- * unmount and remount without dropping an authorization that is still running.
- */
 export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -39,14 +34,10 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
     toast.show({ kind: "success", message: t("Connected") });
   }, [onRefresh, t, toast]);
 
-  // A remount takes over the success callback, so an in-flight login still
-  // refreshes the list and toasts through the current view's wiring.
   useEffect(() => {
     bindOAuthLoginSuccess(provider.id, handleLoginSuccess);
   }, [provider.id, handleLoginSuccess]);
 
-  // A session that finished before this view opened is stale: show idle again
-  // (a login still in flight is left untouched).
   useEffect(() => {
     resetSettledOAuthLogin(provider.id);
   }, [provider.id]);

@@ -6,7 +6,6 @@ const log = createLogger("api/profile");
 
 export const dynamic = "force-dynamic";
 
-// GET /api/profile  →  { username: string | null }
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -19,7 +18,6 @@ export async function GET() {
   }
 }
 
-// PUT /api/profile  body: { username: string | null }
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {

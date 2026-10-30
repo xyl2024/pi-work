@@ -12,15 +12,6 @@ import {
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
-/**
- * The channels panel's root page: the new-channel input and every channel as a
- * row with a status dot, its name and the bound WeChat user. Full width — the
- * two-column modal split is gone, so a row navigates to the channel's detail
- * page instead of filling a right pane.
- *
- * The list, the create draft and the page stack all live in the module store,
- * so a tab switch never resets them. The page is otherwise a pure view.
- */
 export function ChannelsRootPage() {
   const { t } = useI18n();
   const toast = useToast();
@@ -36,7 +27,6 @@ export function ChannelsRootPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Header: label + count */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("Channels")}</span>
         <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
@@ -44,7 +34,6 @@ export function ChannelsRootPage() {
         </span>
       </div>
 
-      {/* Create row */}
       <div style={{ display: "flex", gap: 8, padding: "0 14px 10px", flexShrink: 0 }}>
         <input
           value={nameDraft}
@@ -86,7 +75,6 @@ export function ChannelsRootPage() {
         </button>
       </div>
 
-      {/* List */}
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 8px 16px" }}>
         {!loaded && !loadError && <Hint text={t("Loading...")} />}
         {loadError && (

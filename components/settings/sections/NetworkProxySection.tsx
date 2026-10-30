@@ -16,29 +16,6 @@ interface ProbeResult {
   error?: string;
 }
 
-/**
- * Section: Network proxy.
- *
- * Interaction notes (this section is deliberately not "everything is
- * immediate-apply"):
- *
- * - `url` / `no_proxy` are drafts. Half-typed `http://127.0.0.1:` must never
- *   reach config.yaml, and a typo must never be applied to the live
- *   dispatcher.
- * - The address field comes *first*: everything else is unusable without it,
- *   and a wall of disabled controls with no visible cause is worse than an
- *   empty field with an explicit hint.
- * - The enable switch is usable as soon as an address exists *anywhere*
- *   (saved or still in the draft) — pressing it persists the draft and flips
- *   the switch in one write. Requiring "Save" first read as a dead control.
- * - "Test connection" always probes the draft, so an address can be verified
- *   before it is written anywhere.
- *
- * Unlike the pages that fetch their own data, this page has no mount-time
- * request: the persisted values come from the config the modal already loaded
- * once per open. It therefore has no page-data cache entry — switching away and
- * back changes nothing on screen and sends nothing.
- */
 export function NetworkProxySection({
   config,
   apply,
@@ -58,8 +35,6 @@ export function NetworkProxySection({
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [saveOk, flashSaveOk] = useTransientFlag();
 
-  // Re-sync the drafts whenever the persisted value changes (first load, or a
-  // write from another tab), so the fields never keep stale text after a save.
   useEffect(() => {
     setUrl(saved.url);
     setNoProxy(saved.no_proxy);
@@ -74,7 +49,6 @@ export function NetworkProxySection({
     onDirtyChange?.("network-proxy", dirty);
   }, [dirty, onDirtyChange]);
 
-  /** Persist the draft; optionally flip `enabled` in the same write. */
   const persist = (enabled?: boolean) => {
     setSaving(true);
     void apply((prev) => ({

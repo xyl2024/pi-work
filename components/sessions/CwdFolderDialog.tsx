@@ -1,21 +1,5 @@
 "use client";
 
-/**
- * CwdFolderDialog — 可视化目录选择弹窗 (visual folder chooser).
- *
- * Opened from CwdPicker's "Select folder..." entry. Browse the filesystem
- * one level at a time (single-level list, like a system folder picker):
- * click a folder to enter it (double-click also enters), Up button /
- * breadcrumb-free path bar for jumping, and a hidden-files toggle. The
- * current directory is confirmed with "Open" — no folder creation, no
- * write operations anywhere: listing goes through the read-only
- * `GET /api/files?type=list` route (which serves the whole filesystem).
- *
- * Client-safe path helpers live here instead of importing Node's `path`
- * (browser bundle). They cover POSIX + Windows drive letters, matching
- * the shapes `lib/file-paths.ts` and the files route already handle.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
@@ -26,10 +10,6 @@ import { encodeFilePathForApi } from "@/lib/shared/file-paths";
 import { FolderIcon } from "../files/FileIcons";
 import { IconButton } from "../ui/IconButton";
 
-// ── Client-safe path helpers ─────────────────────────────────────────────
-
-/** Split an absolute path into segments, keeping a Windows drive ("C:") as
- *  its own segment. Backslashes are normalized to slashes first. */
 function parsePathSegments(p: string): string[] {
   return p
     .replace(/\\/g, "/")
@@ -42,9 +22,6 @@ function isDriveRoot(p: string): boolean {
   return /^[a-zA-Z]:$/.test(p);
 }
 
-/** Normalize user-typed input into an absolute directory path. `~` and
- *  relative paths resolve against the home directory; `.`/`..` segments are
- *  collapsed. Returns null for empty input. */
 function normalizeLogicalPath(input: string, home: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -73,7 +50,7 @@ function joinDirPath(parent: string, name: string): string {
 
 function getParentDirPath(p: string): string | null {
   const segs = parsePathSegments(p);
-  if (segs.length === 0) return null; // "/" has no parent
+  if (segs.length === 0) return null;
   if (segs.length === 1) return isDriveRoot(segs[0]) ? null : "/";
   const parentSegs = segs.slice(0, -1);
   if (isDriveRoot(parentSegs[0])) {
@@ -84,8 +61,6 @@ function getParentDirPath(p: string): string | null {
   if (p.startsWith("//") || p.startsWith("\\\\")) return "//" + parentSegs.join("/");
   return "/" + parentSegs.join("/");
 }
-
-// ── Home directory (fetched once, cached at module scope) ────────────────
 
 let cachedHome: string | null | undefined;
 async function fetchHome(): Promise<string | null> {
@@ -100,8 +75,6 @@ async function fetchHome(): Promise<string | null> {
   return cachedHome;
 }
 
-// ── Directory listing (read-only, whole filesystem) ──────────────────────
-
 async function fetchSubdirs(dirPath: string): Promise<string[]> {
   const res = await fetch(`/api/files/${encodeFilePathForApi(dirPath)}?type=list`);
   if (!res.ok) {
@@ -112,10 +85,8 @@ async function fetchSubdirs(dirPath: string): Promise<string[]> {
     throw new Error("Failed to load folder");
   }
   const data = (await res.json()) as { entries?: { name: string; isDir: boolean }[] };
-  // Folders only — this is a folder chooser, files are noise.
   return (data.entries ?? []).filter((e) => e.isDir).map((e) => e.name);
 }
-
 
 function DirRow({
   name,
@@ -159,15 +130,10 @@ function DirRow({
   );
 }
 
-// ── Dialog ───────────────────────────────────────────────────────────────
-
 interface CwdFolderDialogProps {
-  /** True while mounted (conditional-mount pattern; see useModalAnimation). */
   open: boolean;
-  /** Directory shown when the dialog opens; falls back to home, then "/". */
   startPath?: string | null;
   onClose: () => void;
-  /** Fires with the confirmed absolute directory path. */
   onSelect: (dir: string) => void;
 }
 
@@ -201,7 +167,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
     setSelected(null);
     try {
       const names = await fetchSubdirs(dir);
-      if (seq !== loadSeqRef.current) return; // superseded by a newer navigation
+      if (seq !== loadSeqRef.current) return;
       setCurrentPath(dir);
       setDirs(names);
       if (!keepInput) setPathInput(dir);
@@ -213,7 +179,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
     }
   }, [t]);
 
-  // Initial load: home directory (or the provided start path).
   useEffect(() => {
     void (async () => {
       const home = await fetchHome();
@@ -222,7 +187,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
     })();
   }, [loadDir]);
 
-  // Escape closes; body scroll is locked while the dialog is visible.
   useBodyScrollLock(isVisible);
   useEscapeKey(isVisible, (e) => {
     e.preventDefault();
@@ -282,7 +246,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -327,7 +290,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           </IconButton>
         </div>
 
-        {/* Path bar: Home / Up / input / Go */}
         <div
           style={{
             display: "flex",
@@ -384,7 +346,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           </IconButton>
         </div>
 
-        {/* Hidden-files toggle */}
         <div
           style={{
             display: "flex",
@@ -424,7 +385,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("Show hidden files")}</span>
         </div>
 
-        {/* Directory list */}
         <div data-scroll-inset style={{ flex: 1, overflowY: "auto", padding: "6px 8px", minHeight: 0 }}>
           {loading ? (
             <div style={{ padding: "14px 10px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 7 }}>
@@ -452,7 +412,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           )}
         </div>
 
-        {/* Footer */}
         <div
           style={{
             display: "flex",

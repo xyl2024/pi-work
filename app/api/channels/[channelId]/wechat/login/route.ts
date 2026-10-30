@@ -1,17 +1,3 @@
-/**
- * Channel-scoped WeChat QR login.
- *
- * POST /api/channels/:channelId/wechat/login
- *   Starts a QR login for the channel. Requires an existing channel in a
- *   scannable state (pending / connected / expired). One session per
- *   channel at a time — starting a new scan drops any previous session.
- *
- * GET /api/channels/:channelId/wechat/login?sessionKey=…
- *   Polls the login state machine. On `confirmed` the credentials are
- *   written to the channel credential dir and the channel transitions to
- *   `connected` with a fresh syncBuf and no current session (first inbound
- *   message cold-starts a new session).
- */
 import { NextResponse } from "next/server";
 import { api, qr } from "@/lib/server/wechat";
 import {
@@ -55,7 +41,6 @@ export async function POST(_: Request, { params }: Params) {
       return NextResponse.json({ error: "failed_to_fetch_qr" }, { status: 502 });
     }
 
-    // One active login session per channel.
     dropSessionsForChannel(channelId);
     const session = createSession({
       qrcodeUrl: fetched.qrcode_img_content,
@@ -172,9 +157,6 @@ function advancePhase(
       );
       if (existing) return set({ phase: "error", message: "channels.msg.accountAlreadyBound" });
       saveChannelAccount(channelId, account);
-      // Re-login replaces credentials but keeps name + workspace; the
-      // session binding and dedupe state are reset so the next inbound
-      // message cold-starts a fresh session in this workspace.
       updateChannel(channelId, {
         status: "connected",
         accountId: account.accountId,
@@ -185,7 +167,6 @@ function advancePhase(
       clearChannelMessages(channelId);
       registerWorker(channelId, createWeChatWorker(channelId));
       startChannel(channelId);
-      // Best-effort "bot online" announcement.
       api.notifyStart({ baseUrl: account.baseUrl, token: account.token }).catch(() => {});
       return set({ phase: "confirmed", account });
     }

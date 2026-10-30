@@ -69,29 +69,11 @@ export function TranslatePanel() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLDivElement | null>(null);
 
-  // One-shot auto-translate request pushed in from outside the panel
-  // (e.g. the chat text-selection toolbar's Translate action, which
-  // sets `target: "zh"`). When set, an effect below fires a
-  // translation as soon as `model` is loaded and `input` matches the
-  // pushed text (so the user changing the textarea in the meantime
-  // cancels the auto-fire). Cleared once consumed so it doesn't
-  // re-trigger on later state changes.
   const autoFireRef = useRef<{ text: string; target: LanguageCode } | null>(null);
 
-  // Persistence refs (not in state — changes here should not trigger renders).
-  // `savedModelRef` holds the model the user previously selected; the models
-  // fetch effect consults it once the model list is available so we restore
-  // the same model instead of falling back to the default.
   const savedModelRef = useRef<{ provider: string; modelId: string } | null>(null);
-  // `initializedRef` gates the save effect so the very first run (with
-  // pre-restore default values) doesn't clobber the data we're about to
-  // rehydrate.
   const initializedRef = useRef(false);
 
-  // Restore input/output/model/target from localStorage so switching tabs (or
-  // closing/reopening the translate tab) preserves the last translation.
-  // Translation now fires only when the user clicks the Translate button, so
-  // rehydrating these values doesn't kick off a request on its own.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STATE_STORAGE_KEY);
@@ -105,12 +87,9 @@ export function TranslatePanel() {
       if (isLanguageCode(data?.target)) {
         setTarget(data.target);
       }
-    } catch { /* malformed JSON or localStorage unavailable — ignore */ }
+    } catch {}
   }, [setOutput]);
 
-  // Persist input/output/model/target to localStorage on every change. The
-  // first run is skipped so the initial empty state doesn't overwrite the
-  // data we are about to rehydrate above.
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -120,10 +99,9 @@ export function TranslatePanel() {
       const payload: PersistedState = { input, output, target };
       if (model) payload.model = model;
       localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(payload));
-    } catch { /* quota exceeded or localStorage unavailable — ignore */ }
+    } catch {}
   }, [input, output, model, target]);
 
-  // Load models on mount, pre-select the default.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -136,8 +114,6 @@ export function TranslatePanel() {
         setModelList(list);
         setModelIcons(data.modelIcons ?? {});
         setModelIconPreferences(data.modelIconPreferences ?? {});
-        // Prefer the model the user had selected last session; fall back to
-        // the default model, then to the first entry in the list.
         const saved = savedModelRef.current;
         if (saved && list.some((m) => m.provider === saved.provider && m.id === saved.modelId)) {
           setModel(saved);
@@ -153,11 +129,8 @@ export function TranslatePanel() {
     return () => { cancelled = true; };
   }, [toast, t]);
 
-  // 图标偏好 (icon preference) can be written from the models-config panel
-  // while this panel stays mounted; patch the cached map in place.
   useModelIconPreferencesSync(setModelIconPreferences);
 
-  // Close the model dropdown on outside click.
   useEffect(() => {
     if (!modelDropdownOpen) return;
     const handler = (e: MouseEvent) => {
@@ -170,28 +143,12 @@ export function TranslatePanel() {
     return () => document.removeEventListener("mousedown", handler);
   }, [modelDropdownOpen]);
 
-  // No auto-resize needed: the input wrapper is `flex: 1`, so the textarea
-  // fills half the panel vertically (matching the output area 1:1) and
-  // scrolls internally when content overflows.
-
-  // Auto-scroll output to the bottom while streaming.
   useEffect(() => {
     const el = outputRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [output]);
 
-  // Auto-fire translations queued by external publishers (today: the
-  // chat text-selection toolbar's Translate action, which sets
-  // `target: "zh"` so the snippet is translated into Chinese). Runs
-  // whenever `input`/`model`/`isStreaming` settle: the model list
-  // loads asynchronously, so the request can only fire once
-  // `model` is non-null. We also gate on `input === queued.text` so
-  // the auto-fire is cancelled if the user edits the textarea
-  // before the model finishes loading (their edit takes priority).
-  // Once consumed, `autoFireRef.current` is cleared so later state
-  // changes (e.g. `isStreaming` flipping back to false) don't
-  // re-trigger it.
   useEffect(() => {
     const queued = autoFireRef.current;
     if (!queued) return;
@@ -204,10 +161,6 @@ export function TranslatePanel() {
     autoFireRef.current = null;
     start({ text: queued.text, target: queued.target, provider: model.provider, modelId: model.modelId });
   }, [input, model, isStreaming, start]);
-
-  // Translation fires only when the user clicks the Translate button (or hits
-  // Cmd/Ctrl+Enter). handleTranslate doubles as Stop while a request is
-  // in-flight so the same button covers both states.
 
   const handleTranslate = useCallback(() => {
     if (isStreaming) {
@@ -255,8 +208,6 @@ export function TranslatePanel() {
     return modelOptions.find((o) => o.provider === model.provider && o.modelId === model.modelId)?.name ?? model.modelId;
   }, [model, modelOptions]);
 
-  // Height cap for the model dropdown (space below the trigger). SSR-safe:
-  // the dropdown stays mounted even while closed, so `window` is guarded.
   const viewportHeight = typeof window === "undefined" ? 0 : window.innerHeight;
   const modelDropdownMaxH = Math.max(120, Math.min(viewportHeight - (modelDropdownRect?.top ?? 0) - 40, 360));
 
@@ -265,7 +216,6 @@ export function TranslatePanel() {
       display: "flex", flexDirection: "column", height: "100%",
       background: "transparent",
     }}>
-      {/* Top bar: model selector + target selector + copy + clear */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6, padding: "8px 10px",
         flexShrink: 0, position: "relative",
@@ -367,13 +317,6 @@ export function TranslatePanel() {
               ))}
           </AnimatedPopover>
         </div>
-        {/* Target-language toggle. A single button whose label always shows
-            the *current* target language ("to中文" / "to英文"); clicking
-            switches the target to the other language. The label is keyed by
-            `target` so React remounts the <span> on every switch,
-            re-firing the `lang-swap-in` keyframe from globals.css for the
-            "切换感". `minWidth` keeps the button from jittering between the
-            two label widths. */}
         <Tooltip
           content={t("Current target: {lang}", { lang: t(target === "zh" ? "Chinese" : "English") })}
         >
@@ -409,8 +352,6 @@ export function TranslatePanel() {
             onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
             onBlur={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
           >
-            {/* Swap arrows icon — a left-pointing and right-pointing chevron
-                stacked, hinting that the button *swaps* something. */}
             <svg
               width="12" height="12" viewBox="0 0 24 24"
               fill="none" stroke="currentColor" strokeWidth="1.8"
@@ -490,8 +431,6 @@ export function TranslatePanel() {
         </Tooltip>
       </div>
 
-      {/* Prompt preview pane — read-only view of the active target's prompt.
-          Updates live when target changes (no state sync needed). */}
       {previewOpen && (
         <div style={{
           padding: "8px 12px",
@@ -550,7 +489,6 @@ export function TranslatePanel() {
         </div>
       )}
 
-      {/* Input area — flex: 1 so it shares the panel height 1:1 with the output area. */}
       <div style={{ padding: "10px 12px 6px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>
           {t("Translation input")}
@@ -560,18 +498,11 @@ export function TranslatePanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Tab cycles the target language (zh ⇄ en) instead of moving
-            // focus out of the textarea. Shift+Tab behaves the same so users
-            // can toggle in either direction. Streaming locks the switch,
-            // matching the toolbar button's disabled state.
             if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
               e.preventDefault();
               if (!isStreaming) setTarget((prev) => (prev === "en" ? "zh" : "en"));
               return;
             }
-            // Cmd/Ctrl+Enter triggers translation (or stops, if streaming).
-            // Plain Enter still inserts a newline — translation is an
-            // explicit action, not an auto-fire.
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               handleTranslate();
@@ -596,7 +527,6 @@ export function TranslatePanel() {
         />
       </div>
 
-      {/* Output area */}
       <div style={{ padding: "0 12px 12px", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",

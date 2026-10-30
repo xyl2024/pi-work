@@ -25,9 +25,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
     }
   }
 
-  // Worker health: peak the persisted heartbeat table. `alive` derives
-  // from a fresh last poll (more reliable than the in-memory isRunning
-  // registry across the instrumentation/handler module split).
   const health = getWorkerHealth(channelId);
   const now = Date.now();
   const FRESH_MS = 30_000;

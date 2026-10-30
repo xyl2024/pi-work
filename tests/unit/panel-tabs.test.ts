@@ -38,12 +38,10 @@ import {
   type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
-/** Apply a list of actions in order — mirrors how the shell dispatches them. */
 function reduce(state: PanelTabsState, ...actions: PanelTabsAction[]): PanelTabsState {
   return actions.reduce(panelTabsReducer, state);
 }
 
-/** Panel kinds present in the strip, newest first. */
 function kinds(state: PanelTabsState): string[] {
   return state.tabs.map((tab) => tab.kind);
 }
@@ -84,8 +82,6 @@ describe("panelTabs open", () => {
   });
 
   it("only upgrades the panel mode, never downgrades it", () => {
-    // No spec declares an expanded default any more, so the wide mode is
-    // entered explicitly (the strip's expand button does the same).
     const expanded = reduce(
       createPanelTabsState(),
       { type: "open", kind: "translate" },
@@ -93,13 +89,10 @@ describe("panelTabs open", () => {
     );
     expect(expanded.mode).toBe("expanded");
 
-    // Opening a closed panel only ever reaches its declared default…
     expect(reduce(createPanelTabsState(), { type: "open", kind: "llmAudit" }).mode).toBe("normal");
 
-    // …opening another panel while expanded keeps it expanded…
     expect(reduce(expanded, { type: "open", kind: "llmAudit" }).mode).toBe("expanded");
 
-    // …and a re-open does not pull it back down.
     expect(reduce(expanded, { type: "open", kind: "translate" }).mode).toBe("expanded");
   });
 
@@ -126,7 +119,6 @@ describe("panelTabs open", () => {
       { type: "open_file", path, label: "a.md" },
     );
 
-    // Reusing the tab keeps its original position in the strip.
     expect(kinds(state)).toEqual(["translate", "file"]);
     expect(openCount(state, fileTabId(path))).toBe(2);
     expect(selectActiveKind(state)).toBe("file");
@@ -149,7 +141,6 @@ describe("panelTabs toggle", () => {
       { type: "toggle", kind: "tokens" },
     );
 
-    // The tab stays in the strip so the next toggle reopens the same view.
     expect(kinds(state)).toEqual(["tokens"]);
     expect(state.mode).toBe("closed");
     expect(selectIsOpen(state)).toBe(false);
@@ -182,7 +173,6 @@ describe("panelTabs toggle", () => {
 
 describe("panelTabs close", () => {
   it("falls back to the oldest remaining tab when the active one closes", () => {
-    // Newest-first strip: llmAudit, translate, favorites (favorites is oldest).
     const state = reduce(
       createPanelTabsState(),
       { type: "open", kind: "favorites" },
@@ -229,8 +219,6 @@ describe("panelTabs close", () => {
 });
 
 describe("panelTabs batch close", () => {
-  // Newest-first strip used by the batch tests: translate, favorites,
-  // llmAudit, tokens — i.e. tokens is the oldest tab.
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
@@ -357,7 +345,6 @@ describe("panelTabs registry", () => {
         expect(entry.labelKey).toBeTruthy();
         expect(entry.keywords.length).toBeGreaterThan(0);
         for (const keyword of entry.keywords) expect(keyword).toBeTruthy();
-        // The id is a palette-id suffix; the generated id adds the separator.
         expect(entry.id ?? "").not.toContain(".");
       }
     }
@@ -400,13 +387,8 @@ describe("panelTabs registry", () => {
     const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
 
     expect(skills?.tabId).toBe(SKILLS_TAB_ID);
-    // Strip label reuses the existing "Skills" entry — resolved at render time
-    // so a locale switch relabels the open tab.
     expect(skills?.labelKey).toBe("Skills");
     expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
-    // Session-bound: the list follows the selected session's cwd, so the
-    // button groups with the other live-state buttons (it is never greyed
-    // out — the flag only drives column grouping).
     expect(skills?.sessionBound).toBe(true);
     expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
@@ -418,13 +400,7 @@ describe("panelTabs registry", () => {
     const mcp = PANEL_TAB_SPECS.find((spec) => spec.kind === "mcp");
 
     expect(mcp?.tabId).toBe(MCP_TAB_ID);
-    // Strip label reuses the existing "MCP 服务器" entry; the button and the
-    // palette entry keep the "Open MCP servers" wording.
     expect(mcp?.labelKey).toBe("mcp.title");
-    // Session-bound: the workspace mcp.json section follows the selected
-    // session's cwd, so the button groups with the other live-state buttons.
-    // The flag only drives column grouping — the button stays enabled on the
-    // new-session page (ADR-0018).
     expect(mcp?.sessionBound).toBe(true);
     expect(mcp?.commands?.[0]?.labelKey).toBe("mcp.open");
     expect(mcp?.commands?.[0]?.keywords).toEqual(
@@ -439,8 +415,6 @@ describe("panelTabs registry", () => {
 
     expect(scheduler?.tabId).toBe(SCHEDULER_TAB_ID);
     expect(scheduler?.labelKey).toBe("Scheduled tasks");
-    // The task list is global data, so the button stays enabled on the
-    // new-session page; only the form's cwd default follows the session.
     expect(scheduler?.sessionBound).toBe(false);
     expect(scheduler?.commands?.[0]?.labelKey).toBe("Open scheduled tasks");
     expect(scheduler?.commands?.[0]?.keywords).toContain("定时");
@@ -451,11 +425,7 @@ describe("panelTabs registry", () => {
     const channels = PANEL_TAB_SPECS.find((spec) => spec.kind === "channels");
 
     expect(channels?.tabId).toBe(CHANNELS_TAB_ID);
-    // Strip label reuses the existing "Channels" entry; the button and the
-    // palette entry keep the "Open channels" wording.
     expect(channels?.labelKey).toBe("Channels");
-    // The channel list is global data, so the button stays enabled on the
-    // new-session page.
     expect(channels?.sessionBound).toBe(false);
     expect(channels?.commands?.[0]?.labelKey).toBe("Open channels");
     expect(channels?.commands?.[0]?.keywords).toEqual(
@@ -471,7 +441,6 @@ describe("panelTabs registry", () => {
       ["context", "conversationTree", "gitDiff", "llmAudit", "mcp", "skills"].sort(),
     );
 
-    // The wide mode is the user's expand button, never an open default.
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
     expect(expanded).toEqual([]);
   });
@@ -511,7 +480,6 @@ describe("panelTabs file-deletion cascade", () => {
       { type: "open_file", path: "/repo/src/a.ts", label: "a.ts" },
       { type: "open_file", path: "/repo/src/b.ts", label: "b.ts" },
       { type: "open_file", path: "/repo/src/c.ts", label: "c.ts" },
-      // Newest-first: c, b, a — c is active and gets closed by the cascade.
       { type: "close_files_under", path: "/repo/src" },
     );
 
@@ -564,8 +532,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
   });
 
   it("shares one glyph per kind between the tab strip and its right-bar button", () => {
-    // The tab strip no longer keeps its own icon chain: it reads the same
-    // descriptor entry the button column renders, so the two can't drift.
     for (const kind of PANEL_TAB_KINDS) {
       const buttonId = PANEL_BUTTON_ID_BY_KIND[kind];
       expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get(buttonId)?.icon).toBe(PANEL_TAB_ICON_BY_KIND[kind]);
@@ -582,8 +548,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  /** The ctx every descriptor is exercised against; individual tests flip one
-   *  observable at a time. */
   function barCtx(overrides: Partial<RightBarCtx> = {}): RightBarCtx {
     return {
       rightPanelState: "normal",
@@ -619,34 +583,25 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
   it("badges the skills button while an install is running, collapsed or not", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
 
-    // The install lives in the module store, so the badge follows the store
-    // flag — not the panel being open. Collapsed is the case that matters.
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
     expect(
       descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
     ).toBeTruthy();
     expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
-    // The install flag must not light the models-config dot, and vice versa.
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
   });
 
   it("badges the MCP button while any cwd holds an unsaved draft", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp");
 
-    // The dirty buckets live in the module store, so the dot follows the store
-    // flag — not the panel being open, and not the current session's cwd.
-    // Collapsed (and another session) is the case ADR-0018 calls out.
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed", mcpDirty: true }))).toBeTruthy();
     expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
-    // The MCP flag must not light the models-config dot, and vice versa.
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ mcpDirty: true }))).toBeFalsy();
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
   });
 
   it("routes the models-config / skills / MCP badges through the one shared corner-dot hook", () => {
-    // Same mark, different predicate: whatever the models-config badge renders
-    // while dirty is what the skills / MCP badges render too.
     const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
       barCtx({ modelsConfigDirty: true }),
     );
@@ -655,11 +610,9 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     );
     const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
 
-    // Deep equality on the React element: same component, same (empty) props.
     expect(dirty).toEqual(installing);
     expect(dirty).toEqual(mcpDirty);
 
-    // …and the shared mark really is the small corner dot.
     const rendered = (
       dirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
     ).type();
@@ -673,12 +626,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(panelButtonIdForKind("file")).toBe(null);
   });
 });
-
-// ── Registry → command palette ─────────────────────────────────────────
-// #7: the palette's panel entries are generated from the registry's opt-in
-// `command` declarations. These tests pin the derived side, so re-adding a
-// hand-written palette entry (or silently giving a panel one it never had)
-// fails here instead of shipping.
 
 describe("panelTabs registry → command palette", () => {
   const panelCommands = (ctx: CommandContext) =>
@@ -700,7 +647,6 @@ describe("panelTabs registry → command palette", () => {
     };
   }
 
-  /** Every palette entry the registry declares, in declaration order. */
   const optInCommands = PANEL_TAB_SPECS.flatMap((spec) =>
     (spec.commands ?? []).map((entry) => ({
       id: entry.id ? `panel.${spec.kind}.${entry.id}` : `panel.${spec.kind}`,
@@ -722,8 +668,6 @@ describe("panelTabs registry → command palette", () => {
   });
 
   it("keeps the palette down to exactly the entries the registry declares", () => {
-    // Output-side pin: another palette entry appearing (or one of these
-    // disappearing) fails here, not just in the registry declaration.
     expect(
       panelCommands(commandCtx())
         .map((cmd) => cmd.id)
@@ -768,8 +712,6 @@ describe("panelTabs registry → command palette", () => {
     expect(commands.map((cmd) => cmd.keywords)).toEqual(
       optInCommands.map((entry) => [...entry.keywords]),
     );
-    // Fresh arrays: a mutated command entry must not write back into the
-    // shared registry declaration.
     commands.forEach((cmd, index) => {
       expect(cmd.keywords).not.toBe(optInCommands[index].keywords);
     });
@@ -779,9 +721,6 @@ describe("panelTabs registry → command palette", () => {
     const toggled: PanelViewKind[] = [];
     const ctx = commandCtx({ togglePanel: (kind) => toggled.push(kind) });
 
-    // Run the whole palette, not just the Panel group: a hand-written entry
-    // that opens a panel from any group (the regression this issue deletes)
-    // shows up as an extra panel call here.
     for (const cmd of buildCommands(ctx, (key) => key)) cmd.run(ctx);
 
     expect(toggled).toEqual(optInCommands.map((entry) => entry.kind));

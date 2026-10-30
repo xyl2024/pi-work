@@ -3,7 +3,6 @@ import type { AgentPhase } from "@/hooks/useAgentSession";
 import { joinFilePath } from "@/lib/shared/file-paths";
 import { splitFinalAssistantBlocks } from "@/lib/shared/message-display";
 
-/** Common tool-arg keys that carry a file path. */
 const FILE_PATH_ARG_KEYS = ["path", "file_path", "filePath", "notebook_path", "notebookPath"] as const;
 
 function extractFileBasename(args: Record<string, unknown> | undefined): string | null {
@@ -31,7 +30,6 @@ export function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<s
   if (phase?.kind === "running_tools") {
     const tools = phase.tools;
     if (tools.length === 0) return t("Running tool...");
-    // Show the most recently started tool; mention the rest as a count.
     const latest = tools[tools.length - 1];
     const label = singleToolLabel(latest, t);
     if (tools.length > 1) return `${label} (+${tools.length - 1})`;
@@ -49,7 +47,6 @@ export function phaseLoaderVariant(phase: AgentPhase) {
   return "spark" as const;
 }
 
-/** Resolve a `read` tool's raw path against the session cwd. */
 export function resolveReadPath(raw: string, cwd?: string | null): string | null {
   const p = raw.startsWith("@") ? raw.slice(1) : raw;
   if (p.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith("\\\\")) return p;

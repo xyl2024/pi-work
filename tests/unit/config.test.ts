@@ -4,15 +4,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
-/**
- * The public contract of `lib/server/config.ts` — the in-process cache in
- * particular. Driven at the module level (no HTTP), against a temp
- * `PI_WORK_DATA_DIR`, so the real `~/.pi-work/config.yaml` is never touched.
- *
- * Only external behaviour is asserted: what `readConfig` returns after a write,
- * after a hand edit, and when the file is missing or corrupt.
- */
-
 const root = mkdtempSync(join(tmpdir(), "pi-work-config-"));
 const configPath = join(root, "config.yaml");
 
@@ -28,8 +19,6 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  // The cache lives on globalThis across module evaluations; start each case
-  // from the file on disk.
   globalThis.__piWorkConfigCache = undefined;
 });
 
@@ -58,7 +47,6 @@ describe("config: in-process cache", () => {
     rmSync(configPath, { force: true });
     const config = readConfig();
     expect(config.load_pi_docs).toBe(true);
-    // The default file is written back, as before.
     expect(existsSync(configPath)).toBe(true);
   });
 

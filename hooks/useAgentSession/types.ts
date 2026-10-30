@@ -9,8 +9,6 @@ import type {
 } from "@/lib/shared/session-runtime-state";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 import type { PermissionMode } from "@/lib/shared/permission-mode";
-// The session-event protocol is declared once, in the shared layer, and used by
-// both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
 
 export type { AgentPhase, ContextUsage, RetryInfo } from "@/lib/shared/session-runtime-state";
@@ -42,11 +40,6 @@ export type StreamAction =
   | { type: "end" }
   | { type: "reset" };
 
-/**
- * The REST `get_state` payload — the body of the `client_snapshot` runtime
- * input. Declared once in the shared layer (the reducer consumes it); this is
- * the hook-side name, kept so callers do not have to reach across layers.
- */
 export type AgentRuntimeState = SessionSnapshotPayload;
 
 export type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
@@ -73,11 +66,6 @@ export interface UseAgentSessionOptions {
   chatInputRef?: RefObject<ChatInputHandle | null>;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
   scrollToEntryId?: string | null;
-  /**
-   * The session-entry navigation finished: land the view at the end of the
-   * reloaded branch. `useScrollFollow` implements it (it owns every chat
-   * scroll write) and reports back to the shell from there.
-   */
   onEntryNavigated?: () => void;
   isActive?: boolean;
   controllerId?: string;
@@ -111,9 +99,6 @@ export interface TransportRefs {
   reconnectAttempt: Ref<number>;
   disposed: Ref<boolean>;
   sessionId: SessionIdRef;
-  /** Reads the current runtime state's `agentRunning` synchronously — the
-   *  transport needs it before the next render, and it is derived from the
-   *  one runtime state object rather than a second ref. */
   isAgentRunning: () => boolean;
 }
 
@@ -121,7 +106,6 @@ export interface SessionDataLoaderRefs {
   sessionId: SessionIdRef;
   loadContext: LoadContextRef;
   refreshAgentRuntimeState: RuntimeStateRef;
-  /** Triggered on connect to refresh agent runtime state from the server. */
   isAgentRunning: () => boolean;
 }
 
@@ -130,7 +114,6 @@ export type SessionRuntimeStatus =
   | { kind: "running" }
   | { kind: "compacting" };
 
-/** One entry of the model catalog `/api/models` reports. */
 export interface SessionModelOption {
   id: string;
   name: string;
@@ -142,17 +125,7 @@ export interface SessionModelOption {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
 }
 
-/**
- * The hook's named return interface — the module's public surface, so it is
- * documented by its type rather than by a 50-key inline object literal.
- *
- * The raw runtime-state setters (`setActiveLeafId` / `setData` / `setMessages`)
- * and the streaming reducer's `dispatch` are deliberately absent: their only
- * consumer was the hook's own adapter, and handing them out let a caller change
- * state behind the reducer's back. Actions are the only way to move it.
- */
 export interface UseAgentSessionResult {
-  // Runtime state, projected out of the one state object.
   data: SessionData | null;
   loading: boolean;
   error: string | null;
@@ -169,10 +142,8 @@ export interface UseAgentSessionResult {
   retryInfo: RetryInfo | null;
   contextUsage: ContextUsage | null;
   subagentRefreshKey: number;
-  // Models and tools.
   modelNames: Record<string, string>;
   modelIcons: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences: Record<string, string>;
   modelList: SessionModelOption[];
   modelThinkingLevels: Record<string, string[]>;
@@ -183,8 +154,6 @@ export interface UseAgentSessionResult {
   toolsLoading: boolean;
   toolsError: string | null;
   thinkingLevel: ThinkingLevelOption;
-  /** The session's permission mode (ADR-0021). Drives the toolbar shield, the
-   *  red input border, the badges and the palette entry. */
   permissionMode: PermissionMode;
   systemPrompt: string | null;
   currentModel: { provider: string; modelId: string } | null;
@@ -193,7 +162,6 @@ export interface UseAgentSessionResult {
   isNew: boolean;
   currentSessionId: string | null;
   userMessageHistory: string[];
-  // Refs the chat window wires into scroll follow / drag & drop.
   sessionIdRef: MutableRefObject<string | null>;
   eventSourceRef: MutableRefObject<EventSource | null>;
   messagesEndRef: RefObject<HTMLDivElement | null>;
@@ -201,7 +169,6 @@ export interface UseAgentSessionResult {
   lastUserMsgRef: RefObject<HTMLDivElement | null>;
   pendingScrollToUserRef: MutableRefObject<boolean>;
   userJustSentRef: MutableRefObject<boolean>;
-  // Actions.
   handleSend: (message: string, images?: AttachedImage[]) => Promise<void>;
   handleAbort: () => Promise<void>;
   handleNavigate: (entryId: string) => Promise<void>;

@@ -1,17 +1,3 @@
-/**
- * Per-channel worker health (heartbeat + backoff state), persisted to
- * `channels.db` so the heartbeat survives the instrumentation-vs-route-handler
- * module split and a live worker's state is visible to the API.
- *
- * The WeChat worker updates this row on every poll outcome:
- *   - success          -> lastPollAt = now, consecutiveFailures = 0
- *   - transient error  -> lastFailureAt = now, consecutiveFailures++, nextRetryAt
- *   - token expired    -> failures reset (channel goes `expired` instead)
- *
- * A "fresh" lastPollAt is a far more reliable liveness signal than the
- * in-memory `isRunning()` registry (which may read a different module
- * instance), so the status API derives `alive` from this table.
- */
 import { db } from "./db";
 
 export interface WorkerHealth {
@@ -79,16 +65,13 @@ export function updateWorkerHealth(channelId: string, patch: HealthPatch): void 
       )
       .run(channelId, next.lastPollAt, next.lastFailureAt, next.consecutiveFailures, next.nextRetryAt, next.updatedAt);
   } catch {
-    // best effort
   }
 }
 
-/** Clear health for a channel (disable / delete / re-login). */
 export function clearWorkerHealth(channelId: string): void {
   try {
     ensureTable();
     db().prepare("DELETE FROM channel_worker_state WHERE channel_id = ?").run(channelId);
   } catch {
-    // best effort
   }
 }

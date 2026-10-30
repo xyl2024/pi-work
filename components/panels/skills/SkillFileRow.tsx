@@ -10,21 +10,6 @@ import { fileLanguage } from "@/lib/shared/skill-files";
 import { fetchSkillSubFile } from "@/lib/client/skills-io";
 import type { SkillDetailFile } from "@/lib/shared/skills";
 
-/**
- * One attached file inside a skill's detail page. Clicking a text file expands
- * a syntax-highlighted preview inline — never a second overlay, so the panel
- * stays a single surface. Sub-file content is fetched lazily through the
- * skills io layer the first time a row is expanded, so re-expanding the same
- * row never re-requests.
- *
- * Pure controlled component: the parent owns the expansion set and passes
- * `expanded` + `onToggle` down. The only state the row owns is the loaded
- * text, which is kept while the row stays mounted so collapsing and
- * re-expanding never re-requests. A failed load is not retried until the user
- * collapses and expands again.
- *
- * Used by the panel detail page.
- */
 export function SkillFileRow({
   file,
   skillFilePath,
@@ -44,12 +29,9 @@ export function SkillFileRow({
 
   useEffect(() => {
     if (!expanded) {
-      // Forget a previous failure so the next expand retries instead of the
-      // row being stuck on the error.
       if (loadError !== null) setLoadError(null);
       return;
     }
-    // Already loaded, in flight, or failed — do not start another request.
     if (content !== null || loading || loadError !== null) return;
     setLoading(true);
     fetchSkillSubFile(skillFilePath, file.relativePath)
@@ -84,10 +66,6 @@ export function SkillFileRow({
           color: "var(--text)",
         }}
       >
-        {/* Expand/collapse chevron — points down when expanded, right when
-            collapsed (rotates -90deg); matches the sidebar cwd fold arrow.
-            Kept as a hidden placeholder for non-previewable files so names
-            stay aligned. */}
         <span
           aria-hidden
           style={{
@@ -138,7 +116,6 @@ export function SkillFileRow({
         </span>
       </div>
 
-      {/* Expanded content */}
       {expanded && (
         <div style={{ padding: "2px 0 2px 28px" }}>
           {loading ? (

@@ -15,17 +15,6 @@ import {
 } from "@/lib/shared/session-runtime-state";
 import type { AgentMessage, SessionTreeNode, ToolInfo } from "@/lib/shared/types";
 
-// Pure unit tests for the client half of the reducer's input union (#74). The
-// REST snapshot used to be a second writer of the runtime state and the phase
-// had a second concurrent derivation; these tests pin the two properties that
-// moving it into the one reducer is for:
-//
-//   • the snapshot reduces like any other input — including today's "running"
-//     derivation (compaction wins, unknown phase waits on the model, a `true`
-//     `running` flag with no `state` counts);
-//   • replaying the same snapshot is idempotent, which is what makes SSE
-//     reconnects, compaction replays and window refocus safe.
-
 const eventTypes: readonly string[] = SESSION_EVENT_TYPES;
 
 const snapshot = (
@@ -59,8 +48,6 @@ describe("client snapshot input", () => {
   });
 
   it("adopts the session's permission mode from the snapshot", () => {
-    // A remount has to learn the mode without waiting for the next
-    // `permission_mode_changed`: that event is live, never replayed (ADR-0021).
     const next = snapshot(createSessionRuntimeState(), {
       type: "client_snapshot",
       snapshot: { running: false, state: { permissionMode: "full_access" } },
@@ -75,7 +62,6 @@ describe("client snapshot input", () => {
     });
     expect(confirm.state.permissionMode).toBe("confirm");
 
-    // An older server simply omits the field; the client keeps its belief.
     const kept = snapshot(
       patchSessionRuntimeState(createSessionRuntimeState(), "permissionMode", "full_access"),
       { type: "client_snapshot", snapshot: { running: false, state: {} } },
@@ -146,8 +132,6 @@ describe("client snapshot input", () => {
   });
 
   it("is idempotent: the same snapshot twice changes neither state nor effects", () => {
-    // The running branch is the interesting one: it re-derives the phase, and a
-    // fresh but equal phase object must not churn the state identity.
     const input: SessionRuntimeInput = {
       type: "client_snapshot",
       snapshot: { running: true, state: { isRunning: true } },
@@ -225,8 +209,6 @@ const sources = (over: Partial<SessionUiPublishSources> = {}): SessionUiPublishS
   ...over,
 });
 
-// SessionTreeNode carries a whole SessionEntry; the projection only ever picks
-// one of the two arrays by reference, so a sentinel is enough here.
 const tree = (label: string) => [{ label } as unknown as SessionTreeNode];
 const tool = (name: string): ToolInfo => ({ name, description: name });
 

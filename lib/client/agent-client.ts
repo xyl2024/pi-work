@@ -1,12 +1,3 @@
-// Client-side helper for POST /api/agent/[id].
-//
-// Every /api/agent/[id] route returns one of:
-//   { success: true, data: <result> }
-//   { error: string }              (non-2xx)
-//
-// Call sites previously repeated the same 5-line fetch block 13× in
-// hooks/useAgentSession.ts. This helper collapses that down to one line.
-
 import type { ToolInfo } from "../shared/types";
 
 export async function sendAgentCommand<T = unknown>(
@@ -29,14 +20,10 @@ export async function sendAgentCommand<T = unknown>(
   return body.data as T;
 }
 
-/** Response from the existing `get_tools` command (POST /api/agent/[id]). */
 export interface ToolWithActive extends ToolInfo {
   active: boolean;
 }
 
-/** POST /api/agent/tools — list tools for `cwd` without instantiating a
- *  persistent session. Used by the ChatInput tools popover for brand-new
- *  sessions that haven't sent their first message yet. */
 export async function listToolsForCwd(cwd: string): Promise<ToolInfo[]> {
   const res = await fetch("/api/agent/tools", {
     method: "POST",

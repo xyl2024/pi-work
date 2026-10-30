@@ -30,25 +30,6 @@ import {
 
 export { getAgentDir };
 
-// ============================================================================
-// Session-tree cleanup helpers
-//
-// session_info entries are session metadata (name), not conversation branch
-// nodes. They are appended by pi when a session is (auto-)renamed, hung off
-// whatever the leaf was at that moment — which turns them into a side-branch
-// that misroutes buildConversationTree's per-round children[0] walk (the
-// round's final assistant gets locked early and every intermediate message
-// renders as a standalone card). Both the disk-loaded tree
-// (/api/sessions/[id]) and the live tree pushed over SSE must apply the same
-// cleanup so they render identically.
-// ============================================================================
-
-/**
- * Strip session_info nodes out of a branch tree (children promoted into the
- * vacated slot). Re-links each promoted child's parentId to the session_info's
- * own parentId so the active-path walk in lib/buildConversationTree — which
- * follows entry.parentId upward — can keep climbing past the strip point.
- */
 export function stripSessionInfoNodes<T extends { entry: { type?: string; parentId?: string | null }; children: T[] }>(nodes: T[]): T[] {
   const out: T[] = [];
   for (const n of nodes) {
@@ -67,11 +48,6 @@ export function stripSessionInfoNodes<T extends { entry: { type?: string; parent
   return out;
 }
 
-/**
- * When a session_info entry is the last one in the file, reloading makes it
- * the leaf; subsequent messages would then hang off the metadata entry. Walk
- * back to the nearest real entry so the returned leaf stays a real message.
- */
 export function fallbackSessionLeafId(
   sm: { getEntry(id: string): unknown },
   leafId: string | null,
@@ -93,16 +69,6 @@ export async function listAllSessions(cwd?: string): Promise<SessionInfo[]> {
   return all.filter((s) => s.cwd === cwd);
 }
 
-// ============================================================================
-// In-memory list cache (TTL 5s)
-// `SessionManager.listAll` scans every JSONL header across the disk, which is
-// expensive on machines with thousands of session files. Multiple pagination
-// requests landing within the same TTL window share one scan.
-//
-// Mutations (rename / delete / new session) call `invalidateSessionListCache`
-// explicitly so user-initiated changes are immediately visible.
-// ============================================================================
-
 const LIST_CACHE_TTL_MS = 5_000;
 
 declare global {
@@ -116,7 +82,6 @@ function toSessionInfo(piSessions: PiSessionInfo[]): SessionInfo[] {
 
   const cache = getPathCache();
   return piSessions.map((s) => {
-    // Populate path cache so resolveSessionPath works without a full scan
     cache.set(s.id, s.path);
     return {
       path: s.path,
@@ -128,13 +93,11 @@ function toSessionInfo(piSessions: PiSessionInfo[]): SessionInfo[] {
       messageCount: s.messageCount,
       firstMessage: cleanFirstMessage(s.firstMessage),
       parentSessionId: s.parentSessionPath ? pathToId.get(s.parentSessionPath) : undefined,
-      // Read layer has no RPC context; the /api/sessions route enriches from the wrapper registry.
       running: false,
     };
   });
 }
 
-/** Internal: return the cached full-list, refreshing if TTL elapsed. */
 async function loadAllSessionsCached(): Promise<SessionInfo[]> {
   const now = Date.now();
   const cached = globalThis.__piSessionListCache;
@@ -142,7 +105,6 @@ async function loadAllSessionsCached(): Promise<SessionInfo[]> {
     return cached.list;
   }
 
-  // Coalesce concurrent cold loads
   if (globalThis.__piSessionListInflight) {
     return globalThis.__piSessionListInflight;
   }
@@ -162,56 +124,11 @@ async function loadAllSessionsCached(): Promise<SessionInfo[]> {
   }
 }
 
-/**
- * Drop the cached full-list. Call after any mutation that changes the set or
- * metadata of sessions (rename / delete / new session creation).
- *
- * Clears both caches (full-read and header-only) so user-initiated changes
- * are immediately visible to either listing path.
- */
 export function invalidateSessionListCache(): void {
   globalThis.__piSessionListCache = undefined;
   globalThis.__piSessionListHeaderCache = undefined;
 }
 
-// ============================================================================
-// Header-only session listing (5s TTL, separate cache slot)
-//
-// `SessionManager.listAll()` reads every .jsonl file to EOF to compute
-// `messageCount` / `name` / `firstMessage` / `lastActivityTime`. On a host
-// with 1000+ session files (200+ MB total) that scan is consistently
-// ~1.8-2.1s, regardless of how few rows the caller actually wants. The
-// sidebar's /api/sessions first page (limit=3) only needs header data,
-// which is normally in the first few entries of each file.
-//
-// Trade-offs vs. the full scan:
-//   * `modified`     → file `mtime` (pi rewrites the file on every flush,
-//                      so `mtime` is within microseconds of `lastActivityTime`)
-//   * `name`         → first `session_info.name` we encounter; renames past
-//                      the scan ceiling are dropped (sidebar renders
-//                      `name || firstMessage.slice(0,50) || id`, so the
-//                      fallback handles the missing-rename case, and the
-//                      sidecar name index recovers most of them)
-//   * `firstMessage` → first user message we encounter (chunked scan, see
-//                      HEADER_SCAN_CHUNK_BYTES: the system-prompt entry alone
-//                      can be bigger than one chunk)
-//   * `messageCount` → 0 (callers that need a real count can defer to
-//                      /api/sessions/[id], which loads the full SessionContext)
-//
-// Caller contract is unchanged: same SessionInfo[] shape, same return order
-// (newest-first by mtime).
-// ============================================================================
-
-/**
- * Bytes per `read(2)`. A single fixed window is not enough: pi writes the
- * session's system prompt as a `message` entry (role `system`, content `""`,
- * prompt in `sections`) that is routinely 30KB+, so the first *user* message
- * can sit well past 16KB. With a fixed window such a session reported no
- * `firstMessage` and the sidebar fell back to pi's "(no messages)" placeholder
- * as if it were the title. The scan now keeps pulling chunks until it knows
- * header + name + first message, with a ceiling so one pathological file can
- * never make the listing read forever.
- */
 const HEADER_SCAN_CHUNK_BYTES = 16 * 1024;
 const HEADER_SCAN_MAX_BYTES = 1024 * 1024;
 
@@ -224,7 +141,6 @@ interface HeaderScanResult {
   firstMessage?: string;
 }
 
-/** Pull a text block out of a message content (string | text-block array | other). */
 function extractMessageText(content: unknown): string | undefined {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -242,15 +158,6 @@ function extractMessageText(content: unknown): string | undefined {
   return undefined;
 }
 
-/**
- * Bounded-scan reader: read the file in fixed chunks, split on newlines,
- * JSON.parse each line, capture the fields the sidebar needs. Stops as soon as
- * header + name + first user message are populated (or at the byte ceiling).
- *
- * A line is only parsed once its terminating newline arrived, so the huge
- * system-prompt entry — far bigger than one chunk — is carried across chunks
- * instead of being cut in half and dropped.
- */
 function readHeaderOnly(filePath: string): HeaderScanResult | null {
   let fd: number;
   try {
@@ -269,8 +176,6 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
     let name: string | undefined;
     let firstMessage: string | undefined;
     let headerSeen = false;
-    // Bytes of the last line that did not fit in the previous chunk (a single
-    // entry can be far larger than one chunk — the system prompt one is).
     let pending = "";
     let offset = 0;
     let eof = false;
@@ -285,9 +190,6 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
       if (bytesRead === 0) eof = true;
       offset += bytesRead;
 
-      // StringDecoder holds back a split multi-byte character, so lines are
-      // never cut mid-codepoint. On EOF every remaining line is complete; mid
-      // file the last element is the unterminated tail and is carried over.
       const lines = (pending + decoder.write(chunk.subarray(0, bytesRead))).split("\n");
       pending = eof ? "" : lines.pop() ?? "";
 
@@ -301,7 +203,6 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
         }
         if (!entry || typeof entry !== "object") continue;
 
-        // First session entry holds the header.
         const entryType = (entry as { type?: unknown }).type;
         if (!headerSeen && entryType === "session" && typeof (entry as { id?: unknown }).id === "string") {
           id = (entry as { id: string }).id;
@@ -314,7 +215,7 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
           headerSeen = true;
           continue;
         }
-        if (!headerSeen) continue; // ignore anything before the header
+        if (!headerSeen) continue;
 
         if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
           const trimmed = ((entry as { name: string }).name).trim();
@@ -328,13 +229,6 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
         }
       }
 
-      // Stop as soon as both are known, or once the first message is known and
-      // the chunk we just read already covers the name window the old fixed
-      // 16KB scan provided — a rename appended deeper in the file is the
-      // sidecar name index's job, not this window's. Cost per file therefore
-      // stays at the usual single chunk for ordinary sessions; only a session
-      // whose first user message sits deeper (big system-prompt entry) pays
-      // for the extra chunks it actually needs.
       if (name !== undefined && firstMessage !== undefined) break;
       if (firstMessage !== undefined && offset >= HEADER_SCAN_CHUNK_BYTES) break;
     }
@@ -352,7 +246,6 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
   }
 }
 
-/** stat().mtime with a null fallback for races (concurrent delete, etc.). */
 function safeStatMtime(filePath: string): Date | null {
   try {
     return statSync(filePath).mtime;
@@ -397,7 +290,6 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
           if (f.endsWith(".jsonl")) allFiles.push(join(dir, f));
         }
       } catch {
-        // unreadable subdir — skip
       }
     }
 
@@ -409,7 +301,7 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
       if (!mtime) continue;
       const header = readHeaderOnly(filePath);
       if (!header) continue;
-      if (seen.has(header.id)) continue; // duplicate id — keep first
+      if (seen.has(header.id)) continue;
       seen.add(header.id);
       pathToId.set(filePath, header.id);
       const info: SessionInfo = {
@@ -419,10 +311,10 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
         name: header.name,
         created: header.created,
         modified: mtime.toISOString(),
-        messageCount: 0, // callers needing real counts hit /api/sessions/[id]
+        messageCount: 0,
         firstMessage: cleanFirstMessage(header.firstMessage),
         parentSessionId: undefined,
-        running: false, // enriched by the /api/sessions route from the wrapper registry
+        running: false,
       };
       if (header.parentSessionPath) {
         info.parentSessionId = pathToId.get(header.parentSessionPath);
@@ -430,15 +322,8 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
       out.push(info);
     }
 
-    // Newest-first by mtime to match SessionManager.listAll's contract.
     out.sort((a, b) => b.modified.localeCompare(a.modified));
 
-    // Merge the sidecar name index in one pass — the chunked scan
-    // stops early (roughly the first 16KB for ordinary sessions) and sees
-    // only the FIRST session_info there; users who rename a
-    // session after a long conversation would otherwise see the wrong
-    // (or no) name in the sidebar. The sidecar is the canonical
-    // authoritative name source; see lib/server/session-names.ts.
     if (out.length > 0) {
       const names = await listSessionNames();
       if (names.size > 0) {
@@ -449,8 +334,6 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
       }
     }
 
-    // Mirror the path cache populated by the full-scan reader so that
-    // resolveSessionPath() hit-shops in subsequent calls.
     const pathCache = globalThis.__piSessionPathCache;
     if (pathCache) {
       for (const s of out) pathCache.set(s.id, s.path);
@@ -468,27 +351,12 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
   }
 }
 
-/**
- * Header-only, list-ALL with optional cwd filter. Same call shape as
- * listAllSessions; same SessionInfo[] contract; same 5s TTL cache slot.
- * Skips full-file reads; ~10-20x faster on hosts with many large sessions.
- *
- * Differences from `listAllSessions` (acceptable for sidebar list views):
- *   - `modified`    is `mtime` (within milliseconds of activity time).
- *   - `name`        is the first session_info inside the scan window.
- *   - `firstMessage` is the first user/assistant message inside the window.
- *   - `messageCount` is always 0.
- */
 export async function listAllSessionsHeaderOnly(cwd?: string): Promise<SessionInfo[]> {
   const all = await listAllSessionsHeaderOnlyUnfiltered();
   if (!cwd) return all;
   return all.filter((s) => s.cwd === cwd);
 }
 
-// ============================================================================
-// Session path cache: sessionId → absolute file path
-// Stored in globalThis for hot-reload safety
-// ============================================================================
 declare global {
   var __piSessionPathCache: Map<string, string> | undefined;
 }
@@ -502,12 +370,6 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   const cached = getPathCache().get(sessionId);
   if (cached) return cached;
 
-  // Cache miss: the header-only listing fills the same id → path cache as the
-  // full scan, but stops after the first chunk (16KB) for ordinary sessions
-  // instead of reading every file to EOF (~1s vs ~5s on a host with thousands
-  // of sessions). Only when
-  // the bounded reader can't see the id (malformed/short header, delete race)
-  // do we pay for the full `SessionManager.listAll()` scan.
   await listAllSessionsHeaderOnly();
   const fromHeaderScan = getPathCache().get(sessionId);
   if (fromHeaderScan) return fromHeaderScan;
@@ -524,12 +386,6 @@ export function invalidateSessionPathCache(sessionId: string): void {
   getPathCache().delete(sessionId);
 }
 
-/**
- * Build the full active-branch history for the browser. This deliberately does
- * not use pi's compaction-trimmed message list: that list is the runtime context
- * sent to the model, while the UI must keep showing messages already summarized
- * by a compaction entry.
- */
 export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
@@ -537,11 +393,6 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   const piEntries = entries as unknown as PiSessionEntry[];
   const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
 
-  // Build entryIds + entryTimestamps: parallel arrays to messages[], mapping
-  // each message back to its entry id and the entry-level persistence timestamp
-  // (ms). entryIds is needed for navigate_tree calls from the UI; the
-  // timestamps feed the per-turn duration display (turn end = the entry
-  // timestamp of the last assistant message, i.e. when its stream finished).
   let targetLeaf: SessionEntry | undefined;
   if (leafId === null) {
     return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
@@ -552,7 +403,6 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
   }
 
-  // Walk path from target leaf to root
   const path: SessionEntry[] = [];
   let cur: SessionEntry | undefined = targetLeaf;
   while (cur) {
@@ -560,18 +410,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
 
-  // 消息来源（ADR-0023）：非网页来源的用户消息身后跟着一条
-  // `pi_work_message_origin` custom entry，挂在它描述的 user entry 之后。
-  // 归属规则：树序上最近的前一条 user message —— 沿 path 正序扫，遇到 entry
-  // 就记到当前的 user entry 上。origin 只在这里合并进返回给 UI 的消息对象，
-  // 绝不写回 JSONL 消息体；非法数据按缺省处理（不带 origin）。entry 随消息
-  // 树走：不在 path 上的 entry 自然脱落（分支）；被压缩掻掉的 entry 也随之
-  // 消失——最后一个 compaction 的 firstKeptEntryId 之前的区域是已被摘要
-  // 吞掉的部分，其间的 user message 与 origin entry 不再参与归属（保持与
-  // pi buildContextEntries 的压缩语义一致），后续消息也不会错挂到它们身上。
   const originByUserEntryId = new Map<string, unknown>();
-  // 压缩切点：最后一个 compaction entry 在 path 上的 firstKeptEntryId 下标；
-  // 该下标之前的 entry 都算被压缩掉。无压缩时为 0（不切）。
   let compactedBefore = 0;
   for (let i = path.length - 1; i >= 0; i--) {
     const entry = path[i] as { type?: string; firstKeptEntryId?: string };
@@ -599,10 +438,6 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     }
   });
 
-  // Project every displayable entry on the full path and build all parallel
-  // arrays in the same loop. Compaction entries are rendered separately as
-  // dividers, so their synthetic compactionSummary messages stay out of the
-  // normal message list.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
   const entryTimestamps: (number | undefined)[] = [];
@@ -622,19 +457,11 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     }
   }
 
-  // Compaction points: every `compaction` entry on the visible path. The
-  // divider belongs before the first displayed message after the compaction;
-  // `beforeMessageEntryId` is set to that id when one exists. When the
-  // compaction is at the tail of the path (e.g. just compacted, no new
-  // messages yet), we still surface the point so the chat stream renders
-  // a trailing divider instead of waiting for the user to send another
-  // message — otherwise the chat looks unchanged until the next prompt.
   const visibleEntryIds = new Set(entryIds);
   const compactionPoints: CompactionPoint[] = [];
   for (const e of path) {
     if (e.type !== "compaction") continue;
     const ce = e as CompactionEntry;
-    // First visible message after this compaction entry on the path.
     let afterId: string | undefined;
     let afterSelf = false;
     for (const p of path) {
@@ -667,21 +494,11 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   };
 }
 
-/**
- * Parent session id for one session file, without scanning every session.
- *
- * The session header stores `parentSession` as a *path*; the id we hand the UI
- * lives in that parent file's own header, so a single first-chunk read is
- * enough — same mapping the full listing does (`parentSessionPath` → id).
- * Missing/unreadable parents resolve to `undefined`, matching what the full
- * scan produced when the parent wasn't in its path index.
- */
 export function resolveParentSessionId(parentSessionPath: string | undefined): string | undefined {
   if (!parentSessionPath) return undefined;
   return readHeaderOnly(parentSessionPath)?.id;
 }
 
-/** Read the disk-backed session payload used by GET /api/sessions/[id]. */
 export async function readSessionDetails(sessionId: string) {
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
@@ -697,7 +514,6 @@ export async function readSessionDetails(sessionId: string) {
   try {
     modified = statSync(filePath).mtime.toISOString();
   } catch {
-    // Use the header timestamp when stat fails.
   }
   const parentSessionId = resolveParentSessionId(header?.parentSession);
   const info = header ? {
@@ -708,8 +524,6 @@ export async function readSessionDetails(sessionId: string) {
     created: header.timestamp,
     modified,
     messageCount: context.messages.length,
-    // Same placeholder rule as the two listing paths: no user text → "", so the
-    // UI falls back to its unnamed-title rule instead of showing "(no messages)".
     firstMessage: cleanFirstMessage(
       extractMessageText(
         (context.messages.find((m) => m.role === "user") as { content?: unknown } | undefined)?.content,
@@ -728,15 +542,6 @@ export async function readSessionDetails(sessionId: string) {
   };
 }
 
-// ============================================================================
-// Subagent session stats
-//
-// Lightweight per-child aggregate (assistant messages, read-tool file count,
-// model id) used by /api/sessions/[id]/subagents. Polling re-runs this for
-// every child of a parent session, so results are cached per JSONL mtime —
-// an unchanged file is never re-parsed.
-// ============================================================================
-
 export interface SubagentSessionStats {
   assistantCount: number;
   readCount: number;
@@ -752,7 +557,6 @@ function getSubagentStatsCache(): Map<string, { mtimeMs: number; stats: Subagent
   return globalThis.__piSubagentStatsCache;
 }
 
-/** Aggregate assistant/read/model stats for one child session. */
 export async function readSubagentSessionStats(sessionId: string): Promise<SubagentSessionStats | null> {
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
@@ -795,34 +599,20 @@ export async function readSubagentSessionStats(sessionId: string): Promise<Subag
     }
     stats = { assistantCount, readCount: readPaths.size + readCalls, model };
   } catch {
-    // Unreadable / mid-write JSONL: fall through with zeroed stats.
   }
 
   cache.set(sessionId, { mtimeMs, stats });
   return stats;
 }
 
-// ============================================================================
-// Subagent live info (stats + recent tool-call activity)
-//
-// Feeds the activity window of a subagent task detail (`subagent` tool
-// `get` / session lookups). Same mtime-cache pattern as
-// readSubagentSessionStats — an unchanged JSONL is never re-parsed.
-// ============================================================================
-
-/** One recent tool call in the child session, for the activity window. */
 export type { SubagentActivityItem } from "@/lib/shared/types";
 import type { SubagentActivityItem } from "@/lib/shared/types";
 
-/** Raw aggregate computed from the child session JSONL (before callers slice
- *  their own window off it). */
 export interface SubagentLiveSnapshot {
   assistantCount: number;
   readCount: number;
   model: string | null;
-  /** Recent tool calls in chronological order (oldest first). */
   activities: SubagentActivityItem[];
-  /** Total number of tool calls in the child session, before the window. */
   activityCount: number;
 }
 
@@ -847,13 +637,8 @@ const ACTIVITY_SUMMARY_KEYS = [
 
 const ACTIVITY_SUMMARY_MAX = 120;
 
-/**
- * The cache is keyed by session mtime, so it must hold the same window whatever
- * a caller asks for; callers slice their own limit off the tail.
- */
 const ACTIVITY_CACHE_LIMIT = SUBAGENT_ACTIVITY_MAX_LIMIT;
 
-/** Short single-line preview of a tool call's input, mirroring the UI's tool preview. */
 export function summarizeToolInput(input: unknown): string {
   if (!input || typeof input !== "object") return "";
   const record = input as Record<string, unknown>;
@@ -870,7 +655,6 @@ export function summarizeToolInput(input: unknown): string {
   return oneLine.length > ACTIVITY_SUMMARY_MAX ? `${oneLine.slice(0, ACTIVITY_SUMMARY_MAX)}…` : oneLine;
 }
 
-/** Aggregate stats + recent tool-call activity for one child session. */
 export async function readSubagentLiveInfo(
   sessionId: string,
   activityLimit = SUBAGENT_ACTIVITY_DEFAULT_LIMIT,
@@ -886,8 +670,6 @@ export async function readSubagentLiveInfo(
 
   const cache = getSubagentLiveCache();
   const cached = cache.get(sessionId);
-  // The cache holds the widest window; each caller gets its own slice, even on
-  // a cache hit (a hit must not leak the previous caller's limit).
   const limited = (info: SubagentLiveSnapshot): SubagentLiveSnapshot => ({
     ...info,
     activities: activityLimit > 0 ? info.activities.slice(-activityLimit) : [],
@@ -936,7 +718,6 @@ export async function readSubagentLiveInfo(
       activityCount: activities.length,
     };
   } catch {
-    // Unreadable / mid-write JSONL: fall through with the empty snapshot.
   }
 
   cache.set(sessionId, { mtimeMs, info });

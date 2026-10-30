@@ -18,23 +18,11 @@ const CHIP_MAX_WIDTH = 150;
 
 interface Props {
   files: ReadFileInfo[];
-  /** Edge the chip group is pinned to inside its row. `end` (right-aligned)
-   *  also mirrors the "..." expansion bubble so it opens leftward instead of
-   *  overflowing the row. */
   align?: "start" | "end";
-  /** Turn-level aggregate added/deleted line counts from edit/write tool
-   *  calls (derived from the tools' own data, no git). Rendered after the
-   *  "..." button when non-null. */
   diffStats?: ToolDiffStats | null;
   onOpenFile: (filePath: string, fileName: string) => void;
 }
 
-/** Turn-level read / edit / write file chips, rendered in the assistant
- *  message footer row. Shows at most {@link MAX_VISIBLE} chips, then a "..."
- *  that smoothly expands a bubble (down by default, up only when space below
- *  is tight) with the full list. Every chip/list row opens the file in the
- *  right-hand panel. Edit/write-touched files additionally show +N/-M in the
- *  expanded list, plus one turn-level total after the "...". */
 export function ReadFileChips({ files, align = "start", diffStats, onOpenFile }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -45,10 +33,6 @@ export function ReadFileChips({ files, align = "start", diffStats, onOpenFile }:
   const visible = files.slice(0, MAX_VISIBLE);
   const hasMore = files.length > MAX_VISIBLE;
 
-  // Toggle the bubble. On open, pick a direction — down by default, up only
-  // when there isn't enough room below — and cap its height to the space
-  // actually visible in that direction inside the chat scroll container, so
-  // the expanding list is never clipped out of view.
   const toggle = () => {
     if (!open && rootRef.current) {
       let c: HTMLElement | null = rootRef.current.parentElement;
@@ -74,7 +58,6 @@ export function ReadFileChips({ files, align = "start", diffStats, onOpenFile }:
     setOpen((v) => !v);
   };
 
-  // Close on outside click / Escape; the "..." button toggles by itself.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: MouseEvent) => {
@@ -146,9 +129,6 @@ export function ReadFileChips({ files, align = "start", diffStats, onOpenFile }:
   );
 }
 
-/** Turn-level aggregate changed-lines label: [+N] [-M] as plain text.
- *  No icon, no pill background — just inline colored counts.
- *  Non-interactive; Tooltip explains what the numbers mean. */
 function DiffStatChip({ stats }: { stats: ToolDiffStats }) {
   const { t } = useI18n();
   return (
@@ -172,27 +152,21 @@ function DiffStatChip({ stats }: { stats: ToolDiffStats }) {
   );
 }
 
-/** SKILL.md 特化:读到的文件是 SKILL.md 时,chip 不显示文件名,
- *  而是展示 SKILL 的名称(SKILL.md 所在目录的目录名),图标用扳手。 */
 function isSkillFile(file: ReadFileInfo): boolean {
-  // 严格区分大小写:仅大写的 SKILL.md 视为 skill 标记文件。
   return file.name === "SKILL.md";
 }
 
-/** SKILL 名称 = SKILL.md 所在目录的目录名(取 path 的父目录 basename)。 */
 function skillDisplayName(file: ReadFileInfo): string {
   const normalized = normalizeFilePathSlashes(file.path).replace(/\/+$/, "");
   const parts = normalized.split("/");
-  parts.pop(); // 去掉 SKILL.md 本身
+  parts.pop();
   return parts[parts.length - 1] ?? file.name;
 }
 
-/** chip 上展示的名称:SKILL.md 特化为 SKILL 名称,其余为文件名。 */
 function chipLabel(file: ReadFileInfo): string {
   return isSkillFile(file) ? skillDisplayName(file) : file.name;
 }
 
-/** chip 上的图标:SKILL.md 用扳手,其余走文件类型图标。 */
 function fileChipIcon(file: ReadFileInfo, size: number): React.ReactNode {
   if (isSkillFile(file)) {
     return <ToolIcon size={size} style={{ flexShrink: 0 }} />;
@@ -200,8 +174,6 @@ function fileChipIcon(file: ReadFileInfo, size: number): React.ReactNode {
   return getFileIcon(file.name, size);
 }
 
-/** One pill: [file icon + basename]. Ellipsizes long names; Tooltip shows the
- *  full absolute path. Click opens the file in the right-hand panel. */
 function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
   return (
     <Tooltip content={file.path}>
@@ -235,8 +207,6 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
   );
 }
 
-/** Per-file [+N] [-M] shown in the expanded list for files this turn's
- *  edit/write calls touched. Renders nothing for read-only files. */
 function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
   if (!stats || (stats.additions <= 0 && stats.deletions <= 0)) return null;
   return (
@@ -247,11 +217,6 @@ function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
   );
 }
 
-/** Expandable list bubble anchored to the "..." button. Defaults to expanding
- *  downward; flips upward only when there isn't enough room below. Stays
- *  mounted so close animates too: height transitions 0 ↔ measured content
- *  (clamped to BUBBLE_MAX_HEIGHT), then flips to scrollable once the
- *  transition settles for long lists. */
 function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
   files: ReadFileInfo[];
   open: boolean;
@@ -266,8 +231,6 @@ function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
   const targetHeight = contentHeight === null ? 0 : Math.min(contentHeight, maxHeight);
   const settled = scrolled || (contentHeight !== null && contentHeight <= maxHeight);
   const anchor = direction === "down" ? { top: "calc(100% + 8px)" } : { bottom: "calc(100% + 8px)" };
-  // "end" pins the bubble's right edge to the "..." button so a right-aligned
-  // chip group opens leftward, inside the message column.
   const horizontal = align === "end" ? { right: 0 } : { left: 0 };
 
   useEffect(() => {
@@ -276,7 +239,6 @@ function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
       return;
     }
     if (contentHeight !== null && contentHeight > maxHeight) {
-      // Match the height transition duration, then make the list scrollable.
       const id = window.setTimeout(() => setScrolled(true), 260);
       return () => window.clearTimeout(id);
     }

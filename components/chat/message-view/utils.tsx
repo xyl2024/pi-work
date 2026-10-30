@@ -127,12 +127,6 @@ export function useMarkdownComponents(
   );
 }
 
-/**
- * Anchors in chat markdown: a bare path (`/abs/a.ts` or a cwd-relative
- * `src/a.ts`) opens in the right panel instead of navigating. External links,
- * fragments and routes fall through to the plain anchor, leaving
- * `useExternalLinks` to handle http(s).
- */
 function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutRef<"a">) {
   const handler = useFileLinkHandler();
   const target = handler ? resolveFileLink(href, handler.cwd) : null;
@@ -159,7 +153,6 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
   );
 }
 
-/** Live per-turn duration. Ticks every second while running, freezes on stop, and becomes fully static once endMs arrives. */
 export function TurnDuration({ startMs, endMs, running }: { startMs: number; endMs?: number; running: boolean }) {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   useEffect(() => {
@@ -207,15 +200,12 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
       parts = [str(record.command)];
       break;
     }
-    // The current tool name, plus the pre-rename name still present in old
-    // messages. `subagentType` is the even older field name on custom entries.
     case SUBAGENT_TOOL_NAME:
     case LEGACY_SPAWN_SUBAGENT_TOOL_NAME: {
       parts = [str(record.subagent_name) || str(record.subagentType), str(record.description)];
       break;
     }
     default: {
-      // Fallback: first meaningful key, then any other key at all.
       const fallbackKey =
         ["command", "path", "file_path", "pattern", "query", "symbol", "action", "url", "name"].find((k) => k in record) ?? keys[0];
       parts = [String(record[fallbackKey])];
@@ -233,14 +223,12 @@ export interface UsageIconsProps {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } | null;
 }
 
-/** First-token latency: sub-second reads better in ms, later in seconds. */
 function formatTtft(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const seconds = ms / 1000;
   return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
 }
 
-/** Generation speed: keep one decimal, drop it once it stops mattering. */
 function formatTps(tps: number): string {
   return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
@@ -249,9 +237,6 @@ export function UsageIcons({ usage }: UsageIconsProps) {
   const { formatCost, currency } = useFormatCurrency();
   const inputDenom = usage ? usage.input + usage.cacheRead : 0;
   const cacheHitRate = inputDenom > 0 ? ((usage?.cacheRead ?? 0) / inputDenom) * 100 : 0;
-  // Each item carries its tooltip and its compact footer text: the two differ
-  // (a tooltip spells out what a bare number means) and deriving both from one
-  // place keeps them from drifting apart.
   const items: Array<{ key: string; label: string; compact: string; icon: React.ReactNode }> = [];
   if (usage?.input) {
     items.push({
@@ -321,15 +306,8 @@ export function UsageIcons({ usage }: UsageIconsProps) {
   );
 }
 
-/**
- * TTFT / generation-speed badges. Rendered next to the model name in the
- * message header rather than in the footer, and hidden until the message is
- * hovered. Both facts come from the model-call metrics DB (not the session
- * JSONL), so a message whose call was never recorded simply shows nothing.
- */
 export function CallMetricsBadges({ metrics, hidden }: {
   metrics?: MessageCallMetrics | null;
-  /** Keep the badges mounted but transparent until the row is hovered. */
   hidden?: boolean;
 }) {
   const items: Array<{ key: string; label: string; compact: string; icon: React.ReactNode }> = [];

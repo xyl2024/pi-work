@@ -4,12 +4,6 @@ import { Tooltip } from "../ui/Tooltip";
 import { useI18n } from "@/hooks/useI18n";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 
-/**
- * Inline chip rendered above the textarea once the user has picked a
- * skill from the slash menu. Shows the `skill` source badge plus the
- * `/command` and a small remove button. Shift+Backspace on the textarea
- * is the keyboard equivalent of the remove button.
- */
 export function SlashCommandHint({ resource, onRemove }: {
   resource: SlashResource;
   onRemove: () => void;

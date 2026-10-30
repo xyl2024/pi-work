@@ -30,7 +30,6 @@ function DotPulseLoader() {
   );
 }
 
-/** `HH:MM:SS`, zero-padded and never negative. */
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -40,10 +39,6 @@ function formatElapsed(ms: number): string {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
-/**
- * Live "已耗时：HH:MM:SS" clock anchored to `since` (the turn's start).
- * Ticks once a second; the interval restarts if the anchor changes.
- */
 function ElapsedClock({ since }: { since: number }) {
   const { t } = useI18n();
   const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - since));
@@ -78,7 +73,6 @@ export default function LoadingState({
 }: {
   label?: string;
   variant?: LoadingVariant;
-  /** Turn start timestamp (ms). Renders the live elapsed clock when set. */
   elapsedSince?: number | null;
 }) {
   return (

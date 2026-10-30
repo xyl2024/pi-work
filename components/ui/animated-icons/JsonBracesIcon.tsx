@@ -1,6 +1,3 @@
-// JSON-panel glyph (FolderCode). Hovering nudges the two `</>` code brackets
-// apart/pivot via `custom={±1}` directional variants.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -86,4 +83,3 @@ export const JsonBracesIcon = forwardRef<JsonBracesIconHandle, JsonBracesIconPro
 );
 
 JsonBracesIcon.displayName = "JsonBracesIcon";
-

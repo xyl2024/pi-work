@@ -32,7 +32,6 @@ import { DangerousRuleEditor } from "../dangerous-commands/DangerousRuleEditor";
 import { RuleList, RuleRow } from "../dangerous-commands/DangerousRuleList";
 import { dangerousRuleProblemText } from "@/lib/client/dangerous-commands-problem-text";
 
-/** One read of the effective set; the modal's page-data cache keeps it for the modal's lifetime. */
 async function loadRuleSet(): Promise<DangerousRuleSetSnapshot> {
   const response = await fetch("/api/dangerous-commands", { cache: "no-store" });
   const data = (await response.json().catch(() => ({}))) as DangerousRuleSetSnapshot & {
@@ -42,7 +41,6 @@ async function loadRuleSet(): Promise<DangerousRuleSetSnapshot> {
   return data;
 }
 
-/** "If this command ran, what would happen?" — answered by the server. */
 async function testCommand(command: string): Promise<DangerousCommandVerdict> {
   const response = await fetch("/api/dangerous-commands/test", {
     method: "POST",
@@ -58,12 +56,6 @@ async function testCommand(command: string): Promise<DangerousCommandVerdict> {
   return data;
 }
 
-/**
- * The three outcomes, told apart on sight: a hard block is red and says it
- * cannot be configured here, a rule match says a confirmation would appear and
- * which layer the rule came from, no match says the command would just run.
- * Sharing one neutral card between the first two would read as "both blocked".
- */
 function VerdictView({ verdict }: { verdict: DangerousCommandVerdict }) {
   const { t } = useI18n();
 
@@ -153,30 +145,17 @@ function VerdictView({ verdict }: { verdict: DangerousCommandVerdict }) {
   );
 }
 
-/**
- * "Try a command" — the page-level box, deliberately not inside a rule editor:
- * the question it answers ("would this command be stopped?") depends on the
- * whole rule set in force, plus the self-protection layer no rule describes.
- *
- * The judgement is the server's (`POST /api/dangerous-commands/test` →
- * `evaluateDangerousCommand`), the same call the `tool_call` gate makes, so a
- * command cannot read as fine here and behave differently in a session.
- */
 function CommandTester() {
   const { t } = useI18n();
   const [command, setCommand] = useState("");
   const [verdict, setVerdict] = useState<DangerousCommandVerdict | null>(null);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Only the latest test may touch the result; an earlier response arriving
-  // late must not overwrite a newer answer.
   const latestRequest = useRef(0);
 
   const run = async () => {
     const id = ++latestRequest.current;
     setError(null);
-    // An empty command has nothing to match, so it is answered without a
-    // request — and without pretending the server looked at it.
     if (command.trim() === "") {
       setTesting(false);
       setVerdict({ kind: "none" });
@@ -246,34 +225,6 @@ function CommandTester() {
   );
 }
 
-/**
- * Settings → Agent → Dangerous commands (ADR-0020).
- *
- * Three facts this page has to keep straight:
- *
- *   • **The built-in floor is read-only and always on.** What it lists is the
- *     platform's built-ins, read from `/api/dangerous-commands` — the same
- *     effective set the gate assembles, not a client-side copy — so the
- *     Windows-only PowerShell rules appear on Windows and stay out of the way
- *     everywhere else.
- *   • **Clearing your own rules does not turn the built-ins off**, and a match
- *     asks for confirmation instead of blocking the command.
- *   • **Saving is immediate.** Matching reads the config on every tool call, so
- *     a rule lands on the next command without a restart or a new session. The
- *     page never hints otherwise.
- *   • **The timeout is part of the same save**, and an unusable value is a
- *     blocker rather than a silent fallback to the default (ADR-0020: with a
- *     UI, guessing for the user is worse than refusing the save).
- *
- * Self-protection (the code-level hard block in `lib/server/self-protection.ts`)
- * deliberately does not appear as a list: anything listed on a settings page
- * reads as configurable, and that one is not. It surfaces only in the command
- * tester's result, where it is the answer to "why was this stopped?".
- *
- * The draft model (`lib/shared/dangerous-commands-draft.ts`) owns every "can
- * this be saved?" decision, and the write route re-runs the same validation
- * before touching disk. The page only reads those answers.
- */
 export function DangerousCommandsSection({
   config,
   pageCache,
@@ -293,60 +244,35 @@ export function DangerousCommandsSection({
 
   const savedRules = config.dangerous_patterns.rules;
   const savedTimeoutMs = config.dangerous_patterns.timeout_ms;
-  // The draft is deliberately not cached across page entries: leaving the page
-  // drops unsaved edits, the same as the other staged pages.
   const [draft, setDraft] = useState<DangerousRulesDraft | null>(null);
-  // The timeout field is free text on purpose. Round-tripping it through a
-  // number would turn "abc" into a silently empty box; keeping the raw text
-  // lets the blocker say what is wrong while the user still sees what they
-  // typed. The draft carries the parsed value (NaN when it does not parse).
   const [timeoutText, setTimeoutText] = useState(() => String(savedTimeoutMs));
   const [editor, setEditor] = useState<null | { mode: "new" } | { mode: "edit"; uid: string }>(null);
   const [saving, setSaving] = useState(false);
   const [savedOk, flashSavedOk] = useTransientFlag();
 
   const current = draft ?? dangerousRulesDraft(savedRules, savedTimeoutMs);
-  // The row the editor is prefilling. Absent for a new rule; also absent if a
-  // row vanished while the modal was open, in which case the modal is not
-  // rendered at all (see below) rather than silently discarding the form.
   const editingRule =
     editor?.mode === "edit" ? current.rules.find((entry) => entry.uid === editor.uid) : undefined;
-  /** Position of the row being edited, so its own name does not count as taken. */
   const editingRowIndex =
     editor?.mode === "edit" ? current.rules.findIndex((entry) => entry.uid === editor.uid) : -1;
-  // The names a user rule may not reuse. The built-ins come from the same
-  // effective set the page lists (not a client-side copy of the rule set), so
-  // "reserved" and "listed below" cannot drift; until that read lands the
-  // write route still refuses a shadowing name.
   const builtinNames = (data?.builtins ?? []).map((rule) => rule.name);
   const dirty = isDangerousRulesDraftDirty(current, savedRules, savedTimeoutMs);
   const problem = dangerousRulesDraftProblem(current, { builtinNames });
-  // The timeout blocker belongs to a page-level field, not to a row.
   const timeoutProblem = problem?.kind === "timeout" ? problem : null;
   const rowProblem = problem && problem.kind !== "timeout" ? problem : null;
   const problemText = rowProblem
     ? dangerousRuleProblemText(rowProblem, t, t("Rule {n}", { n: rowProblem.index + 1 }))
     : null;
 
-  /**
-   * Move the timeout field into the draft. An empty or unparseable box becomes
-   * NaN, which the shared module reports as a blocker — deliberately not
-   * "keep the old value": that silent fallback is the hand-edited-YAML habit
-   * a UI has to stop.
-   */
   const changeTimeout = (value: string) => {
     setTimeoutText(value);
     setDraft({ ...current, timeoutMs: value.trim() === "" ? Number.NaN : Number(value) });
   };
 
-  // With no draft the field mirrors what is on disk, so a config change from
-  // elsewhere cannot leave a stale number beside a fresh baseline.
   useEffect(() => {
     if (draft === null) setTimeoutText(String(savedTimeoutMs));
   }, [draft, savedTimeoutMs]);
 
-  // Staged page: the modal's close/leave guard reads this registry, so an
-  // unsaved rule prompts before it is dropped (ADR-0019).
   useEffect(() => {
     onDirtyChange?.("dangerous-commands", dirty);
   }, [dirty, onDirtyChange]);
@@ -365,21 +291,15 @@ export function DangerousCommandsSection({
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(payload.error ?? `HTTP ${response.status}`);
       }
-      // The settings store is the client's mirror of config.yaml: moving it
-      // here keeps the draft baseline and a later entry into this page in sync
-      // without a second read.
       setSettings({
         ...config,
         dangerous_patterns: { rules: body.rules, timeout_ms: body.timeoutMs },
       });
-      // Everything that was just written compiles (the route checked), so the
-      // cached "these user rules are broken" report is stale.
       if (data) mutate({ ...data, invalidUserRules: [] });
       setDraft(null);
       flashSavedOk();
       toast.show({ kind: "success", message: t("Settings saved") });
     } catch (e) {
-      // The draft stays exactly as it was: a failed write must not lose edits.
       toast.show({
         kind: "error",
         message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),

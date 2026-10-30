@@ -1,6 +1,3 @@
-// Git-diff-panel glyph (GitGraph). Hovering draws the commit nodes (circles)
-// and branch stems in sequentially with staggered delays.
-
 "use client";
 
 import { motion, useAnimation } from "motion/react";
@@ -114,4 +111,3 @@ export const GitDiffIcon = forwardRef<GitDiffIconHandle, GitDiffIconProps>(
 );
 
 GitDiffIcon.displayName = "GitDiffIcon";
-

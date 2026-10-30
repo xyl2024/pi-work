@@ -1,17 +1,3 @@
-// ── Last-used model persistence ────────────────────────────────────────
-//
-// Pi Work used to let new sessions fall back to the model that was last
-// used (pi remembers it per cwd). The new-session pre-selection feature
-// (commit c5a030b) changed this to force the global default from
-// `~/.pi/agent/settings.json` on every new session, overriding that
-// behaviour. This module restores the old UX: we remember the model the
-// user actually last used and default new sessions to it, falling back to
-// the settings default when nothing has been recorded yet.
-//
-// Deliberately small string-only payload — JSON.stringify + JSON.parse
-// both directions. Fails silently (no store / private mode / corrupt
-// value) just like the other Pi Work localStorage layers.
-
 import { getLocalStorage } from "./local-storage";
 
 const LAST_USED_MODEL_KEY = "pi-work:last-used-model";
@@ -21,8 +7,6 @@ export interface LastUsedModel {
   modelId: string;
 }
 
-/** Read the last-used model. Returns `null` when localStorage is
- *  unavailable, the key is missing, or the value is corrupt. */
 export function readLastUsedModel(): LastUsedModel | null {
   const store = getLocalStorage();
   if (!store) return null;
@@ -44,8 +28,6 @@ export function readLastUsedModel(): LastUsedModel | null {
   }
 }
 
-/** Persist the last-used model. Best-effort — write failures (private
- *  mode, quota) are swallowed and never crash the caller. */
 export function writeLastUsedModel(next: LastUsedModel): void {
   const store = getLocalStorage();
   if (!store) return;

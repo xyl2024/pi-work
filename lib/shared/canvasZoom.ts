@@ -1,22 +1,7 @@
-/**
- * Zoom math for a pan/zoom canvas (currently the conversation tree).
- *
- * The canvas is one unscaled coordinate space that is rendered through
- * `transform: scale(s)` with `transform-origin: top left` inside a
- * scrollable viewport. Zooming must keep the point under the cursor (or
- * the viewport center) pinned: we therefore remember that point in
- * *unscaled* canvas coordinates plus its offset inside the viewport, and
- * rewrite scrollLeft/scrollTop once the browser knows the new layout.
- *
- * Pure and DOM-free so the tricky part (anchoring across a burst of wheel
- * events, before React has committed the new scroll) is unit-tested.
- */
-
 export const DEFAULT_CANVAS_SCALE = 0.85;
 export const MIN_CANVAS_SCALE = 0.3;
 export const MAX_CANVAS_SCALE = 2;
 
-/** Clamp a zoom factor into [MIN_CANVAS_SCALE, MAX_CANVAS_SCALE]. */
 export function clampCanvasScale(value: number): number {
   if (Number.isNaN(value)) return DEFAULT_CANVAS_SCALE;
   return Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, value));
@@ -27,35 +12,21 @@ export interface CanvasPoint {
   y: number;
 }
 
-/** A point on the canvas, plus where it should stay inside the viewport. */
 export interface ZoomAnchor {
-  /** Unscaled canvas coordinate (padding included). */
   contentX: number;
   contentY: number;
-  /** Viewport-relative offset that must keep showing that canvas point. */
   mx: number;
   my: number;
 }
 
 export interface ComputeZoomAnchorArgs {
-  /** Scale currently in effect (before this zoom step). */
   currentScale: number;
   scroll: { left: number; top: number };
   viewport: { width: number; height: number };
-  /** Pointer position in viewport coordinates; omitted → viewport center. */
   pointer?: CanvasPoint;
-  /**
-   * Anchor computed by a previous zoom step whose scroll has not been
-   * written yet. Wheel events can fire several times before the render
-   * commits, so `scroll` is stale; deriving from the pending anchor keeps
-   * the point under the cursor pinned instead of drifting.
-   */
   pending?: ZoomAnchor | null;
 }
 
-/**
- * Where the canvas point under `pointer` lives, in unscaled coordinates.
- */
 export function computeZoomAnchor({
   currentScale,
   scroll,
@@ -82,10 +53,6 @@ export function computeZoomAnchor({
   };
 }
 
-/**
- * Scroll offsets that put `anchor` back under its viewport offset at the
- * given scale. Negative values are impossible to scroll to, so clamp to 0.
- */
 export function scrollForAnchor(
   anchor: ZoomAnchor,
   scale: number,
@@ -96,10 +63,6 @@ export function scrollForAnchor(
   };
 }
 
-/**
- * Scale that fits an unscaled canvas into the viewport, leaving `inset`
- * pixels of breathing room on every side.
- */
 export function fitCanvasScale(
   canvas: { width: number; height: number },
   viewport: { width: number; height: number },

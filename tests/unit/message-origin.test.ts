@@ -1,7 +1,3 @@
-// Seam A：消息来源的共享纯函数（spec：.scratch/message-origin/spec.md）。
-// 缺省回退（无标记 ≡ 网页端）、origin → 图标/名称/悬停文案映射（文案是 i18n
-// 词典键）、prompt + origin → 待写 entry 数据（毫秒时间戳 + 文本前 80 字符）、
-// customType `pi_work_message_origin` 的类型守卫。非法数据不抛错、按缺省处理。
 import { describe, expect, it } from "vitest";
 
 import {
@@ -93,7 +89,7 @@ describe("buildMessageOriginEntryData", () => {
   });
 
   it("多字文本按码点截断，不产生半个代理对", () => {
-    const text = "😀".repeat(60); // 60 个码点、120 个 code unit
+    const text = "😀".repeat(60);
     const data = buildMessageOriginEntryData(text, { kind: "web" }, 1700000000000);
     expect(data.messagePrefix).toBe("😀".repeat(60));
   });

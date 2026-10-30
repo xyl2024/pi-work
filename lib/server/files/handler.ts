@@ -6,15 +6,6 @@ import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { filePathFromSegments } from "@/lib/server/file-access";
 import { readConfig } from "@/lib/server/config";
 
-/**
- * Shared GET handler + helpers for the files API.
- *
- * Mounted at both `/api/files/[...path]` (catch-all) and `/api/files`
- * (zero segments → filesystem root `/`). Next.js route files may only
- * export route handlers (its generated types enforce that), so everything
- * the GET handler needs lives in this non-route module instead.
- */
-
 export const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
   ".turbo", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
@@ -25,23 +16,10 @@ export const IGNORED_SUFFIXES = [".pyc"];
 
 const log = createLogger("api/files");
 
-/**
- * Read the per-kind preview-size limits (in MB) from ~/.pi-work/config.yaml.
- * Falls back to defaults if the config is missing/garbled — `readConfig` is
- * fail-open, so the file route never blocks on user YAML errors.
- */
 function getPreviewLimits(): { text: number; image: number; pdf: number } {
   return readConfig().file_viewer.max_size_mb;
 }
 
-/**
- * Build a 413 response for "file too large" rejections. Returns a
- * machine-readable shape (code/kind/sizeBytes/limitBytes) so the
- * SettingsModal/FilViewer can i18n the user-facing message client-side
- * and so future features (e.g. an "Open settings" button) can detect
- * this error category without string-matching the message. The English
- * `error` field is still populated for `curl` / log readability.
- */
 function fileTooLargeResponse(
   kind: "image" | "text" | "pdf",
   sizeBytes: number,
@@ -137,7 +115,6 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 function getLanguage(filePath: string): string {
   const base = path.basename(filePath).toLowerCase();
-  // Special full-name matches
   if (base === "dockerfile" || base.startsWith("dockerfile.")) return "dockerfile";
   if (base === ".env" || base.startsWith(".env.")) return "bash";
   if (base === "makefile" || base === "gnumakefile") return "makefile";
@@ -153,20 +130,14 @@ export function jsonOk(data: Record<string, unknown>, status = 200): NextRespons
   return NextResponse.json({ ok: true, ...data }, { status });
 }
 
-/** Upper bounds for in-memory directory zipping on download. Beyond these
- *  the request is rejected rather than risking an OOM in the Next server. */
 const DOWNLOAD_ZIP_MAX_BYTES = 100 * 1024 * 1024;
 const DOWNLOAD_ZIP_MAX_FILES = 10000;
 
-/** RFC 5987 Content-Disposition with an ASCII fallback for non-ASCII names. */
 function contentDisposition(filename: string): string {
   const fallback = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/** Zip a directory tree in memory (JSZip). Skips IGNORED_NAMES/IGNORED_SUFFIXES
- *  and symlinks (avoiding cycles / escaping the tree), and throws when the
- *  tree exceeds the size/file caps. */
 async function buildDirectoryZip(dirPath: string): Promise<ArrayBuffer> {
   const zip = new JSZip();
   let totalBytes = 0;
@@ -220,7 +191,6 @@ function createFileBodyStream(filePath: string, range?: { start: number; end: nu
         try {
           controller.close();
         } catch {
-          // The browser may cancel media probes before the file stream ends.
         }
       });
       fileStream.once("error", (error) => {
@@ -229,7 +199,6 @@ function createFileBodyStream(filePath: string, range?: { start: number; end: nu
         try {
           controller.error(error);
         } catch {
-          // The response was already abandoned by the client.
         }
       });
     },
@@ -297,20 +266,12 @@ function streamFile(filePath: string, stat: fs.Stats, contentType: string, range
   });
 }
 
-/**
- * GET logic for the files API. `segments` are the decoded path segments
- * from the route params; an empty array means the filesystem root.
- */
 export async function handleFilesGet(request: NextRequest, segments: string[]): Promise<Response> {
   const startedAt = Date.now();
   try {
     const filePath = filePathFromSegments(segments);
     const type = request.nextUrl.searchParams.get("type") ?? "list";
     log.debug("file request received", { type, path: filePath });
-
-    // GET is intentionally not gated by getAllowedRoots()/isPathAllowed().
-    // Read paths (list/read/watch, image/audio/video/pdf streaming) are
-    // unrestricted; write paths (PUT/POST/DELETE/PATCH) keep the check.
 
     let stat: fs.Stats;
     try {
@@ -449,10 +410,8 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
             try {
               controller.enqueue(new TextEncoder().encode(payload));
             } catch {
-              // client disconnected
             }
           };
-          // Send initial ping so client knows connection is live
           send("connected", { filePath });
           try {
             watcher = fs.watch(filePath, () => {
@@ -465,7 +424,7 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
             });
             watcher.on("error", () => {
               log.warn("file watch error", { path: filePath, durationMs: elapsedMs(startedAt) });
-              try { controller.close(); } catch { /* ignore */ }
+              try { controller.close(); } catch {}
             });
           } catch {
             log.warn("file watch failed to start", { path: filePath, durationMs: elapsedMs(startedAt) });
@@ -474,7 +433,7 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
           }
         },
         cancel() {
-          try { watcher?.close(); } catch { /* ignore */ }
+          try { watcher?.close(); } catch {}
           log.info("file watch closed", { path: filePath, durationMs: elapsedMs(startedAt) });
         },
       });
@@ -489,7 +448,6 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
       });
     }
 
-    // type === "list"
     if (!stat.isDirectory()) {
       log.warn("directory list rejected", { path: filePath, reason: "not a directory", durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: "Not a directory" }, { status: 400 });
@@ -514,7 +472,6 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
       })
       .filter(Boolean)
       .sort((a, b) => {
-        // Dirs first, then files, both alphabetically
         if (a!.isDir !== b!.isDir) return a!.isDir ? -1 : 1;
         return a!.name.localeCompare(b!.name);
       });

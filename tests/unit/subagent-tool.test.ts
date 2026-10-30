@@ -23,17 +23,9 @@ import {
 import { DEFAULT_SUBAGENT_WAIT_MS, SUBAGENT_RESULT_WINDOW_DEFAULT } from "@/lib/shared/subagent";
 import type { SubagentTaskStatus } from "@/lib/shared/types";
 
-/**
- * The tool's own external seam: `execute` is driven with a fake parent resolver
- * and a fake task manager, so the argument semantics (defaults, forwarding,
- * result wording) are asserted without a model, a session or a database.
- * Task lifecycle itself is covered by `subagent-tasks.test.ts`.
- */
-
 let dir: string;
 
 beforeAll(() => {
-  // Profile lookups read the subagent DB; keep them out of the real data root.
   dir = mkdtempSync(join(tmpdir(), "pi-work-subagent-tool-"));
   process.env.PI_WORK_SUBAGENTS_DB = join(dir, "subagents.db");
   process.env.PI_WORK_DATA_DIR = dir;
@@ -48,8 +40,6 @@ afterAll(() => {
 type ExecuteContext = Parameters<NonNullable<typeof subagentTool.execute>>[4];
 
 function fakeContext(parentSessionId = "parent-1"): ExecuteContext {
-  // Only `cwd` and the session id are read by the tool. The full pi extension
-  // context is not constructible here; the cast is confined to this helper.
   return {
     cwd: "/tmp/work",
     sessionManager: { getSessionId: () => parentSessionId },
@@ -175,8 +165,6 @@ describe("subagent tool — spawn action", () => {
     expect(spawn.description).toBe("explore");
     expect(spawn.prompt).toBe("look around");
     expect(spawn.config.subagentName).toBe("codebase_explorer");
-    // The profile names no model, so the parent's is inherited; the child
-    // never gets the subagent tool itself.
     expect(spawn.config.model).toEqual({ provider: "p", modelId: "m-parent" });
     expect(spawn.config.tools).toContain("read");
     expect(spawn.config.tools).not.toContain("subagent");
@@ -301,14 +289,6 @@ describe("subagent tool — spawn action", () => {
     expect(updates[0].details).toMatchObject({ status: "queued", childSessionId: null });
   });
 });
-
-// ============================================================================
-// list / get — the read side of the tool
-//
-// Rows are seeded straight into the temp subagents DB and the fake manager only
-// answers "is this task live?"; the assertions stay on the tool's own result
-// (text + details), which is what the parent model actually reads.
-// ============================================================================
 
 type ExecuteParams = Parameters<NonNullable<typeof subagentTool.execute>>[1];
 

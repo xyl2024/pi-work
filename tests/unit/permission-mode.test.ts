@@ -6,25 +6,6 @@ import type { AgentSessionLike } from "@/lib/server/pi-types";
 import type { SessionEvent } from "@/lib/shared/session-events";
 import { isPermissionMode } from "@/lib/shared/permission-mode";
 
-/**
- * The permission-mode seam (ADR-0021).
- *
- * Three external behaviours are asserted, nothing internal:
- *
- *   1. "Given a command and a mode, what does the gate decide?" — the
- *      `{confirm, full_access} × {self-protected, user rule, built-in rule,
- *      no match}` matrix, with `full_access + self-protected` still a hard
- *      block as the case that matters most.
- *   2. "Given a mode toggle, what happens to the session's memo and to the
- *      gates already waiting?" — switching back to `confirm` revokes
- *      "allow similar for this session"; a switch neither approves nor denies
- *      a pending request.
- *   3. "What does the sidecar read back, and what does a bad value do?" —
- *      missing / corrupt / illegal everywhere reduce to `confirm`.
- *
- * Everything runs against a temp `PI_WORK_DATA_DIR`, like the other server
- * tests: the user rules live in `config.yaml` and the sidecar is a file.
- */
 const root = mkdtempSync(join(tmpdir(), "pi-work-permission-mode-"));
 
 let evaluateDangerousCommand: typeof import("@/lib/server/dangerous-patterns")["evaluateDangerousCommand"];
@@ -43,8 +24,6 @@ beforeAll(async () => {
 }, 60_000);
 
 beforeEach(() => {
-  // The config cache lives on globalThis across module evaluations; start each
-  // case from the file on disk.
   globalThis.__piWorkConfigCache = undefined;
 });
 
@@ -53,7 +32,6 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-/** Replace the user's rule list, leaving the rest of the config intact. */
 function setUserRules(rules: { name: string; pattern: string }[]): void {
   const base = readConfig();
   writeConfig({
@@ -61,8 +39,6 @@ function setUserRules(rules: { name: string; pattern: string }[]): void {
     dangerous_patterns: { ...base.dangerous_patterns, rules },
   });
 }
-
-// ── 1. The decision matrix ────────────────────────────────────────────────
 
 describe("evaluateDangerousCommand × permission mode", () => {
   beforeEach(() => {
@@ -77,8 +53,6 @@ describe("evaluateDangerousCommand × permission mode", () => {
   });
 
   it("still hard-blocks self-protection in full access", () => {
-    // The whole point of the exception: full access is not a licence to kill
-    // the process that hosts every session, terminal and background loop.
     expect(evaluateDangerousCommand("pkill node", "full_access")).toEqual({
       kind: "self_protected",
       reason: expect.any(String),
@@ -114,14 +88,10 @@ describe("evaluateDangerousCommand × permission mode", () => {
   });
 
   it("treats an unknown mode as confirm, never as full access", () => {
-    // ADR-0008's "unknown decision means allow" trap must not be repeated.
     expect(evaluateDangerousCommand("pytest -q", "yolo" as never).kind).toBe("matched");
   });
 });
 
-// ── 2. Toggling: the memo and the gates already waiting ───────────────────
-
-/** The smallest inner session the wrapper's `set_permission_mode` path reads. */
 function fakeWrapper(sessionId: string) {
   const inner = {
     sessionId,
@@ -179,11 +149,9 @@ describe("set_permission_mode", () => {
   it("revokes the session memo when leaving full access", async () => {
     const { wrapper } = fakeWrapper("toggling-session-3");
 
-    // "Allow similar" records the rule...
     const first = wrapper.gates.runPermissionGate(gateRequest("call-1", "rm -rf"));
     wrapper.gates.resolvePermission("call-1", "allow_similar");
     await expect(first).resolves.toEqual({ decision: "allow" });
-    // ...so the next hit on the same rule does not ask.
     await expect(wrapper.gates.runPermissionGate(gateRequest("call-2", "rm -rf"))).resolves.toEqual({
       decision: "allow",
     });
@@ -191,7 +159,6 @@ describe("set_permission_mode", () => {
     await wrapper.send({ type: "set_permission_mode", mode: "full_access" });
     await wrapper.send({ type: "set_permission_mode", mode: "confirm" });
 
-    // Back on confirm the same rule asks again: the memo went with the mode.
     const third = wrapper.gates.runPermissionGate(gateRequest("call-3", "rm -rf"));
     expect(wrapper.snapshotPendingGates()).toEqual([
       expect.objectContaining({ type: "permission_request", toolCallId: "call-3" }),
@@ -212,7 +179,6 @@ describe("set_permission_mode", () => {
     });
 
     await wrapper.send({ type: "set_permission_mode", mode: "full_access" });
-    // Give the microtask queue a turn: an auto-approval would land here.
     await Promise.resolve();
     expect(settled).toBe(false);
     expect(wrapper.snapshotPendingGates()).toHaveLength(1);
@@ -222,13 +188,10 @@ describe("set_permission_mode", () => {
     expect(settled).toBe(false);
     expect(wrapper.snapshotPendingGates()).toHaveLength(1);
 
-    // The user — not the switch — decides it.
     wrapper.gates.resolvePermission("call-1", "allow_once");
     await expect(pending).resolves.toEqual({ decision: "allow" });
   });
 });
-
-// ── 3. The sidecar ────────────────────────────────────────────────────────
 
 describe("session permission-mode sidecar", () => {
   it("reads a session that never opted in as confirm", () => {
@@ -287,8 +250,6 @@ describe("session permission-mode sidecar", () => {
     expect(typeof parsed.updatedAt).toBe("string");
   });
 });
-
-// ── 4. The mode vocabulary ────────────────────────────────────────────────
 
 describe("isPermissionMode", () => {
   it("accepts exactly the two modes", () => {

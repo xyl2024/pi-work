@@ -14,16 +14,6 @@ import {
 } from "@/lib/shared/dangerous-commands-draft";
 import type { DangerousPatternRule } from "@/lib/shared/config-types";
 
-/**
- * The dangerous-commands page's draft model — the one seam where every
- * "can this be saved?" decision is made. Pure functions, so the error branches
- * (empty name, empty pattern, broken regex) are driven without a server.
- *
- * The page, the editor popup and the write route all read this module: the
- * editor marks the row, the Save button stays disabled, and the route rejects
- * the same payload with a 400. One implementation, three consumers.
- */
-
 const TIMEOUT = 300_000;
 
 const rule = (name: string, pattern: string, ignoreCase?: boolean): DangerousPatternRule => ({
@@ -41,8 +31,6 @@ describe("dangerousRulesDraft", () => {
       { uid: expect.any(String), name: "mine", pattern: "rm -rf", ignoreCase: true },
       { uid: expect.any(String), name: "other", pattern: "drop", ignoreCase: false },
     ]);
-    // Stable ids, distinct per row — the editor and the row marker look rows up
-    // by uid, so two rows must never share one.
     expect(new Set(draft.rules.map((entry) => entry.uid)).size).toBe(2);
   });
 
@@ -122,13 +110,9 @@ describe("dangerousRulesDraftProblem", () => {
   });
 
   it("reports one problem only, in the fixed order: name, then pattern, then compilation", () => {
-    // Row 0 has a broken regex, row 1 has no name: the missing name wins
-    // because the criterion order is fixed, not the row order.
     const nameFirst = dangerousRulesDraft([rule("mine", "("), rule("", "ok")], TIMEOUT);
     expect(dangerousRulesDraftProblem(nameFirst)).toEqual({ kind: "empty-name", index: 1 });
 
-    // Row 0 is broken, row 1 has an empty pattern: the empty pattern wins
-    // over the compile failure that appears earlier in the list.
     const patternFirst = dangerousRulesDraft([rule("mine", "("), rule("other", " ")], TIMEOUT);
     expect(dangerousRulesDraftProblem(patternFirst)).toEqual({ kind: "empty-pattern", index: 1 });
   });
@@ -147,8 +131,6 @@ describe("dangerousRulesDraftProblem", () => {
   });
 
   it("rejects a duplicate name and names the earlier row that already uses it", () => {
-    // A name is the key a session's "always allow" remembers, so two rules
-    // behind one name would be allowed by a single click (ADR-0020).
     const draft = dangerousRulesDraft([rule("rm", "one"), rule("  rm  ", "two")], TIMEOUT);
 
     expect(dangerousRulesDraftProblem(draft)).toEqual({
@@ -170,9 +152,6 @@ describe("dangerousRulesDraftProblem", () => {
   });
 
   it("checks names the row does not hold, because the editor owns one row of a longer list", () => {
-    // What the rule editor passes: its own row plus the other rows and their
-    // positions, so a duplicate is caught — and located — before the row is
-    // even appended.
     const draft = dangerousRulesDraft([rule("taken", "x")], TIMEOUT);
 
     expect(dangerousRulesDraftProblem(draft, { takenRules: [{ name: "taken", index: 2 }] })).toEqual(
@@ -193,21 +172,13 @@ describe("dangerousRulesDraftProblem", () => {
       timeoutMs?: number;
       expected: string;
     }> = [
-      // empty name wins over everything behind it
       { rules: [rule("", "("), rule("x", "y")], expected: "empty-name" },
-      // …including over a duplicate and a built-in collision
       { rules: [rule("", "y"), rule("", "y")], expected: "empty-name" },
-      // a duplicate wins over a missing pattern/bad regex further down
       { rules: [rule("dup", "("), rule("dup", " ")], expected: "duplicate-name" },
-      // …and over a name that also shadows a built-in
       { rules: [rule("builtin", "a"), rule("builtin", "b")], expected: "duplicate-name" },
-      // a built-in collision wins over an empty pattern
       { rules: [rule("builtin", " ")], expected: "builtin-name" },
-      // an empty pattern wins over a compile failure that comes earlier
       { rules: [rule("broken", "("), rule("blank", " ")], expected: "empty-pattern" },
-      // a broken regex wins over the timeout field
       { rules: [rule("broken", "(")], expected: "invalid-pattern" },
-      // the timeout is the last criterion
       { rules: [rule("fine", "x")], timeoutMs: 0, expected: "timeout" },
     ];
 
@@ -224,7 +195,6 @@ describe("dangerousRulesDraftProblem", () => {
     expect(at(DANGEROUS_RULE_TIMEOUT_MIN_MS)).toBeNull();
     expect(at(DANGEROUS_RULE_TIMEOUT_MAX_MS)).toBeNull();
     expect(at(TIMEOUT)).toBeNull();
-    // Fractions are pointless but harmless; only the range is enforced.
     expect(at(1_500.5)).toBeNull();
     for (const bad of [
       Number.NaN,
@@ -240,7 +210,6 @@ describe("dangerousRulesDraftProblem", () => {
   });
 
   it("skips the timeout criterion when the caller owns no timeout field", () => {
-    // The editor checks one row; it must not have to invent a timeout value.
     expect(dangerousRulesDraftProblem({ rules: [] })).toBeNull();
     expect(
       dangerousRulesDraftProblem({ rules: [{ uid: "row", name: "mine", pattern: "x", ignoreCase: false }] }),
@@ -262,8 +231,6 @@ describe("updateDangerousRule", () => {
       ignoreCase: true,
     });
 
-    // Order and identity are untouched: only the row's content changed, so
-    // the row does not jump and the editor's marker stays on it.
     expect(after.rules.map((entry) => entry.uid)).toEqual(before.rules.map((entry) => entry.uid));
     expect(after.rules[1]).toEqual({
       uid: target.uid,
@@ -329,8 +296,6 @@ describe("moveDangerousRule", () => {
     const after = moveDangerousRule(before, before.rules[1].uid, "up");
 
     expect(after.rules.map((entry) => entry.name)).toEqual(["second", "first", "third"]);
-    // Only the two neighbours move: the row keeps its uid, and the untouched
-    // row keeps its place at the end.
     expect(after.rules[0]).toEqual(before.rules[1]);
     expect(after.rules[1]).toEqual(before.rules[0]);
     expect(after.rules[2]).toEqual(before.rules[2]);
@@ -462,7 +427,6 @@ describe("validateDangerousRulesWrite", () => {
     expect(emptyName.ok).toBe(false);
     expect(emptyPattern.ok).toBe(false);
     expect(broken.ok).toBe(false);
-    // The message names the failing rule so the 400 is actionable.
     expect(broken.ok === false && broken.error).toContain("x");
   });
 
@@ -479,7 +443,6 @@ describe("validateDangerousRulesWrite", () => {
       const result = validateDangerousRulesWrite({ rules: [], timeoutMs });
       expect(result.ok).toBe(false);
     }
-    // The bounds themselves are allowed values.
     for (const timeoutMs of [DANGEROUS_RULE_TIMEOUT_MIN_MS, DANGEROUS_RULE_TIMEOUT_MAX_MS]) {
       expect(validateDangerousRulesWrite({ rules: [], timeoutMs }).ok).toBe(true);
     }
@@ -507,7 +470,6 @@ describe("validateDangerousRulesWrite", () => {
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.error).toContain("mkfs");
     expect(result.ok === false && result.error).toContain("built-in");
-    // Without the platform's names there is nothing to collide with.
     expect(validateDangerousRulesWrite({ rules: [{ name: "mkfs", pattern: "x" }] }).ok).toBe(true);
   });
 });

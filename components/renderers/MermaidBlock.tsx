@@ -8,41 +8,19 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { copyText } from "@/lib/client/clipboard";
 import { FullscreenOverlay } from "@/components/ui/FullscreenOverlay";
 
-// Dynamic import keeps elkjs (~MB) out of the initial bundle — only fetched
-// the first time a mermaid block actually renders. The module promise is
-// memoized so subsequent blocks reuse the same load.
 let libPromise: Promise<typeof BeautifulMermaid> | null = null;
 function loadLib(): Promise<typeof BeautifulMermaid> {
   if (!libPromise) libPromise = import("beautiful-mermaid");
   return libPromise;
 }
 
-// Strip the Google Fonts @import that beautiful-mermaid embeds for the chosen
-// `font` option. pi-work's own font stack handles typography elsewhere; the
-// @import would otherwise trigger a network round-trip on first render and
-// makes the rendered SVG non-self-contained when network is restricted.
-// The font-family CSS rule is left intact, so the browser falls back through
-// the system stack we already load.
 const FONT_IMPORT_RE = /@import url\([^)]+\);?\s*/g;
 
 interface Props {
   code: string;
-  /**
-   * When true (parent is mid-stream), suppresses the error banner so partial
-   * syntax during streaming doesn't flash "Failed to render" on every token.
-   * The render attempt still runs on every code change, so a complete
-   * ```mermaid ... ``` block switches to SVG as soon as the last line is
-   * written — even if the rest of the message is still streaming.
-   */
   isStreaming?: boolean;
 }
 
-/**
- * Renders a `mermaid` fenced code block as an SVG diagram. Used by
- * MessageView, and FileViewer to detect ```mermaid blocks
- * inside markdown and replace react-markdown's default `pre > code`
- * fallback with an actual diagram.
- */
 export function MermaidBlock({ code, isStreaming }: Props) {
   const { t } = useI18n();
   const { preset, isDark } = useTheme();
@@ -50,14 +28,8 @@ export function MermaidBlock({ code, isStreaming }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
   const [asciiCopied, flashAsciiCopied] = useTransientFlag();
-  // "rendered" shows the SVG (or the source pre as fallback while loading /
-  // on parse error). "source" forces the source pre regardless — useful for
-  // copy-paste, comparing syntax against the rendered result, or working
-  // around a renderer bug.
   const [viewMode, setViewMode] = useState<"rendered" | "source">("rendered");
 
-  // One-time load of the lib + elkjs. The loaded module identity is stable
-  // for the lifetime of the page, so the memo below can depend on it.
   useEffect(() => {
     let cancelled = false;
     loadLib().then((m) => {
@@ -68,15 +40,6 @@ export function MermaidBlock({ code, isStreaming }: Props) {
     };
   }, []);
 
-  // Read the current theme's CSS variables off :root and pass the resolved
-  // color values to the renderer. We do NOT pass `var(--bg)` style references
-  // here: the renderer inlines them on the SVG root as `style="--bg:var(--bg)"`
-  // and not every browser resolves that self-reference correctly — the result
-  // is the literal string "var(--bg)" being used as a color, which falls back
-  // to black on the affected elements (e.g. edge-label rects).
-  // Depending on `preset` re-reads the variables on theme change, so the
-  // diagram re-skins immediately. It's not strictly live like a pure-CSS
-  // solution would be, but renderMermaidSVG is synchronous and fast.
   const options = useMemo<BeautifulMermaid.RenderOptions>(() => {
     const fallback = (name: string, def: string) => {
       if (typeof document === "undefined") return def;
@@ -85,8 +48,6 @@ export function MermaidBlock({ code, isStreaming }: Props) {
         .trim();
       return v || def;
     };
-    // `preset` is read for its side effect of re-running this memo on theme
-    // change so the variables are re-resolved against the new theme.
     void preset;
     return {
       bg: fallback("--bg", "#ffffff"),
@@ -118,11 +79,6 @@ export function MermaidBlock({ code, isStreaming }: Props) {
     });
   }, [code, flashCopied]);
 
-  // Render the diagram as ASCII/Unicode text and write it to the clipboard.
-  // We pick pure ASCII (useAscii: true) + no color codes so the result pastes
-  // cleanly into anything — markdown, code comments, terminal, IM. The SVG
-  // already proved the source is parseable, so this rarely throws; on the
-  // off chance it does, fail silently rather than interrupting the user.
   const onCopyAscii = useCallback(() => {
     if (!lib) return;
     try {
@@ -134,14 +90,11 @@ export function MermaidBlock({ code, isStreaming }: Props) {
         flashAsciiCopied();
       });
     } catch {
-      // ignore — see comment above
     }
   }, [code, lib, flashAsciiCopied]);
 
   const onDownload = useCallback(() => {
     if (!svg) return;
-    // The renderer emits an `<svg>` element without the XML prolog;
-    // a prolog makes the file open cleanly in standalone viewers.
     const blob = new Blob(
       ['<?xml version="1.0" encoding="UTF-8"?>\n', svg],
       { type: "image/svg+xml;charset=utf-8" },
@@ -156,23 +109,6 @@ export function MermaidBlock({ code, isStreaming }: Props) {
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }, [svg]);
 
-  // Body: show the source `<pre>` until the SVG is ready, then keep showing
-  // the SVG. Showing the source during the initial mount, while streaming,
-  // and after a parse error means the user never sees a "Loading…" flash —
-  // the only visible transition is source → SVG, which `minHeight: 80` keeps
-  // layout-stable. Errors are surfaced in the red banner below.
-  //
-  // The body is a two-layer layout: the outer div is the scroll viewport
-  // (owns `overflow: auto` so both axes can scroll); the inner div is a flex
-  // wrapper with `min-width: min-content` so it never collapses below the
-  // SVG's intrinsic width. Without the inner wrapper, `display: flex` on the
-  // outer would let the SVG shrink (`flex-shrink: 1`) instead of triggering
-  // a horizontal scrollbar when the diagram is wider than the viewport.
-  // Source mode (or no SVG yet) falls back to the raw `<pre>` so the user
-  // can always see the underlying syntax.
-  //
-  // `showRendered` is reused inside the JSX below — TypeScript narrows it
-  // to `string` in the truthy branch, so we don't need a separate cast.
   const showRendered = viewMode === "rendered" && svg;
   const body = showRendered ? (
     <div
@@ -442,5 +378,3 @@ function HeaderButton({
     </button>
   );
 }
-
-

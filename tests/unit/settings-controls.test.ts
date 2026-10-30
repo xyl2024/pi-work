@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const sectionsDir = path.join(repoRoot, "components/settings/sections");
 
-/** Every .tsx under components/settings/sections, with its source. */
 function sectionSources(): Array<{ file: string; source: string }> {
   return readdirSync(sectionsDir)
     .filter((name) => name.endsWith(".tsx"))
@@ -16,7 +15,6 @@ function sectionSources(): Array<{ file: string; source: string }> {
     }));
 }
 
-/** Every .ts/.tsx under components/settings, recursively. */
 function allSettingsSources(): Array<{ file: string; source: string }> {
   const root = path.join(repoRoot, "components/settings");
   const out: Array<{ file: string; source: string }> = [];
@@ -33,7 +31,6 @@ function allSettingsSources(): Array<{ file: string; source: string }> {
   return out;
 }
 
-/** Strip // line comments and /* block comments so prose is not scanned. */
 function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -42,14 +39,8 @@ function stripComments(source: string): string {
     .join("\n");
 }
 
-/**
- * Skin properties a section must not put on a form control inline: they come
- * from the shared control module. Layout properties (display / flex / gap /
- * margin / width…) remain allowed inline.
- */
 const SKIN_PROP = /border|background/i;
 
-/** Inline `style={{ … }}` object literals attached to a JSX tag. */
 function inlineStyleObjects(tag: string): string[] {
   const out: string[] = [];
   let cursor = 0;
@@ -64,13 +55,6 @@ function inlineStyleObjects(tag: string): string[] {
   return out;
 }
 
-/**
- * ADR-0003 rule 3 forbids a browser test rig, so the "one control skin" rule
- * is pinned by a source guard: a section file may not style a form control
- * (input / textarea / select / button) with inline border / background
- * literals. This is an approximation that exists to stop regressions, not a
- * proof — layouts and non-control elements are unaffected.
- */
 describe("settings sections use the shared control skin", () => {
   it("has no inline skin on a form control", () => {
     const offenders: string[] = [];
@@ -91,7 +75,6 @@ describe("settings sections use the shared control skin", () => {
   it("does not keep a local copy of a control skin or control component", () => {
     const offenders: string[] = [];
     for (const { file, source } of allSettingsSources()) {
-      // The shared control module is the one place these may be defined.
       if (file.endsWith("components/settings/controls.tsx")) continue;
       const code = stripComments(source);
       for (const pattern of [

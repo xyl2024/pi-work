@@ -1,6 +1,3 @@
-// Tool-panel glyph (Wrench). Hovering gives the wrench head a quick
-// loose-wiggle. Shrink-wrapped, so it also fits the animated-icon registry.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -78,4 +75,3 @@ export const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
 );
 
 WrenchIcon.displayName = "WrenchIcon";
-

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAttachmentFileName } from "@/lib/client/request-body-download";
 
-/**
- * The download response names its file server-side (`Content-Disposition`), so
- * the browser-side save must read the name back out of the header instead of
- * inventing one. Anything unparseable falls back to the caller's default.
- */
 describe("parseAttachmentFileName", () => {
   it("reads a quoted filename", () => {
     expect(

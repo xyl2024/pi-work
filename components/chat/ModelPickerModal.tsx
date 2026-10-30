@@ -13,25 +13,6 @@ interface ModelOption {
   name: string;
 }
 
-/**
- * Model-picker modal opened by the `/model` slash command — the keyboard-
- * friendly counterpart of the toolbar ModelPicker dropdown. Same grouped
- * option model (prefer `modelList`, fall back to `modelNames`), same
- * interplay with the active model, but rendered as a centered portal modal
- * with a filter box and full keyboard navigation:
- *
- *   - Opens (and re-filters) with the currently-active model highlighted
- *     instead of the first row, when present in the list.
- *   - Models render as a grid of cards grouped by provider.
- *   - ← / → move one card, ↑ / ↓ move a full grid row; Enter confirms,
- *     Esc closes.
- *   - Mouse: hover moves the active card, click to pick; click the
- *     backdrop or × to close.
- *
- * Selecting the currently-active model just closes the modal (no-op),
- * matching ModelPicker's click behaviour. While `disabled` (agent mid-
- * turn) rows are non-interactive and a hint explains why.
- */
 export function ModelPickerModal({
   open,
   model,
@@ -46,9 +27,7 @@ export function ModelPickerModal({
   open: boolean;
   model: { provider: string; modelId: string } | null | undefined;
   modelNames?: Record<string, string>;
-  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   disabled?: boolean;
@@ -68,8 +47,6 @@ export function ModelPickerModal({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Same option build as ModelPicker: prefer modelList (has provider
-  // info), fall back to modelNames keyed by model id.
   const options = useMemo<ModelOption[]>(() => {
     if (modelList && modelList.length > 0) {
       return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name }));
@@ -86,9 +63,6 @@ export function ModelPickerModal({
     [model],
   );
 
-  // Number of cards per grid row at the active index — derived from the
-  // DOM (cards sharing the same offsetTop) so it stays correct across
-  // resizes, filtering and provider-group boundaries.
   const columnCount = useCallback((index: number): number => {
     const el = rowRefs.current[index];
     const grid = el?.parentElement;
@@ -101,8 +75,6 @@ export function ModelPickerModal({
     return Math.max(1, count);
   }, []);
 
-  // Filter on open: empty query → everything, otherwise match provider /
-  // model id / display name (case-insensitive).
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
@@ -113,8 +85,6 @@ export function ModelPickerModal({
     );
   }, [options, query]);
 
-  // Group filtered options by provider, preserving insertion order — same
-  // shape as ModelPicker.modelsByProvider.
   const groups = useMemo(() => {
     const out: { provider: string; options: ModelOption[] }[] = [];
     for (const opt of filtered) {
@@ -125,9 +95,6 @@ export function ModelPickerModal({
     return out;
   }, [filtered]);
 
-  // Fresh modal per open: reset the filter and focus the
-  // search input (mirrors Cmd+K palette / CwdSessionsModal). The active
-  // row is set by the "enter at current model" effect below.
   useEffect(() => {
     if (!open) return;
     setQuery("");
@@ -135,13 +102,6 @@ export function ModelPickerModal({
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  // Enter the list at the currently-selected model rather than the first
-  // row — on open and whenever the filter changes the list. Fall back to
-  // the first row only when the current model isn't among the results.
-  // Guarded by a "navigation key" (open + query): this effect must NOT
-  // re-run on unrelated parent re-renders, which recreate the `model` prop
-  // (and thus `isActive`) every time — otherwise keyboard/mouse navigation
-  // would visibly snap back to the current model while the user browses.
   const navKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!open) {
@@ -155,21 +115,16 @@ export function ModelPickerModal({
     setActiveIndex(idx >= 0 ? idx : 0);
   }, [open, query, filtered, isActive]);
 
-  // Stay in range when the list shrinks (typing / opening with few models).
   useEffect(() => {
     setActiveIndex((i) => Math.min(i, Math.max(0, filtered.length - 1)));
   }, [filtered.length]);
 
-  // Keep the active row visible as it moves (↑↓) or the list reorders.
   useEffect(() => {
     rowRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 
   const selectOption = useCallback(
     (opt: ModelOption) => {
-      // Ignore repeats landed after the leaving animation started — a row
-      // focused by mouse can receive Enter twice (document handler + native
-      // button click), and a fast user can click twice.
       if (phase !== "open" || disabled) return;
       if (onModelChange && !isActive(opt)) onModelChange(opt.provider, opt.modelId);
       requestClose();
@@ -177,9 +132,6 @@ export function ModelPickerModal({
     [phase, disabled, isActive, onModelChange, requestClose],
   );
 
-  // Document-level keyboard handling (works whether focus sits in the
-  // filter box, on a row, or nowhere inside the panel):
-  //   ↑↓ move, Enter confirm, Esc close.
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
@@ -192,8 +144,6 @@ export function ModelPickerModal({
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setActiveIndex((i) => {
-          // ← / → move one card; ↑ / ↓ move a full grid row (column count
-          // read from the rendered grid so it adapts to the panel width).
           if (e.key === "ArrowLeft") return (i - 1 + filtered.length) % filtered.length;
           if (e.key === "ArrowRight") return (i + 1) % filtered.length;
           const step = (e.key === "ArrowDown" ? 1 : -1) * columnCount(i);
@@ -202,10 +152,6 @@ export function ModelPickerModal({
         return;
       }
       if (e.key === "Enter") {
-        // A focused row/close button already gets its own native Enter→click
-        // activation — let that path (→ selectOption/requestClose) run and
-        // only treat Enter as "confirm active row" from the filter input or
-        // a neutral target.
         const target = e.target as HTMLElement | null;
         if (target && target.tagName === "BUTTON") return;
         const opt = filtered[activeIndex];
@@ -219,7 +165,6 @@ export function ModelPickerModal({
     return () => document.removeEventListener("keydown", handler);
   }, [isVisible, filtered, activeIndex, selectOption, requestClose, columnCount]);
 
-  // Portal target — mount after first client render to avoid SSR mismatch.
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setPortalEl(document.body);
@@ -253,7 +198,6 @@ export function ModelPickerModal({
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px", flexShrink: 0 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>
             {t("Switch model")}
@@ -277,7 +221,6 @@ export function ModelPickerModal({
           </button>
         </div>
 
-        {/* Search filter */}
         <div style={{ padding: "0 14px 10px", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -312,7 +255,6 @@ export function ModelPickerModal({
           </div>
         </div>
 
-        {/* Model list */}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 6px 8px", minHeight: 80 }} data-hide-v-scrollbar>
           {filtered.length === 0 ? (
             <div style={{ padding: "24px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
@@ -402,7 +344,6 @@ export function ModelPickerModal({
           )}
         </div>
 
-        {/* Footer hints */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
           {disabled ? (
             <span>{t("Model locked while agent is running")}</span>

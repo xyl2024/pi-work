@@ -12,15 +12,6 @@ import {
   useModelsConfigStore,
 } from "@/lib/client/models-config-store";
 
-/**
- * The panel's root page: every provider the user can configure, in one
- * full-width list. Three groups, in the order the modal used to stack them —
- * subscription providers already logged in, API-key providers already
- * configured, then the user's own providers with their model entries.
- *
- * Subscription and API-key rows open their own detail pages; the custom-provider
- * rows open theirs. The bottom of the page carries the "Add provider" entry.
- */
 export function ModelsConfigRootPage() {
   const { t } = useI18n();
   const { config, oauthProviders, apiKeyProviders } = useModelsConfigStore();
@@ -41,9 +32,6 @@ export function ModelsConfigRootPage() {
     </button>
   );
 
-  // The catalog is a root-level sibling: this row opens it as a page inside
-  // the same panel view (never a second panel / button), and its Back returns
-  // here. It stays reachable even with no providers configured.
   const catalogRow = (
     <NavRow icon={<CatalogIcon />} label={t("View all model data")} onClick={openModelsConfigCatalog} />
   );
@@ -141,7 +129,6 @@ function NavRow({ icon, label, onClick }: { icon: ReactNode; label: string; onCl
   );
 }
 
-/** Grid glyph for the read-only "All model data" row. */
 function CatalogIcon() {
   return (
     <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-muted)" }}>

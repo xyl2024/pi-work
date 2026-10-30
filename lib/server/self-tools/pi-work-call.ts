@@ -1,32 +1,3 @@
-/**
- * `pi_work_call` — dispatcher for Pi Work platform capabilities.
- *
- * Consolidates the former `pi_work_get_sessions_id`,
- * `pi_work_get_active_sessions_id` and `pi_work_get_session_info_by_id`
- * tools into ONE tool so the platform tool descriptions don't flood the
- * system prompt. Deeper guidance is meant to be provided later by a
- * pi-work platform skill (progressive disclosure), so this tool carries no
- * appended system-prompt block — only its description.
- *
- * Actions (all read-only):
- * - `list_recent_sessions`  — most recently modified sessions (disk-backed).
- * - `list_active_sessions`  — ids of sessions currently loaded in memory
- *   (the `__piSessions` registry) + which are running.
- * - `get_session_info`      — disk-backed detail for one session id (name,
- *   cwd, timestamps, first/last messages, model, thinking level, token
- *   usage, compaction history).
- *
- * Implementation is derived from existing server modules:
- *   - live set + running state: lib/server/session-registry.ts
- *   - disk session detail:      lib/server/session-reader.ts (readSessionDetails)
- *
- * These tools are intentionally READ-ONLY: the agent can inspect Pi Work
- * sessions but never mutate them. Only registered inside pi-work sessions
- * (rpc-manager.ts). Because they read
- * server state, this module is server-only and must not be imported by
- * client code.
- */
-
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { listAllSessionsHeaderOnly, readSessionDetails } from "@/lib/server/session-reader";
@@ -37,8 +8,6 @@ export const PI_WORK_CALL_TOOL = "pi_work_call";
 
 export type PiWorkCallAction = "list_recent_sessions" | "list_active_sessions" | "get_session_info";
 
-/** Cap on the amount of message text / compaction summary surfaced to the
- *  model per call, so a busy session can't blow out the tool result. */
 const MAX_TEXT = 2000;
 
 function truncate(text: string, max = MAX_TEXT): string {
@@ -46,7 +15,6 @@ function truncate(text: string, max = MAX_TEXT): string {
   return `${text.slice(0, max)}\n… [truncated ${text.length - max} chars]`;
 }
 
-/** Render a message's textual content (string or content blocks). */
 function messageText(msg: AgentMessage): string {
   const content = (msg as { content: unknown }).content;
   if (typeof content === "string") return content.trim();
@@ -59,10 +27,6 @@ function messageText(msg: AgentMessage): string {
   }
   return "";
 }
-
-// ============================================================================
-// list_recent_sessions
-// ============================================================================
 
 interface RecentSessionSummary {
   id: string;
@@ -91,10 +55,6 @@ async function listRecentSessions(limit = 10) {
   return { content: [{ type: "text" as const, text }], details };
 }
 
-// ============================================================================
-// list_active_sessions
-// ============================================================================
-
 interface ListActiveSessionsDetails {
   action: "list_active_sessions";
   sessionIds: string[];
@@ -116,10 +76,6 @@ function listActiveSessions() {
 
   return { content: [{ type: "text" as const, text }], details: { action: "list_active_sessions", sessionIds, running, count } satisfies ListActiveSessionsDetails };
 }
-
-// ============================================================================
-// get_session_info
-// ============================================================================
 
 interface CompactionInfo {
   count: number;
@@ -151,7 +107,6 @@ interface GetSessionInfoDetails {
   parentSessionId: string | undefined;
   alive: boolean;
   running: boolean;
-  /** Set to "not_found" when the session id does not exist. */
   error?: string;
 }
 
@@ -177,7 +132,6 @@ function sessionInfoPayload(
   const firstUser = messages.find((m) => m.role === "user");
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant") as AssistantMessage | undefined;
 
-  // Aggregate token usage across assistant messages.
   let input = 0, output = 0, cacheRead = 0, cacheWrite = 0, cost = 0;
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
@@ -290,10 +244,6 @@ async function getSessionInfo(sessionId: string) {
   const payload = sessionInfoPayload(sessionId, details);
   return { content: [{ type: "text" as const, text: sessionInfoText(payload) }], details: payload };
 }
-
-// ============================================================================
-// Tool registration
-// ============================================================================
 
 const PiWorkCallParams = Type.Object(
   {

@@ -7,7 +7,6 @@ export type IconButtonSize = "xs" | "sm" | "md";
 export type IconButtonVariant = "ghost" | "subtle" | "primary";
 
 export interface IconButtonProps {
-  /** Accessible name; also used as the decorative tooltip by default. */
   label: string;
   onClick?: () => void;
   children?: ReactNode;
@@ -16,7 +15,6 @@ export interface IconButtonProps {
   active?: boolean;
   size?: IconButtonSize;
   variant?: IconButtonVariant;
-  /** Set false when the parent already provides a tooltip. */
   tooltip?: boolean;
   type?: "button" | "submit" | "reset";
   style?: CSSProperties;

@@ -1,30 +1,14 @@
 "use client";
 
-/**
- * Client helpers for the sidebar file explorer's mutating actions
- * (create file/folder, upload file/folder). All of them talk to the
- * existing `/api/files` routes:
- *
- *   POST /api/files/<dir>?type=create   body {name}            → empty file
- *   POST /api/files/<dir>?type=mkdir    body {name}            → directory
- *   POST /api/files/<dir>?type=upload   multipart form-data    → files
- *
- * Server side lives in lib/server/files/mutations.ts. Keep the error
- * strings here opaque (they come straight from the server's `error`
- * field) so i18n for user-facing text happens at the component layer.
- */
-
 import { encodeFilePathForApi } from "@/lib/shared/file-paths";
 
 export type ExplorerCreateKind = "file" | "folder";
 
 export interface CreateResult {
   ok: boolean;
-  /** Raw server error message when ok === false. */
   error?: string;
 }
 
-/** Create an empty file or a directory inside `parentDir`. */
 export async function createEntry(
   parentDir: string,
   kind: ExplorerCreateKind,
@@ -48,9 +32,6 @@ export async function createEntry(
   }
 }
 
-/** Move a file or directory into `destDir` (keeping its name). Used by the
- *  explorer's drag-and-drop. Returns the server error verbatim on failure
- *  (e.g. "Already exists", "Cannot move a folder into itself"). */
 export async function moveEntry(sourcePath: string, destDir: string): Promise<CreateResult> {
   try {
     const encoded = encodeFilePathForApi(sourcePath);
@@ -69,9 +50,6 @@ export async function moveEntry(sourcePath: string, destDir: string): Promise<Cr
   }
 }
 
-/** Duplicate a file next to itself (`?type=duplicate`). The server picks a
- *  non-existing "<name> copy[ n]<ext>" name. Files only — directories are
- *  rejected by the API. */
 export async function duplicateEntry(sourcePath: string): Promise<CreateResult> {
   try {
     const encoded = encodeFilePathForApi(sourcePath);
@@ -92,16 +70,10 @@ export interface UploadOutcome {
   failed: { path: string; error: string }[];
 }
 
-/** Upload files (or a picked directory tree) into `parentDir`. The
- *  server never overwrites existing entries — they come back counted in
- *  `skipped`. Throws with the server error message when the whole
- *  request fails (access denied, too many files, ...). */
 export async function uploadFilesToDir(parentDir: string, files: File[]): Promise<UploadOutcome> {
   const form = new FormData();
   for (const f of files) {
     form.append("file", f, f.name);
-    // webkitRelativePath preserves the picked folder structure
-    // ("folder/sub/file.txt"); plain file picks have it empty.
     form.append("path", f.webkitRelativePath || f.name);
   }
   const encoded = encodeFilePathForApi(parentDir);
@@ -116,13 +88,6 @@ export async function uploadFilesToDir(parentDir: string, files: File[]): Promis
   return (await res.json()) as UploadOutcome;
 }
 
-/**
- * Open a native file picker and resolve with the selected files. With
- * `directory` the picker selects a folder (webkitdirectory) and each
- * File carries its `webkitRelativePath`. Resolves [] when the picker is
- * cancelled. The hidden <input> is created on the fly so callers don't
- * need per-component refs.
- */
 export function pickFiles(opts?: { directory?: boolean }): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement("input");

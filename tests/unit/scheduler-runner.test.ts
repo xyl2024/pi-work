@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 import { toRunEnd } from "@/lib/server/scheduler/run-end";
 import type { TurnResult } from "@/lib/server/turn";
 
-/**
- * The scheduler's mapping from a turn result to the run record it writes, plus
- * the side-effect payload a finished run produces (the phone notification).
- *
- * Pure — no session, no SQLite — so the scheduler's run-policy decisions (an
- * empty reply is a failure, an interruption stays silent, notification text
- * and truncation) are asserted directly.
- */
-
 function result(overrides: Partial<TurnResult> = {}): TurnResult {
   return {
     status: "completed",

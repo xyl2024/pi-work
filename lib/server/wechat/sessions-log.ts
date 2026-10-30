@@ -1,16 +1,3 @@
-/**
- * sessions.log — append-only JSONL trail of every inbound WeChat message
- * and the full lifecycle that follows (cold-start / send / typing / agent_end
- * / reply). One line per event. Designed for O2-style troubleshooting:
- * given a userId + time window, you can reconstruct everything that
- * happened in chronological order.
- *
- * The turn module owns the raw event stream now, so the per-event
- * `agent_event` line this trail used to carry is gone; the lifecycle lines
- * (send / cold_start / agent_end / agent_error / reply) remain.
- *
- * File: <data root>/wechat/sessions.log (chmod 600 best-effort)
- */
 import { appendFileSync, mkdirSync, existsSync, writeFileSync } from "fs";
 import { dataPath } from "../data-dir";
 
@@ -39,7 +26,6 @@ function ensureInit(): void {
       mkdirSync(dataPath("wechat"), { recursive: true });
       writeFileSync(p, "", "utf8");
     } catch {
-      // best-effort
     }
   }
 }
@@ -50,6 +36,5 @@ export function logSessionEvent(event: SessionLogEvent): void {
   try {
     appendFileSync(logPath(), line + "\n", "utf8");
   } catch {
-    // best-effort, never block the main flow
   }
 }

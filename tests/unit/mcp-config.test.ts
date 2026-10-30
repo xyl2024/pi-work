@@ -4,15 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadMcpConfigForPiWork, validateMcpServerConfig } from "@/lib/server/mcp-config";
 
-/**
- * Pi Work's own mcp.json loader (lib/server/mcp-config.ts).
- *
- * pi's `loadMcpConfig` / `validateMcpServerConfig` are not reachable from the
- * package root, so Pi Work mirrors them. These tests pin the rules the mirror
- * has to keep: which files are read, how entries merge, and which malformed
- * entries are rejected instead of handed to the MCP transport.
- */
-
 const created: string[] = [];
 
 function sandbox(): { agentDir: string; cwd: string } {
@@ -182,10 +173,6 @@ describe("mcp-config: validation", () => {
   });
 
   it("resolves the retired codemode-deferred exposure to codemode", () => {
-    // pi dropped the level in 1.1.0 (its behavior moved into `codemode`) but
-    // still accepts the name and validates the entry as `codemode`; an
-    // existing mcp.json must keep loading, and this mirror has to agree with
-    // what a session actually connects with.
     expect(validateMcpServerConfig("x", { command: "x", exposure: "codemode-deferred" })).toMatchObject({
       exposure: "codemode",
     });
@@ -205,7 +192,6 @@ describe("mcp-config: validation", () => {
     expect(
       validateMcpServerConfig("x", { url: "https://example.com/mcp", auth: { provider: "anthropic" } }),
     ).toMatchObject({ url: "https://example.com/mcp" });
-    // The token goes to this URL, so a plaintext one is only allowed on loopback.
     expect(validateMcpServerConfig("x", { url: "http://example.com/mcp", auth: { provider: "anthropic" } })).toContain(
       "auth requires an https URL",
     );

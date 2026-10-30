@@ -3,18 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { PrimaryButton } from "./controls";
 
-/**
- * The one staged-save button. Every explicit-save setting (append system
- * prompt, network proxy, profile) uses the same three states so
- * the user does not have to learn a different vocabulary per section:
- *
- *   - can save  → accent, clickable
- *   - saving    → muted, disabled
- *   - saved     → success colour + check, briefly disabled
- *
- * The button skin itself comes from the shared `PrimaryButton`; this only
- * varies the three state colours.
- */
 export function SaveButton({
   canSave,
   saving,
@@ -58,7 +46,6 @@ export function SaveButton({
   );
 }
 
-/** The shared "this staged value has not been written yet" hint. */
 export function UnsavedHint({ show }: { show: boolean }) {
   const { t } = useI18n();
   if (!show) return null;

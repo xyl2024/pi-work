@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { _getOwnContext, matchSelfKillCommand, type SelfKillContext } from "@/lib/server/self-protection";
 
-// Fixed fake server facts so assertions are deterministic. The port also
-// exercises that only the configured instance port triggers port rules.
 const ctx: SelfKillContext = { pid: 123456, port: 14514 };
 
 const blocked = (cmd: string, expectIn: RegExp) => {
@@ -34,7 +32,6 @@ describe("matchSelfKillCommand", () => {
     allowed("git status && npm test");
     allowed("grep reboot /var/log/syslog");
     allowed("fuser 14514/tcp");
-    // Non-kill usage of our pid/port digits.
     allowed("echo 'server pid 123456 listens on 14514'");
     allowed("curl -s localhost:14514 && cat /proc/123456/status");
   });
@@ -111,9 +108,7 @@ describe("matchSelfKillCommand", () => {
   });
 
   it("uses the real process pid/port by default", () => {
-    // The default context must reflect the real server process.
     expect(_getOwnContext().pid).toBe(process.pid);
-    // With default context the literal pid of the current process is caught.
     expect(matchSelfKillCommand(`kill -9 ${process.pid}`), "expected block (default ctx)").toMatchObject({ reason: expect.stringMatching(/PID/) });
     if (process.env.PORT) {
       expect(matchSelfKillCommand(`fuser -k ${Number(process.env.PORT)}/tcp`), "expected block (default ctx port)").toMatchObject({ reason: expect.stringMatching(/port/) });

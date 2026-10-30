@@ -5,18 +5,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "../ui/ProviderIcon";
 
-/**
- * The settings control skin — one definition every settings section (the MCP
- * and models-config panel views, which reach it directly or through the
- * re-export shim in `models-config/form-fields`) shares.
- * Changing the look of a control is a change to this file, not to
- * thirteen section files.
- *
- * The skin is the one that appeared most often and is most consistent with the
- * rest of the settings page: radius 6, control font size 13, control height 32.
- * There is deliberately no second skin kept alongside it.
- */
-
 export const SETTINGS_RADIUS = 6;
 export const SETTINGS_CONTROL_FONT_SIZE = 13;
 export const SETTINGS_CONTROL_HEIGHT = 32;
@@ -228,7 +216,6 @@ export function Check({
   );
 }
 
-/** A select with `<optgroup>` sections and an optional leading option. */
 export function GroupedSelect({
   value,
   onChange,
@@ -292,8 +279,6 @@ export function IconField({ value, onChange }: { value: string | undefined; onCh
     </Field>
   );
 }
-
-// ── Buttons ─────────────────────────────────────────────────────────────
 
 interface ButtonProps {
   children: ReactNode;
@@ -397,8 +382,6 @@ export function DangerButton({ children, onClick, disabled, title, ariaLabel, ty
   );
 }
 
-// ── Segmented control ───────────────────────────────────────────────────
-
 export function SegmentedControl({
   value,
   onChange,
@@ -444,8 +427,6 @@ export function SegmentedControl({
     </div>
   );
 }
-
-// ── Textarea ────────────────────────────────────────────────────────────
 
 export function TextArea({
   value,

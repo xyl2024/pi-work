@@ -9,19 +9,6 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { wrapModelCallMetrics } from "@/lib/server/model-call-metrics";
 import type { ModelCallInsert } from "@/lib/shared/token-audit-types";
 
-/**
- * The metrics wrapper is the only place that knows the logical call id, while
- * the LLM-API audit layer is the only place that sees the HTTP request. The
- * `bindCallId` hook is the seam between them: the audit context needs to carry
- * the id of the call currently in flight so a captured request can be traced
- * back to the assistant message that call produced.
- *
- * Contract under test: the id is published before the provider is reached,
- * it is the same id the metrics row is later stored under, and it is cleared
- * once the call reaches a terminal state (so a request issued outside a
- * wrapped call is never attributed to a finished call).
- */
-
 const MODEL = { provider: "test-provider", id: "test-model", api: "test-api" } as const;
 
 function assistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
@@ -72,8 +59,6 @@ describe("model call id binding", () => {
     stream.push({ type: "done", reason: "stop", message: assistantMessage() } as AssistantMessageEvent);
 
     expect(published).toEqual([published[0], null]);
-    // The audit request can only be tied to the message if the id published at
-    // call start is the one the metrics row is stored under.
     expect(recorded.map((row) => row.callId)).toEqual([published[0]]);
   });
 

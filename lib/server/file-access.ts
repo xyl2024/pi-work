@@ -3,17 +3,11 @@ import { dataPath } from "./data-dir";
 
 declare global {
   var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
-  /** A scan in flight, shared by every concurrent miss (see `getAllowedRoots`). */
   var __piAllowedRootsPromise: Promise<Set<string>> | undefined;
-  /** Bumped by invalidation; a scan that started before it must not fill the cache. */
   var __piAllowedRootsGeneration: number | undefined;
   var __piCreatedSpaceRoots: Set<string> | undefined;
 }
 
-// Long enough that opening a panel in a fresh session does not pay for a full
-// session scan, short enough that a newly created working directory is allowed
-// soon after. Longer TTL is the fail-closed direction: a new root waits for the
-// window (or an explicit invalidation), it is never allowed early.
 const ALLOWED_ROOTS_TTL_MS = 30_000;
 const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
 
@@ -34,11 +28,7 @@ export function filePathFromSegments(segments: string[]): string {
 
 export function invalidateAllowedRootsCache(): void {
   globalThis.__piAllowedRootsCache = undefined;
-  // Drop an in-flight scan too: after a write that changes the answer, the next
-  // caller must not receive the pre-write result the shared promise resolves to.
   globalThis.__piAllowedRootsPromise = undefined;
-  // The dropped scan may still be running; the generation stops it from writing
-  // its (now stale) roots into the cache when it settles.
   globalThis.__piAllowedRootsGeneration = (globalThis.__piAllowedRootsGeneration ?? 0) + 1;
 }
 
@@ -47,18 +37,12 @@ export async function getAllowedRoots(): Promise<Set<string>> {
   const cached = globalThis.__piAllowedRootsCache;
   if (cached && cached.expiresAt > now) return cached.roots;
 
-  // Concurrent misses (a panel firing several requests at once) share one scan
-  // instead of each listing every session. The promise is cleared once it
-  // settles, so a later miss still pays for a fresh scan rather than reusing a
-  // stale in-flight result.
   if (globalThis.__piAllowedRootsPromise) return globalThis.__piAllowedRootsPromise;
   const generation = globalThis.__piAllowedRootsGeneration ?? 0;
   const promise = computeAllowedRoots();
   globalThis.__piAllowedRootsPromise = promise;
   try {
     const roots = await promise;
-    // If the cache was invalidated while this scan ran, it answered an
-    // out-of-date question — return it to this caller, but do not store it.
     if ((globalThis.__piAllowedRootsGeneration ?? 0) === generation) {
       globalThis.__piAllowedRootsCache = { roots, expiresAt: Date.now() + ALLOWED_ROOTS_TTL_MS };
     }
@@ -78,8 +62,6 @@ async function computeAllowedRoots(): Promise<Set<string>> {
   for (const root of globalThis.__piCreatedSpaceRoots ?? []) {
     roots.add(root);
   }
-  // Also allow <data root>/workspace/pi-cwd-* directories created by the
-  // default-cwd endpoint
   const { readdirSync } = await import("fs");
   const workspace = dataPath("workspace");
   try {
@@ -89,7 +71,6 @@ async function computeAllowedRoots(): Promise<Set<string>> {
       }
     }
   } catch {
-    // ignore if workspace has not been created yet
   }
 
   return roots;

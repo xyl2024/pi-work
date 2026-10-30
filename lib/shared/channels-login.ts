@@ -1,22 +1,3 @@
-/**
- * The WeChat scan-login phase machine, shared by the channels panel's UI, its
- * module store and its close guard.
- *
- * The nine phases are what the server's login session reports. Two questions
- * are asked about a phase, and they are deliberately different:
- *
- *   • `isLoginInProgress` — should the 2s status poll keep running? True for
- *     every phase where the session is still useful to the user (including
- *     `verify_blocked`, where a wrong pairing code was entered, and `redirected`,
- *     where the server is switching IDC nodes).
- *   • the close guard (`lib/shared/channels-close.ts`) only warns for
- *     `waiting / scanned / verifying` — the phases where the user has an
- *     unfinished action on screen.
- *
- * Pure — no React / DOM / server imports — so both questions are driven from
- * `tests/unit`.
- */
-
 export type LoginPhase =
   | "waiting"
   | "scanned"
@@ -28,7 +9,6 @@ export type LoginPhase =
   | "expired"
   | "error";
 
-/** Every phase. The close-guard test uses this list to prove it covers all nine. */
 export const LOGIN_PHASES: readonly LoginPhase[] = [
   "waiting",
   "scanned",
@@ -41,7 +21,6 @@ export const LOGIN_PHASES: readonly LoginPhase[] = [
   "error",
 ];
 
-/** The i18n key for a phase's status line. */
 const PHASE_LABEL_KEYS: Record<LoginPhase, string> = {
   waiting: "channels.waitingScan",
   scanned: "channels.scanned",
@@ -58,12 +37,6 @@ export function loginPhaseLabelKey(phase: LoginPhase): string {
   return PHASE_LABEL_KEYS[phase];
 }
 
-/**
- * Whether a login session is still in flight: the 2s status poll runs only
- * while this is true. `confirmed / already_bound / expired / error` are
- * terminal; `verify_blocked` and `redirected` are not — the session is still
- * the user's to finish (refresh the QR, or wait out the node switch).
- */
 export function isLoginInProgress(phase: LoginPhase | null): boolean {
   if (phase === null) return false;
   return (

@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { summarizationPurpose } from "@/lib/shared/model-call-purpose";
 
-/**
- * Pure rule tests for the SDK summarization request classifier. The acceptance
- * tests in `model-call-metrics-compaction.test.ts` drive the real SDK entries;
- * these cases pin the request-shape edge cases they cannot cheaply construct.
- */
-
 const SUMMARIZATION_SYSTEM =
   "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.\n\nDo NOT continue the conversation.";
 const ORDINARY_SYSTEM = "You are a coding assistant.";

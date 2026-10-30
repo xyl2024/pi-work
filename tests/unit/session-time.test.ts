@@ -6,7 +6,6 @@ describe("sessionDayDiff", () => {
   const local = (d: Date) => d.toISOString();
 
   it("counts calendar days, not 24h windows", () => {
-    // 00:05 today and 23:55 yesterday are 2 minutes apart but a full day.
     expect(sessionDayDiff(new Date(2024, 9, 18, 0, 5).toISOString(), now)).toBe(0);
     expect(sessionDayDiff(new Date(2024, 9, 17, 23, 55).toISOString(), now)).toBe(1);
   });
@@ -20,7 +19,6 @@ describe("sessionDayDiff", () => {
   });
 
   it("handles a DST-crossing span without off-by-one", () => {
-    // 2024-11-03 is the US DST fall-back day: 24h + 1h apart in local time.
     const before = new Date(2024, 10, 2, 12, 0);
     const after = new Date(2024, 10, 4, 12, 0);
     expect(sessionDayDiff(local(before), after)).toBe(2);

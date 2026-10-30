@@ -1,12 +1,8 @@
-// WeChat — settings section + demo panel + workspace/session status bar.
-
 export const wechat = {
-  // Settings section (embedded in SettingsModal)
   "WeChat Connection": "微信连接",
   "Manage WeChat connection.": "管理微信连接。",
   "Discard unsaved changes?": "放弃未保存的修改？",
 
-  // Demo panel
   "WeChat": "微信",
   "WeChat Demo": "微信演示",
   "Loading image": "正在加载图片",
@@ -29,7 +25,6 @@ export const wechat = {
     "暂无联系人。让朋友扫一下上面的二维码给你发条消息，他们就会出现在这里。",
   "New contact: {userId}": "新联系人：{userId}",
 
-  // Workspace / session status bar
   "Current workspace": "当前 Workspace",
   "Current session": "当前 Session",
   "Not started": "未启动",

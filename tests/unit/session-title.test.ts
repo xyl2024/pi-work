@@ -1,10 +1,3 @@
-// The session title rule, and the one string it must never display.
-//
-// A row is titled `name → first message → id stub`. pi's listing puts the
-// literal "(no messages)" in `firstMessage` when a session holds no message
-// text (image-only first turn, aborted session, header-only file). A session
-// that was never named — including one whose auto-name call came back empty —
-// must keep the unnamed fallback instead of displaying that placeholder.
 import { describe, expect, it } from "vitest";
 import { cleanFirstMessage, NO_MESSAGES_PLACEHOLDER, sessionDisplayTitle } from "@/lib/shared/session-title";
 

@@ -6,19 +6,6 @@ import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/info");
 
-/**
- * GET /api/sessions/[id]/info
- *
- * Lightweight SessionInfo lookup for a single session id. Used by the sidebar
- * when an `initialSessionId` from the URL is not in any loaded page (rare —
- * most URLs point to a recent session that's already on page 1).
- *
- * Hits the same 5s-TTL header-only list cache as /api/sessions and
- * /api/workspaces, so a flow of these lookups within the window shares one
- * scan. `messageCount` will be 0 here; the unique caller (SessionSidebar
- * initial-restore merge) doesn't render this field — see
- * reader.ts:listAllSessionsHeaderOnly for the full precision trade-off list.
- */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -42,8 +29,6 @@ export async function GET(
       session: {
         ...info,
         running: getRpcSession(info.id)?.isRunning() ?? false,
-        // Same projection as the two list routes: a session restored from a URL
-        // must wear its shield without being opened first (ADR-0021).
         ...permissionModeField(readSessionPermissionModes(), info.id),
       },
     });

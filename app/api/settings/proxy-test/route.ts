@@ -6,13 +6,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/settings/proxy-test");
 
-/**
- * "Test" button in Settings → Network proxy.
- *
- * Builds a throwaway dispatcher from the *submitted* url / no_proxy (not the
- * saved one) and sends one real request through it, so the user can verify an
- * address before committing it. The live process dispatcher is never touched.
- */
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {

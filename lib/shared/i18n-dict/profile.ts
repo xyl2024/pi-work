@@ -1,7 +1,3 @@
-// Profile section (avatar + username at bottom of sidebar).
-// "Only PNG images are supported" and "File too large (max 5MB)" live
-// in common.ts because the same strings appear in non-profile places.
-
 export const profile = {
   "Profile": "个人资料",
   "Avatar": "头像",

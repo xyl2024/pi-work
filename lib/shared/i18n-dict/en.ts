@@ -1,6 +1,3 @@
-// English labels for keys introduced in namespaced form.
-// Most of the catalog uses English source text as its key; these entries keep
-// namespaced keys backwards-compatible without leaking implementation keys.
 export const EN_TRANSLATIONS = {
   "Set default tools": "Set default tools",
   "Default tools for this project": "Default tools for this project",
@@ -194,7 +191,6 @@ export const EN_TRANSLATIONS = {
   "mcp.problemInvalidJson": "{name} is not valid JSON.",
   "mcp.problemMissingTransport": "{name} needs a command or a URL.",
 
-  // Message origin (see lib/shared/message-origin.ts): full hover copy.
   "Message from channel {channel}": "From channel {channel}",
   "Message from scheduled task {task}": "From scheduled task {task}",
   "Message from session {session}": "From session {session}",

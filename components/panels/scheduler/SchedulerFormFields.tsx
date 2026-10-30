@@ -13,17 +13,6 @@ import type { ToolInfo } from "@/lib/shared/types";
 import { CheckIcon, LightbulbIcon, ToolIcon } from "@/components/ui/icons";
 import { fieldErrorStyle, fieldHintStyle, fieldLabelStyle } from "@/components/scheduler/styles";
 
-/**
- * Form primitives for the scheduler form page.
- *
- * The model / thinking / tools controls reuse the chat input bar's pill
- * language (a borderless rounded trigger that opens the shared application
- * dialog), so the scheduler does not grow a second model / tool / directory
- * picker. They are split out of the page itself so the page reads as a layout,
- * not a wall of controls.
- */
-
-/** Trigger pill matching the chat input bar's model / thinking / tools buttons. */
 export function pillTriggerStyle(open: boolean): CSSProperties {
   return {
     display: "flex",
@@ -45,7 +34,6 @@ export function pillTriggerStyle(open: boolean): CSSProperties {
   };
 }
 
-/** Dropdown panel chrome matching the chat input's popover panels. */
 export const dropdownPanelStyle: CSSProperties = {
   position: "absolute",
   top: "calc(100% + 6px)",
@@ -58,7 +46,6 @@ export const dropdownPanelStyle: CSSProperties = {
   boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
 };
 
-/** Option row matching the chat input dropdown rows. */
 export function dropdownOptionStyle(active: boolean): CSSProperties {
   return {
     display: "flex",
@@ -78,7 +65,6 @@ export function dropdownOptionStyle(active: boolean): CSSProperties {
   };
 }
 
-/** Open state + outside reference for one dropdown trigger. */
 export function useDropdown() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -104,7 +90,6 @@ const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
   max: "#b91c1c",
 };
 
-/** One form field: label, control, then either the error or the hint. */
 export function Field({
   label,
   hint,
@@ -147,8 +132,6 @@ export function SchedulerModelSelect({
   const modelIconPreferences = meta?.modelIconPreferences;
   const isUnselected = !form.provider || !form.modelId;
   const current = options.find((o) => o.provider === form.provider && o.id === form.modelId);
-  // Stable identity across parent re-renders — a fresh object literal here
-  // would churn ModelPickerModal's memoized deps every time.
   const pickerModel = useMemo(
     () => (isUnselected ? null : { provider: form.provider, modelId: form.modelId }),
     [isUnselected, form.provider, form.modelId],
@@ -169,9 +152,6 @@ export function SchedulerModelSelect({
             {isUnselected ? t("Select a model") : current?.name ?? `${form.provider}/${form.modelId}`}
           </span>
         </button>
-        {/* Same `/model` picker modal as the chat input: grid layout + keyboard
-            navigation. It may cover the panel — an accepted cost of reusing the
-            shared picker instead of re-implementing the model list. */}
         <ModelPickerModal
           open={open}
           model={pickerModel}
@@ -180,10 +160,6 @@ export function SchedulerModelSelect({
           modelList={options}
           onModelChange={(provider, modelId) => {
             const partial: Partial<SchedulerTaskForm> = { provider, modelId };
-            // Scheduled tasks must run with an explicit thinking level (no
-            // "auto"), so when the new model does not support the current level
-            // jump to the closest valid one instead of persisting a level the
-            // run-time call would silently clamp.
             const nextAvailable = meta?.thinkingLevels[`${provider}:${modelId}`] ?? null;
             const currentLevel = form.thinkingLevel;
             if (currentLevel && (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)) {
@@ -296,9 +272,6 @@ export function SchedulerToolsSelect({
   const { t } = useI18n();
   const { open, setOpen, rootRef } = useDropdown();
   const selection = form.toolSelection;
-  // Patterns (e.g. "pi_work_*") expand against the catalog for display; the raw
-  // selection (patterns included) is what gets stored so the server re-expands
-  // it when the task's session starts.
   const toolNames = availableTools.map((tool) => tool.name);
   const selectedCount =
     selection === "all" ? availableTools.length : expandToolPatterns(Array.isArray(selection) ? selection : [], toolNames).length;

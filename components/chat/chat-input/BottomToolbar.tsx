@@ -29,84 +29,50 @@ import type { ContextComposition } from "@/lib/shared/context-composition";
 type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface BottomToolbarProps {
-  /** i18n function — wired from the parent's `useI18n`. */
   t: (key: string, params?: Record<string, string | number>) => string;
-  /** True while the agent is mid-turn. Gates model/cwd pickers, upload, and
-   *  the thinking/tools affordances (they swap for read-only badges). */
   isStreaming: boolean;
 
-  // LEFT side
   onSlashAction?: (action: string) => void;
-  /** True if at least one image is attached. Drives the upload button's
-   *  "accent" variant so the user can see at a glance whether they have
-   *  images queued. */
   hasAttachedImages: boolean;
-  /** Hidden file input ref. The upload button calls `.click()` on it. */
   fileInputRef: RefObject<HTMLInputElement | null>;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
-  /** "<provider>:<modelId>" → provider id map from /api/models. */
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
 
-  // MIDDLE
   contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
   sessionStats: SessionStats;
 
-  // RIGHT - permission mode (ADR-0021). The button is only offered when the
-  // handler exists — a draft has no session, and a draft is always `confirm`.
   permissionMode?: PermissionMode;
   onPermissionModeToggle?: () => void;
 
-  // RIGHT - thinking
   thinkingLevel?: ThinkingLevelOption;
   onThinkingLevelChange?: (level: ThinkingLevelOption) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
 
-  // RIGHT - tools preset dropdown
   toolSelection: ToolSelection;
   availableTools: ToolInfo[];
   toolsLoading: boolean;
   toolsError: string | null;
-  /** Compatibility ref retained for the parent; the picker itself is a modal. */
   toolDropdownRef: RefObject<HTMLDivElement | null>;
   toolDropdownOpen: boolean;
   setToolDropdownOpen: (open: boolean) => void;
   onToolSelectionChange?: (selection: ToolSelection) => void;
   onEnsureAvailableTools?: () => Promise<void>;
   customExpanded: boolean;
-  /** Flip the Custom row's expand state. Parent decides whether to fire
-   *  `onEnsureAvailableTools` on the first expand (so the catalog fetch
-   *  is triggered exactly once per session). */
   toggleCustomExpanded: () => void;
 
-  // RIGHT - notify channel (empty new-session screen only)
-  /** Show the icon-only notification-channel picker right of the tools
-   *  picker. Only the parent knows whether the session is still empty; a
-   *  session with messages binds its channel through the More menu. */
   showNotifyPicker?: boolean;
   notifyChannelId?: string | null;
   onNotifyChannelChange?: (channelId: string | null) => void;
 }
 
-/**
- * Bottom toolbar beneath the textarea: LEFT (new session + upload + model +
- * cwd), MIDDLE (context usage), RIGHT (thinking + tools + notify + more).
- *
- * No abort affordance here: while streaming the send button in the input row
- * turns into the red stop button.
- *
- * Pure presentational — every state/derivative the JSX needs comes from
- * props. The corresponding state machine (slash menu, history, tools
- * dropdown, etc.) lives in the parent's hooks; this component only reads.
- */
 export function BottomToolbar(props: BottomToolbarProps) {
   const {
     t,
@@ -127,13 +93,9 @@ export function BottomToolbar(props: BottomToolbarProps) {
     showNotifyPicker = false, notifyChannelId = null, onNotifyChannelChange,
   } = props;
 
-  // Model selection now goes through the same `/model` modal as the slash
-  // command — the toolbar button is just a trigger that opens it.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
 
-  // Hide the trigger entirely when no models are available (matches the
-  // old ModelPicker's gating), and resolve the display name for it.
   const modelOptionsEmpty = (modelList?.length ?? 0) === 0 && Object.keys(modelNames ?? {}).length === 0;
   const currentModelName = model
     ? (modelList?.find((m) => m.id === model.modelId && m.provider === model.provider)?.name
@@ -141,8 +103,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
        ?? model.modelId)
     : null;
 
-  // Full metadata row for the current model, if the list carries it —
-  // surfaced in the trigger's hover tooltip (context window / max output).
   const currentModelMeta = model
     ? modelList?.find((m) => m.id === model.modelId && m.provider === model.provider)
     : undefined;
@@ -152,11 +112,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
       : n >= 1000
         ? `${(n / 1000).toFixed(0)}k`
         : String(n);
-  // Cost is quoted per million tokens — render if/when the catalog carries it.
   const formatCost = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 3 })}`;
 
-  // Tooltip metadata grid, mirroring the fields shown in the Models settings
-  // page (context window, max output, reasoning/thinking, image input, cost).
   const modelMetaTooltip = !currentModelMeta ? currentModelName : (
     <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "2px 12px", whiteSpace: "nowrap" }}>
       <span style={{ gridColumn: "1 / -1", fontWeight: 600, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -184,8 +141,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
     </div>
   );
 
-  // Current thinking level's display label for the streaming badge —
-  // the same mapped value the picker button shows.
   const currentThinkingLevel: ThinkingLevel = (thinkingLevel ?? "off") as ThinkingLevel;
   const currentThinkingMapped = thinkingLevelMap
     ? thinkingLevelMap[currentThinkingLevel]
@@ -194,24 +149,12 @@ export function BottomToolbar(props: BottomToolbarProps) {
     ? currentThinkingMapped
     : currentThinkingLevel;
 
-  // `onToolSelectionChange` is optional on Props (older call sites), so an
-  // explicit no-op keeps the inline toggle callback total.
   const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
 
-  // The shield button's two states. `confirm` is the default and must not look
-  // "on" — an inactive-looking control plus a red one makes the current mode
-  // readable without reading the tooltip.
   const permissionFullAccess = permissionMode === "full_access";
 
-  // ── Narrow-container adaptation ──────────────────────────────────────
-  // The row never wraps and never scrolls: it trades information density for
-  // width instead. `useToolbarLayout` measures the row itself (a viewport
-  // breakpoint cannot see a chat column squeezed by both side panels) and
-  // resolves the tier plan defined in `lib/shared/toolbarLayout`.
   const { containerRef, layout, width } = useToolbarLayout();
 
-  // Self-explaining locals rather than `layout.tier >= 2` sprinkled through
-  // the JSX — each one names the decision it represents.
   const showModelName = layout.modelLabelWidth !== null;
   const showCwdName = layout.cwdLabelVisible;
   const compactContext = layout.contextBarCompact;
@@ -221,15 +164,10 @@ export function BottomToolbar(props: BottomToolbarProps) {
   const toolsCollapsed = layout.collapsed.includes("tools");
   const cwdCollapsed = layout.collapsed.includes("cwd");
 
-  // The model's metadata tooltip used to be hard-capped at 420px. In a ~400px
-  // column that is wider than the screen, so clamp it to the measured row and
-  // leave the `Tooltip` component itself alone (it is used everywhere).
   const modelTooltipMaxWidth = width === null
     ? 420
     : Math.max(0, Math.min(420, width - 24));
 
-  // Opening the cwd picker from the More menu: the trigger is gone in that
-  // tier, so the modal is opened through its programmatic signal instead.
   const [collapsedCwdOpen, setCollapsedCwdOpen] = useState(false);
 
   const availableLevels = useMemo(
@@ -237,16 +175,11 @@ export function BottomToolbar(props: BottomToolbarProps) {
     [availableThinkingLevels],
   );
 
-  // Only the controls that were actually folded out of the row are listed in
-  // the More menu. A wide toolbar resolves to no collapsed items, which renders
-  // exactly the menu it rendered before this feature existed.
   const collapsedEntries = useMemo<CollapsedMenuEntry[]>(() => {
     const entries: CollapsedMenuEntry[] = [];
     if (thinkingCollapsed && onThinkingLevelChange) {
       entries.push({
         key: "thinking",
-        // Reuses the picker's own labels; the level name is the value, the
-        // colour is preserved so the menu still encodes the tier.
         label: `${t("Thinking level")} · ${currentThinkingDisplay}`,
         icon: (
           <span style={{ display: "flex", color: THINKING_LEVEL_COLOR[currentThinkingLevel] }}>
@@ -287,11 +220,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
       ref={containerRef}
       style={{ marginTop: 8, display: "flex", alignItems: "center", gap: layout.buttonGap }}
     >
-      {/* LEFT: attach + model selector */}
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2 }}>
-        {/* New session — circular icon button. Same action as the /new
-            slash command: starts a fresh session in the current cwd
-            (selected session's cwd, or the in-flight new-session cwd). */}
         <Tooltip content={t("New session")}>
           <button
             type="button"
@@ -355,12 +284,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
             </button>
           </Tooltip>
         )}
-        {/* Model selector — visible always, disabled during streaming.
-            Opens the `/model` picker modal (grid + keyboard navigation)
-            instead of an inline dropdown. Hidden when no models exist.
-            Hovering shows the current model's metadata (context window,
-            max output) from /api/models. The trigger is wrapped in a span
-            so the tooltip still fires while the button is disabled. */}
         {!modelOptionsEmpty && (
           <Tooltip
             content={modelMetaTooltip}
@@ -424,9 +347,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
           onClose={() => setModelPickerOpen(false)}
         />
 
-        {/* CWD picker — always visible (new-session flow picks the project;
-            during a session it mirrors the model selector: disabled while
-            the agent is running, clickable when idle to switch projects). */}
         {onCwdChange && (
           <CwdPicker
             cwd={cwd ?? null}
@@ -441,25 +361,15 @@ export function BottomToolbar(props: BottomToolbarProps) {
         )}
       </div>
 
-      {/* spacer */}
       <div style={{ flex: 1 }} />
 
       {contextUsage && (
         <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 4 }}>
-          {/* Cumulative token stats (input / output / cache hit rate / cost)
-              are surfaced in the context bar's hover tooltip. The previous
-              inline strip was removed so the input row stays compact. */}
           <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} contextComposition={contextComposition} compact={compactContext} />
         </div>
       )}
 
-      {/* RIGHT: thinking + tools preset | More */}
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
-        {/* Streaming: show the chosen thinking level as a read-only
-            badge instead of the icon button (the level can't be changed
-            while the agent is running). The badge follows the same label
-            rule as the picker, so streaming does not introduce a third
-            layout. */}
         {isStreaming && (
           <span
             style={{
@@ -523,8 +433,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
             </button>
           </div>
         )}
-        {/* Rendered outside the trigger block: the picker can also be opened
-            from the More menu, where the trigger button is gone. */}
         {!isStreaming && (
           <ToolsPickerModal
             open={toolsPickerOpen}
@@ -540,9 +448,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
           />
         )}
         {onPermissionModeToggle && (
-          // The tooltip is the whole explanation: the label alone would not say
-          // what full access lets through, and "it stopped asking" is exactly
-          // the impression that needs the boundary spelled out.
           <Tooltip
             content={
               <div style={{ display: "flex", flexDirection: "column", gap: 3, maxWidth: 240 }}>
@@ -602,8 +507,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
     </div>
   );
 }
-/** The tools picker's wrench, shared by the toolbar button and the More menu's
- *  collapsed entry so the control keeps its glyph after it is folded away. */
 function ToolsIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>

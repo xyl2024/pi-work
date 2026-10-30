@@ -1,9 +1,3 @@
-// TDD test for the "add custom model" flow:
-//   - filterCatalogModels: full-text search over the runtime model catalog.
-//
-// Runs via `node --experimental-strip-types scripts/test-models-config-flow.ts`.
-// Does NOT spin up the Next.js dev server. Exit code 0 on success.
-
 import assert from "node:assert/strict";
 import { filterCatalogModels } from "../components/settings/models-config/catalog-search.ts";
 import type { RuntimeModelInfo } from "../components/settings/models-config/types.ts";
@@ -37,13 +31,11 @@ function test(name: string, fn: () => void) {
   console.log(`  ok - ${name}`);
 }
 
-// Empty query returns the full list.
 test("empty query returns all models", () => {
   assert.equal(filterCatalogModels(CATALOG, "").length, 3);
   assert.equal(filterCatalogModels(CATALOG, "   ").length, 3);
 });
 
-// Matches model id, name and provider, case-insensitively.
 test("matches model id (case-insensitive)", () => {
   const hits = filterCatalogModels(CATALOG, "GPT-4O");
   assert.equal(hits.length, 1);
@@ -62,7 +54,6 @@ test("matches provider name", () => {
   assert.equal(hits[0].model.id, "deepseek-chat");
 });
 
-// Full-text: matches nested metadata fields, not just id/name/provider.
 test("full-text matches nested metadata (input modality)", () => {
   const hits = filterCatalogModels(CATALOG, "image");
   assert.equal(hits.length, 1);
@@ -75,7 +66,6 @@ test("full-text matches nested metadata (context window)", () => {
   assert.equal(hits[0].model.id, "gpt-4o");
 });
 
-// Non-matching query yields empty list, original array untouched.
 test("no match returns empty list", () => {
   assert.equal(filterCatalogModels(CATALOG, "no-such-model").length, 0);
 });

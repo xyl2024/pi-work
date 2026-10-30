@@ -1,26 +1,3 @@
-// main.js — Pi Work Electron shell
-//
-// The shell owns a server process. A plain (packaged) launch starts one: a
-// standalone Node runtime bundled under `resources/runtime/` runs the
-// production server (`bin/pi-work.js`) on a random loopback port, with a
-// per-launch random secret; the window is signed in with the matching cookie
-// before the app loads. `--dev` still points at the isolated dev instance and
-// an explicit `PI_PORT` still means "a server is already running here", so in
-// those two cases the shell spawns nothing.
-//
-// The window loads Pi Work *directly*: the app is the top-level page, the
-// window controls are the platform's own, and the shell owns exactly one page
-// of its own — the "server unreachable" error page. There is no iframe, no
-// self-drawn title bar and no preload bridge: the error page's retry button is
-// a navigation to `pi-work://retry`, which this process cancels and turns into
-// a restart.
-//
-// The server-process decisions (whether to spawn, with what command and env,
-// how to sign the session, how to kill the tree, when it counts as ready) live
-// in server-process.js, which is unit-tested without Electron. So do the
-// lifetime rules (closing hides into the tray, the app outlives its windows,
-// what the tray menu offers) — lifecycle.js, same treatment.
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, session, shell } = require("electron");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -34,62 +11,32 @@ const { TRAY_ITEM, keepsRunningWithoutWindow, trayMenu, windowCloseAction, windo
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { AUTH_COOKIE_NAME, SESSION_TTL_MS, buildServerEnv, findFreePort, killPlan, mintSecret, shouldSpawnServer, serverCommand, signSessionToken, waitForServer } = require("./server-process.js");
 
-// ── Config ──────────────────────────────────────────────────────────
-// `--dev` points the window at the isolated dev instance (port 30143, its own
-// data root) instead of production, so debugging never touches production
-// data. PI_PORT means "a server is already running on this port" — that is the
-// documented way to attach the shell to a server someone else started.
 const isDev = process.argv.includes("--dev");
-/** The pi-work root: `bin/pi-work.js` and `.next/` live here. */
 const APP_ROOT = path.join(__dirname, "..");
-/** How long a launch waits for the server before showing the error page. */
 const START_TIMEOUT_MS = 30_000;
-/** POSIX: own a process group so `killPlan` can take the whole tree down. */
 const DETACHED = process.platform !== "win32";
 
-// The URL the window loads. Replaced by the real port once the shell's own
-// server has picked one (see startServer); until then it is the dev / already
-// running instance the window is pointed at.
 let appUrl = resolveAppUrl({ dev: isDev, env: process.env });
 
 const appOrigin = () => new URL(appUrl).origin;
 const appPort = () => new URL(appUrl).port;
 
-// Windows: the app owns the title bar strip and the native caption buttons are
-// drawn on top of it as a Window Controls Overlay — that keeps the Win11
-// window controls and snap layouts while dropping the self-drawn title bar.
-// Everywhere else the window keeps its ordinary native frame.
 const USES_CONTROLS_OVERLAY = process.platform === "win32";
 const CONTROLS_OVERLAY_HEIGHT = 36;
-// The overlay is transparent so the app's own background shows through the
-// strip; the glyphs are mid-gray, which reads on both the light and the dark
-// app theme.
 const CONTROLS_OVERLAY_COLOR = "#00000000";
 const CONTROLS_OVERLAY_SYMBOL = "#808080";
 
-// ── CLI flags ────────────────────────────────────────────────────────
-/** `--hidden` (autostart) starts without showing the window — the first start only. */
 const LAUNCH_HIDDEN = process.argv.includes("--hidden");
 
-// ── State ───────────────────────────────────────────────────────────
 let win = null;
 let tray = null;
 let isQuitting = false;
-/** Whether startApp has run before (only a launch may stay hidden). */
 let hasStarted = false;
-/** The server this launch owns; null when it does not own one (dev, PI_PORT). */
 let server = null;
-/** In-flight start/retry, so a double-clicked retry cannot spawn twice. */
 let startInFlight = null;
 
-// ── App icon ─────────────────────────────────────────────────────────
 const iconPath = path.join(__dirname, "pi.png");
 
-// ── Error page (shown when the Pi Work server is unreachable) ────────
-// A data: URL rather than a file: the shell stays self-contained. The retry
-// button navigates to the shell's own `pi-work://retry` command, which the
-// main process turns into "make sure the server is up, then load the app" —
-// that is the whole IPC surface, so no preload bridge is needed.
 function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]
@@ -129,23 +76,16 @@ document.getElementById("retry-btn").addEventListener("click", function () {
 </div></body></html>`)}`;
 }
 
-/** Swap the window over to the error page. */
 function showErrorPage(errorDescription) {
   if (!win) return;
   win.loadURL(errorPage(errorDescription)).catch(() => {});
 }
 
-/** Load the app. A failure surfaces through the did-fail-load handler. */
 function loadApp() {
   if (!win) return;
   win.loadURL(appUrl).catch(() => {});
 }
 
-/**
- * Reload the app in place — a normal reload keeps the current route and query,
- * so the user stays where they were. When the window is sitting on the error
- * page (a data: URL, not the app), go back to the app URL instead.
- */
 function reloadApp() {
   if (!win) return;
   if (isAppUrl(win.webContents.getURL(), appOrigin())) {
@@ -155,12 +95,6 @@ function reloadApp() {
   }
 }
 
-// ── The server process ───────────────────────────────────────────────
-/**
- * Start the server this launch owns: a standalone Node runtime on a random
- * loopback port, with a fresh secret. Resolves once the process has spawned
- * (not once it answers — see ensureServer).
- */
 async function startServer() {
   const secret = mintSecret();
   const port = await findFreePort();
@@ -177,8 +111,6 @@ async function startServer() {
   const child = await new Promise((resolve, reject) => {
     const proc = spawn(plan.command, plan.args, {
       cwd: APP_ROOT,
-      // The desktop track's env: PI_WORK_DESKTOP + this launch's secret + the
-      // ports it picked. Never Electron's own Node (see server-process.js).
       env: buildServerEnv({ env: process.env, port, terminalPort, secret }),
       stdio: ["ignore", "pipe", "pipe"],
       detached: DETACHED,
@@ -202,14 +134,9 @@ async function startServer() {
   child.on("exit", (code, signal) => {
     console.warn(`[Pi Shell] server exited (code=${code ?? "null"}, signal=${signal ?? "null"})`);
     server = null;
-    // A server that dies under a live window fails every request from then on:
-    // show the retry page instead of a UI that silently stopped working.
     if (!isQuitting && win) showErrorPage(`服务端已退出（code=${code ?? signal}）`);
   });
 
-  // A quit that landed while we were spawning ran stopServer() when there was
-  // still nothing to stop: without this the child would outlive the shell as an
-  // orphan, holding its port and its background loops.
   if (isQuitting) {
     stopServer();
     return;
@@ -218,7 +145,6 @@ async function startServer() {
   console.log(`[Pi Shell] server pid ${child.pid} listening on ${appUrl}`);
 }
 
-/** Sign the window in: the cookie the server derives its key from. */
 async function injectAuthCookie() {
   await session.defaultSession.cookies.set({
     url: `http://127.0.0.1:${server.port}`,
@@ -231,15 +157,6 @@ async function injectAuthCookie() {
   console.log("[Pi Shell] session cookie injected");
 }
 
-/**
- * Make sure something answers on the app URL: start the server if this launch
- * owns one and wait for it. Returns a failure message for the error page, or
- * null when the window can load.
- *
- * Dev mode and an explicit PI_PORT return straight away — in those cases the
- * server is someone else's and the login page (not a shell-signed cookie) is
- * how the window authorizes itself.
- */
 async function ensureServer() {
   if (!shouldSpawnServer({ dev: isDev, env: process.env })) return null;
 
@@ -253,8 +170,6 @@ async function ensureServer() {
 
   const child = server?.child;
   if (!child) {
-    // It exited between spawning and here: the exit handler already cleared
-    // the slot (and showed its own message).
     return "服务端已退出";
   }
   const ready = await waitForServer({
@@ -270,29 +185,16 @@ async function ensureServer() {
   try {
     await injectAuthCookie();
   } catch (err) {
-    // The cookie *is* the trust boundary here: without it every request is
-    // 401, so failing loudly beats an app that loads and does nothing.
     return `无法写入会话凭据：${err instanceof Error ? err.message : String(err)}`;
   }
   return null;
 }
 
-/**
- * Bring the app up: make sure the server is there, create the window if
- * needed, then load the app (or the error page). Also what the error page's
- * retry button does, so retrying with a live server is just a reload.
- *
- * The window is created hidden and shown at the end: a window announcing
- * "服务端未连接" while the server is still starting would be a lie.
- */
 function startApp() {
   if (startInFlight) return startInFlight;
   startInFlight = (async () => {
     try {
       const failure = await ensureServer();
-      // A quit that landed while the server was starting owns the shutdown: no
-      // window is created for it (the server it may have spawned is reaped in
-      // startServer).
       if (isQuitting) return;
       if (!win) createWindow();
       if (failure) showErrorPage(failure);
@@ -304,8 +206,6 @@ function startApp() {
       if (windowShowsOnStart({ launchHidden: LAUNCH_HIDDEN, hasStarted })) win.show();
       hasStarted = true;
     } catch (err) {
-      // Nothing here may reject silently: startApp is fired and forgotten by
-      // the tray, the retry command and app-ready alike.
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[Pi Shell] startup failed: ${message}`);
       if (win) showErrorPage(message);
@@ -316,14 +216,6 @@ function startApp() {
   return startInFlight;
 }
 
-/**
- * End the server process tree, so quitting leaves nothing behind.
- *
- * Windows' `taskkill` runs synchronously: the shell is on its way out, and an
- * asynchronous killer could be lost when the process goes away. POSIX signals
- * the whole group and lets the entry's own shutdown finish the tree (it
- * escalates to SIGKILL itself) — the signal is delivered before we return.
- */
 function stopServer() {
   if (!server) return;
   const { child, kill } = server;
@@ -341,12 +233,6 @@ function stopServer() {
   }
 }
 
-// ── Window presence ─────────────────────────────────────────────────
-// The window can be hidden while the app — and the server under it — keeps
-// running (see lifecycle.js), so "bring it back" is an operation with several
-// callers: the tray's toggle, the tray's reload, the global shortcut, a second
-// launch. Hiding is what the close button does; nothing here touches `server`.
-/** Show and focus the window, creating it if it is gone. */
 function showWindow() {
   if (!win) {
     startApp();
@@ -357,7 +243,6 @@ function showWindow() {
   win.focus();
 }
 
-/** Apply the toggle rule to the state the window is in right now. */
 function toggleWindow() {
   if (!win) {
     startApp();
@@ -367,7 +252,6 @@ function toggleWindow() {
   else showWindow();
 }
 
-// ── BrowserWindow ───────────────────────────────────────────────────
 function createWindow() {
   win = new BrowserWindow({
     width: 1200,
@@ -376,7 +260,6 @@ function createWindow() {
     minHeight: 400,
     title: "Pi Work",
     autoHideMenuBar: true,
-    // Shown by startApp once the app (or the error page) is in place.
     show: false,
     icon: iconPath,
     ...(USES_CONTROLS_OVERLAY
@@ -396,23 +279,13 @@ function createWindow() {
     },
   });
 
-  // Every window.open()/target="_blank" link goes to the user's default
-  // browser instead of spawning another Electron window. Non-web schemes
-  // (ws://, javascript:, …) are dropped rather than fed to a shell handler.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalNavigation(url, appOrigin())) shell.openExternal(url);
     return { action: "deny" };
   });
 
-  // Backstop for links that navigate instead of popping: a plain <a href>
-  // without target, or a location.href assignment, would otherwise replace
-  // Pi Work in the window with the target page. Anything leaving the app goes
-  // to the default browser; in-app navigation (route changes, the login
-  // redirect) and the shell's own data: error page are left alone.
   win.webContents.on("will-frame-navigate", (event) => {
     const { url } = event;
-    // The error page's retry button: cancel the (undeliverable) navigation and
-    // run the command here instead.
     if (isShellCommand(url)) {
       event.preventDefault();
       console.log("[Pi Shell] retry requested");
@@ -424,22 +297,15 @@ function createWindow() {
     shell.openExternal(url);
   });
 
-  // Main-frame load failure → the server is unreachable (or went away): show
-  // the retry page. ERR_ABORTED (-3) is our own navigation backstop, not a
-  // failure; sub-frame failures are irrelevant now that nothing is embedded.
   win.webContents.on(
     "did-fail-load",
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) return;
-      // The retry command arrives through whichever handler Chromium runs
-      // first: `will-frame-navigate` above cancels it, or — if the unknown
-      // scheme never got that far — this failure is how we hear about it.
-      // startApp() is idempotent while one is in flight, so both are harmless.
       if (isShellCommand(validatedURL)) {
         startApp();
         return;
       }
-      if (errorCode === -3) return; // ERR_ABORTED
+      if (errorCode === -3) return;
       console.warn(
         `[Pi Shell] ${validatedURL} unreachable: ${errorDescription} (${errorCode})`
       );
@@ -447,8 +313,6 @@ function createWindow() {
     }
   );
 
-  // Ctrl+R / F5: reload the app in place. The custom menu below carries no
-  // Reload role, so this is the only path for it.
   win.webContents.on("before-input-event", (event, input) => {
     const isReload =
       input.type === "keyDown" &&
@@ -468,8 +332,6 @@ function createWindow() {
     }
   });
 
-  // Close hides to the tray (lifecycle.js): the server, and the 定时任务 / 看板
-  // / 频道 loops ticking inside it, must outlive the window.
   win.on("close", (event) => {
     if (windowCloseAction({ isQuitting, hasTray: tray !== null }) === "hide") {
       event.preventDefault();
@@ -477,7 +339,6 @@ function createWindow() {
     }
   });
 
-  // The tray's toggle item says what the next click does, so it follows.
   win.on("show", refreshTrayMenu);
   win.on("hide", refreshTrayMenu);
 
@@ -487,12 +348,10 @@ function createWindow() {
   });
 }
 
-// ── System Tray ─────────────────────────────────────────────────────
 function trayTooltip() {
   return isDev ? `Pi Work (dev · ${appPort()})` : `Pi Work (${appPort()})`;
 }
 
-/** The tray's Electron menu, from lifecycle.js' model (one place for wording). */
 function trayMenuItems() {
   return trayMenu({ windowVisible: Boolean(win?.isVisible()) }).map((item) => {
     if (item.type === "separator") return { type: "separator" };
@@ -500,7 +359,6 @@ function trayMenuItems() {
       case TRAY_ITEM.TOGGLE_WINDOW:
         return { label: item.label, click: () => toggleWindow() };
       case TRAY_ITEM.RELOAD:
-        // Also the recovery path when the window sits on the error page.
         return {
           label: item.label,
           click: () => {
@@ -524,7 +382,6 @@ function trayMenuItems() {
   });
 }
 
-/** Rebuild the tray menu, so its toggle item matches the window right now. */
 function refreshTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate(trayMenuItems()));
@@ -539,7 +396,6 @@ function createTray() {
   tray.on("double-click", () => showWindow());
 }
 
-// ── App Lifecycle ───────────────────────────────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -547,10 +403,6 @@ if (!gotTheLock) {
 } else {
   app.on("second-instance", () => showWindow());
 
-  // Replace Electron's default application menu (which binds Ctrl+R / F5 to
-  // its own "Reload" role and Ctrl+Shift+I to DevTools) with a minimal one
-  // that keeps undo/copy/paste and quit working but leaves reload/devtools
-  // wiring to main.js' before-input-event handler so we can intercept Ctrl+R.
   function installAppMenu() {
     const editMenu = {
       label: "编辑",
@@ -577,9 +429,6 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     installAppMenu();
-    // The tray is the way back to a hidden window, so a shell that cannot have
-    // one must not pretend: with no tray, closing really quits (lifecycle.js)
-    // rather than hiding into an app the user can never reach again.
     try {
       createTray();
     } catch (err) {
@@ -598,9 +447,6 @@ if (!gotTheLock) {
     }
   });
 
-  // The app outlives its window, as long as the tray can bring the window back
-  // (lifecycle.js): a window that is merely gone must not take the server
-  // process — and the loops ticking inside it — down with it.
   app.on("window-all-closed", () => {
     if (keepsRunningWithoutWindow({ isQuitting, hasTray: tray !== null })) return;
     app.quit();

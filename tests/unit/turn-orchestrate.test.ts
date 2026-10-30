@@ -11,24 +11,12 @@ import {
   type TurnSessionPolicy,
 } from "@/lib/server/turn";
 
-/**
- * Orchestration tests for the turn module, driven by fake sessions.
- *
- * Per the module's testing decisions (docs/adr/0004-…): these assert outward
- * behaviour — which terminal state a scripted event sequence produces and
- * which commands reach the session — not internal call order or private
- * state. The one ordering rule pinned here ("the listener exists the moment
- * the prompt is delivered") is observable through the fake: the prompt
- * delivery itself settles the turn synchronously.
- */
-
 const settledAssistant = (text: string) => ({
   role: "assistant",
   content: [{ type: "text", text }],
   stopReason: "end_turn",
 });
 
-/** The assistant message a session records for a turn that was aborted. */
 const abortedAssistant = (text: string) => ({
   role: "assistant",
   content: [{ type: "text", text }],
@@ -41,7 +29,6 @@ class FakeTurnSession implements TurnSession {
   private readonly eventListeners = new Set<(event: TurnEvent) => void>();
   private readonly destroyCallbacks = new Set<() => void>();
   destroyed = 0;
-  /** When true, delivering the prompt settles the turn synchronously (a "very short turn"). */
   settleOnPrompt = false;
 
   constructor(readonly sessionId: string) {}
@@ -151,9 +138,6 @@ describe("runTurn — one call runs the whole turn", () => {
   });
 
   it("forwards the message origin on the prompt command, leaving the prompt byte-identical", async () => {
-    // 消息来源（ADR-0023）：非网页发送方（如定时任务）把 origin 放在 prompt
-    // 命令上交给收口点；prompt 文本本身不因 origin 有任何包装或改变，缺省
-    // （网页端）不传时命令保持原样（见上例 sent[0] 的对比）。
     const session = new FakeTurnSession("real-1");
     session.settleOnPrompt = true;
 
@@ -172,8 +156,6 @@ describe("runTurn — one call runs the whole turn", () => {
   });
 
   it("carries the message origin on the prompt command only when one is set", async () => {
-    // 非网页来源（ticket 05）：origin 随 prompt 命令到达会话层，写 entry 与 SSE
-    // 附加都由收口完成；缺省（网页端）不传 origin，行为与改动前一致。
     const withoutOrigin = new FakeTurnSession("real-1");
     withoutOrigin.settleOnPrompt = true;
     await runTurn(baseSpec(), makeFactory([withoutOrigin], []));
@@ -205,9 +187,6 @@ describe("runTurn — one call runs the whole turn", () => {
   });
 
   it("has the terminal listener in place the moment the prompt is delivered", async () => {
-    // settleOnPrompt settles the turn synchronously inside send(): if the
-    // listener were installed after the prompt (the old wechat drift), the
-    // settle would be missed and the wait would only end at the deadline.
     const sessions: FakeTurnSession[] = [];
     const session = new FakeTurnSession("real-1");
     sessions.push(session);
@@ -227,17 +206,11 @@ describe("runTurn — one call runs the whole turn", () => {
     const result = await runTurn(baseSpec(), makeFactory(sessions, calls));
 
     expect(session.sent.map((command) => command.type)).toEqual(["prompt"]);
-    // toolNames undefined → the factory applies its own default (sidecar / cwd
-    // default); the module never invents one. source defaults to "user".
     expect(calls).toEqual([{ cwd: "/tmp/project", toolNames: undefined, source: "user", policy: { kind: "fresh" } }]);
     expect(result.status).toBe("completed");
   });
 
   it("forwards the reuse policy and runs the turn in the caller's existing session", async () => {
-    // The factory is the acquisition seam: `reuse` names a session id and the
-    // factory hands back that very session (live or revived). Observable from
-    // here as: one acquisition, the reuse policy reaches the factory, and the
-    // returned session is the one that gets the prompt.
     const existing = new FakeTurnSession("real-9");
     existing.settleOnPrompt = true;
     const calls: FactoryCall[] = [];
@@ -303,11 +276,6 @@ describe("runTurn — one call runs the whole turn", () => {
   });
 
   it("reports the timeout, not a cancel, when the deadline's own destroy fires a caller's stop source", async () => {
-    // A caller may wire one of its stop sources to the session's destroy — the
-    // subagent path does, because the child session being closed is one of its
-    // stop conditions. The wrapper runs destroy callbacks synchronously, so the
-    // deadline must decide the outcome *before* it tears the session down, or
-    // that source would settle the wait as cancelled first.
     const session = new FakeTurnSession("real-1");
     const childGone = new AbortController();
     session.onDestroy(() => childGone.abort());
@@ -337,8 +305,6 @@ describe("runTurn — one call runs the whole turn", () => {
       makeFactory([session], []),
     );
 
-    // key-1 / real-1 come from the factory; commandsSoFar is 0 because the hook
-    // fires right after acquisition, before set_model / set_thinking_level / prompt.
     expect(seen).toEqual([{ sessionId: "key-1", realSessionId: "real-1", commandsSoFar: 0 }]);
   });
 
@@ -357,8 +323,6 @@ describe("runTurn — one call runs the whole turn", () => {
       ),
     ).rejects.toThrow("card gone");
 
-    // The callback failed before any command reached the session: tear it down
-    // rather than leak a session the caller could never link.
     expect(session.destroyed).toBe(1);
     expect(session.sent).toEqual([]);
   });
@@ -486,7 +450,6 @@ describe("runTurn — abort sources", () => {
     expect(result.status).toBe("cancelled");
     expect(result.error).toBe("Subagent cancelled");
     expect(result.hasReply).toBe(false);
-    // The deadline never fired: the session was not torn down by a timeout.
     expect(session.destroyed).toBe(0);
   });
 
@@ -502,7 +465,6 @@ describe("runTurn — abort sources", () => {
     source.abort();
     await turn;
 
-    // The prompt went out, then the abort command right after it.
     expect(session.sent.map((command) => command.type)).toEqual(["prompt", "abort"]);
   });
 
@@ -539,8 +501,6 @@ describe("runTurn — abort sources", () => {
     );
     await tick();
     source.abort();
-    // The session settles on its own right after the abort, and the deadline
-    // elapses — neither may turn the already-terminal result into another one.
     session.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("too late")] });
     session.emit({ type: "agent_settled" });
     await tickMs(30);
@@ -564,8 +524,6 @@ describe("runTurn — abort sources", () => {
 
     expect(result.status).toBe("cancelled");
     expect(result.error).toBe("Subagent cancelled");
-    // No prompt was ever sent: a turn nobody is going to wait for must not be
-    // started and left running.
     expect(session.sent.map((command) => command.type)).toEqual(["abort"]);
   });
 
@@ -589,8 +547,6 @@ describe("runTurn — abort sources", () => {
       reported = true;
     });
     await tick();
-    // The abort command went out, but nothing is reported while the turn is
-    // still running: "cancelled" is only allowed to mean "it really stopped".
     expect(session.sent.map((command) => command.type)).toEqual(["prompt", "abort"]);
     expect(reported).toBe(false);
 
@@ -600,7 +556,6 @@ describe("runTurn — abort sources", () => {
     const result = await turn;
     expect(result.status).toBe("cancelled");
     expect(result.error).toBe("Subagent cancelled");
-    // Confirming a stop never means destroying the wrapper.
     expect(session.destroyed).toBe(0);
   });
 
@@ -619,8 +574,6 @@ describe("runTurn — abort sources", () => {
     const result = await turn;
     expect(result.status).toBe("timeout");
     expect(result.error).toContain("max lifetime exceeded");
-    // A destroyed wrapper is not proof the turn stopped, so confirm mode never
-    // destroys one — the caller keeps the honest observable state instead.
     expect(session.destroyed).toBe(0);
   });
 
@@ -630,8 +583,6 @@ describe("runTurn — abort sources", () => {
     const turn = runTurn(baseSpec({ confirmStop: true, timeoutMs: 10 }), makeFactory([session], []));
     await new Promise<void>((resolve) => setTimeout(resolve, 25));
 
-    // The deadline already asked for a stop, but the turn had finished its
-    // answer anyway: the landed result must not be reported as `timeout`.
     session.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("the answer")] });
     session.emit({ type: "agent_settled" });
 
@@ -658,7 +609,6 @@ describe("runTurn — abort sources", () => {
     const result = await runTurn(baseSpec(), makeFactory([session], []));
 
     expect(result.status).toBe("completed");
-    // No abort command appears on a run that was never given a stop policy.
     expect(session.sent.map((command) => command.type)).toEqual(["prompt"]);
   });
 

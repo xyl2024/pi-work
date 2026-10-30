@@ -3,18 +3,6 @@
 import { useSyncExternalStore } from "react";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 
-/**
- * Client cache of the configured subagent profiles (`GET /api/subagents`).
- *
- * The chat surfaces that render a subagent's Pi Bot (the subagent live
- * panel and the subagent sessions popover) need the profile's appearance, and
- * the editor needs to invalidate it after a write. One module-level list keeps
- * those from each fetching on their own.
- *
- * `loaded` makes the first subscription fetch once; callers that write a
- * profile call `refreshSubagentProfiles()` to invalidate.
- */
-
 const EMPTY: readonly SubagentProfile[] = [];
 
 let profiles: readonly SubagentProfile[] = EMPTY;
@@ -37,7 +25,6 @@ export async function refreshSubagentProfiles(): Promise<void> {
       loaded = true;
       emit();
     } catch {
-      // Keep the last known list; the next subscription retries.
     } finally {
       inflight = null;
     }
@@ -65,7 +52,6 @@ export function useSubagentProfiles(): readonly SubagentProfile[] {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/** Look up one profile in a list returned by `useSubagentProfiles`. */
 export function findSubagentProfile(
   list: readonly SubagentProfile[],
   name: string | null | undefined,

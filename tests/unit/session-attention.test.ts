@@ -1,13 +1,3 @@
-/**
- * The sidebar row shows at most ONE attention dot, and a session that is
- * blocked on a dangerous-command confirmation outranks one that is blocked on
- * an `ask_user_questions` card.
- *
- * Both facts are decided here, once, in a pure function: the two client
- * sources (`askUserQuestionsStore` and the pending-permission queue) are
- * merged before `SessionItem` sees anything, so the component never nests the
- * precedence rule inside its render.
- */
 import { describe, expect, it } from "vitest";
 import { sessionAttentionById } from "@/lib/shared/session-attention";
 
@@ -38,8 +28,6 @@ describe("sessionAttentionById", () => {
   });
 
   it("collapses several pending confirmations of one session into one entry", () => {
-    // Two parallel bash calls can each open a gate; the row still has room
-    // for exactly one dot.
     const attention = sessionAttentionById([], ["s1", "s1", "s1"]);
 
     expect(attention.size).toBe(1);

@@ -5,37 +5,10 @@ import { useI18n } from "@/hooks/useI18n";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 
-/**
- * Viewport-sized overlay used by SvgBlock / MermaidBlock / EchartsBlock to
- * inspect a rendered diagram full-screen. Shared so each renderer doesn't
- * re-implement the same body-scroll-lock + Escape + backdrop-click-to-close
- * boilerplate.
- *
- * Two visual layouts via the optional `header` prop:
- *
- *  - **With header** (`header` provided): a strip renders at the top with
- *    `header` content on the left and a plain close button on the right.
- *    Used by SvgBlock which shows a `svg` label.
- *
- *  - **Without header**: a floating close button sits in the top-right
- *    corner with a hover highlight. Used by MermaidBlock / EchartsBlock.
- *
- * In both modes the overlay locks `document.body.style.overflow`, listens
- * for `Escape` (preventDefault + stopPropagation so it doesn't bubble to
- * other handlers like the chat input's Escape-to-close-slash-menu), and
- * closes on click outside the inner content (the `e.target ===
- * e.currentTarget` check is what wires that).
- */
 export interface FullscreenOverlayProps {
   onClose: () => void;
-  /** Optional header strip content. When present, renders a top strip with
-   *  this content on the left and a close button on the right; otherwise
-   *  renders a floating close button in the top-right corner. */
   header?: ReactNode;
-  /** Custom z-index. Default 9999 to sit above normal content but below the
-   *  modal-animation stack (which uses 10000). */
   zIndex?: number;
-  /** Backdrop color. Default near-opaque black. */
   background?: string;
   children: ReactNode;
 }
@@ -55,11 +28,6 @@ export function FullscreenOverlay({
 }: FullscreenOverlayProps) {
   const { t } = useI18n();
 
-  // Always active while this overlay is mounted. The body-scroll-lock
-  // hook keeps overflow hidden, and the Escape handler fires `onClose`
-  // (with the same preventDefault/stopPropagation we previously did by
-  // hand, so the chat input's Escape-to-close-slash-menu doesn't leak
-  // through the capture-phase listener).
   useBodyScrollLock(true);
   useEscapeKey(true, (e) => {
     e.preventDefault();

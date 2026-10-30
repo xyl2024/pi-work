@@ -1,17 +1,5 @@
-/**
- * Tiny hand-drawn ("rough") path generators for the conversation tree.
- * Everything is deterministic — every shape derives from a numeric seed,
- * so re-renders (and React StrictMode double-renders) produce identical
- * geometry. Seeding by card/edge id keeps the sketch stable across turns.
- *
- * Style notes: lines are jittered polylines smoothed through Catmull-Rom
- * into Béziers; card borders are drawn twice ("double stroke", the classic
- * sketchy look) with slightly inset corners so boxes read as hand-drawn.
- */
-
 export type RoughPoint = [number, number];
 
-/** Deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -23,7 +11,6 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** FNV-1a string hash → stable uint32 seed. */
 export function hashString(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -33,13 +20,11 @@ export function hashString(str: string): number {
   return h >>> 0;
 }
 
-/** Stable pseudo-random rotation (degrees) in [-maxDeg, maxDeg]. */
 export function sketchRotateDeg(id: string, maxDeg = 1.6): number {
   const h = hashString(id);
   return ((h % 1000) / 1000) * 2 * maxDeg - maxDeg;
 }
 
-/** Smooth a polyline through Catmull-Rom → cubic Béziers. */
 function smoothPath(pts: RoughPoint[]): string {
   if (pts.length < 3) {
     return pts
@@ -65,11 +50,6 @@ function smoothPath(pts: RoughPoint[]): string {
   return d;
 }
 
-/**
- * A hand-drawn line with per-segment perpendicular jitter. Points are
- * inserted every ~22px and pushed sideways by up to `amplitude` px, then
- * smoothed into Béziers.
- */
 export function roughLine(
   x1: number,
   y1: number,
@@ -81,7 +61,6 @@ export function roughLine(
   return roughPolyline([[x1, y1], [x2, y2]], seed, amplitude);
 }
 
-/** A hand-drawn polyline (jittered + smoothed), preserving its corners. */
 export function roughPolyline(
   points: RoughPoint[],
   seed: number,
@@ -108,11 +87,6 @@ export function roughPolyline(
   return smoothPath(pts);
 }
 
-/**
- * A hand-drawn rectangle: two passes (double stroke), each edge with
- * slightly inset corners and perpendicular jitter, so the box reads as
- * sketched rather than stamped. Returns one path string per stroke.
- */
 export function roughRect(
   x: number,
   y: number,
@@ -134,7 +108,6 @@ export function roughRect(
       const len = Math.hypot(x2 - x1, y2 - y1) || 1;
       const ux = (x2 - x1) / len;
       const uy = (y2 - y1) / len;
-      // Corners don't quite meet — the classic sketchy gap.
       const sInset = rnd() * 1.6;
       const eInset = rnd() * 1.6;
       let sx = x1 + ux * sInset;
@@ -142,7 +115,6 @@ export function roughRect(
       let ex = x2 - ux * eInset;
       let ey = y2 - uy * eInset;
       if (pass === 1) {
-        // The second stroke sits slightly off the first.
         const off = 0.4 + rnd() * 0.8;
         const side = rnd() > 0.5 ? 1 : -1;
         sx += -uy * off * side;

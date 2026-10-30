@@ -1,23 +1,11 @@
-/** Fixed pixel height of the sticky panel — chosen to fit one question
- *  card with options + a small footer without dominating the chat. The
- *  tab bar at the top and the Submit/Cancel row at the bottom sit inside
- *  this height; only the question card scrolls. */
 export const PANEL_HEIGHT_PX = 350;
 
-/** Delay before auto-advancing to the next question after a single-select
- *  pick — long enough to register the choice, short enough to feel snappy. */
 export const AUTO_ADVANCE_MS = 450;
 
-/** Slightly longer window before auto-submitting on the last question so a
- *  stray click doesn't fire the tool before the user can notice. */
 export const AUTO_SUBMIT_MS = 700;
 
-/** How long the "Answers sent" confirmation stays before the panel closes. */
 export const SENT_VIEW_MS = 1400;
 
-/** Inline CSS for the panel's animations + icon-button affordance. Hoisted
- *  out of the component so the literal only allocates once per module load
- *  (the tab bar and footer both target the same .askq-icon-btn class). */
 export const ASK_PANEL_STYLES = `
   @keyframes ask-panel-in {
     from { opacity: 0; transform: translateY(8px); }

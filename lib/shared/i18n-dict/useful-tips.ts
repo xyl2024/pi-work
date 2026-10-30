@@ -1,5 +1,3 @@
-// Useful tips shown in the bottom status bar.
-
 export const usefulTips = {
   "You can set a custom Prompt and invoke it with '/'.": "你可以设置自定义 Prompt，并通过 '/' 唤起。",
   "For unrelated tasks, consider starting a new session.": "毫不相干的任务，建议开启新的会话。",

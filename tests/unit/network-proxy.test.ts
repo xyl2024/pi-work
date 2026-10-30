@@ -6,20 +6,6 @@ import {
 import { buildNoProxyList, checkProxyUrl } from "@/lib/server/network-proxy";
 import { api, type Json } from "./helpers";
 
-/**
- * Settings → Network proxy.
- *
- * Two layers here:
- *
- * - pure unit tests for the URL / bypass-list normalization (no network),
- * - API tests against the isolated instance's config.yaml.
- *
- * The API tests deliberately never leave the proxy *enabled*: the dispatcher
- * it installs is process-wide, so a stray enabled-at-a-dead-address value
- * would break every other test sharing the isolated server. The live
- * application path is covered by keeping the enable/disable round trip
- * balanced inside a single `try/finally`.
- */
 describe("network-proxy: url validation", () => {
   it("accepts an empty url as \"not configured\"", () => {
     expect(checkProxyUrl("")).toEqual({ ok: true, url: "" });
@@ -32,7 +18,6 @@ describe("network-proxy: url validation", () => {
       ok: true,
       url: "https://proxy.example.com:8443",
     });
-    // Surrounding whitespace is trimmed, not rejected.
     expect(checkProxyUrl("  http://127.0.0.1:7897  ")).toEqual({
       ok: true,
       url: "http://127.0.0.1:7897",
@@ -67,7 +52,6 @@ describe("network-proxy: bypass list", () => {
 let originalProxy: NetworkProxyConfig | undefined;
 
 afterAll(async () => {
-  // Never leave an enabled proxy behind for the rest of the suite.
   const restore: NetworkProxyConfig = originalProxy ?? { enabled: false, url: "", no_proxy: "" };
   await api("/api/settings", {
     method: "PUT",
@@ -120,7 +104,6 @@ describe("settings api: network proxy", () => {
       const proxy = after.body.network_proxy as Json;
       expect(proxy.url).toBe("http://127.0.0.1:7897");
       expect(proxy.no_proxy).toBe("10.1.2.3");
-      // Persisted but not active — enabling is what installs the dispatcher.
       expect(proxy.enabled).toBe(false);
     } finally {
       await api("/api/settings", {
@@ -149,8 +132,6 @@ describe("settings api: proxy connection test", () => {
   });
 
   it("reports a refused connection instead of hanging", async () => {
-    // Port 1 is reserved and never listening: the probe must come back with
-    // ok:false + a reason rather than a timeout or a 500.
     const res = await api("/api/settings/proxy-test", {
       method: "POST",
       body: JSON.stringify({ url: "http://127.0.0.1:1", probe_url: "https://example.com/" }),

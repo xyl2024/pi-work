@@ -14,14 +14,6 @@ import {
 } from "@/lib/client/skills-store";
 import { SkillCard } from "./SkillCard";
 
-/**
- * The panel's root page: every discoverable skill as a card in a grid grouped
- * by source (`pi-work` / `project` / `global` / `path`).
- *
- * The header row stays put while the grid scrolls, so "Add Skill" is always
- * reachable in the narrow strip. There is no save affordance by design:
- * enabling / disabling writes through on the toggle (see `skills-store`).
- */
 export function SkillsRootPage() {
   const { t } = useI18n();
   const toast = useToast();
@@ -166,8 +158,6 @@ export function SkillsRootPage() {
                     key={skill.filePath}
                     skill={skill}
                     toggleLoading={toggleBusy.includes(skill.filePath)}
-                    // The detail page itself arrives in the next slice; the card
-                    // already drives the real page stack so Back / Escape work.
                     onOpen={() => openSkillsDetail(skill.filePath)}
                     onToggle={(disableModelInvocation) => void handleToggle(skill.filePath, disableModelInvocation)}
                   />

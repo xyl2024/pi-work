@@ -3,16 +3,6 @@ import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { SkillInstallPhase } from "@/lib/shared/skills";
 import { SKILLS_INSTALL_CLOSE_CONFIRM, selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 
-/**
- * The skills panel's close guard (lib/shared/skills-close.ts). One question:
- * would closing the panel tab abandon an install? Driven as plain data — the
- * shell is the only caller and maps the returned i18n keys through `t()`.
- *
- * Unlike the models-config guard there is no second condition to compose: the
- * skills panel holds no draft (enable / disable writes through immediately),
- * so "installing" is the whole rule.
- */
-
 describe("selectSkillsCloseConfirm", () => {
   it("asks before closing while an install is still running", () => {
     expect(selectSkillsCloseConfirm({ installPhase: "running" })).toEqual(

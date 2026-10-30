@@ -18,10 +18,6 @@ import { usePendingPermissionSessionIds } from "@/hooks/usePendingPermissions";
 import { sessionAttentionById, type SessionAttention } from "@/lib/shared/session-attention";
 import { SESSION_PAGE_SIZE_GROUPED, insertActiveSession } from "@/lib/shared/sidebar-paging";
 
-/**
- * Per-cwd session loader state. Held in a Map keyed by cwd so each group
- * can paginate independently without disturbing the others.
- */
 export interface CwdSessionsState {
   sessions: SessionInfo[];
   cursor: string | null;
@@ -32,28 +28,19 @@ export interface CwdSessionsState {
 }
 
 interface MultiCwdListProps {
-  /** Ordered list — active cwd first, then by lastUsed desc */
   workspaces: Workspace[];
   emptyMessage?: string;
   loadingWorkspaces: boolean;
   loadingMoreWorkspaces: boolean;
   hasMoreWorkspaces: boolean;
-  /** Chain-loading gave up because the list still cannot scroll: show the
-   *  manual "load more projects" fallback. Never persistent — hidden while
-   *  a fetch is in flight and once every group is loaded. */
   showFallbackLoadMore: boolean;
   workspaceLoadError: string | null;
-  /** The single expanded cwd group. Everything else renders folded — the
-   *  accordion keeps the sidebar scannable. Null = all groups folded. */
   expandedCwd: string | null;
-  /** cwd → session loader state */
   perCwdSessions: Record<string, CwdSessionsState>;
   favoriteIds: string[];
   selectedSessionId: string | null;
-  /** Full active session metadata, used when the selected row is outside the loaded page. */
   activeSession?: SessionInfo | null;
 
-  /** Tell the parent about cwd header refs so it can scrollIntoView on activate. */
   onCwdHeaderRef: (cwd: string, el: HTMLDivElement | null) => void;
 
   onToggleExpand: (cwd: string) => void;
@@ -63,20 +50,10 @@ interface MultiCwdListProps {
   onToggleFavorite?: (sessionId: string) => void;
   onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
-  /** Called with the workspace cwd when the per-cwd "+" button is clicked.
-   *  Wraps the parent-side new-session handler so the caller can decide
-   *  which cwd wins regardless of the picker's active selection. */
   onNewSession?: (cwd: string) => void;
-  /** Open the paged-search modal for the given cwd. Triggered by the
-   *  "..." menu item ("View more sessions") on the cwd group header. */
   onOpenCwdSessions: (cwd: string) => void;
 }
 
-/**
- * Multi-cwd workspace list. Renders one CwdGroup per workspace, with the
- * active cwd pinned to the top. Each group is independently collapsible
- * (state owned by the parent — this component just renders + dispatches).
- */
 export function MultiCwdList({
   workspaces,
   emptyMessage,
@@ -103,10 +80,6 @@ export function MultiCwdList({
 }: MultiCwdListProps) {
   const { t } = useI18n();
 
-  // Which sessions need the user: an unanswered `ask_user_questions` card or a
-  // pending dangerous-command confirmation. Both stores are read here so one
-  // re-render covers every group, and the merge (confirmation outranks
-  // question, one dot per row) is the pure `sessionAttentionById`.
   const pendingQuestions = useAllPendingAskUserQuestions();
   const pendingPermissionSessionIds = usePendingPermissionSessionIds();
   const attentionBySessionId = sessionAttentionById(
@@ -133,14 +106,8 @@ export function MultiCwdList({
       )}
 
       {workspaces.map((ws) => {
-        // Accordion: only the active project is expanded by default; every
-        // other cwd stays folded. Clicking a header moves the open slot.
         const expanded = expandedCwd === ws.cwd;
         const group = perCwdSessions[ws.cwd];
-        // 选中的会话若不在 group 已加载页面里，插到第 SESSION_PAGE_SIZE_GROUPED
-        // 条之后（页尾），让用户既能看到原本的首屏会话，又能直接定位到选中项。
-        // 已加载时 group 原样显示 —— SessionItem 自己根据 selectedSessionId
-        // 渲染选中态，不再重排。注入位置由页大小决定（页大小从上层传入）。
         const activeSessionInCwd = activeSession?.cwd === ws.cwd ? activeSession : null;
         const sessions = insertActiveSession(
           group?.sessions ?? [],
@@ -223,17 +190,12 @@ interface CwdGroupProps {
   group: CwdSessionsState | undefined;
   favoriteIds: string[];
   selectedSessionId: string | null;
-  /** Session id → the one attention dot its row shows. Owned by the parent so
-   *  the whole sidebar re-renders in sync when either store changes, not just
-   *  the group that contains the affected session. */
   attentionBySessionId: ReadonlyMap<string, SessionAttention>;
 
   onHeaderRef: (el: HTMLDivElement | null) => void;
   onToggleExpand: () => void;
   onSelectSession: (session: SessionInfo) => void;
   onLoadMoreSessions: () => void;
-  /** Open the paged-search modal for this cwd. Wired to the "..."
-   *  menu item on the group header ("View more sessions"). */
   onOpenCwdSessions: () => void;
   onToggleFavorite?: (sessionId: string) => void;
   onSessionRenamed: (sessionId: string, name: string) => void;
@@ -261,8 +223,6 @@ function CwdGroup({
   const { t } = useI18n();
   const headerRef = useRef<HTMLDivElement | null>(null);
 
-  // Per-cwd custom icon + display alias (loaded lazily via the app-wide
-  // stores).
   useEffect(() => {
     initCwdIcons();
     initCwdAliases();
@@ -273,19 +233,11 @@ function CwdGroup({
   const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
   const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
 
-  // Forward the header DOM node to the parent so it can scrollIntoView when
-  // the active cwd changes (e.g. via picker → list sync).
   useEffect(() => {
     onHeaderRef(headerRef.current);
     return () => onHeaderRef(null);
   }, [onHeaderRef]);
 
-  // Body height animation for expand/collapse. The body DOM outlives the
-  // collapsed state so the exit animation can squeeze it to zero, then it
-  // unmounts (session data lives in the parent's perCwdSessions cache, so
-  // re-expanding remounts instantly). Unlike useCollapseHeight, the measured
-  // element is unmounted between collapses, so the ResizeObserver rebinds on
-  // every `rendered` flip instead of once at mount.
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [allowAnim, setAllowAnim] = useState(false);
   const [bodyHeight, setBodyHeight] = useState<number | null>(null);
@@ -297,8 +249,6 @@ function CwdGroup({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Measure the rendered body; follow content growth (lazy-loaded sessions
-  // arriving mid-expand) via ResizeObserver.
   useEffect(() => {
     if (!rendered) return;
     const el = bodyRef.current;
@@ -311,8 +261,6 @@ function CwdGroup({
     return () => ro.disconnect();
   }, [rendered]);
 
-  // Expand: remount the body, keep it squeezed until measured, then release
-  // so the height transition runs 0 → actual.
   useEffect(() => {
     if (expanded) setRendered(true);
   }, [expanded]);
@@ -321,8 +269,6 @@ function CwdGroup({
     if (expanded && rendered && bodyHeight != null) setCollapsed(false);
   }, [expanded, rendered, bodyHeight]);
 
-  // Collapse: squeeze to zero, then unmount after the animation window.
-  // The timeout also covers the empty-body case where no transition fires.
   useEffect(() => {
     if (expanded) return;
     setCollapsed(true);
@@ -331,18 +277,11 @@ function CwdGroup({
   }, [expanded]);
 
   const sessions = group?.sessions ?? [];
-  // API 已经返回 modified desc，这里重新排一次作为防御性兜底。
   const orderedSessions = sessions.slice().sort((a, b) => b.modified.localeCompare(a.modified));
 
-  // The dynamic tail of the list: whichever session renders last right now.
-  // It moves as more sessions load, which is exactly what "load more" must
-  // attach to.
   const lastSessionId = orderedSessions.length > 0 ? orderedSessions[orderedSessions.length - 1].id : null;
   const canLoadMore = !!group?.hasMore;
 
-  // Shared row renderer — the group's last row gets wrapped with the
-  // hover-revealed "Load more sessions" affordance (see LastSessionLoadMore).
-  // The React key travels through `key` so both callers stay keyed.
   const sessionRow = (s: SessionInfo, key: string) => (
     <SessionItem
       key={key}
@@ -368,8 +307,6 @@ function CwdGroup({
       </LastSessionLoadMore>
     ) : sessionRow(s, key);
 
-  // "..." menu state — mirrors SessionItem's pattern. The trigger button
-  // (shown only on row hover) opens a portal'd menu panel on click.
   const [rowHovered, setRowHovered] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
   const [loadMenuOpen, setLoadMenuOpen] = useState(false);
@@ -380,7 +317,6 @@ function CwdGroup({
   const showLoadMoreTrigger = rowHovered || triggerHovered || loadMenuOpen;
 
   const cancelMenuClose = useCallback(() => {
-    // no-op; kept for symmetry with SessionItem
   }, []);
 
   const openLoadMenu = useCallback(() => {
@@ -391,7 +327,6 @@ function CwdGroup({
     setLoadMenuOpen(true);
   }, [cancelMenuClose]);
 
-  // Animate the menu in (matches SessionItem's rAF pattern).
   useEffect(() => {
     if (!loadMenuOpen) {
       setLoadMenuVisible(false);
@@ -401,7 +336,6 @@ function CwdGroup({
     return () => cancelAnimationFrame(id);
   }, [loadMenuOpen]);
 
-  // Close the menu on outside mousedown / ESC / scroll / resize.
   useEffect(() => {
     if (!loadMenuOpen) return;
     const onMouseDown = (e: MouseEvent) => {
@@ -440,22 +374,12 @@ function CwdGroup({
   }, [loadMenuOpen, cancelMenuClose]);
 
   return (
-    // No gap between header and body here: the 4px spacing lives as
-    // paddingTop on the body's inner content (below) so it animates with
-    // the height. A flex gap here would sit OUTSIDE the height-animated,
-    // overflow-hidden container — collapsing to height 0 would still leave
-    // the 4px gap behind, and when the body unmounts 220ms later the gap
-    // would vanish in a non-animated 4px snap.
     <div
       style={{
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Cwd header — plain row, no hover/active visual. Click anywhere on
-          the row toggles expand/collapse. The right-side "…" trigger opens
-          a portal menu (Load more sessions) modelled on SessionItem's menu
-          pattern. */}
       <div
         ref={headerRef}
         onClick={onToggleExpand}
@@ -475,12 +399,6 @@ function CwdGroup({
           cursor: "pointer",
         }}
       >
-        {/* Cwd / project icon — filled, theme-tinted via currentColor.
-            Pinned to var(--accent) so it stands out from the muted chrome
-            (basename stays --text-muted) and gives each cwd row a coloured
-            anchor. The icon already depicts an "opened" folder, so it does
-            not flip with `expanded`; the fold/unfold chevron next to the
-            basename (see below) is the canonical expand/collapse affordance. */}
         <span
           aria-hidden
           style={{
@@ -493,10 +411,6 @@ function CwdGroup({
           <CwdProjectIcon cwd={workspace.cwd} size={14} />
         </span>
 
-        {/* Path — display alias when set (falls back to the basename),
-            then the fold/unfold chevron immediately after (not
-            right-aligned), then the running dot. Hovering shows the
-            absolute cwd path as a tooltip. */}
         <span
           style={{
             flex: 1, minWidth: 0,
@@ -516,8 +430,6 @@ function CwdGroup({
             </span>
           </Tooltip>
 
-          {/* Fold/unfold chevron — sits right after the basename. Points
-              down when expanded, right when collapsed (rotates -90deg). */}
           <span
             aria-hidden
             style={{
@@ -534,10 +446,6 @@ function CwdGroup({
           </span>
         </span>
 
-        {/* "+" trigger — shown only on row hover (matches the existing "…"
-            trigger pattern). Click creates a new session in this cwd
-            without disturbing the picker's active selection. stopPropagation
-            keeps the parent header click from also toggling expand. */}
         {onNewSession && rowHovered && (
           <Tooltip content={t("New session in this project")}>
             <button
@@ -573,8 +481,6 @@ function CwdGroup({
           </Tooltip>
         )}
 
-        {/* "…" trigger — shown on row hover or while menu is open. Mirrors
-            SessionItem's row-hover trigger pattern. Click opens the menu. */}
         {showLoadMoreTrigger && (
           <button
             ref={loadMenuTriggerRef}
@@ -618,7 +524,6 @@ function CwdGroup({
           </button>
         )}
 
-        {/* Menu panel via createPortal — same look as SessionItem's row menu. */}
         {loadMenuOpen && loadMenuPos && createPortal(
           <div
             ref={loadMenuRef}
@@ -675,7 +580,6 @@ function CwdGroup({
               label={t("Set project alias")}
               onClick={() => {
                 setLoadMenuOpen(false);
-                // Flush any pending menu-close timer before opening the modal.
                 cancelMenuClose();
                 setAliasDialogOpen(true);
               }}
@@ -692,7 +596,6 @@ function CwdGroup({
               label={t("Set custom icon")}
               onClick={() => {
                 setLoadMenuOpen(false);
-                // Flush any pending menu-close timer before opening the modal.
                 cancelMenuClose();
                 setIconPickerOpen(true);
               }}
@@ -703,16 +606,11 @@ function CwdGroup({
 
       </div>
 
-      {/* Body: pinned sessions + recent sessions. The DOM outlives the
-          collapsed state so the exit animation can squeeze it to zero, then
-          it unmounts after the animation settles. */}
       {rendered && (
         <div
           style={{
             height: collapsed ? 0 : bodyHeight ?? undefined,
             overflow: "hidden",
-            // Opacity trails the height so text doesn't look squashed mid-
-            // animation (same trick as CollapsiblePanel).
             opacity: collapsed ? 0 : 1,
             transition:
               allowAnim && bodyHeight != null
@@ -744,11 +642,6 @@ function CwdGroup({
         </div>
       )}
 
-      {/* Pickers/overlays are siblings of the header (never descendants):
-          they open from the header "…" menu and mount in a portal, but React
-          portal events bubble along the React tree — nesting them under the
-          clickable header would make every click inside the modal hit its
-          onClick and toggle expand/collapse. */}
       {toolsPickerOpen && (
         <CwdToolsPicker cwd={workspace.cwd} open onClose={() => setToolsPickerOpen(false)} />
       )}
@@ -778,11 +671,6 @@ function CwdGroup({
 }
 
 function basenameOf(cwd: string): string {
-  // Pick the separator that actually appears in the path. Windows uses
-  // backslashes; POSIX uses slashes. If both are present (unusual but
-  // legal on Windows after POSIX tools), prefer "/" so mixed paths render
-  // sensibly. filter(Boolean) drops the empty leading segment produced by
-  // absolute paths.
   const sep = cwd.includes("\\") && !cwd.includes("/") ? "\\" : "/";
   const parts = cwd.split(sep).filter(Boolean);
   return parts[parts.length - 1] ?? cwd;
@@ -831,13 +719,6 @@ function CwdMenuRow({
   );
 }
 
-/**
- * Wraps the last session row of a cwd group. While the pointer is over the
- * row (or the revealed row below it), a "Load more sessions" row smoothly
- * expands beneath it via CollapsiblePanel. The wrapped row is whatever the
- * caller passes in, so the trigger follows the list's dynamic tail as more
- * sessions load.
- */
 function LastSessionLoadMore({
   children,
   loadingMore,
@@ -849,12 +730,6 @@ function LastSessionLoadMore({
 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    // No gap on this flex column either: the 6px spacing sits as paddingTop
-    // INSIDE the CollapsiblePanel row (which is overflow:hidden), so it
-    // expands/collapses with the grid height. A flex gap here would sit
-    // outside the animated grid and snap away when the panel unmounts
-    // after the collapse animation — the same non-animated jump as the
-    // cwd group header.
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -870,10 +745,6 @@ function LastSessionLoadMore({
   );
 }
 
-/**
- * The revealed "load more" row — same height and indent as a session row so
- * it reads as a sibling of the items it sits under.
- */
 function LoadMoreRow({ loadingMore, onClick }: { loadingMore: boolean; onClick: () => void }) {
   const { t } = useI18n();
   const [hover, setHover] = useState(false);

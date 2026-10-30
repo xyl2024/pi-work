@@ -1,7 +1,3 @@
-// Dangerous-command permission flow (PermissionDialog component).
-// Esc → deny, Enter → allow once, backdrop-click → deny are the safe
-// defaults — see AGENTS.md "Permission defaults are safe".
-
 export const permissions = {
   "Permission required": "需要确认",
   "Rule: {name}": "规则:{name}",
@@ -11,17 +7,9 @@ export const permissions = {
   "Deny": "拒绝",
   "Permission denied": "已拒绝",
   "Permission timed out": "确认超时,已拒绝",
-  // Sidebar row dot (SessionItem): a session is blocked on a command
-  // confirmation the user has not answered yet. The dot is the only cue once
-  // the user switches to another tab, because the dialog only renders for the
-  // focused session.
   "Awaiting command approval": "等待确认命令执行",
   "Failed to send the permission decision": "权限决定发送失败",
 
-  // Session-level permission mode (ADR-0021). These live here rather than in
-  // the chat dictionary because this is the same permission semantics the
-  // dialog above belongs to — the dialog asks once, the mode says whether it
-  // asks at all.
   "Allow full access": "完全访问",
   "Confirm dangerous commands": "确认危险命令",
   "Switch to allow full access": "切换到完全访问",

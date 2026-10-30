@@ -27,18 +27,9 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if (body.status === "connected" || body.status === "disabled") {
     if (body.status === "connected") {
-      // Register (and best-effort start) the per-channel worker BEFORE
-      // enabling, so a disabled channel can always be re-enabled even when
-      // its worker was never registered in this process (e.g. a cold boot
-      // that lost the monitor-host lock, or a channel left disabled across
-      // a restart). ensureWeChatWorkerRunning's startChannel call is a no-op
-      // while the channel is still disabled (status != connected); the real
-      // poller is started by setEnabled below once the status is connected.
       ensureWeChatWorkerRunning(channelId);
     }
     if (!setEnabled(channelId, body.status === "connected")) return NextResponse.json({ error: "invalid_status_transition" }, { status: 400 });
-    // Workspace changes go through POST /api/channels/:channelId/workspace,
-    // which validates the path against the allowed roots.
   } else if (["pending", "expired"].includes(String(body.status))) patch.status = body.status;
   const channel = updateChannel(channelId, patch as never);
   return channel ? NextResponse.json({ channel }) : NextResponse.json({ error: "not_found" }, { status: 404 });

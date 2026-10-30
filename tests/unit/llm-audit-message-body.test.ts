@@ -6,13 +6,6 @@ import {
   type RequestAttempt,
 } from "@/lib/shared/llm-audit-message-body";
 
-/**
- * Pure rules behind "download the request body that produced this assistant
- * message". The interesting decisions are which captured HTTP attempt is THE
- * request (a turn may retry), how the JSON is presented, and what the file is
- * called — all of them independent of SQLite and of the browser.
- */
-
 function attempt(overrides: Partial<RequestAttempt> = {}): RequestAttempt {
   return {
     id: 1,

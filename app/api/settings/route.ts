@@ -14,16 +14,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/settings");
 
-/**
- * Strict validator for the `file_viewer.max_size_mb` sub-tree. Returns
- * {ok: false, error} on the first invalid value (with the field path in
- * the message), {ok: true} if every per-kind entry is either absent
- * (parser will fall back to default) or a valid integer in [min, max].
- * Runs at the PUT boundary so the SettingsModal can't persist garbage
- * even if its own client-side validation regresses; the lib/config.ts
- * parser is independently fail-open so a hand-edited YAML never breaks
- * the file route.
- */
 function validateFileViewerMaxSizeMb(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -80,8 +70,6 @@ function validateNetworkProxy(
   }
   const urlCheck = checkProxyUrl(obj.url);
   if (!urlCheck.ok) return { ok: false, error: urlCheck.error };
-  // Enabling the proxy without an address would silently leave traffic
-  // direct, which reads as "the setting did nothing" — reject it instead.
   if (obj.enabled === true && !urlCheck.url) {
     return { ok: false, error: "network_proxy.url is required when the proxy is enabled" };
   }
@@ -144,12 +132,6 @@ export async function PUT(req: Request) {
   try {
     const rawBody = (await req.json()) as Record<string, unknown>;
 
-    // The body is a *patch*: only the keys this route owns (the shared
-    // SETTINGS_OWNED_KEYS list) are considered. Anything else
-    // (cwd_aliases / cwd_icons / disabled_skills …) is ignored without an
-    // error, so an old client submitting a whole config snapshot is a
-    // harmless no-op for the keys another feature owns. Method stays PUT so
-    // upgrading clients never see a 405.
     const body: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(rawBody)) {
       if (isSettingsOwnedKey(key)) body[key] = value;
@@ -187,8 +169,6 @@ export async function PUT(req: Request) {
       }
     }
 
-    // Start from what is on disk and overlay only the owned keys present in
-    // the patch; the write face is therefore exactly SETTINGS_OWNED_KEYS.
     const onDisk = readConfig();
 
     const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -213,8 +193,6 @@ export async function PUT(req: Request) {
     };
 
     writeConfig(next);
-    // Hot-apply: the dispatcher is process-wide, so a saved setting changes
-    // the next outbound request without restarting the server.
     applyNetworkProxy(next.network_proxy);
     log.info("settings written", { durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ success: true });

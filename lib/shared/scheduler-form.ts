@@ -1,23 +1,10 @@
-/**
- * Form state helpers for the scheduler panel's task form.
- *
- * Pure — no React / DOM / server imports — so the "new task default" and the
- * "edit an existing task" mapping live in one place and the form page stays a
- * rendering shell. The dirty test itself lives in `lib/shared/scheduler-close.ts`
- * next to the close guard it feeds; this module only builds the two snapshots
- * that test compares.
- */
-
 import { Cron } from "croner";
 import type { SchedulerTaskForm, ScheduledTask } from "./scheduler";
 
-/** Server-side bounds for `maxLifetimeMs`, kept in sync with the store. */
 export const MIN_MAX_LIFETIME_MS = 1_000;
 export const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
-/** The runner's global default when a task has no explicit cap (2h). */
 export const RUNNER_DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
-/** A blank form, sitting on the default daily-at-09:00 schedule. */
 export const EMPTY_SCHEDULER_FORM: SchedulerTaskForm = {
   name: "",
   cron: "0 9 * * *",
@@ -39,7 +26,6 @@ export const EMPTY_SCHEDULER_FORM: SchedulerTaskForm = {
   recipientId: "",
 };
 
-/** The browser's IANA zone — the default for a new task's schedule. */
 export function browserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -48,27 +34,20 @@ export function browserTimezone(): string {
   }
 }
 
-/**
- * Every IANA zone the runtime knows, for the form's timezone picker. Falls back
- * to UTC where `Intl.supportedValuesOf` is unavailable.
- */
 export function listTimezones(): string[] {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
   try {
     const zones = intl.supportedValuesOf?.("timeZone");
     if (zones && zones.length > 0) return zones;
   } catch {
-    // fall through
   }
   return [browserTimezone(), "UTC"];
 }
 
-/** A fresh form for a new task, defaulting the working directory to the cwd. */
 export function newSchedulerForm(cwd: string | null): SchedulerTaskForm {
   return { ...EMPTY_SCHEDULER_FORM, cwd: cwd ?? "", timezone: browserTimezone() };
 }
 
-/** Map an existing task onto the form for editing. */
 export function schedulerFormFromTask(task: ScheduledTask): SchedulerTaskForm {
   const notification = task.notification;
   return {
@@ -79,8 +58,6 @@ export function schedulerFormFromTask(task: ScheduledTask): SchedulerTaskForm {
     prompt: task.prompt,
     provider: task.provider ?? "",
     modelId: task.modelId ?? "",
-    // Old tasks that stored thinkingLevel="auto" or null have to be re-picked
-    // on next edit — "auto" is no longer offered in the dropdown.
     thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
     toolSelection: task.toolNames === null ? "all" : task.toolNames,
     maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
@@ -95,7 +72,6 @@ export function schedulerFormFromTask(task: ScheduledTask): SchedulerTaskForm {
   };
 }
 
-/** True when croner can parse the expression. */
 export function isCronValid(cron: string): boolean {
   try {
     new Cron(cron);
@@ -105,10 +81,6 @@ export function isCronValid(cron: string): boolean {
   }
 }
 
-/**
- * Convert the form's minutes-string to ms. Returns null for empty / invalid
- * input (which means "use the runner default").
- */
 export function parseMaxLifetimeMinutes(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -120,7 +92,6 @@ export function parseMaxLifetimeMinutes(raw: string): number | null {
   return ms;
 }
 
-/** Format ms max lifetime for the form (as minutes, or empty for the default). */
 export function formatMaxLifetimeForForm(ms: number | null): string {
   if (ms === null) return "";
   return String(Math.round(ms / 60_000));

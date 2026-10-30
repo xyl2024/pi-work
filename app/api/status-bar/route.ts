@@ -49,24 +49,18 @@ export async function GET(request: Request) {
       const deletions = status.files.reduce((sum, f) => sum + f.deletions, 0);
       git = { branch: status.branch, changedFiles: status.files.length, additions, deletions };
     } catch {
-      // A cwd may no longer exist or may not be a Git repository.
     }
   }
 
   const tokenTotals = summarize("today", "none").totals;
   const activeChannels = listChannels().filter((c) => c.status === "connected").length;
 
-  // A conversation's spend includes the work it triggered: the subagent
-  // sessions it spawned are ordinary sessions with their own billing rows, and
-  // they can spawn further sessions of their own.
   let session: ReturnType<typeof summarizeSessions> | null = null;
   if (sessionId) {
     let subagentSessionIds: string[] = [];
     try {
       subagentSessionIds = listDescendantSubagentSessionIds(sessionId);
     } catch {
-      // A corrupt/unreadable subagent store must not take the status bar down;
-      // report the conversation's own numbers instead.
     }
     session = summarizeSessions([sessionId, ...subagentSessionIds]);
   }
@@ -80,9 +74,6 @@ export async function GET(request: Request) {
       tokens: tokenTotals.inputTokens + tokenTotals.outputTokens + tokenTotals.cacheReadTokens + tokenTotals.cacheWriteTokens,
       cost: tokenTotals.costTotal,
     },
-    // Per-session rollup for the selected conversation (plus its subagent
-    // sessions); null when nothing is selected so the bar can hide the whole
-    // group instead of showing zeros.
     session,
   });
 }

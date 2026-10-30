@@ -6,14 +6,6 @@ import {
 } from "@/lib/shared/context-composition";
 import { contextBucketRows, type ContextCompositionRow } from "@/lib/shared/context-composition-rows";
 
-// Pure unit tests for the composition panel's row projection (#37). The seam is
-// the same one `context-composition.test.ts` uses: an injected deterministic
-// `countTokens`, no tokenizer, no request.
-//
-// What matters is the *partition*: rows are what the panel prints, so a row's
-// number has to equal the leaves it owns and the parent's number, otherwise the
-// UI shows an arithmetic discrepancy it cannot explain.
-
 const chars4 = (text: string) => Math.floor(text.length / 4);
 
 function composition(input: {
@@ -39,7 +31,6 @@ function bucket(result: ContextComposition, id: ContextBucketId) {
 
 const sum = (values: Array<number | null>) => values.reduce((total: number, value) => total + (value ?? 0), 0);
 
-/** Every row (including children) must add up to the bucket it came from. */
 function expectPartition(
   result: ContextComposition,
   id: ContextBucketId,
@@ -144,8 +135,6 @@ describe("contextBucketRows", () => {
     const base = rows.find((row) => row.id === "base")!;
 
     expect(base.children.map((child) => child.id)).toEqual(["base", "available-tools", "guidelines"]);
-    // The tools-list line lives here, under its Context-panel anchor name —
-    // never in the `system-tools` bucket (which is ~50× bigger).
     expect(base.children.find((child) => child.id === "available-tools")!.localTokens).toBeGreaterThan(0);
     expectPartition(result, "system-prompt", rows);
   });
@@ -218,8 +207,6 @@ describe("contextBucketRows", () => {
     expect(contextBucketRows(bucket(result, "system-prompt"))).toEqual([]);
     expect(contextBucketRows(bucket(result, "skills"))).toEqual([]);
     expect(contextBucketRows(bucket(result, "system-tools"))).toEqual([]);
-    // The message bucket always keeps its seven roles, all at zero: the panel
-    // promises seven rows, and "thinking: 0" is information, not noise.
     const messages = contextBucketRows(bucket(result, "messages"));
     expect(messages).toHaveLength(7);
     expect(messages.every((row) => row.localTokens === 0 && row.tokens === null)).toBe(true);

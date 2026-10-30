@@ -7,28 +7,17 @@ import {
   type ProcessFoldState,
 } from "@/lib/shared/process-fold";
 
-/** The height transition the fold's body should run for the commit in flight. */
 export type ProcessFoldMotion = "animate" | "instant";
 
 export interface UseProcessFoldMotionResult {
   motion: ProcessFoldMotion;
-  /**
-   * Call right before committing a fold state change: it captures the scroll
-   * anchor the commit needs and picks `instant` when rows are about to be
-   * prepended to already-rendered content (a height transition there would
-   * fight the per-frame scroll compensation).
-   */
   beginTransition: (prev: ProcessFoldState, next: ProcessFoldState) => void;
 }
 
 interface UseProcessFoldMotionOptions {
-  /** The fold group's root, used to find the scrolling ancestor. */
   rootRef: React.RefObject<HTMLElement | null>;
-  /** The measured content box whose `scrollHeight` tracks the rendered rows. */
   contentRef: React.RefObject<HTMLElement | null>;
-  /** The fold state the caller just committed. */
   state: ProcessFoldState;
-  /** Rows this turn can show — the window arithmetic's input. */
   total: number;
 }
 
@@ -39,19 +28,6 @@ interface PendingCommit {
   beforeContentHeight: number;
 }
 
-/**
- * The DOM half of the turn-fold: height motion and scroll anchoring. The rules
- * it applies live in `lib/shared/process-fold.ts`; this hook only measures,
- * compares and writes `scrollTop`.
- *
- * Two paths are deliberately different. Content that grows *below* the summary
- * row (collapsed → partial/full) may animate while it is short. Content
- * prepended *above* already-rendered rows (partial → more) must never animate:
- * it is compensated with `scrollTop += insertedHeight` in the layout phase, and
- * running a height transition at the same time would keep re-moving the anchor.
- * The fold body also opts out of browser scroll anchoring
- * (`overflow-anchor: none`), so only this compensation runs.
- */
 export function useProcessFoldMotion({
   rootRef,
   contentRef,
@@ -85,8 +61,6 @@ export function useProcessFoldMotion({
       motion === "animate" &&
       !shouldAnimateFoldGrowth(pending.prev, state, newContentHeight - pending.beforeContentHeight)
     ) {
-      // Runs before paint, so the first painted frame is already the final
-      // layout instead of the start of a long slide.
       setMotion("instant");
     }
 
@@ -99,8 +73,6 @@ export function useProcessFoldMotion({
   return { motion, beginTransition };
 }
 
-/** The nearest scrolling ancestor; the chat scrollport is the only candidate
- *  in practice. */
 function findScrollParent(node: HTMLElement | null): HTMLElement | null {
   let el = node?.parentElement ?? null;
   while (el) {

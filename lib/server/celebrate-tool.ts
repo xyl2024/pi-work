@@ -1,16 +1,3 @@
-/**
- * `celebrate` — a pure-frontend fun tool.
- *
- * The agent calls it to make the Pi Work UI play a celebration animation
- * (confetti rain / party cannons, or both). The tool itself does nothing on the server: it validates the
- * parameters, attaches structured `details` to the result, and returns
- * immediately. The animation fires when the SSE `tool_execution_end` event
- * reaches the browser (see hooks/useAgentSession/events.ts →
- * lib/client/celebrate-store.ts → components/effects/CelebrationOverlay.tsx).
- *
- * Registered in rpc-manager.ts.
- */
-
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import {

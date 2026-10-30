@@ -1,6 +1,5 @@
 "use client";
 
-// Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
 import GoogleColorIcon from "@lobehub/icons/es/Google/components/Color";
@@ -38,8 +37,6 @@ import {
 
 type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
 
-// hasColor=true → Color icon (self-colored SVG, no wrapper)
-// hasColor=false → Mono icon (rendered with currentColor, inherits theme text color)
 const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }> = {
   "anthropic":              { Icon: AnthropicIcon,        hasColor: false },
   "openai":                 { Icon: OpenAIIcon,           hasColor: false },
@@ -72,8 +69,6 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "perplexity":             { Icon: PerplexityColorIcon,  hasColor: true },
   "together":               { Icon: TogetherColorIcon,    hasColor: true },
   "grok":                   { Icon: GrokIcon,             hasColor: false },
-  // pi builtin providers discovered through runtime catalogs (opencode API,
-  // NVIDIA NIM, token plans, ...) — keep in sync with pi-ai's models.generated.js
   "opencode":               { Icon: OpenCodeIcon,         hasColor: false },
   "opencode-go":            { Icon: OpenCodeIcon,         hasColor: false },
   "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },
@@ -93,15 +88,8 @@ export function hasProviderIcon(providerId: string | null | undefined): boolean 
   return !!providerId && PROVIDER_ICONS[providerId] !== undefined;
 }
 
-/** All provider ids that have an icon — used by the ModelsConfig icon picker. */
 export const PROVIDER_ICON_IDS: string[] = Object.keys(PROVIDER_ICONS);
 
-/**
- * The default fallback icon shown when a model has no provider icon and no
- * custom icon. `color` defaults to the muted text colour model cards want;
- * interactive hosts (right-bar button / tab strip) pass `"inherit"` so the
- * glyph follows their active / hover colour like every other panel glyph.
- */
 export function ProviderGearIcon({ size, color = "var(--text-muted)" }: { size: number; color?: string }) {
   return (
     <svg
@@ -126,13 +114,6 @@ export function ProviderGearIcon({ size, color = "var(--text-muted)" }: { size: 
   );
 }
 
-/**
- * Resolve the icon id to render for a model — a thin wrapper over the shared,
- * pure three-layer resolver (`resolveModelIconId` in
- * lib/shared/model-icon-match): explicit model-level icon > auto match >
- * provider icon, with the icon-library membership check supplied here. The
- * signature is kept stable for the existing icon consumers.
- */
 export function resolveProviderIcon(
   provider: string | null | undefined,
   model: string | null | undefined,
@@ -145,8 +126,6 @@ export function resolveProviderIcon(
 export function ProviderIcon({ id, size, fallback }: { id: string; size: number; fallback?: React.ReactNode }) {
   const pi = PROVIDER_ICONS[id];
   if (!pi) return fallback ?? null;
-  // Color icons: self-colored SVG, no wrapper needed
   if (pi.hasColor) return <pi.Icon size={size} />;
-  // Mono icons: use currentColor so they adapt to light/dark theme
   return <pi.Icon size={size} style={{ color: "var(--text-muted)" }} />;
 }

@@ -7,15 +7,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/git/commit");
 
-// GET /api/git/commit?cwd=<path>&commit=<sha>
-// Returns metadata + full message + per-file +N/-M stats for one commit.
-// Merge commits return `files: []` with `commit.isMerge: true` (the UI
-// shows a banner instead of a file list). File *contents* are NOT returned
-// here — GitLogView fetches them lazily per file via /api/git/diff?commit=.
-//
-// Same cwd-trust rationale as /api/git and /api/git/log: the caller is a
-// session cwd already validated at session creation, and the response
-// carries only public git metadata.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
@@ -34,9 +25,6 @@ export async function GET(req: Request) {
 
   const detail = await getCommitDetail(repoRoot, commit);
   if (!detail) {
-    // Unknown sha / git broken — same null-payload convention as the diff
-    // routes, letting the client distinguish "no such commit" from a
-    // transport failure without special-casing status codes.
     return NextResponse.json({ commit: null, body: null, files: [] }, { status: 200 });
   }
 

@@ -4,10 +4,6 @@ import { GrokBot } from "@/components/grokbot/GrokBot";
 import { useI18n } from "@/hooks/useI18n";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 
-/**
- * One subagent profile rendered as a card: its Pi Bot face, name, description
- * and a one-line summary of model / thinking / timeout / tool count.
- */
 export function SubagentCard({
   profile,
   onEdit,

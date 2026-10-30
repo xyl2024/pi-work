@@ -13,11 +13,6 @@ import { IGNORED_NAMES, IGNORED_SUFFIXES, jsonError, jsonOk } from "./handler";
 
 const log = createLogger("api/files");
 
-/** Max size (in bytes) we accept from PUT. Mirrors the soft "5MB
- *  warning / 50MB degrade" UX in the right-side viewer (see
- *  components/files/file-viewer/MonacoViewer.tsx) — anything larger
- *  should be written via the agent's Write tool, not the inline
- *  editor. 10 MiB. */
 export const FILE_PUT_MAX_BYTES = 10 * 1024 * 1024;
 
 export async function handleFilePut(request: NextRequest, segments: string[]) {
@@ -56,9 +51,6 @@ export async function handleFilePut(request: NextRequest, segments: string[]) {
       return NextResponse.json({ error: "Missing or invalid 'content' field" }, { status: 400 });
     }
 
-    // Size limit. `Buffer.byteLength` measures UTF-8 bytes (the way the
-    // file will be written), not the JS string length — emoji and CJK
-    // characters cost more than code units.
     const byteLength = Buffer.byteLength(body.content, "utf-8");
     if (byteLength > FILE_PUT_MAX_BYTES) {
       log.warn("file write rejected", {
@@ -81,15 +73,11 @@ export async function handleFilePut(request: NextRequest, segments: string[]) {
 
     fs.writeFileSync(filePath, body.content, "utf-8");
 
-    // Read mtime from a fresh stat so the client can refresh its
-    // status-bar display without an extra GET round-trip.
     let mtime: string | null = null;
     try {
       const after = fs.statSync(filePath);
       mtime = after.mtime.toISOString();
     } catch {
-      // File vanished between write and stat — odd but not fatal for the
-      // caller; they'll see the size and know the write itself succeeded.
     }
 
     log.info("file written", {
@@ -104,13 +92,8 @@ export async function handleFilePut(request: NextRequest, segments: string[]) {
   }
 }
 
-/** Max size (in bytes) per uploaded file. Generous enough for binaries
- *  the inline editor would refuse (the 10 MiB PUT cap targets text
- *  editing), while keeping the whole formData comfortably in memory. */
 export const FILE_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
-/** Hard cap on the number of files per upload request (directory uploads
- *  can otherwise explode into thousands of form entries). */
 export const FILE_UPLOAD_MAX_FILES = 2000;
 
 export async function handleFileUpload(request: NextRequest, segments: string[]) {
@@ -135,9 +118,6 @@ export async function handleFileUpload(request: NextRequest, segments: string[])
       return jsonError("Parent is not a directory", 400);
     }
 
-    // Multipart form: for each file the client appends a "file" entry and
-    // a matching "path" entry carrying the webkitRelativePath (so folder
-    // uploads land in subdirectories). Index i of both lists corresponds.
     const form = await request.formData();
     const files = form.getAll("file").filter((f): f is File => f instanceof File);
     const paths = form.getAll("path").map((p) => String(p));
@@ -155,9 +135,6 @@ export async function handleFileUpload(request: NextRequest, segments: string[])
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const rawRel = paths[i] ?? file.name;
-      // Normalize the relative path: strip drive/backslashes/"./" and
-      // reject traversal ("..") outright — the client sends this value,
-      // so it is untrusted input.
       const rel = rawRel
         .replace(/\\/g, "/")
         .split("/")
@@ -167,7 +144,6 @@ export async function handleFileUpload(request: NextRequest, segments: string[])
         continue;
       }
 
-      // Same name rules as create/rename for every path segment...
       let invalid: string | null = null;
       for (const seg of rel) {
         const v = validateFileName(seg);
@@ -180,10 +156,6 @@ export async function handleFileUpload(request: NextRequest, segments: string[])
         failed.push({ path: rawRel, error: invalid });
         continue;
       }
-      // ...and the same ignore-list guard for the top-level entry, so an
-      // explicit upload can't materialize e.g. a fresh "node_modules" at
-      // the workspace root (nested ignored dirs are allowed — blocking a
-      // whole folder upload because it *contains* one would be hostile).
       if (IGNORED_NAMES.has(rel[0]) || IGNORED_SUFFIXES.some((s) => rel[0].endsWith(s))) {
         failed.push({ path: rawRel, error: "Ignored name" });
         continue;
@@ -194,8 +166,6 @@ export async function handleFileUpload(request: NextRequest, segments: string[])
         failed.push({ path: rawRel, error: "Access denied" });
         continue;
       }
-      // Existing entries are skipped, never overwritten — an accidental
-      // re-upload must not silently clobber user edits.
       if (fs.existsSync(target)) {
         skipped++;
         continue;
@@ -276,7 +246,6 @@ export async function handleFilePost(request: NextRequest, segments: string[]) {
       return jsonError("Cannot create ignored directory", 400);
     }
 
-    // Parent must exist and be a directory
     let parentStat: fs.Stats;
     try {
       parentStat = fs.statSync(parentPath);
@@ -302,7 +271,6 @@ export async function handleFilePost(request: NextRequest, segments: string[]) {
       return jsonOk({ path: target });
     }
 
-    // op === "create" — empty file with optional initial content
     const content = typeof body.content === "string" ? body.content : "";
     fs.writeFileSync(target, content, "utf-8");
     invalidateAllowedRootsCache();
@@ -314,8 +282,6 @@ export async function handleFilePost(request: NextRequest, segments: string[]) {
   }
 }
 
-/** Pick a non-existing "<name> copy[ n]<ext>" path inside `dir` for a
- *  duplicate of `filename`. */
 function uniqueCopyPath(dir: string, filename: string): string {
   const parsed = path.parse(filename);
   let candidate = path.join(dir, `${parsed.name} copy${parsed.ext}`);
@@ -327,8 +293,6 @@ function uniqueCopyPath(dir: string, filename: string): string {
   return candidate;
 }
 
-/** Duplicate a single file next to itself (`?type=duplicate`). Directories
- *  are intentionally rejected — use create/upload for those. */
 export async function handleFileDuplicate(segments: string[]) {
   const startedAt = Date.now();
   try {
@@ -384,8 +348,6 @@ export async function handleFileDelete(segments: string[], options: { recursive?
     }
 
     if (stat.isDirectory()) {
-      // Never allow removing an allowed root itself — that would wipe the
-      // whole workspace, and the UI only ever deletes children of a cwd.
       const resolvedTarget = path.resolve(targetPath);
       for (const root of allowedRoots) {
         if (path.resolve(root) === resolvedTarget) {
@@ -470,8 +432,6 @@ export async function handleFilePatch(request: NextRequest, segments: string[]) 
       return jsonError("Already exists", 409);
     }
 
-    // fs.renameSync throws on cross-device moves; we explicitly want same-dir only,
-    // but the safety net is that `newPath` is computed from `path.dirname(oldPath)`.
     fs.renameSync(oldPath, newPath);
     invalidateAllowedRootsCache();
     log.info("file renamed", { from: oldPath, to: newPath, durationMs: elapsedMs(startedAt) });
@@ -482,12 +442,6 @@ export async function handleFilePatch(request: NextRequest, segments: string[]) 
   }
 }
 
-/**
- * Move `oldPath` into the directory in the request's `destDir` body field.
- * Used by the explorer's drag-and-drop. Keeps the basename; refuses
- * overwrites, cross-root destinations, and moving a directory into its own
- * subtree. Called from `handleFilePatch` with `?type=move`.
- */
 async function handleFileMove(
   request: NextRequest,
   oldPath: string,
@@ -527,14 +481,12 @@ async function handleFileMove(
   const name = path.basename(oldPath);
   const newPath = path.join(destDir, name);
   if (path.resolve(newPath) === path.resolve(oldPath)) {
-    // Already in the target directory — treat as a successful no-op.
     return jsonOk({ path: oldPath, oldPath });
   }
   if (!isPathAllowed(newPath, allowedRoots)) {
     return jsonError("Access denied", 403);
   }
 
-  // Refuse moving a directory into itself or one of its descendants.
   if (fs.statSync(oldPath).isDirectory()) {
     const rel = path.relative(oldPath, destDir);
     if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {

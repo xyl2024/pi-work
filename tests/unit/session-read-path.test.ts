@@ -1,18 +1,3 @@
-// Opening a session must not depend on a scan of every session on disk.
-//
-// `SessionManager.listAll()` (pi) reads every session JSONL to EOF to compute
-// fields nobody needs on this path; on a host with thousands of sessions that
-// is a ~5s stall per open, which is why `readSessionDetails` had to stop
-// calling it. Two rules are pinned here:
-//
-//   1. the parent session id comes from the parent file's own header (a single
-//      bounded 16KB read), not from a global listing;
-//   2. resolving a session id → path goes through the bounded header scan, so
-//      a cold server boot does not pay the full scan either.
-//
-// `readSessionDetails`'s own dependency on `listAllSessions` is guarded at the
-// source level: it is a pure I/O decision, and asserting it from the outside
-// would mean timing a multi-second scan.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -30,7 +15,6 @@ const read = (file: string) => readFileSync(path.join(repoRoot, file), "utf8");
 
 const READER = "lib/server/sessions/reader.ts";
 
-/** Body of a top-level `export async function ...` (up to its closing brace). */
 function functionSource(file: string, marker: string): string {
   const source = read(file);
   const start = source.indexOf(marker);
@@ -43,7 +27,6 @@ const created: string[] = [];
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 const savedDataDir = process.env.PI_WORK_DATA_DIR;
 
-/** Temp agent dir + Pi Work data dir; never the real ~/.pi or ~/.pi-work. */
 function sandbox(): { agentDir: string } {
   const root = mkdtempSync(path.join(tmpdir(), "pi-work-session-read-"));
   created.push(root);
@@ -54,7 +37,6 @@ function sandbox(): { agentDir: string } {
   return { agentDir };
 }
 
-/** First line of a session file, same shape pi writes. */
 function headerLine(id: string, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
     type: "session",
@@ -74,7 +56,6 @@ function writeSession(agentDir: string, fileName: string, header: string, ...lin
   return filePath;
 }
 
-/** Module-level caches live on globalThis (hot-reload safe), so tests share them. */
 function clearCaches(): void {
   const g = globalThis as Record<string, unknown>;
   delete g.__piSessionPathCache;
@@ -109,7 +90,6 @@ describe("resolveParentSessionId", () => {
 
     expect(resolveParentSessionId(undefined)).toBeUndefined();
     expect(resolveParentSessionId(missing)).toBeUndefined();
-    // No session header → no id to report; the full-scan path behaved the same.
     expect(resolveParentSessionId(empty)).toBeUndefined();
   });
 });
@@ -135,7 +115,6 @@ describe("resolveSessionPath", () => {
 describe("readSessionDetails: no global session scan", () => {
   it("resolves the parent id without listAllSessions", () => {
     const body = functionSource(READER, "export async function readSessionDetails");
-    // The full listing reads every JSONL to EOF; it was only here for this field.
     expect(body).not.toContain("listAllSessions(");
     expect(body).toContain("resolveParentSessionId(");
   });
@@ -147,11 +126,6 @@ describe("readSessionDetails: no global session scan", () => {
   });
 });
 
-// pi's listing writes the literal "(no messages)" into `firstMessage` when a
-// session holds no message text. That string is data, never a title: the reader
-// normalizes it to "" so the UI keeps using its unnamed fallback (name →
-// first message → id stub) instead of displaying "(no messages)" — the case the
-// user sees after an auto-name call comes back without an answer.
 describe("firstMessage never carries pi's placeholder", () => {
   const imageOnlyMessage = JSON.stringify({
     type: "message",
@@ -188,11 +162,6 @@ describe("firstMessage never carries pi's placeholder", () => {
   });
 });
 
-// pi writes the session's system prompt as a `message` entry (role `system`,
-// content "", prompt in `sections`) and it is routinely tens of KB. A scan that
-// only looked at the file's first 16KB therefore never reached the first *user*
-// message and reported none — the sidebar then had nothing to fall back to for
-// an unnamed session.
 describe("the first user message is found past a huge system-prompt entry", () => {
   it("keeps scanning past an entry larger than one chunk", async () => {
     const { agentDir } = sandbox();

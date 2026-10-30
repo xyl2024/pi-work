@@ -6,10 +6,6 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ channelId: string }> };
 
-/**
- * GET /api/channels/:channelId/activity?limit=50
- * Returns the channel's recent lifecycle events (newest first).
- */
 export async function GET(req: Request, { params }: Params) {
   const { channelId } = await params;
   if (!getChannel(channelId)) return NextResponse.json({ error: "not_found" }, { status: 404 });

@@ -1,9 +1,3 @@
-/**
- * GET /api/token-audit/calls?range=today|7d|30d|all&sessionId=...&limit=N&offset=N
- *
- * Returns `{ rows, total }`. Range defaults to "7d", limit default 100 / max 500,
- * offset default 0. Mirrors the response shape from `lib/token-audit-store.listCalls`.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listCalls, type Range } from "@/lib/server/token-audit-store";

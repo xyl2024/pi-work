@@ -12,19 +12,6 @@ import {
 } from "@/lib/shared/file-viewer-limits";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
-/**
- * Section 8: File preview limits.
- *
- * Per-kind MB caps using the shared `FileViewerLimitRow` (each row
- * owns its own draft + range validation; the section just receives
- * the parsed `next` value via `onCommit`). Validation is also
- * enforced here as defense-in-depth before the immediate-apply PUT,
- * so a regression in the row's blur handler can't write an
- * out-of-range value.
- *
- * Already-open file tabs are not force-refetched — the new limit
- * applies on the next read (Q9 decision from the original module).
- */
 export function FilePreviewSection({
   config,
   apply,

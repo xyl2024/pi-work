@@ -1,14 +1,5 @@
 import type { SubagentTaskStatus } from "./types";
 
-/**
- * One label key and one colour per subagent task status, shared by every UI
- * surface that renders a status (the sessions popover, the settings pages).
- * Two surfaces drifting apart — e.g. `creating` rendered as "running" in one
- * place — is exactly the inconsistency the lifecycle spec forbids, so the
- * mapping lives in one place.
- *
- * The keys are English source strings fed through `useI18n`, not display text.
- */
 export const SUBAGENT_STATUS_LABEL_KEYS: Record<SubagentTaskStatus, string> = {
   queued: "Queued",
   creating: "Creating",

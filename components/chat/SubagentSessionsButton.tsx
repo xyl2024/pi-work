@@ -11,16 +11,8 @@ import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-
 
 interface Props {
   parentSessionId: string | null;
-  /** Incremented by the parent session's subagent tool event stream. */
   refreshKey: number;
   onOpenSession: (sessionId: string) => void;
-  /**
-   * True while the parent turn is running. In that window the input's stop
-   * button is the total stop (it stops the parent turn and cascades), so the
-   * popover does not offer a second, redundant entry. Once the parent turn has
-   * ended and background tasks remain, the popover owns the independent
-   * stop-all entry instead of occupying the send button.
-   */
   parentIsStreaming?: boolean;
 }
 
@@ -74,13 +66,6 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     }
   }, [parentSessionId]);
 
-  // Load exactly once when this session becomes active. Subsequent loads are
-  // driven by refreshKey, which the parent session increments for relevant
-  // subagent SSE events. Refreshes also run while the popover is closed so its
-  // badge already reflects background subagent activity; the polling effect
-  // below keeps the rows fresh while a task is unfinished or the popover is open
-  // (a manual follow-up is started from the child session's own input, so the
-  // parent's event stream never announces it).
   useEffect(() => {
     const sessionChanged = previousParentSessionIdRef.current !== parentSessionId;
     previousParentSessionIdRef.current = parentSessionId;
@@ -104,10 +89,6 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     (task) => task.status === "queued" || task.status === "creating" || task.status === "running" || task.status === "stopping",
   );
 
-  // Poll while a task is unfinished, and while the popover is open: a manual
-  // follow-up is started from the *child* session's own input, so the parent's
-  // event stream never announces it — opening the popover is how it becomes
-  // visible, and it must not show a stale snapshot while the user is looking.
   useEffect(() => {
     if (!parentSessionId || (!hasActiveTask && !open)) return;
     const timer = setInterval(() => {
@@ -132,9 +113,6 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     onOpenSession(sessionId);
   };
 
-  // The same task manager rule the parent's abort command reaches: a stop-all
-  // request is not a claim that the tasks already stopped. The list reload
-  // shows `stopping` until each child session confirms, then `cancelled`.
   const handleStopAll = useCallback(async () => {
     if (!parentSessionId || stoppingAll) return;
     setStoppingAll(true);

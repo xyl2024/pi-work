@@ -1,11 +1,3 @@
-// Server-side git history operations for the GitPanel's Log view. Runs
-// `git` via runGit (execFile, never a shell) so user-supplied paths/refs
-// are never interpreted as shell syntax — same boundary as git-diff.ts.
-//
-// Wire formats are NUL-delimited (`-z` / `%x00`) so paths with spaces,
-// unicode, or newlines come through verbatim; NUL cannot appear in commit
-// metadata or paths, so record splitting is unambiguous.
-
 import { createLogger } from "@/lib/server/logger";
 import { getFileDiff, runGit } from "@/lib/server/git-diff";
 import type {
@@ -17,18 +9,11 @@ import type {
 
 const log = createLogger("git-log");
 
-/** Default page size for the log list; the route clamps `limit` to this. */
 export const LOG_DEFAULT_PAGE_SIZE = 30;
-/** Hard cap on a single page so a misbehaving client can't ask for 10k
- *  commits at once. */
 export const LOG_MAX_PAGE_SIZE = 100;
 
-/** The empty tree object, present in every repo. Used as the `from` side
- *  when diffing a root commit (which has no parent). */
 export const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-/** Head branches, most recently committed first. Returns [] when git is
- *  broken or there are no branches (shouldn't happen in a repo). */
 export async function getBranchList(repoRoot: string): Promise<string[]> {
   const res = await runGit(repoRoot, [
     "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads",
@@ -37,16 +22,8 @@ export async function getBranchList(repoRoot: string): Promise<string[]> {
   return res.stdout.split("\n").filter(Boolean);
 }
 
-/** Optional date-range filter for a log page. Values are loose git-supplied
- *  date strings (ISO day `YYYY-MM-DD` from the client date pickers). When set,
- *  git restricts commits to those committed within [since, until] — passed
- *  through as `--since`/`--until` so git's own date parsing handles them.
- *  `until` is end-inclusive for the whole day (client sends the day, not
- *  midnight), so we leave it verbatim. */
 export interface LogDateFilter {
-  /** Earliest commit date (inclusive). */
   since?: string;
-  /** Latest commit date (inclusive). */
   until?: string;
 }
 
@@ -66,15 +43,10 @@ export async function getLogPage(
     ...(dateFilter?.until ? [`--until=${dateFilter.until}`] : []),
     `--skip=${Math.max(skip, 0)}`,
     `--max-count=${clamped + 1}`,
-    // Hash, short hash, author name, author email, author date (strict
-    // ISO), subject, parent hashes. Fields are NUL-separated, records
-    // newline-separated.
     "--format=%H%x00%h%x00%an%x00%ae%x00%aI%x00%s%x00%P",
   ];
   const res = await runGit(repoRoot, args);
   if (!res) {
-    // Invalid branch (deleted while listed) or git broken → empty page,
-    // matching the "empty state" contract every other git route uses.
     log.warn("git log page failed", { repoRoot, branch, skip, error: "git exited non-zero" });
     return { commits: [], hasMore: false };
   }
@@ -98,15 +70,10 @@ function parseLogRecord(line: string): GitLogCommit | null {
     authorEmail: f[3],
     authorDate: f[4],
     subject: f[5],
-    // Two or more parents (space-separated %P) = merge commit.
     isMerge: (f[6] ?? "").includes(" "),
   };
 }
 
-/** Full detail for one commit: metadata + full message + per-file
- *  stats. Merge commits short-circuit to `files: []` — a merge's combined
- *  diff is multiparent and doesn't map to per-file +N/-M. Returns null
- *  when the sha doesn't exist (or git is broken). */
 export async function getCommitDetail(
   repoRoot: string,
   sha: string,
@@ -120,7 +87,6 @@ export async function getCommitDetail(
   const f = metaRes.stdout.split("\0");
   if (!f[0]) return null;
   const isMerge = (f[6] ?? "").includes(" ");
-  // `git log` appends a trailing newline after %B.
   const body = (f[7] ?? "").replace(/\n$/, "");
   const commit: GitLogCommit = {
     fullHash: f[0],
@@ -135,7 +101,6 @@ export async function getCommitDetail(
     return { commit, body, files: [] };
   }
 
-  // `git show` on a root commit diffs against the empty tree automatically.
   const [statusRes, numstatRes] = await Promise.all([
     runGit(repoRoot, ["show", sha, "--format=", "--name-status", "-z"]),
     runGit(repoRoot, ["show", sha, "--format=", "--numstat", "-z"]),
@@ -151,12 +116,6 @@ export async function getCommitDetail(
   return { commit, body, files };
 }
 
-/**
- * Unified diff of one file *within* a commit (parent..commit). Resolves
- * the parent ourselves — root commits fall back to the empty tree — so
- * the /api/git/diff route and GitLogView never deal with the empty-tree
- * special case. Reuses getFileDiff's cap/truncation semantics.
- */
 export async function getFileDiffAtCommit(
   repoRoot: string,
   sha: string,
@@ -169,9 +128,6 @@ export async function getFileDiffAtCommit(
   });
 }
 
-/** First parent of a commit, or null when it's a root commit / the sha is
- *  unresolvable. `rev-parse --verify --quiet <sha>^` exits non-zero only
- *  for "no such parent", so runGit's null-on-nonzero maps directly. */
 async function resolveFirstParent(repoRoot: string, sha: string): Promise<string | null> {
   const res = await runGit(repoRoot, ["rev-parse", "--verify", "--quiet", `${sha}^`]);
   if (!res) return null;
@@ -179,14 +135,6 @@ async function resolveFirstParent(repoRoot: string, sha: string): Promise<string
   return parent || null;
 }
 
-/**
- * Parse `git show --name-status -z` output into path → status letter.
- *
- * Verified record layouts (see the `git mv` fixture in commit history):
- *   modified: `M\0path\0`
- *   rename:   `R100\0old-path\0new-path\0`   (old first, then new)
- * The score digits are stripped so every status maps to the plain letter.
- */
 function parseNameStatusZ(output: string): Map<string, string> {
   const map = new Map<string, string>();
   const tokens = output.split("\0");
@@ -194,12 +142,12 @@ function parseNameStatusZ(output: string): Map<string, string> {
     const tok = tokens[i];
     if (!tok) continue;
     const m = /^([A-Z])(\d*)$/.exec(tok);
-    if (!m) continue; // not a status token (e.g. leftover path)
+    if (!m) continue;
     const status = m[1];
     if (status === "R" || status === "C") {
       const newPath = tokens[i + 2];
       if (newPath) map.set(newPath, status);
-      i += 2; // consumed old + new path tokens
+      i += 2;
     } else {
       const path = tokens[i + 1];
       if (path) map.set(path, status);
@@ -209,12 +157,6 @@ function parseNameStatusZ(output: string): Map<string, string> {
   return map;
 }
 
-/**
- * Parse `git show --numstat -z` output into path → {add, del}. Same -z
- * rename shape as name-status: `0\t0\t\0old\0new\0` (empty path token,
- * then old, then new) — both paths are recorded so pairing with the
- * name-status map (keyed by new path) always matches.
- */
 function parseNumstatZForLog(output: string): Map<string, { add: number; del: number }> {
   const map = new Map<string, { add: number; del: number }>();
   const tokens = output.split("\0");

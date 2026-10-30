@@ -8,7 +8,6 @@ import {
   type TurnSnapshot,
 } from "@/lib/server/turn";
 
-/** Fold a scripted event sequence into the snapshot the classifier consumes. */
 function observe(events: TurnEvent[]): TurnSnapshot {
   return events.reduce(observeTurnEvent, EMPTY_TURN_SNAPSHOT);
 }
@@ -222,7 +221,6 @@ describe("classifyTurnEnd — non-settle reasons", () => {
     });
     expect(outcome.status).toBe("cancelled");
     expect(outcome.error).toBe("Subagent cancelled");
-    // A cancelled turn was cut short: no reply text is invented for it.
     expect(outcome.text).toBe("");
     expect(outcome.hasReply).toBe(false);
     expect(outcome.stopReason).toBeNull();

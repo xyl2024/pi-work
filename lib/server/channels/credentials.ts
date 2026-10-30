@@ -20,9 +20,9 @@ export function saveChannelAccount(channelId: string, account: WeChatAccount): v
   mkdirSync(dir, { recursive: true });
   const file = pathFor(channelId);
   writeFileSync(file, JSON.stringify(account, null, 2), "utf8");
-  try { chmodSync(file, 0o600); } catch { /* best effort */ }
+  try { chmodSync(file, 0o600); } catch {}
 }
 
 export function deleteChannelAccount(channelId: string): void {
-  try { unlinkSync(pathFor(channelId)); } catch { /* already absent */ }
+  try { unlinkSync(pathFor(channelId)); } catch {}
 }

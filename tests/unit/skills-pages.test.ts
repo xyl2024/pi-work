@@ -9,12 +9,6 @@ import {
   type SkillsPage,
 } from "@/lib/shared/skills-pages";
 
-/**
- * The skills panel page stack (lib/shared/skills-pages.ts). Driven as plain
- * data: push a detail / add page, replace a sibling, back out — no DOM, no
- * React.
- */
-
 function detail(filePath: string): SkillsPage {
   return { kind: "detail", filePath };
 }

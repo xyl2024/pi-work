@@ -18,16 +18,6 @@ interface ContextMenuState {
   x: number;
   y: number;
   items: ContextMenuItem[];
-  /**
-   * Scroll root that should dismiss this menu when *it* scrolls. When
-   * `null`, *any* scroll on the page closes the menu (legacy behavior).
-   *
-   * Set by `open()` callers via `triggerElement`: the provider walks
-   * up to the nearest scrollable ancestor so that programmatic
-   * scrolling in unrelated areas (e.g. ChatWindow auto-scrolling while
-   * a message is streaming) doesn't dismiss a context menu the user
-   * just opened on a different surface (e.g. the session tab bar).
-   */
   scrollRoot: HTMLElement | Window | null;
 }
 
@@ -35,12 +25,6 @@ interface ContextMenuOpenArgs {
   x: number;
   y: number;
   items: ContextMenuItem[];
-  /**
-   * Optional DOM element that originated the menu (typically the right
-   * click target). Used to determine the scroll root that should
-   * dismiss this menu. Pass `null`/omit to keep the legacy
-   * "close on any scroll" behavior.
-   */
   triggerElement?: HTMLElement | null;
 }
 
@@ -69,9 +53,6 @@ function findScrollableAncestor(el: HTMLElement | null): HTMLElement | Window {
     if (style) {
       const overflowY = style.overflowY;
       const overflowX = style.overflowX;
-      // Only use an element as the root when it can actually scroll. Many
-      // layout containers use `overflow: hidden` merely for clipping and
-      // should not shadow the real scroll container above them.
       const canScrollY =
         (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
         cur.scrollHeight > cur.clientHeight;
@@ -87,16 +68,12 @@ function findScrollableAncestor(el: HTMLElement | null): HTMLElement | Window {
 
 function isScrollInRoot(target: EventTarget | null, root: HTMLElement | Window | null): boolean {
   if (!target) return false;
-  // No explicit root: any scroll closes (back‑forward behavior).
   if (root === null) return true;
   if (root === window) {
-    // window-level scrolls only — target is the document / window itself.
     return target === window || target === document || (target instanceof HTMLElement && target === document.documentElement);
   }
   if (!(target instanceof Node)) return false;
   if (target === root) return true;
-  // Some browsers set `e.target` to the deepest scrollable element;
-  // others set it to a parent. Use contains() to cover both.
   return (root as HTMLElement).contains(target);
 }
 
@@ -111,7 +88,6 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const open = useCallback((args: ContextMenuOpenArgs) => {
-    // Clamp position to viewport
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
     const separators = args.items.filter((i) => i.separatorBefore).length;
@@ -128,7 +104,6 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Close triggers: outside mousedown, ESC, scroll (scoped), resize
   useEffect(() => {
     if (!state) return;
 
@@ -144,17 +119,11 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         close();
       }
     };
-    // Only dismiss the menu when the *trigger's* scroll root actually
-    // scrolls. This prevents ChatWindow's per-token auto-scroll from
-    // killing a context menu the user just opened on the session tab
-    // bar, the right-side panel, etc. Legacy `state.scrollRoot === null`
-    // callers still get the old "any scroll closes" behavior.
     const onScroll = (e: Event) => {
       if (isScrollInRoot(e.target, state.scrollRoot)) close();
     };
     const onResize = () => close();
 
-    // Use capture so we get the event before any inner handlers
     window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("scroll", onScroll, true);
@@ -190,11 +159,6 @@ function ContextMenuView({ state, onItem }: { state: ContextMenuState; onItem: (
     setPortalEl(document.body);
   }, []);
 
-  // The provider clamps the initial position using a rough estimate
-  // (fixed item height + width). Real menus vary a lot in height once
-  // labels wrap / separators / font metrics are involved, so re-clamp
-  // against the measured box before paint. Without this the bottom
-  // items (often "Delete") can spill past the viewport edge.
   useLayoutEffect(() => {
     const el = menuRef.current;
     if (!el) return;
@@ -269,7 +233,6 @@ function RowInner({ item, onPick }: { item: ContextMenuItem; onPick: () => void 
       aria-label={item.ariaLabel ?? item.label}
       aria-disabled={item.disabled}
       onMouseDown={(e) => {
-        // Use mousedown to close before potential click handlers fire on items
         e.preventDefault();
         e.stopPropagation();
         if (item.disabled) return;

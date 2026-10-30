@@ -1,14 +1,3 @@
-// Shared bits for the motion-animated icons in this directory.
-//
-//   - `ICON_WRAP`: base classes for the wrapper div. `inline-flex` shrink-wraps
-//     the glyph so a column-stacked body (e.g. the tool-calls running/total
-//     counter) isn't stretched by the wrapper:
-//   - `useIconHover`: the standard self-animate/controlled hover wiring every
-//     animated icon uses. When the component is rendered with no ref it
-//     self-animates on hover; once an imperative handle is bound (via
-//     useImperativeHandle setting `isControlledRef` to true) it stops hovering
-//     on its own and defers to the caller's start/stop.
-
 "use client";
 
 import { useCallback, useRef } from "react";

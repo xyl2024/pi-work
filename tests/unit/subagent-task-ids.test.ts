@@ -4,15 +4,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * Task ids: a short counter (`0001`, `0002`, …) counted per parent session,
- * never reused once handed out, and unique per parent only — so a task row is
- * addressed by `(parentSessionId, taskId)`.
- *
- * The suite also covers the store migration that re-keys an old database, where
- * ids came from a single global counter and `task_id` alone was the primary key.
- */
-
 let dir: string;
 
 function resetStoreGlobals(): void {
@@ -47,7 +38,6 @@ describe("per-session task ids", () => {
 
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-a" }).taskId).toBe("0001");
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-a" }).taskId).toBe("0002");
-    // The counter belongs to its parent: another session starts at 0001 again.
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-b" }).taskId).toBe("0001");
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-a" }).taskId).toBe("0003");
   });
@@ -60,7 +50,6 @@ describe("per-session task ids", () => {
     expect(getSubagentTask("parent-a", "0001")?.parentSessionId).toBe("parent-a");
     expect(getSubagentTask("parent-b", "0001")?.parentSessionId).toBe("parent-b");
     expect(getSubagentTask("parent-c", "0001")).toBeNull();
-    // Two parents hold "0001"; resolving it alone must not silently pick one.
     expect(() => findSubagentTask("0001")).toThrow(/more than one parent session/);
   });
 
@@ -102,7 +91,6 @@ describe("task id migration", () => {
         (task_id, parent_session_id, subagent_name, description, prompt, status, created_at)
       VALUES (?, ?, 'codebase_explorer', 'd', 'p', 'completed', 1)
     `);
-    // One global counter: ids 1..3, all owned by the same parent.
     insert.run("1", "parent-legacy");
     insert.run("2", "parent-legacy");
     insert.run("3", "parent-legacy");
@@ -112,18 +100,15 @@ describe("task id migration", () => {
     const { createSubagentTask, getSubagentDb, getSubagentTask, listSubagentTasks } =
       await import("@/lib/server/subagent-store");
 
-    // Legacy rows survive, still readable by (parent, id).
     expect(listSubagentTasks("parent-legacy")).toHaveLength(3);
     expect(getSubagentTask("parent-legacy", "2")).toMatchObject({ status: "completed" });
 
-    // The key is now the pair, so the id may repeat across parents…
     const key = (getSubagentDb().prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{
       name: string;
       pk: number;
     }>).filter((column) => column.pk > 0).map((column) => column.name);
     expect(key.sort()).toEqual(["parent_session_id", "task_id"]);
 
-    // …while this parent keeps counting after the highest id it already holds.
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-legacy" }).taskId).toBe("0004");
     expect(createSubagentTask({ ...seed, parentSessionId: "parent-fresh" }).taskId).toBe("0001");
   });

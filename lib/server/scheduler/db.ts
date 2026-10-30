@@ -1,16 +1,3 @@
-/**
- * SQLite-backed storage for scheduled tasks.
- *
- * Mirrors the singleton pattern in lib/db.ts: `better-sqlite3` is imported
- * only here, the handle is cached on `globalThis` so Next.js dev-mode HMR
- * doesn't reopen it on every reload. Separate file from other DBs because
- * the schemas are unrelated and the lifecycle (delete with cascade) should
- * not entangle the two domains.
- *
- * File location: `~/.pi-work/scheduler.db` by default, override with
- * `PI_WORK_SCHEDULER_DB` env var.
- */
-
 import Database from "better-sqlite3";
 import { dirname } from "path";
 import { mkdirSync } from "fs";
@@ -70,14 +57,6 @@ const SCHEMA = `
     ON scheduled_tasks(enabled, next_run_at);
 `;
 
-/**
- * Additive migrations for DBs created before a column existed. `CREATE TABLE
- * IF NOT EXISTS` won't add a column to a table that already exists, so each
- * new column needs an explicit `ALTER TABLE ... ADD COLUMN` here.
- *
- * Each step is guarded by a column-existence check (via `PRAGMA table_info`)
- * so it's idempotent and safe to run on every open.
- */
 function runMigrations(db: Database.Database): void {
   const taskColumns = db.prepare("PRAGMA table_info(scheduled_tasks)").all() as Array<{ name: string }>;
   const hasMaxLifetime = taskColumns.some((c) => c.name === "max_lifetime_ms");
@@ -87,8 +66,6 @@ function runMigrations(db: Database.Database): void {
   }
   const hasTimezone = taskColumns.some((c) => c.name === "timezone");
   if (!hasTimezone) {
-    // Nullable temporarily: the API adopts the opening browser's timezone for
-    // legacy tasks, then persists it together with a corrected next_run_at.
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN timezone TEXT");
     log.info("migration: added scheduled_tasks.timezone column");
   }

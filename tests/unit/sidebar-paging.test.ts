@@ -111,7 +111,6 @@ describe("refreshLimit", () => {
 });
 
 describe("decideLoadMoreOnScroll", () => {
-  /** A list that scrolls; `distance` px remain below the viewport. */
   const metricsWithDistance = (distance: number): ScrollMetrics => ({
     scrollHeight: 5000,
     scrollTop: 5000 - 600 - distance,

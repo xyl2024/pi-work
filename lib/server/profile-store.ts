@@ -62,7 +62,6 @@ function writeAvatarMeta(meta: AvatarMeta): void {
 function cleanupAvatarFiles(): void {
   const dir = PROFILE_DIR;
   if (!existsSync(dir)) return;
-  // Legacy avatar.png plus every supported extension.
   const names = new Set<string>([`${AVATAR_BASE}.png`]);
   for (const ext of Object.values(MIME_TO_EXT)) names.add(`${AVATAR_BASE}.${ext}`);
   names.add("avatar.json");
@@ -92,10 +91,6 @@ function normalizeUsername(raw: unknown): string | null {
   return trimmed;
 }
 
-/**
- * Read the user profile from ~/.pi-work/profile/user.json.
- * Returns { username: null } when the file is missing or malformed.
- */
 export function readProfile(): UserProfile {
   try {
     if (!existsSync(USER_FILE)) return { username: null };
@@ -110,10 +105,6 @@ export function readProfile(): UserProfile {
   }
 }
 
-/**
- * Write the user profile to ~/.pi-work/profile/user.json.
- * Returns the normalized profile.
- */
 export function writeProfile(profile: UserProfile): UserProfile {
   ensureDir();
   const username = normalizeUsername(profile.username);
@@ -125,7 +116,6 @@ export function writeProfile(profile: UserProfile): UserProfile {
 export function getAvatar(): { buffer: Buffer; mime: string } | null {
   const meta = readAvatarMeta();
   const file = avatarFileForMime(meta.mime);
-  // Meta may point to a file that no longer exists (e.g. partial write); fall back to legacy png.
   if (!existsSync(file)) {
     const legacy = join(PROFILE_DIR, "avatar.png");
     if (!existsSync(legacy)) return null;
@@ -140,7 +130,6 @@ export function avatarExists(): boolean {
 
 export function writeAvatar(buffer: Buffer, mime: string = DEFAULT_AVATAR_MIME): void {
   ensureDir();
-  // Remove any previous avatar in another format before writing the new one.
   cleanupAvatarFiles();
   writeFileSync(avatarFileForMime(mime), buffer);
   writeAvatarMeta({ mime });

@@ -49,8 +49,6 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
   const userExpandedRef = useRef(false);
   const previousSearchMatchRef = useRef(isSearchMatch);
   useEffect(() => {
-    // Thinking blocks start collapsed. When a search highlight goes away,
-    // fold an untouched thinking block back up.
     if (previousSearchMatchRef.current && !isSearchMatch && !userExpandedRef.current) {
       setExpanded(false);
     }
@@ -79,17 +77,6 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const text = highlightTextAsHtml(block.thinking, keywords, isSearchMatch);
 
-  // ── "Flowing" folded preview (streaming tail view) ─────────────
-  // While this block is the live tail of a streaming message and stays
-  // folded, show the *newest line* of the thinking text and right-pin it to
-  // the cell edge — a pure-CSS news-ticker effect (flex +
-  // justify-content:flex-end + width:max-content), lifted from deepseek-
-  // harness's ReasoningRow. Each React commit just grows the text and the
-  // browser relayouts once: the overflow clips out through the left edge at
-  // the exact pace the model writes — no rAF/transform/catch-up animation
-  // to stutter or fight the stream. When the stream moves on (or the block
-  // is expanded) the attribute drops and the idle ellipsized head preview
-  // comes back. Clicking still folds/unfolds it.
   const flowing = Boolean(isStreaming) && !expanded;
   const streamingLine = useMemo(() => {
     const newline = block.thinking.lastIndexOf("\n");
@@ -159,14 +146,10 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 
 function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
   const { isDark } = useTheme();
-  // The tool-call-display module owns "what kind of call is this"; the block
-  // never compares tool names itself.
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
   const isFileMutation = toolKind === "file-mutation";
   const isCodemode = toolKind === "codemode";
-  // Only the specialized renderers (bash / diff for edit & write) stay
-  // expanded by default; every other tool call block collapses by default.
   const isSpecialized = isBash || isFileMutation;
   const isCollapsedByDefault = !isSpecialized;
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
@@ -184,9 +167,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const resultIsEmpty = isToolResultEmpty(result);
   const isError = result?.isError ?? false;
 
-  // Added/deleted line counts, including where each count comes from, are the
-  // tool-call-display module's policy (edit → result details' diff payload;
-  // write → the input content; errored calls → null). Never from git.
   const diffStats = useMemo(
     () => (isFileMutation ? toolCallDiffStats(block, result) : null),
     [isFileMutation, block, result],
@@ -242,9 +222,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   );
 
   if (isBash) {
-    // Bash blocks render their terminal-like content directly: no collapse,
-    // no header. The long output is capped inside BashToolCallContent with a
-    // click-to-expand mask instead.
     return (
       <div
         style={{
@@ -261,10 +238,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   }
 
   if (isCodemode) {
-    // Codemode blocks render like bash: no header, no JSON dump. The single
-    // `code` argument is shown as the input, JS-highlighted, with the script's
-    // text output below; the whole thing is capped inside
-    // CodemodeToolCallContent with a click-to-expand mask.
     return (
       <div
         style={{
@@ -374,9 +347,6 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
       }}
     >
       <div className="no-scrollbar" style={{ overflowX: "auto", padding: 0, scrollbarWidth: "none" }}>
-        {/* Keep the diff rows inside an inline-block that grows to the widest
-            line. Without this, each row only paints to the viewport width,
-            so its background disappears when scrolling horizontally. */}
         <div style={{ display: "inline-block", minWidth: "100%" }}>
           {lines.length > 0 ? lines.map((line, index) => (
             <div
@@ -452,10 +422,6 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
         <div style={{ color: dimFg }}>(timeout={timeout}s)</div>
       )}
       <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
-      {/* The command (the call's input) soft-wraps instead of scrolling
-          sideways: long commands are read, not re-run, so keeping them fully
-          visible matters more than preserving terminal column alignment. The
-          output below deliberately keeps its own layout. */}
       <SyntaxHighlighter
         language="bash"
         style={isDark ? vscDarkPlus : vs}
@@ -465,9 +431,6 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
       >
         {command}
       </SyntaxHighlighter>
-      {/* One blank line between the call's input and its output: a wrapped
-          command can span several lines, and without the gap the first line of
-          output reads like part of the command. */}
       {resultText !== null && (
         resultIsEmpty ? (
           <pre

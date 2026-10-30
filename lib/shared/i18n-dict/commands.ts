@@ -1,7 +1,3 @@
-// Command palette — titles for ⌘K commands (commands.tsx).
-// "Command palette" itself is here because the palette dialog title lives
-// in components/CommandPalette.tsx, not the chat layer.
-
 export const commands = {
   Session: "会话",
   Theme: "主题",

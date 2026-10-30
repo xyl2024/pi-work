@@ -10,14 +10,8 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/model-icon-preferences");
 
-/**
- * Upper bound on the provider / modelId identifiers accepted by the write
- * route. Real ids are far shorter; the cap keeps a stray client from growing
- * the preference file with huge keys (and its `provider:modelId` composite).
- */
 const MAX_IDENTIFIER_LENGTH = 200;
 
-// GET /api/model-icon-preferences → { preferences: { "provider:modelId": "provider" } }
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -30,7 +24,6 @@ export async function GET() {
   }
 }
 
-// PUT /api/model-icon-preferences { provider, modelId, preference } → { preferences }
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   let body: { provider?: unknown; modelId?: unknown; preference?: unknown };

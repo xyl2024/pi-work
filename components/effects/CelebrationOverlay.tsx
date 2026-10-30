@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * CelebrationOverlay — full-screen, pointer-transparent canvas that plays the
- * `celebrate` tool's animation (confetti rain / party cannons / grand finale).
- *
- * Mounted once from `app/page.tsx`, portalled to <body> above every modal.
- * It subscribes to `lib/client/celebrate-store.ts`; each trigger spawns
- * particles and keeps a requestAnimationFrame loop alive until the show ends
- * (spawning stops at `endAt`, the loop stops when the sky is empty), so there
- * is zero cost while idle.
- */
-
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { subscribeCelebration } from "@/lib/client/celebrate-store";
@@ -50,8 +39,6 @@ export function CelebrationOverlay() {
   const [mounted, setMounted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // All animation state lives in refs — the component itself never re-renders
-  // during a show).
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
   const spawnAccRef = useRef(0);
@@ -80,14 +67,8 @@ export function CelebrationOverlay() {
     endAtRef.current = endAt;
 
     const style = details.resolvedStyle ?? pick(CONCRETE_CELEBRATION_STYLES);
-    // Optional user-mapped sound (default silent; the style-synced SFX below
-    // are the built-in audio for the show). Rapid re-triggers are deduped by
-    // the player's min-gap, and autoplay policy is honored like other
-    // UI-sound events (silent until the first user gesture unlocks audio).
     playUiSoundEvent("celebrate");
-    // One cannon boom kicks off every show, regardless of visual style.
     playUiSoundEffect(CANNON_BOOM);
-    // Layer the new celebration on top of a running one instead of clearing it.
     activeStyleRef.current = style;
 
     switch (style) {
@@ -104,8 +85,6 @@ export function CelebrationOverlay() {
     }
     ensureLoop();
   }
-
-  // ── spawners ────────────────────────────────────────────────────────────
 
   function spawnConfetti(count: number, w: number): void {
     for (let i = 0; i < count; i++) {
@@ -138,7 +117,6 @@ export function CelebrationOverlay() {
       const fromLeft = i % 2 === 0;
       const x = fromLeft ? w * rand(0.02, 0.1) : w * rand(0.9, 0.98);
       const y = h - rand(4, 24);
-      // Aim up and toward the center of the screen.
       const spread = rand(-0.28, 0.28);
       const baseAngle = fromLeft ? -Math.PI / 2 + 0.42 : -Math.PI / 2 - 0.42;
       const angle = baseAngle + spread;
@@ -160,15 +138,12 @@ export function CelebrationOverlay() {
         swayPhase: rand(0, Math.PI * 2),
         color: pick(PALETTE),
         alpha: 1,
-        // Cannon pieces fade so lingering strays don't pile up on screen.
         decay: 0.0022,
         gravity: CANNON_GRAVITY,
         drag: CANNON_DRAG,
       });
     }
   }
-
-  // ── main loop ───────────────────────────────────────────────────────────
 
   function tick(now: number): void {
     const canvas = canvasRef.current;
@@ -182,7 +157,6 @@ export function CelebrationOverlay() {
     const spawning = now < endAtRef.current;
     const style = activeStyleRef.current;
 
-    // Continuous emission while the show is running.
     if (spawning && style) {
       if (style === "confetti" || style === "grand") {
         spawnAccRef.current += 1.6;
@@ -231,7 +205,6 @@ export function CelebrationOverlay() {
     ctx.globalAlpha = 1;
 
     if (!spawning && particles.length === 0) {
-      // Show over — park the loop; nothing renders until the next trigger.
       rafRef.current = null;
       activeStyleRef.current = null;
       ctx.clearRect(0, 0, w, h);

@@ -28,20 +28,6 @@ import {
 } from "./support/subagent-runtime";
 import { SUBAGENT_RESULT_WINDOW_DEFAULT } from "@/lib/shared/subagent";
 
-/**
- * Issue 08: end-to-end acceptance across the whole lifecycle.
- *
- * One continuous story per test, driven through the same external entries the
- * product uses — the `subagent` tool, the manual-input module, the REST
- * stop-all endpoint — over a real task manager and a temporary SQLite store,
- * with the turn seam scripted. The manager's own live-status query is used only
- * to prove that no turn is still running. Earlier tickets own the per-behaviour
- * assertions; this file only checks that the flows compose: a timed-out wait
- * becomes a background task you can find, wait on, continue, cancel precisely
- * and stop as a parent, and that manual and agent entries obey one shared set
- * of rules.
- */
-
 let dir: string;
 let seq = 0;
 
@@ -80,10 +66,6 @@ afterEach(() => {
   setSubagentTaskManagerForTests(null);
   setSubagentParentResolverForTests(null);
 });
-
-// ---------------------------------------------------------------------------
-// Seams
-// ---------------------------------------------------------------------------
 
 type ExecuteContext = Parameters<NonNullable<typeof subagentTool.execute>>[4];
 type ExecuteParams = Parameters<NonNullable<typeof subagentTool.execute>>[1];
@@ -152,30 +134,22 @@ function detailOf<T>(result: Awaited<ReturnType<typeof run>>): T {
   return result.details as T;
 }
 
-// ============================================================================
-// One delegated task, from a timed-out wait to a precise stop
-// ============================================================================
-
 describe("acceptance: one continuous delegation", () => {
   it("follows a task from wait expiry through discovery, result, continue and a precise cancel", async () => {
     const parent = unique("parent-flow");
     const { runner, manager } = setup();
 
-    // 1. Spawn with no wait: the task id is stable before the child exists and
-    // the task keeps running.
     const firstTask = await spawnTask(parent, "map the module");
     await runner.turns[0].acquire();
     const child = row(parent, firstTask).childSessionId!;
     expect(child).toBeTruthy();
 
-    // 2. An expired wait only ends the observation.
     const observed = await run({ action: "wait", task_id: firstTask, wait_ms: 0 }, parent);
     expect(observed.isError).toBeUndefined();
     expect(textOf(observed)).toContain("still running");
     expect(textOf(observed)).toContain("not cancelled");
     expect(manager.liveStatus(parent, firstTask)).toBe("running");
 
-    // 3. The background task is findable again through list/get.
     const listed = await run({ action: "list", status: "running", limit: 10 }, parent);
     const entries = detailOf<{ entries: Array<{ sessionId: string; taskCount: number; latestTask: { taskId: string } }> }>(listed).entries;
     expect(entries).toEqual([
@@ -188,7 +162,6 @@ describe("acceptance: one continuous delegation", () => {
     const got = await run({ action: "get", task_id: firstTask }, parent);
     expect(detailOf<{ detail: { task: { status: string } } }>(got).detail.task.status).toBe("running");
 
-    // 4. It finishes later; a second wait returns the landed result at once.
     await settle(runner.turns[0], child, "first answer");
     await manager.idle();
     const final = await run({ action: "wait", task_id: firstTask, wait_ms: 0 }, parent);
@@ -198,7 +171,6 @@ describe("acceptance: one continuous delegation", () => {
     expect(detailOf<{ waitExpired: boolean; status: string; result: string }>(final))
       .toMatchObject({ waitExpired: false, status: "completed", result: "first answer" });
 
-    // 5. Continue the same child session: new task id, old task untouched.
     const continued = await run(
       { action: "continue", session_id: child, prompt: "keep going", wait_ms: 0 },
       parent,
@@ -211,14 +183,12 @@ describe("acceptance: one continuous delegation", () => {
     await runner.turns[1].acquire();
     expect(row(parent, firstTask)).toMatchObject({ status: "completed", result: "first answer" });
 
-    // 6. A late cancel of the finished task is honest and touches nothing.
     const late = await run({ action: "cancel", task_id: firstTask }, parent);
     expect(late.isError).toBeUndefined();
     expect(detailOf<{ requested: boolean; status: string }>(late))
       .toMatchObject({ requested: false, status: "completed" });
     expect(manager.liveStatus(parent, secondTask)).toBe("running");
 
-    // 7. The child's history keeps both tasks, newest first, in one list row.
     await settle(runner.turns[1], child, "second answer");
     await manager.idle();
     const after = await run({ action: "list", limit: 10 }, parent);
@@ -230,8 +200,6 @@ describe("acceptance: one continuous delegation", () => {
       latestTask: { taskId: secondTask, status: "completed" },
     });
 
-    // 8. The parent's total stop cascades over a fresh background task through
-    // the same endpoint the UI uses.
     const thirdTask = await spawnTask(parent, "another job");
     await runner.turns[2].acquire();
     const { POST } = await import("@/app/api/sessions/[id]/subagents/stop-all/route");
@@ -241,7 +209,6 @@ describe("acceptance: one continuous delegation", () => {
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true, stopped: 1, stopping: true });
-    // Stopping is not stopped: the row waits for the turn to confirm.
     expect(row(parent, thirdTask).status).toBe("stopping");
     expect(manager.liveStatus(parent, thirdTask)).toBe("stopping");
 
@@ -255,15 +222,10 @@ describe("acceptance: one continuous delegation", () => {
     await manager.idle();
     expect(row(parent, thirdTask).status).toBe("cancelled");
     expect(manager.isStopping(parent)).toBe(false);
-    // The completed tasks were never rewritten by the cascade.
     expect(row(parent, firstTask).status).toBe("completed");
     expect(row(parent, secondTask).status).toBe("completed");
   });
 });
-
-// ============================================================================
-// Manual input and agent delegation share one rule set
-// ============================================================================
 
 describe("acceptance: manual and agent entries", () => {
   it("keeps one unfinished task per child and refuses new work during the parent's stop", async () => {
@@ -273,11 +235,9 @@ describe("acceptance: manual and agent entries", () => {
     await runner.turns[0].acquire();
     const child = row(parent, firstTask).childSessionId!;
 
-    // The user cannot type a second, overlapping turn into the busy child.
     expect(submitErrorCode(() => submitSubagentManualPrompt({ childSessionId: child, message: "me too" })))
       .toBe("busy");
 
-    // The parent's total stop enters a window that refuses both entries.
     expect(manager.stopAll(parent)).toMatchObject({ stopped: 1, stopping: true });
     expect(submitErrorCode(() => submitSubagentManualPrompt({ childSessionId: child, message: "me too" })))
       .toBe("stopping");
@@ -292,10 +252,8 @@ describe("acceptance: manual and agent entries", () => {
       parent,
     );
     expect(refusedSpawn.isError).toBe(true);
-    // No turn was started for either refusal.
     expect(runner.turns).toHaveLength(1);
 
-    // The stop is confirmed by the turn, then the window closes.
     await runner.turns[0].settle({
       status: "cancelled",
       text: "",
@@ -307,15 +265,12 @@ describe("acceptance: manual and agent entries", () => {
     expect(row(parent, firstTask).status).toBe("cancelled");
     expect(manager.isStopping(parent)).toBe(false);
 
-    // An explicit manual follow-up is now admitted as its own tracked task.
     const manual = submitSubagentManualPrompt({ childSessionId: child, message: "my own follow-up" });
     expect(manual.origin).toBe("manual");
     expect(manual.taskId).not.toBe(firstTask);
     await runner.turns[1].acquire();
     expect(manager.liveStatus(parent, manual.taskId)).toBe("running");
 
-    // ...and the agent's continue obeys the same busy rule in the reverse
-    // direction: a manual turn is not something continue may overlap.
     const refusedBusy = await run(
       { action: "continue", session_id: child, prompt: "overlap", wait_ms: 0 },
       parent,
@@ -324,7 +279,6 @@ describe("acceptance: manual and agent entries", () => {
     expect(textOf(refusedBusy)).toContain("busy");
     expect(runner.turns).toHaveLength(2);
 
-    // A late cancel of the earlier task does not touch the manual one.
     const late = await run({ action: "cancel", task_id: firstTask }, parent);
     expect(detailOf<{ requested: boolean; status: string }>(late))
       .toMatchObject({ requested: false, status: "cancelled" });
@@ -332,7 +286,6 @@ describe("acceptance: manual and agent entries", () => {
 
     await settle(runner.turns[1], child, "manual answer");
     await manager.idle();
-    // Both tasks stay readable and tell manual from delegated apart.
     const history = listSubagentTasksForChildSession(parent, child);
     expect(history.map((task) => [task.taskId, task.status, task.origin])).toEqual([
       [manual.taskId, "completed", "manual"],
@@ -347,10 +300,6 @@ describe("acceptance: manual and agent entries", () => {
     ]);
   });
 });
-
-// ============================================================================
-// Bounded results and the retired entry point
-// ============================================================================
 
 describe("acceptance: result boundaries and the old name", () => {
   it("returns a long result as a marked window that get can finish", async () => {
@@ -368,8 +317,6 @@ describe("acceptance: result boundaries and the old name", () => {
     expect(text).toContain("Subagent completed");
     expect(text).toContain("[truncated]");
     expect(text).toContain(`result_offset=${SUBAGENT_RESULT_WINDOW_DEFAULT}`);
-    // The returned details are bounded too, and say so instead of silently
-    // handing back a prefix.
     expect(detailOf<{ result: string; resultTruncated: boolean; resultNextOffset: number }>(waited))
       .toMatchObject({
         result: "x".repeat(SUBAGENT_RESULT_WINDOW_DEFAULT),

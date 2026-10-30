@@ -1,24 +1,3 @@
-/**
- * LLM API call audit capture layer.
- *
- * Design: a single process-level `globalThis.fetch` patch is the one true
- * recording point — it sees the actual HTTP request (URL + raw JSON body)
- * and the actual response (status, headers, and for non-2xx the full error
- * body). A thin ModelRuntime wrapper only stamps authoritative model metadata
- * (provider/modelId/api) into an AsyncLocalStorage context, and the
- * rpc-manager's `send()` wraps each command in that context so every fetch
- * can be attributed to a session.
- *
- * 2xx response bodies are deliberately NOT captured (they are SSE streams
- * consumed by the SDK); only non-2xx bodies are read (via `response.clone()`)
- * so the SDK still sees the original response and builds its APIError as
- * before. Success-path overhead is one timestamp + one insert.
- *
- * Server-only file: imports `@earendil-works/pi-ai` types and
- * `better-sqlite3` transitively. Client code must import types from
- * `lib/llm-audit-types.ts` instead.
- */
-
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createLogger } from "./logger";
@@ -31,36 +10,16 @@ import type { CallPurpose } from "../shared/token-audit-types";
 
 const log = createLogger("llm-audit");
 
-/** Per-command audit context carried through the whole prompt/stream chain. */
 export interface LlmAuditContext {
   sessionId: string | null;
   source: LlmAuditSource | null;
-  /** What the call is for (chat by default; direct callers set their own; compaction/branch summaries are detected from the SDK request). */
   purpose?: CallPurpose;
-  /** Session cwd at command time. */
   cwd: string | null;
-  /** Session display name at command time, if any. */
   sessionName: string | null;
-  /** Authoritative model metadata stamped by the ModelRuntime wrapper. */
   model: { provider: string; modelId: string; api: string | null } | null;
-  /** Retry ordinal, incremented by the wrapper on each provider attempt. */
   attempt: number;
-  /**
-   * Logical model call currently in flight (from the metrics wrapper). Stamped
-   * on every captured request so it can be traced back to the assistant
-   * message that call produced; `null` between calls.
-   */
   callId: string | null;
 }
-
-// ── Cross-module state ────────────────────────────────────────────────────
-// All of this lives on `globalThis` (not module scope) because Next.js dev
-// HMR re-evaluates this module while the already-installed fetch patch keeps
-// running. A module-scoped Set/ALS would silently desync: the new module
-// writes hostnames/context into ITS instances while the old patch reads the
-// OLD ones → no hostname match (nothing recorded) and no session attribution
-// (every call logged as unknown). globalThis keeps a single shared instance
-// across every HMR incarnation.
 
 declare global {
   var __piLlmAuditHosts: Set<string> | undefined;
@@ -78,15 +37,10 @@ function getAls(): AsyncLocalStorage<LlmAuditContext> {
   return globalThis.__piLlmAuditAls;
 }
 
-/**
- * Shared AsyncLocalStorage. Access it via `getLlmAuditAls()` so HMR never
- * splits writers and readers across two ALS instances.
- */
 export function getLlmAuditAls(): AsyncLocalStorage<LlmAuditContext> {
   return getAls();
 }
 
-/** Run a function (typically `wrapper.send(...)`) inside an audit context. */
 export function runWithLlmAuditContext<T>(
   ctx: Omit<LlmAuditContext, "model" | "attempt" | "callId">,
   fn: () => Promise<T>,
@@ -94,19 +48,10 @@ export function runWithLlmAuditContext<T>(
   return getAls().run({ ...ctx, model: null, attempt: 0, callId: null }, fn);
 }
 
-/**
- * Read the model-call context (session/source/purpose) for the call starting
- * now. Outside an audited command there is no session/source to attach, but a
- * request that identifies an SDK summarization call still keeps its purpose;
- * otherwise the call is recorded with `unknown` source/purpose.
- */
 export function resolveModelCallContext(context?: unknown): ModelCallContext | null {
   const detectedPurpose = summarizationPurpose(context);
   const store = getLlmAuditAls().getStore();
   if (!store) {
-    // Outside an audited command we still know what the SDK asked for (e.g. a
-    // compaction started by a process-level routine), so keep that purpose
-    // instead of discarding it with the missing session association.
     return detectedPurpose
       ? { sessionId: null, source: "unknown", purpose: detectedPurpose }
       : null;
@@ -119,21 +64,13 @@ export function resolveModelCallContext(context?: unknown): ModelCallContext | n
   };
 }
 
-// ── Provider host allowlist ────────────────────────────────────────────────
-
 function addHost(baseUrl: string): void {
   try {
     getHosts().add(new URL(baseUrl).hostname);
   } catch {
-    // unparseable baseUrl — skip
   }
 }
 
-/**
- * Collect LLM provider hostnames from every registered provider and model so
- * the fetch patch only touches actual LLM traffic and never interferes with
- * the app's own fetches.
- */
 export function collectProviderHosts(runtime: ModelRuntime): void {
   try {
     const hosts = getHosts();
@@ -153,8 +90,6 @@ function isProviderHost(hostname: string): boolean {
   return getHosts().has(hostname);
 }
 
-// ── Header handling ────────────────────────────────────────────────────────
-
 function headersToRecord(headers: Headers): Record<string, string> {
   const rec: Record<string, string> = {};
   headers.forEach((v, k) => {
@@ -168,7 +103,6 @@ function maskSecret(value: string): string {
   return `${value.slice(0, 8)}...${value.slice(-4)}`;
 }
 
-/** Serialize request headers as JSON with sensitive values masked. */
 function safeRequestHeaders(headersInit: HeadersInit | undefined): string | null {
   if (!headersInit) return null;
   const rec: Record<string, string> = {};
@@ -192,8 +126,6 @@ function safeRequestHeaders(headersInit: HeadersInit | undefined): string | null
   }
   return JSON.stringify(rec);
 }
-
-// ── Fallback inference (only used when the audit context has no model) ────
 
 const KNOWN_PROVIDER_HOSTS: Record<string, string> = {
   "api.anthropic.com": "anthropic",
@@ -237,8 +169,6 @@ function inferModelIdFromBody(body: string | null): string | null {
   }
 }
 
-// ── Response body read (non-2xx only, bounded) ────────────────────────────
-
 const MAX_ERROR_BODY_BYTES = 512 * 1024;
 
 async function readBodyBounded(response: Response, maxBytes: number): Promise<string> {
@@ -260,23 +190,15 @@ async function readBodyBounded(response: Response, maxBytes: number): Promise<st
       }
     }
   } catch {
-    // stream aborted/errored — return what we have
   }
   if (chunks.length === 0) return "";
   return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString("utf8");
 }
 
-// ── ModelRuntime wrapper ───────────────────────────────────────────────────
-
 declare global {
   var __piLlmAuditModelRuntime: ModelRuntime | undefined;
 }
 
-/**
- * Wrap a ModelRuntime so every stream call stamps authoritative model
- * metadata (and bumps the retry counter) into the current audit context.
- * All other methods pass through untouched via Proxy.
- */
 export function wrapModelRuntime(runtime: ModelRuntime): ModelRuntime {
   collectProviderHosts(runtime);
   const wrapped = new Proxy(runtime, {
@@ -301,16 +223,10 @@ export function wrapModelRuntime(runtime: ModelRuntime): ModelRuntime {
   return wrapped as unknown as ModelRuntime;
 }
 
-/** Get (and lazily create) the process-wide shared wrapped ModelRuntime. */
 export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
   if (!globalThis.__piLlmAuditModelRuntime) {
-    // Outer layer: logical call metrics (TTFT/generation window/usage).
-    // Inner layer: the API audit wrapper that stamps provider/model/attempt
-    // into the context before the provider request is issued.
     globalThis.__piLlmAuditModelRuntime = wrapModelCallMetrics(wrapModelRuntime(runtime), {
       resolveContext: resolveModelCallContext,
-      // The metrics layer owns the call id; the audit context is what the fetch
-      // patch reads, so publish it here while the call is in flight.
       bindCallId: (callId) => {
         const store = getLlmAuditAls().getStore();
         if (store) store.callId = callId;
@@ -320,11 +236,6 @@ export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
   return globalThis.__piLlmAuditModelRuntime;
 }
 
-/**
- * Reload models.json (and the persisted model catalog) in the shared runtime
- * after an in-process config write or a catalog refresh. When `providers` is
- * given, only those providers are recomposed and re-read from the store.
- */
 export async function refreshAuditModelRuntime(options: { providers?: string[] } = {}): Promise<boolean> {
   const runtime = globalThis.__piLlmAuditModelRuntime;
   if (!runtime) return false;
@@ -333,15 +244,6 @@ export async function refreshAuditModelRuntime(options: { providers?: string[] }
   return true;
 }
 
-// ── Empty-stream diagnostics ───────────────────────────────────────────────
-
-/**
- * Consume a clone of an SSE provider response without retaining its content.
- * We only emit a diagnostic when a stream terminates normally without any text
- * or tool-call delta. That is the ambiguous case behind a persisted empty
- * assistant reply: the metadata distinguishes an upstream empty stream from a
- * later Pi/adapter transformation, without putting model output in logs.
- */
 function observeEmptySseTerminal(
   response: Response,
   meta: { sessionId: string | null; provider: string | null; modelId: string | null; api: string | null; attempt: number },
@@ -385,7 +287,6 @@ function observeEmptySseTerminal(
           terminalReasons.add(event.status);
         }
       } catch {
-        // Providers may send non-JSON keepalives. Never interfere with pi's stream.
       }
     };
 
@@ -414,18 +315,6 @@ function observeEmptySseTerminal(
   })();
 }
 
-// ── fetch patch ────────────────────────────────────────────────────────────
-
-/**
- * Install the process-level fetch patch.
- *
- * NOT idempotent-guarded with a module-scoped flag: on HMR the module
- * re-evaluates and must REPLACE the previously installed patch (whose closure
- * references the OLD module's functions), otherwise the old closure's
- * stale references keep running. We always re-install against the pristine
- * native fetch saved on `globalThis`, so the wrapper stack stays one layer
- * deep no matter how many times the module reloads.
- */
 export function installLlmFetchAudit(): void {
   if (!globalThis.__piLlmFetchOrig) {
     globalThis.__piLlmFetchOrig = globalThis.fetch;
@@ -472,7 +361,6 @@ export function installLlmFetchAudit(): void {
         try {
           responseBody = await readBodyBounded(response.clone(), MAX_ERROR_BODY_BYTES);
         } catch {
-          // body read failed — keep null, never break the original flow
         }
       }
       try {
@@ -499,8 +387,6 @@ export function installLlmFetchAudit(): void {
       } catch (e) {
         log.warn("llm-audit insert failed", { error: String(e) });
       }
-      // A cloned reader observes only protocol metadata and runs independently
-      // of the SDK's consumer. It never stores model text or tool arguments.
       observeEmptySseTerminal(response.clone(), { sessionId, provider, modelId, api, attempt });
       return response;
     } catch (error) {
@@ -533,9 +419,4 @@ export function installLlmFetchAudit(): void {
   };
 }
 
-// Install eagerly at module load. On HMR the module re-evaluates and this
-// re-installs the patch with the LATEST closure (fresh globalThis-backed
-// hosts/ALS), replacing any stale wrapper left behind by the previous
-// incarnation. Without this, a reloaded module's new code never takes effect
-// until the next startRpcSession call.
 installLlmFetchAudit();

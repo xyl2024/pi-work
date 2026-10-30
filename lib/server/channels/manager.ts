@@ -3,8 +3,6 @@ import { getChannel, updateChannel } from "./db";
 
 const log = createLogger("channels/manager");
 
-/** Runtime registry for channel workers. Workers are intentionally injected so
- * provider-specific implementations do not leak into the generic channel DB. */
 export interface ChannelWorker {
   start(): void;
   stop(): void;
@@ -33,16 +31,6 @@ export function stopChannel(channelId: string): void {
   log.info("channel worker stopped", { channelId });
 }
 
-/**
- * Enable (status → connected + start worker) or disable (stop worker +
- * status → disabled) a channel.
- *
- * `pending` / `expired` channels cannot be enabled — both must go through
- * a (re)scan, and the disable path is always allowed. Enabling a disabled
- * channel whose worker was never registered (e.g. after a process restart)
- * is rejected; callers should `registerWorker` first — see
- * `ensureWeChatWorkerRunning` in `wechat-worker.ts`.
- */
 export function setEnabled(channelId: string, enabled: boolean): boolean {
   const channel = getChannel(channelId);
   if (!channel) return false;

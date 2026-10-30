@@ -1,9 +1,3 @@
-/**
- * /api/scheduled-tasks — CRUD on scheduled tasks.
- *
- * A single route file with GET, POST, PATCH, DELETE. Each mutation calls
- * `reschedule()` so the loop picks up changes immediately.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
@@ -24,8 +18,6 @@ const log = createLogger("api/scheduled-tasks");
 export async function GET(req: Request) {
   const startedAt = Date.now();
   try {
-    // The browser supplies its IANA zone so tasks created before the timezone
-    // column existed can be repaired on their first scheduler-page load.
     const repairedLegacyTasks = adoptLegacyTaskTimezone(req.headers.get("x-pi-work-timezone"));
     const tasks = listTasks();
     if (repairedLegacyTasks) reschedule();

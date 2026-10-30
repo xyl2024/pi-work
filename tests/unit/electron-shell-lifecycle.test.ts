@@ -1,13 +1,3 @@
-// The Electron shell's lifetime rules (electron-shell/lifecycle.js) are pure:
-// visibility, "is a quit in progress" and "is there a tray icon" arrive as
-// arguments, so both branches are driven from here without launching Electron.
-// Same shape as tests/unit/electron-shell-window-rules.test.ts.
-//
-// What is worth guarding: the window's visibility and the app's lifetime are
-// two different things. The 定时任务 / 频道 loops run inside the
-// server process the shell owns, so closing the window must hide it rather than
-// end anything; only a quit may take the process tree down (#89). The tray menu
-// is the window's only way back, because the shell has no other UI of its own.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +14,6 @@ import {
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const read = (file: string) => readFileSync(path.join(repoRoot, file), "utf8");
 
-/** The menu entry with this id, or a failure naming what was actually there. */
 function item(menu: Array<{ id?: string; label?: string; type?: string }>, id: string) {
   const found = menu.find((entry) => entry.id === id);
   if (!found) throw new Error(`no ${id} in [${menu.map((entry) => entry.id ?? entry.type).join(", ")}]`);
@@ -37,14 +26,10 @@ describe("windowCloseAction", () => {
   });
 
   it("really closes the window once a quit is in progress", () => {
-    // The quit path closes windows itself; preventing that close would cancel
-    // the quit (and with it the `will-quit` that reaps the server).
     expect(windowCloseAction({ isQuitting: true, hasTray: true })).toBe("close");
   });
 
   it("never hides the window when no tray can bring it back", () => {
-    // A hidden window with no way back is an app running with no UI at all —
-    // worse than ending it, because the user cannot even get to "退出".
     expect(windowCloseAction({ isQuitting: false, hasTray: false })).toBe("close");
   });
 });
@@ -73,8 +58,6 @@ describe("windowShowsOnStart", () => {
   });
 
   it("shows the window whenever someone asks for it later", () => {
-    // The tray's toggle, a second launch and the error page's retry all go
-    // through startApp: a `--hidden` autostart must not make those permanent.
     expect(windowShowsOnStart({ launchHidden: true, hasStarted: true })).toBe(true);
     expect(windowShowsOnStart({ launchHidden: false, hasStarted: true })).toBe(true);
   });
@@ -97,9 +80,6 @@ describe("trayMenu", () => {
   });
 
   it("announces the direction it will take", () => {
-    // Label and action are one decision: an item that says 隐藏窗口 while the
-    // handler shows the window (or the other way round) is a lie the user acts
-    // on. The wording itself is pinned above; this pins the pairing.
     for (const windowVisible of [true, false]) {
       const toggle = item(trayMenu({ windowVisible }), TRAY_ITEM.TOGGLE_WINDOW);
       expect(toggle.label === "隐藏窗口").toBe(windowToggleAction({ windowVisible }) === "hide");
@@ -114,8 +94,6 @@ describe("trayMenu", () => {
   });
 
   it("keeps the reload item while the window sits on the error page", () => {
-    // Reload is the recovery path for a server that went away, so it must not
-    // depend on the window being visible or the app being healthy.
     for (const windowVisible of [true, false]) {
       expect(item(trayMenu({ windowVisible }), TRAY_ITEM.RELOAD).label).toBe("重新加载");
     }
@@ -129,15 +107,10 @@ describe("trayMenu", () => {
   });
 });
 
-// ADR-0003 rule 3: a rule module takes its inputs as parameters instead of
-// reading them. Here that is what lets the hidden-window branch be driven on a
-// machine with no tray and no Electron, and it is why main.js — the half that
-// cannot be unit-tested — is the only place that reads process.*.
 describe("lifecycle.js stays a rule module", () => {
   const source = read("electron-shell/lifecycle.js");
 
   it("never reads process.platform or process.env itself", () => {
-    // Comments legitimately discuss both, so only code lines are checked.
     const code = source
       .split("\n")
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
@@ -146,17 +119,11 @@ describe("lifecycle.js stays a rule module", () => {
   });
 
   it("imports no Electron and no other module", () => {
-    // It is loaded by the Electron main process as plain CommonJS and by these
-    // tests as plain ESM: no bundler, no path aliases, no Electron object.
     expect(source).not.toMatch(/require\(["']electron["']\)/);
     expect(source).not.toMatch(/^\s*const .*=\s*require\(/m);
   });
 });
 
-// The wiring half. Electron cannot be driven from vitest, so what is pinned
-// here is the shape main.js must keep: the decisions stay in the module, and
-// nothing but a quit may end the server process (which is what carries the
-// background loops). The interactions themselves are on #94's smoke checklist.
 describe("main.js wires the lifetime rules", () => {
   const main = read("electron-shell/main.js");
   const code = main
@@ -177,14 +144,10 @@ describe("main.js wires the lifetime rules", () => {
   });
 
   it("does not keep a second copy of the tray labels", () => {
-    // One place decides both the wording and what the item does.
     expect(code).not.toMatch(/["'](显示窗口|隐藏窗口|重新加载)["']/);
   });
 
   it("ends the server process only on quit", () => {
-    // Two call sites and no more: `will-quit`, and the reap for a child that
-    // finished spawning after a quit had already started. A third one would be
-    // a path that stops 定时任务 / 频道 without anyone asking.
     expect(code.match(/stopServer\(\);/g)).toHaveLength(2);
   });
 });

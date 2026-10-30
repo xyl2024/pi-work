@@ -47,7 +47,6 @@ function atomicReplace(filePath: string, content: string, tmpPath: string): void
     try {
       unlinkSync(tmpPath);
     } catch {
-      // Ignore cleanup failures; preserve the original mutation error.
     }
     throw error;
   }
@@ -60,11 +59,6 @@ export async function renameSession(
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
 
-  // Update the name in place instead of appending a new session_info entry.
-  // appendSessionInfo() writes the entry with parentId = current leaf and
-  // advances the leaf to it, so renaming used to add a stray node to the
-  // branch tree (and, on reload, made later messages hang off it). Rewriting
-  // the existing entry keeps the tree structure untouched.
   const cleanName = name.replace(/[\r\n]+/g, " ").trim();
   const raw = readFileSync(filePath, "utf8");
   const lines = raw.split("\n");
@@ -77,7 +71,6 @@ export async function renameSession(
         break;
       }
     } catch {
-      // Skip malformed lines.
     }
   }
 
@@ -85,23 +78,13 @@ export async function renameSession(
     const entry = JSON.parse(lines[lastInfoIdx]) as Record<string, unknown>;
     entry.name = cleanName;
     lines[lastInfoIdx] = JSON.stringify(entry);
-    // Atomic replace: write a temp file in the same dir, then rename over.
-    // Avoids readers (sidebar, GET) observing a truncated file mid-write.
     atomicReplace(filePath, lines.join("\n"), `${filePath}.rename.tmp`);
   } else {
-    // First naming: the session has no session_info entry yet, and the name
-    // must live in one for getSessionName()/listAllSessions() to see it.
     const sm = SessionManager.open(filePath);
     sm.appendSessionInfo(cleanName);
   }
 
   invalidateSessionListCache();
-  // Mirror the name into the sidecar index so listAllSessionsHeaderOnly
-  // (and any future API bypass of the full scan) can recover the latest
-  // name without re-reading the JSONL. Failure here must not surface as a
-  // rename error: the JSONL has already been updated above, and the
-  // sidebar's header-only reader will fall back to firstMessage for the
-  // session until the next rename / setSessionName repopulates the sidecar.
   try {
     writeSessionName(sessionId, cleanName);
   } catch (err) {
@@ -120,18 +103,14 @@ export async function deleteSession(
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
 
-  // Read header before deleting to get parentSession path.
   const firstLine = readFileSync(filePath, "utf8").split("\n")[0];
   let parentSessionPath: string | undefined;
   try {
     const header = JSON.parse(firstLine) as { type?: string; parentSession?: string };
     if (header.type === "session") parentSessionPath = header.parentSession;
   } catch {
-    // Ignore malformed headers, matching the previous route behavior.
   }
 
-  // Re-attach all direct children to this session's parent (cascade re-parent).
-  // Scan sibling files in the same directory.
   const dir = filePath.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
   let reparentedChildren = 0;
   try {
@@ -145,24 +124,16 @@ export async function deleteSession(
         if (header.type === "session" && header.parentSession === filePath) {
           header.parentSession = parentSessionPath;
           lines[0] = JSON.stringify(header);
-          // Keep child JSONL rewrites atomic so readers never observe a
-          // truncated session while cascade re-parenting is in progress.
           atomicReplace(childPath, lines.join("\n"), `${childPath}.reparent.tmp`);
           reparentedChildren += 1;
         }
       } catch {
-        // Skip malformed or unreadable child sessions.
       }
     }
   } catch {
-    // Skip cascade re-parenting if the directory is unreadable.
   }
 
   await destroyRunningSession(sessionId);
-  // Deleting the parent ends its delegation too: unfinished child tasks would
-  // otherwise outlive the session that owns them with no place to report back.
-  // This is intentionally deletion-only — closing the tab or reaping an idle
-  // wrapper must leave background tasks running.
   const { stopAllSubagentTasksForParent, SUBAGENT_PARENT_DELETED } = await import(
     "@/lib/server/subagent-tasks"
   );

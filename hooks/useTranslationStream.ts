@@ -16,41 +16,12 @@ export interface TranslationStream {
   output: string;
   isStreaming: boolean;
   error: string | null;
-  /** Begin (or restart) a translation. If a request is already in flight it
-   *  is aborted first. Resets `output` and `error` before kicking off. */
   start: (params: TranslationStartParams) => void;
-  /** Abort the in-flight request, if any. The hook leaves `output` /
-   *  `error` untouched so the caller decides what to display afterwards
-   *  (typically a partial translation). */
   stop: () => void;
-  /** Setter exposed for rehydration / manual reset (e.g. restoring a
-   *  persisted translation when a tab re-opens). Does NOT abort an
-   *  in-flight request — call `stop()` first if needed. */
   setOutput: (value: string) => void;
-  /** Clear the most recent error without starting a new request. Used
-   *  by TranslatePanel's external-push subscriber so a fresh push
-   *  from the chat toolbar wipes any prior failure before auto-fire. */
   clearError: () => void;
 }
 
-/**
- * Shared streaming-translation client used by both the right-side
- * TranslatePanel and the chat text-selection TranslateBubble.
- *
- * Encapsulates the POST against /api/translate, the SSE framing
- * (`delta` / `error` / `done`), the AbortController wiring, and the
- * final trim() applied to the accumulated output. The hook owns its own
- * `output` / `isStreaming` / `error` state; callers render whatever
- * shape they like.
- *
- * Errors are also surfaced as a toast (matching TranslatePanel's prior
- * behaviour) so the failure is visible even when the consuming surface
- * is dismissed or off-screen. Aborts are *not* toasted — that's an
- * intentional user action, not a failure.
- *
- * SSR-safe: no DOM access at module load. The fetch only runs when the
- * caller invokes `start()`.
- */
 export function useTranslationStream(): TranslationStream {
   const { t } = useI18n();
   const toast = useToast();
@@ -63,9 +34,6 @@ export function useTranslationStream(): TranslationStream {
     abortRef.current?.abort();
   }, []);
 
-  // React guarantees state setters are stable references, so listing
-  // them in the dep array (as the eslint rule asks) keeps the
-  // callback's referential identity stable across renders.
   const setOutput = useCallback((value: string) => {
     setOutputState(value);
   }, []);
@@ -75,7 +43,6 @@ export function useTranslationStream(): TranslationStream {
   }, []);
 
   const start = useCallback(async (params: TranslationStartParams) => {
-    // Replace any in-flight request.
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -114,13 +81,8 @@ export function useTranslationStream(): TranslationStream {
           } else if (payload.type === "error") {
             throw new Error(payload.message || t("Translation failed"));
           }
-          // "done" → loop exits on next read returning done.
         }
       }
-      // Strip leading/trailing whitespace (spaces, tabs, newlines) from
-      // the final accumulated translation. Models frequently pad the
-      // response with surrounding newlines; without this, the user sees
-      // a blank line before/after the actual translation.
       setOutputState((o) => o.trim());
     } catch (e) {
       if ((e as { name?: string })?.name === "AbortError") return;
@@ -128,8 +90,6 @@ export function useTranslationStream(): TranslationStream {
       setError(msg);
       toast.show({ kind: "error", message: msg || t("Translation failed") });
     } finally {
-      // Only reset if we're still the active controller — a newer
-      // translation may have taken over while we were unwinding.
       if (abortRef.current === ctrl) {
         abortRef.current = null;
         setIsStreaming(false);
@@ -137,7 +97,6 @@ export function useTranslationStream(): TranslationStream {
     }
   }, [toast, t, setOutput]);
 
-  // Abort any in-flight request on unmount.
   useEffect(() => () => {
     abortRef.current?.abort();
   }, []);

@@ -3,16 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * The channel adapter's call attribution (issue 03).
- *
- * A WeChat inbound message must reach the turn module as `source: "user"`
- * (the sender drove it) plus `purpose: "channel"` (so it is not mistaken for
- * ordinary chat), on both the cold-start and reuse branches. The turn itself
- * is mocked: this file pins the adapter's contract, while the metrics
- * acceptance test drives the same `runTurnRpcSession` seam end-to-end.
- */
-
 const mocks = vi.hoisted(() => ({
   runTurnRpcSession: vi.fn(),
   getChannel: vi.fn(),
@@ -109,10 +99,8 @@ describe("wechat inbound call attribution", () => {
       purpose: "channel",
       session: { kind: "fresh" },
       toolNames: "all",
-      // 消息来源：频道入站消息必须带上频道 origin（id + provider + 名称快照）。
       origin: { kind: "channel", channelId: "ch-1", provider: "wechat", name: "测试频道" },
     });
-    // prompt 文本逐字节不变——origin 是独立字段，不掺进消息文本。
     expect(spec.prompt).toBe("hello");
     expect(mocks.sendTextMessage).toHaveBeenCalledWith(
       expect.objectContaining({ text: "channel reply", to: "u-1" }),
@@ -138,7 +126,6 @@ describe("wechat inbound call attribution", () => {
       session: { kind: "reuse", sessionId: "existing-session" },
       origin: { kind: "channel", channelId: "ch-1", provider: "wechat", name: "测试频道" },
     });
-    // A reuse turn must not overwrite the session's recorded tool selection.
     expect(spec.toolNames).toBeUndefined();
   });
 });

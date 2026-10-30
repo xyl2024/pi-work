@@ -1,15 +1,4 @@
-/**
- * Curated set of lucide icon names offered for per-cwd custom icons.
- *
- * This module is plain data (no lucide-react import) so it can be used in
- * lib/shared (browser-safe, no Node APIs) AND by the server API route for
- * validation. The client component map (components/files/cwd-icon-map.ts) is
- * GENERATED from this list by scripts/gen-cwd-icon-map.mjs — re-run that
- * script after editing here. Every name must be a real export of the
- * installed lucide-react.
- */
 export const CWD_ICON_NAMES = [
-  // ── Folder family ────────────────────────────────────────────────
   "Folder",
   "FolderOpen",
   "FolderClosed",
@@ -78,7 +67,6 @@ export const CWD_ICON_NAMES = [
   "FileX",
   "FileX2",
   "File",
-  // ── Containers / infra / packages ───────────────────────────────
   "Box",
   "Boxes",
   "Package",
@@ -128,7 +116,6 @@ export const CWD_ICON_NAMES = [
   "RectangleVertical",
   "Square",
   "SquarePlus",
-  // ── Git / dev ────────────────────────────────────────────────────
   "GitBranch",
   "GitBranchPlus",
   "GitCommit",
@@ -170,7 +157,6 @@ export const CWD_ICON_NAMES = [
   "ToggleRight",
   "Wrench",
   "CircleDot",
-  // ── Web / network / cloud ────────────────────────────────────────
   "Globe",
   "Globe2",
   "GlobeLock",
@@ -202,7 +188,6 @@ export const CWD_ICON_NAMES = [
   "KeyRound",
   "KeySquare",
   "Fingerprint",
-  // ── Devices / hardware ───────────────────────────────────────────
   "Smartphone",
   "Tablet",
   "Laptop",
@@ -222,7 +207,6 @@ export const CWD_ICON_NAMES = [
   "Rocket",
   "Satellite",
   "SatelliteDish",
-  // ── AI / robot / creative tools ──────────────────────────────────
   "Bot",
   "BotMessageSquare",
   "BotOff",
@@ -261,7 +245,6 @@ export const CWD_ICON_NAMES = [
   "Scissors",
   "Hammer",
   "Drill",
-  // ── Docs / knowledge / education ─────────────────────────────────
   "Book",
   "BookOpen",
   "BookOpenText",
@@ -292,7 +275,6 @@ export const CWD_ICON_NAMES = [
   "Inbox",
   "Mail",
   "MailOpen",
-  // ── Projects / planning / status ─────────────────────────────────
   "ClipboardCheck",
   "ClipboardMinus",
   "ClipboardPlus",
@@ -336,7 +318,6 @@ export const CWD_ICON_NAMES = [
   "ChartArea",
   "ChartGantt",
   "ChartNoAxesColumn",
-  // ── Travel / location / nature / misc ────────────────────────────
   "Map",
   "MapPin",
   "MapPinned",
@@ -395,7 +376,6 @@ export type CwdIconName = (typeof CWD_ICON_NAMES)[number];
 
 const NAME_SET: ReadonlySet<string> = new Set<string>(CWD_ICON_NAMES);
 
-/** True when `name` is one of the curated cwd icon names. */
 export function isIconName(name: string): name is CwdIconName {
   return NAME_SET.has(name);
 }

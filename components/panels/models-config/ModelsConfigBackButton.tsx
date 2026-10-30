@@ -3,11 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { modelsConfigBack } from "@/lib/client/models-config-store";
 
-/**
- * The panel's "up one level" control. Every page above the provider list draws
- * one so the page stack is navigable with the mouse, matching what Escape does
- * with the keyboard.
- */
 export function ModelsConfigBackButton() {
   const { t } = useI18n();
   return (

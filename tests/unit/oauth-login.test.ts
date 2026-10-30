@@ -9,13 +9,6 @@ import {
 } from "@/lib/client/oauth-login";
 import type { OAuthLoginState } from "@/lib/shared/models-config";
 
-/**
- * The OAuth login state machine (lib/client/oauth-login.ts): the SSE protocol
- * messages and the transport facts arrive one at a time, and the phase must
- * move to exactly the right place — including the reset paths and the
- * "stream dropped after success" guard. Driven as plain data, no browser.
- */
-
 describe("parseOAuthLoginEvent", () => {
   it("maps each protocol message to its event", () => {
     expect(parseOAuthLoginEvent({ type: "auth", url: "https://x", instructions: null, token: "t" })).toEqual({

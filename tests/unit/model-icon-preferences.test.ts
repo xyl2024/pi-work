@@ -2,16 +2,6 @@ import { afterAll, describe, expect, it } from "vitest";
 import { api, uniqueId } from "./helpers";
 import { normalizeModelIconPreferences } from "@/lib/shared/model-icon-match";
 
-/**
- * 图标偏好 (model icon preferences) contract seam, driven through real HTTP
- * against the isolated instance:
- *  - /api/model-icon-preferences GET/PUT (whole-map response),
- *  - /api/models.modelIconPreferences (whole map, always present).
- *
- * Policy: snapshot the original map, mutate only uniquely keyed entries,
- * restore everything in afterAll. The JSON file is never read directly.
- */
-
 type Preferences = Record<string, string>;
 
 let original: Preferences | undefined;
@@ -69,7 +59,6 @@ describe("model icon preferences api", () => {
     expect(set.status).toBe(200);
     expect((set.body.preferences as Preferences)[key]).toBe("provider");
 
-    // Whole map comes back from PUT, so the client needs no second request.
     const afterSet = await preferences();
     expect(afterSet[key]).toBe("provider");
     expect((await modelsPreferences())[key]).toBe("provider");

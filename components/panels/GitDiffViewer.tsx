@@ -2,14 +2,6 @@
 
 import { useI18n } from "@/hooks/useI18n";
 
-/**
- * Shared renderer for unified diff text, used by both GitDiffView
- * (worktree / staged changes) and GitLogView (a file inside a commit).
- * Pure presentational: receives the already-truncated diff + the
- * truncation flag and paints classifyLine-style colored rows.
- */
-
-/** One line of a unified diff, classified for coloring. */
 type DiffLineType = "file" | "hunk" | "add" | "del" | "meta" | "context";
 
 function classifyLine(line: string): DiffLineType {
@@ -40,9 +32,6 @@ export function GitDiffViewer({ diff, truncated }: { diff: string; truncated: bo
           {t("Diff truncated")}
         </div>
       )}
-      {/* Wrapper is `inline-block` so it grows with the widest line;
-          `minWidth: 100%` keeps short content filling the viewport.
-          Child divs are plain `block` and stretch to this wrapper. */}
       <div style={{ display: "inline-block", minWidth: "100%" }}>
         {lines.map((line, i) => {
           const type = classifyLine(line);

@@ -40,7 +40,7 @@ export function AudioViewer({ filePath }: { filePath: string }) {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
         if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+      } catch {}
       setDuration(null);
       setError(null);
       setBust((b) => b + 1);

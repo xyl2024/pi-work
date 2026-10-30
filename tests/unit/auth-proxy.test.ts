@@ -1,12 +1,3 @@
-/**
- * The auth gateway itself (proxy.ts), driven directly with NextRequest — the
- * only way to observe the desktop track without running the shell: the
- * isolated instance the interface tests hit always runs on the server track.
- *
- * What the acceptance asks of the gateway is exactly this: /api without a
- * credential → 401, with the shell's cookie → through, and /login never
- * renders a login flow in desktop mode.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import authProxy from "@/proxy";
@@ -36,7 +27,6 @@ function request(path: string, cookie?: string): NextRequest {
   });
 }
 
-/** Where a redirect sends the request, or null when it is not a redirect. */
 function redirectTarget(res: Response): string | null {
   const location = res.headers.get("location");
   return location ? new URL(location).pathname : null;

@@ -15,22 +15,17 @@ import {
 } from "@/lib/shared/dangerous-commands";
 import type { DangerousPatternRule } from "@/lib/shared/config-types";
 
-/** Compile a rule list the way the server adapter does. */
 const compiled = (rules: readonly DangerousPatternRule[]): CompiledDangerousRule[] =>
   compileDangerousRules(rules).compiled;
 
-/** The rules a Linux server enforces under the default config. */
 const linux = (command: string) => matchDangerousCommand(command, compiled(defaultDangerousRules("linux")));
 
-/** The rules a Windows desktop enforces under the default config. */
 const windows = (command: string) => matchDangerousCommand(command, compiled(defaultDangerousRules("win32")));
 
-/** Asserts the command is let through without a confirmation. */
 function allowed(matcher: (command: string) => { ruleName: string } | null, command: string): void {
   expect(matcher(command), `expected allow: ${command}`).toBeNull();
 }
 
-/** Asserts the command is caught by the named rule. */
 function blocked(
   matcher: (command: string) => { ruleName: string } | null,
   command: string,
@@ -38,8 +33,6 @@ function blocked(
 ): void {
   expect(matcher(command), `expected block: ${command}`).toEqual({ ruleName });
 }
-
-// ── The default rule sets ───────────────────────────────────────────────────
 
 describe("defaultDangerousRules", () => {
   it("gives every platform the bash set", () => {
@@ -66,8 +59,6 @@ describe("defaultDangerousRules", () => {
     }
   });
 });
-
-// ── The bash set (the one every platform gets) ─────────────────────────────
 
 describe("default bash rules", () => {
   it("catches recursive forced deletes", () => {
@@ -117,8 +108,6 @@ describe("default bash rules", () => {
   });
 });
 
-// ── The PowerShell set (Windows only) ──────────────────────────────────────
-
 describe("default PowerShell rules", () => {
   it("catches recursive forced deletes, in any casing", () => {
     blocked(windows, "Remove-Item -Recurse -Force C:\\Users\\me\\project", "Remove-Item -Recurse -Force");
@@ -151,8 +140,6 @@ describe("default PowerShell rules", () => {
   it("catches shutting the machine down", () => {
     blocked(windows, "Stop-Computer -Force", "Stop-Computer");
     blocked(windows, "Restart-Computer", "Stop-Computer");
-    // `shutdown` itself is the bash set's rule, and the bash set is enforced
-    // on Windows too — one rule, not two names for the same command.
     blocked(windows, "shutdown /s /t 0", "shutdown / reboot");
   });
 
@@ -166,8 +153,6 @@ describe("default PowerShell rules", () => {
     allowed(windows, "Get-Partition");
   });
 });
-
-// ── User rules ─────────────────────────────────────────────────────────────
 
 describe("resolveDangerousRules", () => {
   const userRule: DangerousPatternRule = { name: "custom-git-status", pattern: "git\\s+status" };
@@ -204,13 +189,6 @@ describe("resolveDangerousRules", () => {
     blocked(withUserRules(rules), "echo DANGER", "shouty");
   });
 });
-
-// ── Which layer a match came from ─────────────────────────────────────────
-//
-// The settings page marks a match "your rule" or "built-in rule", so the
-// effective set has to remember where each entry came from. The matching
-// order itself is unchanged: user rules first, built-ins after, first match
-// wins.
 
 describe("resolveDangerousRulesWithSource", () => {
   const compiledWithSource = (platform: string, userRules: readonly DangerousPatternRule[]) =>
@@ -257,8 +235,6 @@ describe("resolveDangerousRulesWithSource", () => {
   });
 
   it("gives every compiled rule in the effective set a layer", () => {
-    // The settings verdict names the layer instead of guessing one, which is
-    // only honest if the set it matches cannot contain an untagged rule.
     const { rules, compiled: matcherInput } = assembleDangerousRules("win32", [
       { name: "mine", pattern: "mine" },
     ]);
@@ -267,8 +243,6 @@ describe("resolveDangerousRulesWithSource", () => {
     expect(matcherInput.map((rule) => rule.name)).toEqual(rules.map((rule) => rule.name));
   });
 });
-
-// ── The read side of the config ───────────────────────────────────────────
 
 describe("buildDangerousRuleSetSnapshot", () => {
   it("returns the platform's built-in set and the user rules that do not compile", () => {
@@ -279,7 +253,6 @@ describe("buildDangerousRuleSetSnapshot", () => {
 
     expect(snapshot.platform).toBe("win32");
     expect(snapshot.builtins).toEqual([...defaultDangerousRules("win32")]);
-    // Reported, not silently dropped: the page needs to mark the rule.
     expect(snapshot.invalidUserRules).toEqual([
       { name: "broken", error: expect.any(String) },
     ]);
@@ -294,8 +267,6 @@ describe("buildDangerousRuleSetSnapshot", () => {
     expect(snapshot.invalidUserRules).toEqual([]);
   });
 });
-
-// ── The matcher itself ─────────────────────────────────────────────────────
 
 describe("matchDangerousCommand", () => {
   it("returns null for an empty rule list", () => {
@@ -320,14 +291,6 @@ describe("matchDangerousCommand", () => {
   });
 });
 
-/**
- * The acceptance criterion this file cannot express as a function call is
- * "a destructive PowerShell command actually reaches the gate". The gate is an
- * inline `tool_call` hook in `lib/server/rpc-manager.ts`, which cannot be
- * imported here without dragging in the pi SDK and SQLite, so its wiring is
- * pinned at the source level — the same approach `interactive-shell.test.ts`
- * takes for its two consumers.
- */
 describe("the gate's wiring", () => {
   const gate = readFileSync(join(process.cwd(), "lib/server/rpc-manager.ts"), "utf8");
   const evaluator = readFileSync(join(process.cwd(), "lib/server/dangerous-patterns.ts"), "utf8");
@@ -337,8 +300,6 @@ describe("the gate's wiring", () => {
   });
 
   it("runs the unconditional self-protection block before the promptable rule match", () => {
-    // The order lives in the evaluator now, so the gate and the settings
-    // tester cannot disagree about which of the two wins.
     const selfProtection = evaluator.indexOf("matchSelfKillCommand(command)");
     const dangerousMatch = evaluator.indexOf("matchDangerousPattern(command)");
 
@@ -347,24 +308,15 @@ describe("the gate's wiring", () => {
   });
 
   it("sends the gate through the evaluation the settings tester also calls", () => {
-    // The gate passes this session's permission mode (ADR-0021) and nothing
-    // else: the mode's meaning is decided inside the evaluator, not here.
     expect(gate).toMatch(/evaluateDangerousCommand\(\s*command,/);
     expect(gate).toContain("wrapperRef.current?.permissionMode");
   });
 
   it("hands the agent the plain reason self-protection blocked the command", () => {
-    // "The command was blocked" is not an answer to a user asking why their
-    // `pkill node` did nothing. Self-protection is the one block full access
-    // does not lift (ADR-0021), so it is the one whose reason must travel.
     expect(gate).toContain("blocked by self-protection: ${verdict.reason}");
   });
 
   it("keeps the mode out of every agent-reachable path", () => {
-    // The mode is a human-only switch (ADR-0021): no slash command, no agent
-    // tool, no system-prompt line. Channel messages are externally controlled
-    // content, so an agent-reachable toggle would be the way a stranger opens
-    // the gate. The only entries are the palette command and the toolbar.
     const palette = readFileSync(join(process.cwd(), "lib/client/commands.tsx"), "utf8");
     expect(palette).toContain('id: "session.permission_mode"');
     expect(readFileSync(join(process.cwd(), "lib/shared/slash-commands.ts"), "utf8"))

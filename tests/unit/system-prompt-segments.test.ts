@@ -8,18 +8,6 @@ import {
   stripPiDocumentationSection,
 } from "@/lib/shared/system-prompt-segments";
 
-// Characterization tests for the segmentation that used to live inside the
-// `"use client"` AppShell component. The move to a pure module is a
-// prefactor (#36): the Context panel must keep rendering exactly what it did,
-// and `context-composition` needs the *offsets* the old code never exposed.
-//
-// The fixtures mirror what pi's `buildSystemPrompt` actually assembles since
-// 0.86: an untagged persona paragraph followed by tagged sections
-// (`<tools>`, `<rules>`, `<docs>`, `<addendum>`, `<project_context>`,
-// `<skills>`, `<cwd>`) joined by blank lines. The Context panel keeps its own
-// anchor vocabulary (available-tools / guidelines / pi-docs / append), so the
-// tag names are translated rather than renamed.
-
 const PREAMBLE =
   "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 
@@ -84,13 +72,11 @@ function expectTiling(spans: Array<{ start: number; end: number }>, length: numb
   for (let i = 0; i < spans.length; i++) {
     expect(spans[i].end).toBeGreaterThan(spans[i].start);
     if (i > 0) {
-      // non-overlapping and gap-free
       expect(spans[i].start).toBe(spans[i - 1].end);
     }
   }
 }
 
-/** Same as `expectTiling`, for spans shifted by a base offset. */
 function expectShiftedTiling(spans: Array<{ start: number; end: number }>, from: number, to: number) {
   expect(spans[0].start).toBe(from);
   expect(spans[spans.length - 1].end).toBe(to);
@@ -106,8 +92,6 @@ describe("splitSystemPrompt", () => {
 
     expectTiling(segments, FULL.length);
     expect(segments.map((segment) => segment.kind)).toEqual(["base", "agents", "base", "agents", "base"]);
-    // `text` is a display slice, so the offsets — not the concatenated display
-    // text — are what cover the original string.
     expect(segments.map((segment) => FULL.slice(segment.start, segment.end)).join("")).toBe(FULL);
   });
 
@@ -123,8 +107,6 @@ describe("splitSystemPrompt", () => {
   });
 
   it("leaves the <project_context> wrapper out of the base slices", () => {
-    // The wrapper is pi scaffolding; it must not reach the panel as content.
-    // Its bytes still belong to the base slices so the offsets keep tiling.
     const base = splitSystemPrompt(FULL)
       .filter((segment) => segment.kind === "base")
       .map((segment) => FULL.slice(segment.start, segment.end))
@@ -164,8 +146,6 @@ describe("splitBaseBlocks", () => {
     expect(anchors).toContain("append");
     expect(anchors).toContain("skills");
     expect(anchors).toContain("cwd");
-    // The offsets are a partition of the original, so every character is in
-    // exactly one block even though the display text drops the tags.
     expect(blocks.map((block) => FULL.slice(block.start, block.end)).join("")).toBe(FULL);
   });
 
@@ -176,7 +156,6 @@ describe("splitBaseBlocks", () => {
     expect(tools.text).not.toContain("<tools>");
     expect(tools.text).not.toContain("</tools>");
     expect(tools.text).toContain("- read: Read the contents of a file");
-    // The offsets still cover the tags, which is what prefix differencing needs.
     expect(FULL.slice(tools.start, tools.end).startsWith("<tools>\n")).toBe(true);
     expect(FULL.slice(tools.start, tools.end).endsWith("\n</tools>")).toBe(true);
 
@@ -195,9 +174,6 @@ describe("splitBaseBlocks", () => {
   });
 
   it("anchors every section the panel knows about, in prompt order", () => {
-    // These anchors are what the Context panel's quick-jump menu is built
-    // from, so the mapping from pi's tag names to the panel's vocabulary has to
-    // stay complete.
     expect(splitBaseBlocks(FULL).map((block) => block.anchor)).toEqual([
       null,
       "available-tools",
@@ -233,7 +209,6 @@ describe("splitSystemPromptLeaves", () => {
 
     const skills = leaves.filter((leaf) => leaf.kind === "skills");
     expect(skills).toHaveLength(1);
-    // The composition bucket is the whole section, not just the tag inside it.
     expect(skills[0].text.startsWith("The following skills provide specialized instructions")).toBe(true);
     expect(skills[0].text.endsWith("</available_skills>")).toBe(true);
   });
@@ -257,7 +232,6 @@ describe("splitSystemPromptLeaves", () => {
     const cwd = leaves[leaves.length - 1];
     expect(cwd.id).toBe("cwd");
     expect(cwd.text).toBe("/repo");
-    // Offsets cover the section tags; only the display text strips them.
     expect(FULL.slice(cwd.start, cwd.end)).toBe("<cwd>\n/repo\n</cwd>");
   });
 
@@ -290,7 +264,6 @@ describe("prompt section rewriting", () => {
 
     expect(stripped).not.toContain("<docs>");
     expect(stripped).not.toContain("Pi documentation");
-    // Nothing else is consumed: the sections on either side survive intact.
     expect(stripped).toContain("<rules>\n- Be concise in your responses\n</rules>");
     expect(stripped).toContain("<addendum>\nAPPENDED SYSTEM PROMPT\n</addendum>");
     expect(stripped).not.toContain("\n\n\n\n");
@@ -305,7 +278,6 @@ describe("prompt section rewriting", () => {
     const stripped = stripPiDocumentationSection(FULL);
 
     expect(stripped).not.toContain("Pi documentation");
-    // Everything the toggle must preserve is still there.
     expect(stripped).toContain("<tools>");
     expect(stripped).toContain("<addendum>\nAPPENDED SYSTEM PROMPT");
     expect(stripped).toContain('<project_instructions path="/repo/AGENTS.md">');
@@ -315,16 +287,13 @@ describe("prompt section rewriting", () => {
   it("flattens the prompt for a specialized subagent", () => {
     const flat = stripDefaultSystemPromptSections(FULL);
 
-    // The generic pi framing is gone.
     expect(flat).not.toContain("You are an expert coding assistant");
     expect(flat).not.toContain("In addition to the tools above");
     expect(flat).not.toContain("Pi documentation");
-    // No section scaffolding survives…
     for (const name of ["tools", "rules", "docs", "addendum", "project_context", "skills", "cwd"]) {
       expect(flat).not.toContain(`<${name}>`);
       expect(flat).not.toContain(`</${name}>`);
     }
-    // …and the bodies keep the headings the subagent prompts are written for.
     expect(flat).toContain("Available tools:\n- read: Read the contents of a file");
     expect(flat).toContain("Guidelines:\n- Be concise in your responses");
     expect(flat).toContain("Current working directory: /repo");

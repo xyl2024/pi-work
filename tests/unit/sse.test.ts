@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitSseEvents } from "@/lib/shared/sse";
 
-/**
- * The SSE frame splitter behind `POST /api/skills/install`
- * (lib/shared/sse.ts). Driven as plain strings: one chunk in, complete event
- * payloads plus the trailing partial frame out — no DOM, no fetch.
- */
-
 describe("splitSseEvents", () => {
   it("returns every complete frame in one chunk", () => {
     const chunk = 'data: {"type":"log","line":"a"}\n\ndata: {"type":"done"}\n\n';

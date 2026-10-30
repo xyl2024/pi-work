@@ -23,18 +23,6 @@ import { resolveModelCallContext, runWithLlmAuditContext } from "@/lib/server/ll
 import { recordModelCall, summarize } from "@/lib/server/token-audit-store";
 import { GET } from "@/app/api/token-audit/calls/route";
 
-/**
- * Acceptance boundary for issue 05: pi's real compaction/branch-summary entry
- * points (AgentSession.compact / prompt-triggered threshold compaction /
- * navigateTree summarize, plus the SDK's own split-turn `compact()`), driven by
- * a controlled ModelRuntime, stored in a temporary SQLite database and read
- * back through the real per-call route handler.
- *
- * No provider, key, user directory or real session is touched. The file is
- * process-internal, so run it with `PI_WORK_TEST_SKIP_INSTANCE=1` (the shared
- * global setup otherwise starts the isolated instance for every unit file).
- */
-
 let root: string;
 let dbCounter = 0;
 const tmpDirs: string[] = [];
@@ -71,8 +59,6 @@ afterAll(() => {
   for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
 });
-
-// ── fixtures ──────────────────────────────────────────────────────────────
 
 const MODEL = {
   provider: "test-provider",
@@ -153,7 +139,6 @@ function emptyLoader(): ResourceLoader {
 }
 
 interface ControlledRuntimeOptions {
-  /** Text of the final assistant message for the n-th (1-based) call. */
   respond?: (callIndex: number) => string;
   outputTokens?: number;
 }
@@ -163,11 +148,6 @@ interface ControlledRuntime {
   calls: () => number;
 }
 
-/**
- * Every generation reports 2,000 ms to first output, 6,000 ms to last output
- * and 7,000 ms to the terminal event: TTFT=2000, window=4000, duration=7000.
- * With 120 output tokens that is generation TPS 30 and end-to-end TPS 120/7.
- */
 function controlledRuntime(
   clockInfo: ReturnType<typeof fakeClock>,
   options: ControlledRuntimeOptions = {},
@@ -178,8 +158,6 @@ function controlledRuntime(
     const text = options.respond?.(calls) ?? "generated text";
     const outputTokens = options.outputTokens ?? 120;
     const stream = createAssistantMessageEventStream();
-    // Push after the wrapper has installed its observation hook: a provider
-    // stream never emits inside the synchronous `streamSimple()` call.
     queueMicrotask(() => {
       clockInfo.advance(2_000);
       stream.push(delta(`${text} `));
@@ -263,8 +241,6 @@ function userContext(dir: string, sessionId = "session-compaction") {
   return { sessionId, source: "user" as const, cwd: dir, sessionName: null };
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────
-
 interface TokenCallBody {
   callId: string;
   ts: number;
@@ -290,8 +266,6 @@ async function queryCalls(query = "range=all&limit=50"): Promise<{ rows: TokenCa
 }
 
 function expectNoBillingRows(): void {
-  // Summary calls bypass the assistant `message_end` billing hook, so the
-  // existing cost/call summary must not grow because of these records.
   expect(summarize("all", "none").totals.calls).toBe(0);
 }
 
@@ -309,8 +283,6 @@ function expectSampleMetrics(call: TokenCallBody): void {
   });
   expect(call.endToEndTps).toBeCloseTo(120 / 7, 10);
 }
-
-// ── manual compaction ─────────────────────────────────────────────────────
 
 describe("compaction and branch-summary model calls", () => {
   it("records a manual compaction summary through the real AgentSession entry", async () => {
@@ -336,8 +308,6 @@ describe("compaction and branch-summary model calls", () => {
       sessionId: "session-compaction",
     });
     expectSampleMetrics(rows[0]);
-    // The summary call is a model call, not a chat message: the billing
-    // summary still only covers real assistant messages.
     expectNoBillingRows();
     session.dispose();
   });
@@ -349,9 +319,6 @@ describe("compaction and branch-summary model calls", () => {
       respond: (call) => `summary part ${call}`,
     });
 
-    // The SDK calls `compact()` once for the history and once for the turn
-    // prefix when the cut point splits a turn. Both are real generation
-    // operations, so both get their own record.
     const preparation = {
       firstKeptEntryId: "kept-entry",
       messagesToSummarize: [userMessage("old question", 1), textMessage("old answer")],
@@ -406,8 +373,6 @@ describe("compaction and branch-summary model calls", () => {
     const session = await createSession({
       dir,
       runtime: controlled.runtime,
-      // The last assistant usage is already over the tiny context window, so
-      // the next prompt compacts before asking the model again.
       seed: (manager) => seedTurns(manager, 8, 3_000, 5_000),
       compaction: { reserveTokens: 100, keepRecentTokens: 3_000 },
     });
@@ -425,7 +390,6 @@ describe("compaction and branch-summary model calls", () => {
     expect(events).toEqual(["compaction_start", "compaction_end"]);
     const { rows, total } = await queryCalls();
     expect(total).toBe(2);
-    // Rows are newest-first; the chat call is the last generation.
     expect(rows.map((row) => row.purpose)).toEqual(["chat", "compaction"]);
     expectSampleMetrics(rows[0]);
     expectSampleMetrics(rows[1]);
@@ -433,8 +397,6 @@ describe("compaction and branch-summary model calls", () => {
     expectNoBillingRows();
     session.dispose();
   });
-
-  // ── branch summary ──────────────────────────────────────────────────────
 
   it("records a branch summary through navigateTree with the branch-summary purpose", async () => {
     const dir = newSessionDir();
@@ -507,8 +469,6 @@ describe("compaction and branch-summary model calls", () => {
     });
     expectSampleMetrics(rows[0]);
   });
-
-  // ── no model request ────────────────────────────────────────────────────
 
   it("does not invent a call when the compaction path makes no model request", async () => {
     const dir = newSessionDir();

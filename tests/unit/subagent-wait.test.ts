@@ -26,17 +26,6 @@ import {
 } from "@/lib/server/subagent-store";
 import { DEFAULT_SUBAGENT_TIMEOUT_MS, DEFAULT_SUBAGENT_WAIT_MS } from "@/lib/shared/subagent";
 
-/**
- * `subagent` action `wait`: re-observing an existing task by `task_id`.
- *
- * Driven through the tool's own external interface with the real task manager,
- * a scripted turn adapter and a fake timer, so every assertion is about what
- * the parent model reads (text + details) and whether a turn is actually still
- * alive. `wait` must never start, replay or cancel a task: a timed-out wait
- * ends only the observation, a terminal task answers at once, and a foreign
- * task id is reported as not found.
- */
-
 let dir: string;
 
 function resetGlobals(): void {
@@ -98,11 +87,6 @@ function textOf(result: { content: Array<{ type: string; text?: string }> }): st
   return result.content.map((item) => (item.type === "text" ? item.text ?? "" : "")).join("\n");
 }
 
-// ---------------------------------------------------------------------------
-// Scripted turn + child session + timer seams (shared support module: no real
-// model, no real user data root)
-// ---------------------------------------------------------------------------
-
 function setup(parentSessionId: string) {
   const runner = createScriptedRunner();
   const timers = createFakeTimers();
@@ -116,7 +100,6 @@ function setup(parentSessionId: string) {
   return { runner, timers, manager, parentSessionId };
 }
 
-/** Create a task through `spawn` with `wait_ms: 0`; returns its stable id. */
 async function spawnTask(parentSessionId: string): Promise<string> {
   const spawned = await run(
     {
@@ -134,7 +117,6 @@ async function spawnTask(parentSessionId: string): Promise<string> {
   return details.taskId;
 }
 
-/** Seed a persisted row directly, for terminal / stale-row cases. */
 function seedRow(input: {
   parent: string;
   child: string | null;
@@ -160,27 +142,19 @@ function seedRow(input: {
   return taskId;
 }
 
-// ============================================================================
-
 describe("subagent tool — wait action", () => {
   it("waits 15 minutes by default, then waits again and returns the final result", async () => {
     const { runner, timers, manager } = setup("parent-wait");
     const taskId = await spawnTask("parent-wait");
     expect(runner.turns).toHaveLength(1);
-    // Start the turn so the wait observes a real `running` task. The runtime
-    // limit is the profile's, set when the turn starts — waiting never changes
-    // it.
     await runner.turns[0].acquire();
     expect(runner.turns[0].spec.timeoutMs).toBe(DEFAULT_SUBAGENT_TIMEOUT_MS);
 
-    // wait_ms = 0 is an immediate status snapshot, not a timeout of the task.
     const immediate = await run({ action: "wait", task_id: taskId, wait_ms: 0 }, "parent-wait");
     expect(immediate.details).toMatchObject({ status: "running", waitExpired: true });
     expect(timers.scheduled).toHaveLength(0);
 
     const waiting = run({ action: "wait", task_id: taskId }, "parent-wait");
-    // The default wait is the spawn default; the timer is the only evidence the
-    // caller asked the manager to observe, and firing it simulates the deadline.
     const deadline = timers.scheduled.find((timer) => !timer.cancelled)!;
     expect(deadline.ms).toBe(DEFAULT_SUBAGENT_WAIT_MS);
     deadline.fire();
@@ -202,8 +176,6 @@ describe("subagent tool — wait action", () => {
     expect(textOf(observed)).toContain("still running");
     expect(textOf(observed)).toContain("not cancelled");
     expect(textOf(observed)).toContain(`action="wait", task_id="${taskId}"`);
-    // The expiry ended only the observation: the turn is alive, its slot is
-    // still held and no replacement task was created.
     expect(manager.liveStatus("parent-wait", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
 
@@ -220,7 +192,6 @@ describe("subagent tool — wait action", () => {
       result: "final answer",
     });
     expect(textOf(finished)).toContain("final answer");
-    // A wait on an already-finished task does not create or replay a turn.
     expect(runner.turns).toHaveLength(1);
   });
 
@@ -299,7 +270,6 @@ describe("subagent tool — wait action", () => {
     expect(textOf(failedResult)).toContain("Last partial output:");
     expect(textOf(failedResult)).toContain("partial text");
 
-    // Every other terminal status also answers at once, with its own error.
     for (const [taskId, status, error] of [
       [cancelled, "cancelled", "Subagent cancelled"],
       [interrupted, "interrupted", "Interrupted: the server restarted"],
@@ -309,7 +279,6 @@ describe("subagent tool — wait action", () => {
       expect(textOf(terminal)).toContain(error);
     }
 
-    // No wait deadline was ever scheduled and no turn was started or replayed.
     expect(timers.scheduled).toHaveLength(0);
     expect(runner.turns).toHaveLength(0);
   });
@@ -322,7 +291,6 @@ describe("subagent tool — wait action", () => {
       status: "completed",
       result: "older result",
     });
-    // Same child session, a later task: `wait` must not drift to it.
     seedRow({
       parent: "parent-target",
       child: "child-shared",
@@ -360,8 +328,6 @@ describe("subagent tool — wait action", () => {
     const deadline = timers.scheduled.find((timer) => !timer.cancelled && timer.ms === 1000)!;
     controller.abort();
 
-    // The abort ends the wait promptly (no need to fire the deadline) and the
-    // task is still running.
     const observed = await waiting;
     expect(observed.details).toMatchObject({ status: "running", waitExpired: false });
     expect(textOf(observed)).toContain("wait was cancelled");
@@ -384,8 +350,6 @@ describe("subagent tool — wait action", () => {
       expect(denied.details).toMatchObject({ action: "wait" });
       expect(textOf(denied)).toContain("No subagent task");
     }
-    // Ownership is checked before the manager is involved: the real owner's
-    // task is untouched and still running.
     expect(manager.liveStatus("parent-owner", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
 

@@ -26,19 +26,6 @@ import { isMcpBucketVerifying, selectMcpBucket } from "@/lib/shared/mcp-drafts";
 import { McpListPage } from "./mcp/McpListPage";
 import { McpEntryPage } from "./mcp/McpEntryPage";
 
-/**
- * The MCP panel view body.
- *
- * The panel card only mounts the active tab's body, so this component owns no
- * page state: the drafts (bucketed by cwd), the page stacks and the last-read
- * file snapshots all live in `lib/client/mcp-store.ts`. Here it wires the
- * per-cwd load, dispatches the current page to a full-width view, keeps Escape
- * meaning "up one level", and renders the fixed save footer.
- *
- * `visible` tells the body whether the panel is expanded right now: the panel
- * card stays mounted while collapsed, so without it a re-expand would not
- * re-read disk.
- */
 export function McpPanel({
   cwd,
   visible,
@@ -56,9 +43,6 @@ export function McpPanel({
   const state = useMcpStore();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Re-read whenever the panel becomes visible; a dirty draft is reused instead
-  // (selectMcpOpenAction). A different cwd parks the previous bucket, and a
-  // collapse is not a reload trigger by itself.
   useEffect(() => {
     if (visible) ensureMcpLoaded(cwd);
   }, [cwd, visible]);
@@ -93,7 +77,6 @@ export function McpPanel({
         case "missing-transport":
           return t("mcp.problemMissingTransport", { name: value.name });
         case "override-extra-keys":
-          // pi's own sentence, verbatim: the server would reject the same entry.
           return mcpOverrideExtraKeysError(value.name);
       }
     },
@@ -109,8 +92,6 @@ export function McpPanel({
     const changes = mcpPendingChanges(bucket.draft, bucket.data);
     if (changes.length === 0) return;
 
-    // One gate for every consequence of this write: the entries it removes and
-    // the commands the next session will run with the user's permissions.
     const gates: string[] = [];
     const removals = describedRemovals(changes);
     if (removals.length > 0) gates.push(t("mcp.confirmRemove", { names: removals.join(", ") }));

@@ -6,27 +6,16 @@ import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
   card: LayoutCard;
-  /** True while the agent is streaming — disables the card's click. */
   disabled: boolean;
-  /** Pixels for the card box. The whole tree is scaled by its parent. */
   width: number;
   height: number;
   onClick: (card: LayoutCard) => void;
   onHover: (card: LayoutCard | null) => void;
-  /** Open the full-branch preview modal for this card's entry. */
   onZoom: (card: LayoutCard) => void;
 }
 
-/**
- * Preview text for the card. Whitespace (spaces + newlines) is collapsed
- * away — the card is a tiny badge, and stripping whitespace helps the
- * 3-line clamp render readably. Empty `card.text` is valid (renders an
- * empty card).
- */
 function previewText(card: LayoutCard): string {
   if (card.role === "compaction") {
-    // Compact divider — show the kernel's "[compaction] compacted from
-    // N tokens" line so users can spot the divider at a glance.
     const n = card.compaction?.tokensBefore ?? 0;
     const formatted = n.toLocaleString();
     return `[compaction] ${formatted} tokens`.trim();
@@ -47,8 +36,6 @@ export function ConversationTreeCard({
   const [hovered, setHovered] = useState(false);
   const isUser = card.role === "user";
   const isCompaction = card.role === "compaction";
-  // The crisp CSS border is deliberately omitted — the sketchy double-
-  // stroked border is drawn by the panel's SVG overlay (lib/rough.ts).
   const background = isUser
     ? "rgba(99, 102, 241, 0.08)"
     : isCompaction
@@ -95,9 +82,6 @@ export function ConversationTreeCard({
         disabled={disabled}
         aria-disabled={disabled}
         style={{
-          // The actual clickable surface — fills the wrapper. The zoom
-          // button sits on top via a separate sibling so it can capture
-          // clicks without triggering the card's navigate.
           position: "absolute",
           inset: 0,
           padding: "8px 10px",
@@ -131,7 +115,6 @@ export function ConversationTreeCard({
           {displayText}
         </span>
       </button>
-      {/* Bottom-right corner: image chip with count */}
       {card.imageCount > 0 && (
         <span
           aria-label={`${card.imageCount} images`}
@@ -164,9 +147,6 @@ export function ConversationTreeCard({
           <span>×{card.imageCount}</span>
         </span>
       )}
-      {/* Top-right corner: zoom button — fades in on hover. Sits above the
-          card surface (z-index 2) and stops propagation so clicking the
-          button never triggers the card's navigate behavior. */}
       <button
         type="button"
         onClick={(e) => {

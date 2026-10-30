@@ -1,50 +1,21 @@
 "use client";
 
-/**
- * useIconMorph — imperative DOM hook over morphicons/dom.
- *
- * Renders a single <svg><path d={...}/></svg> and morphs the `d` attribute
- * with spring physics when `active` flips. The morph driver is born lazily
- * on first effect, so server + client agree on the initial `d` (no
- * hydration mismatch) and there's no work to undo on unmount beyond the
- * driver's own rAF teardown.
- *
- * Usage:
- *   const { svgProps, pathProps } = useIconMorph(MENU, PANEL_LEFT, sidebarOpen, { size: 16 });
- *   return <svg {...svgProps}><path {...pathProps} /></svg>;
- *
- * Why imperative and not <MorphIcon>: pi-work buttons are tiny 12–18 px
- * icons embedded in inline JSX (often inside other <button>s); wrapping
- * each in a stateful React component buys us nothing over a hook that
- * drives a ref'd <path>. The driver is also reentrant on prop changes,
- * so flipping active back and forth costs one morphTo() per flip.
- */
-
 import { useEffect, useRef, useState } from "react";
 import type { SVGAttributes } from "react";
 import { createMorph } from "morphicons/dom";
 import type { Morph, PathEl } from "morphicons/dom";
 import type { SpringPreset } from "morphicons";
 
-export type IconMorphSpring = SpringPreset; // "smooth" | "snappy" | "bouncy"
+export type IconMorphSpring = SpringPreset;
 export type IconMorphReducedMotion = "never" | "user" | "always";
 
 export interface IconMorphOptions {
-  /** Physics preset for the morph. Default: "snappy". */
   spring?: IconMorphSpring;
-  /** SVG width/height in px. Default: 16. */
   size?: number;
-  /** SVG viewBox. Default: "0 0 24 24" (the Lucide grid). Override when the
-   *  path data lives on a different grid (e.g. a 10×10 checkbox outline). */
   viewBox?: string;
-  /** Stroke width on the <path>. Default: 2. */
   strokeWidth?: number;
-  /** Morph even when the OS reduce-motion flag is on. Default: "never"
-   *  (always animate, matching morphicons' default). */
   reducedMotion?: IconMorphReducedMotion;
-  /** Forwarded to the <svg> className. */
   className?: string;
-  /** Stroke color. Default: "currentColor". */
   color?: string;
 }
 
@@ -71,16 +42,9 @@ export function useIconMorph(
     color = "currentColor",
   } = options;
 
-  // Initial d is a function of the active prop — both server and client
-  // compute the same string, so SSR emits the correct static icon and
-  // hydration never rewrites the attribute. The driver takes over only
-  // after mount.
   const initialD = active ? toD : fromD;
   const [d, setD] = useState(initialD);
 
-  // Mirror props into refs so the driver-bearing effect doesn't re-run on
-  // every render — the driver mutates `d` outside React, and we want the
-  // morph call to follow the latest prop without recreating the instance.
   const pathRef = useRef<SVGPathElement | null>(null);
   const driverRef = useRef<Morph | null>(null);
   const deadRef = useRef(false);
@@ -95,10 +59,6 @@ export function useIconMorph(
   springRef.current = spring;
   rmRef.current = reducedMotion;
 
-  // Driver birth + first morph. Runs once after mount: pick whichever
-  // endpoint is current as the birth icon (no flight needed — the static
-  // server render already shows it) and immediately morphTo the other
-  // endpoint when fromD !== toD.
   useEffect(() => {
     deadRef.current = false;
     const el = pathRef.current;
@@ -115,13 +75,9 @@ export function useIconMorph(
     };
   }, []);
 
-  // Active flip → morph + sync React state so SSR-only consumers (rare)
-  // still see the right d. The driver is the source of truth on screen;
-  // the state write is for hydration parity if a future caller decides
-  // to re-render before the rAF flushes.
   useEffect(() => {
     const driver = driverRef.current;
-    if (!driver) return; // first effect owns the birth morph
+    if (!driver) return;
     const target = active ? toD : fromD;
     setD(target);
     if (deadRef.current) return;

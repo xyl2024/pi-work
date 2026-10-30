@@ -3,32 +3,15 @@
 import { useLayoutEffect, useState } from "react";
 
 export interface UsePopoverPositionOptions {
-  /** Ref to the trigger element to anchor against. */
   triggerRef: React.RefObject<HTMLElement | null>;
-  /** Ref to the popover element. The hook measures it to know its size. */
   popoverRef: React.RefObject<HTMLElement | null>;
-  /** Whether the popover is currently open. */
   open: boolean;
-  /** Anchor the popover to the start or end of the trigger. Default: `"start"`. */
   align?: "start" | "end";
-  /** Pixel gap between the trigger and the popover. Default: 6. */
   gap?: number;
-  /** Pixel margin kept between the popover and the viewport edge. Default: 8. */
   margin?: number;
-  /** Extra deps that may change the popover's height (e.g. month/year inside
-   *  a calendar). Triggers a re-measure when any of these change. */
   contentDeps?: ReadonlyArray<unknown>;
 }
 
-/**
- * Anchor a `position: fixed` popover to its trigger in viewport coordinates.
- *
- * The hook assumes the popover will be rendered via a React Portal to
- * `document.body` so no CSS `transform`/`filter`/`perspective` ancestor can
- * capture `position: fixed` and rebase it onto itself (which is what
- * `useModalAnimation` does on every modal panel — popovers inside modals
- * would otherwise jump to the wrong screen position).
- */
 export function usePopoverPosition({
   triggerRef,
   popoverRef,

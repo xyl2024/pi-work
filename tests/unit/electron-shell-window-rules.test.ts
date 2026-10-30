@@ -1,12 +1,3 @@
-// The Electron shell's window rules (electron-shell/window-rules.js) are pure:
-// the mode flag and the environment arrive as arguments, so both branches —
-// including the dev one — can be driven from here without launching Electron
-// or a server. Same shape as tests/unit/trust-boundary.test.ts.
-//
-// What is worth guarding: the window must point at *loopback*, dev mode must
-// point at the isolated instance (never production data), and an explicit
-// PI_PORT must win (that is how the shell's own spawner hands over the port it
-// picked).
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,8 +57,6 @@ describe("isExternalNavigation", () => {
   });
 
   it("leaves non-web schemes alone — Chromium's own navigation rules apply", () => {
-    // Never handed to an OS handler: `shell.openExternal` on a data:/file: URL
-    // would feed it to whatever is registered for that scheme.
     expect(isExternalNavigation("data:text/html,<h1>offline</h1>", APP_ORIGIN)).toBe(false);
     expect(isExternalNavigation("about:blank", APP_ORIGIN)).toBe(false);
     expect(isExternalNavigation("file:///tmp/pi-work/error.html", APP_ORIGIN)).toBe(false);
@@ -102,8 +91,6 @@ describe("isShellCommand", () => {
   });
 
   it("leaves real targets alone", () => {
-    // Anything a link could carry: `pi-work:` must never swallow it, and the
-    // retry command must never be handed to an OS handler.
     for (const url of [`${APP_ORIGIN}/`, "https://github.com/xyl2024/pi-work", "pi-workx://retry", "not a url", ""]) {
       expect(isShellCommand(url)).toBe(false);
     }
@@ -112,9 +99,6 @@ describe("isShellCommand", () => {
   });
 });
 
-// The two ports are duplicated between the shell and the launchers that own
-// them; a silent drift would send dev mode at production data (or the window at
-// nothing at all), which no other test can see.
 describe("port defaults agree with the launchers", () => {
   const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
   const read = (file: string) => readFileSync(path.join(repoRoot, file), "utf8");

@@ -1,8 +1,3 @@
-/**
- * GET /api/llm-audit/sessions — distinct session ids that have audited calls,
- * most recently active first, each with its latest cwd / display name read
- * straight from the audit log (no full session scan).
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listAuditedSessionIds } from "@/lib/server/llm-audit-db";

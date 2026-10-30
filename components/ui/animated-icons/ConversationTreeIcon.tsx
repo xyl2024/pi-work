@@ -1,6 +1,3 @@
-// Conversation-tree-panel glyph (FolderTree). Hovering draws the two folder
-// panels and their branch stems in sequentially with staggered delays.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -103,4 +100,3 @@ export const ConversationTreeIcon = forwardRef<
 });
 
 ConversationTreeIcon.displayName = "ConversationTreeIcon";
-

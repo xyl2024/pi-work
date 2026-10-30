@@ -1,29 +1,3 @@
-/**
- * Smoke tests for `lib/server/env-sanitize.ts`.
- *
- * Run with:  node --experimental-strip-types scripts/test-env-sanitize.mts
- *
- * These are deliberate dependency-free smoke tests — pi-work doesn't ship
- * a test runner (see scripts/test-btw-*.mts for the convention). The point
- * is to lock down the env-sanitisation contract so a future refactor can't
- * silently regress the "child shells don't see Pi Work's runtime env"
- * guarantee.
- *
- * What we cover:
- *   1. Allowlist survives (PATH / HOME / USER / SHELL / LANG / TZ …).
- *   2. Explicit-name blocklist drops NODE_ENV / PORT / HOSTNAME /
- *      __NEXT_PRIVATE_ORIGIN / BEYOND_TOKEN / WORKFLOW_APP_ID / OLDPWD.
- *   3. Prefix blocklist catches NEXT_ / __NEXT_ / npm_ / NPM_CONFIG /
- *      NODE_ / PI_WORK_ / PI_ / DOCKER_ / WT_ / DISPLAY / WAYLAND_DISPLAY /
- *      PULSE_SERVER.
- *   4. Deny-by-default — random unknown variables are dropped.
- *   5. `sanitizeChildEnv` returns a fresh object (input not mutated).
- *   6. `sanitizeProcessEnvInPlace` actually mutates process.env and is
- *      idempotent on a second pass.
- *   7. Exported allowlist / strip-list are non-empty and self-consistent.
- *   8. Output env contains only string values (node-pty contract).
- */
-
 import {
   sanitizeChildEnv,
   shouldKeep,
@@ -53,14 +27,8 @@ function deepEq<T>(actual: T, expected: T, label: string): void {
   eq(JSON.stringify(actual), JSON.stringify(expected), label);
 }
 
-/**
- * Synthetic env mirroring a real `pi-work-start` launch on WSL2 with a
- * user's bash profile loaded. Single source of truth so each test
- * starts from the same baseline.
- */
 function buildSyntheticEnv(): Record<string, string> {
   return {
-    // ── allowlist (must survive) ──
     PATH: "/usr/local/bin:/usr/bin:/bin",
     HOME: "/home/alone",
     USER: "alone",
@@ -69,7 +37,6 @@ function buildSyntheticEnv(): Record<string, string> {
     LANG: "C.UTF-8",
     TZ: "Asia/Shanghai",
 
-    // ── explicit-name blocklist (must go) ──
     NODE_ENV: "production",
     PORT: "14514",
     HOSTNAME: "HaJiMi",
@@ -81,9 +48,7 @@ function buildSyntheticEnv(): Record<string, string> {
     WORKFLOW_APP_ID: "820086798528006",
     OLDPWD: "/home/alone/p/teach-mate",
 
-    // ── prefix blocklist (must go) ──
     NEXT_RUNTIME: "nodejs",
-    // Disambiguate from the explicit-name NEXT_DEPLOYMENT_ID above:
     NEXT_DEPLOYMENT_ID_ALT: "abc",
     __NEXT_PRIVATE_STAGE: "prod",
     npm_lifecycle_event: "start",
@@ -105,13 +70,10 @@ function buildSyntheticEnv(): Record<string, string> {
     WT_PROFILE_ID: "{abc}",
     WT_SESSION: "abc",
 
-    // ── benign unknown (must be dropped — deny by default) ──
     RANDOM_TOOL_FLAG: "1",
     SOME_TOTALLY_RANDOM_VAR: "noise",
   };
 }
-
-// ── tests ───────────────────────────────────────────────────────────────
 
 function testAllowlistKeepsBaseVars(): void {
   const env = buildSyntheticEnv();
@@ -182,17 +144,10 @@ function testExportsAreSelfConsistent(): void {
   ok(ALLOWED_ENV_NAMES.size > 0, "ALLOWED_ENV_NAMES non-empty");
   ok(EXPLICITLY_STRIPPED_NAMES.size > 0, "EXPLICITLY_STRIPPED_NAMES non-empty");
   ok(EXPLICITLY_STRIPPED_PREFIXES.length > 0, "EXPLICITLY_STRIPPED_PREFIXES non-empty");
-  // Every allowlist entry must round-trip through shouldKeep — catches
-  // typos where someone adds a key but it's not actually being kept.
   for (const key of ALLOWED_ENV_NAMES) {
     ok(shouldKeep(key, "x"), `allowlist entry keeps itself: ${key}`);
   }
-  // Every stripped prefix must reject a sample variable. We pick a
-  // sample variable that is unlikely to collide with an allowlist entry
-  // so we don't get false positives.
   const sampleForPrefix = (prefix: string): string => {
-    // The NODE_* prefixes here are themselves full names, not
-    // prefix-matches — handle both shapes.
     if (prefix === "NODE_PATH" || prefix === "NODE_OPTIONS" || prefix === "NODE_EXTRA_CA_CERTS") return prefix;
     return `${prefix}XYZ_SENTINEL`;
   };
@@ -203,9 +158,6 @@ function testExportsAreSelfConsistent(): void {
 }
 
 function testOutputEnvHasOnlyStringValues(): void {
-  // node-pty's `env` option is typed Record<string,string>. Force a
-  // non-string through our input and make sure we drop it (or coerce,
-  // but we drop — safer for processes that call `typeof env.X === "string"`).
   const env = buildSyntheticEnv();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (env as any).NUMBER_VAR = 42;
@@ -215,8 +167,6 @@ function testOutputEnvHasOnlyStringValues(): void {
   }
   ok(!("NUMBER_VAR" in out), "non-string values are dropped");
 }
-
-// ── runner ──────────────────────────────────────────────────────────────
 
 function main(): void {
   console.log("env-sanitize smoke tests:");

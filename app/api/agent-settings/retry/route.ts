@@ -12,18 +12,12 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/agent-settings/retry");
 
-// Server-side range guards. The Settings modal's UI clamps to the same
-// ranges, but we re-check on the PUT boundary so a regression in the
-// modal's client-side validation (or a hand-rolled curl from a power
-// user) can never push garbage into the SDK's settings.json.
 const LIMITS = {
   maxRetries: { min: 0, max: 10 },
   baseDelayMs: { min: 100, max: 60_000 },
   provider: {
     timeoutMs: { min: 1_000, max: 3_600_000 },
     maxRetries: { min: 0, max: 10 },
-    // 0 is legal — docs/settings.md:148 says "Set it to 0 to disable
-    // the limit". So the lower bound is 0, not 1.
     maxRetryDelayMs: { min: 0, max: 300_000 },
   },
 } as const;
@@ -58,12 +52,10 @@ function validateRetry(raw: unknown): ValidationResult {
   }
   const obj = raw as Record<string, unknown>;
 
-  // enabled
   if (typeof obj.enabled !== "boolean") {
     return { ok: false, error: "retry.enabled must be a boolean" };
   }
 
-  // maxRetries
   if (typeof obj.maxRetries !== "number" || !Number.isFinite(obj.maxRetries) || !Number.isInteger(obj.maxRetries)) {
     return { ok: false, error: "retry.maxRetries must be an integer" };
   }
@@ -71,7 +63,6 @@ function validateRetry(raw: unknown): ValidationResult {
     return { ok: false, error: `retry.maxRetries must be between ${LIMITS.maxRetries.min} and ${LIMITS.maxRetries.max}` };
   }
 
-  // baseDelayMs
   if (typeof obj.baseDelayMs !== "number" || !Number.isFinite(obj.baseDelayMs) || !Number.isInteger(obj.baseDelayMs)) {
     return { ok: false, error: "retry.baseDelayMs must be an integer" };
   }
@@ -79,7 +70,6 @@ function validateRetry(raw: unknown): ValidationResult {
     return { ok: false, error: `retry.baseDelayMs must be between ${LIMITS.baseDelayMs.min} and ${LIMITS.baseDelayMs.max} ms` };
   }
 
-  // provider
   const providerCheck = validateProvider(obj.provider, "retry.provider");
   if (!providerCheck.ok) return providerCheck;
 
@@ -111,9 +101,6 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json();
 
-    // Special case: {"reset": true} drops the retry key from
-    // settings.json entirely. The Settings modal's "Reset to defaults"
-    // button sends this.
     if (body && typeof body === "object" && (body as Record<string, unknown>).reset === true) {
       await resetAgentRetry();
       log.info("agent retry reset", { durationMs: elapsedMs(startedAt) });

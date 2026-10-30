@@ -1,7 +1,3 @@
-/**
- * Tiny QR code generator wrapper for the pi-work demo.
- * Renders a weixin:// URL as a base64 PNG data URL.
- */
 import QRCode from "qrcode";
 
 export async function toDataUrl(text: string): Promise<string> {

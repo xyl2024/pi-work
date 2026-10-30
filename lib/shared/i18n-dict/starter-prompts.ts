@@ -1,6 +1,3 @@
-// New-session starter prompt chips — title / description / inserted text.
-// "Hi, {name}..." welcome line + workspace activity live in sessions.ts.
-
 export const starterPrompts = {
   "Explore this codebase": "梳理这个项目",
   "Understand the project structure and how it fits together": "了解项目结构、关键模块与它们的关系",

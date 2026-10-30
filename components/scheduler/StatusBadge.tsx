@@ -1,14 +1,3 @@
-/**
- * StatusBadge — compact pill for task / run status.
- *
- * Renders run variants (success, error, timeout, interrupted, running) and
- * task variants (paused, enabled, disabled, done).
- * The "running" variant has a soft pulse to signal live activity (uses
- * the global `scheduler-running-pulse` keyframes defined in globals.css).
- *
- * Two display sizes: `sm` (compact list rows) and `md` (detail header).
- */
-
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { statusVar, type StatusVariant } from "./utils";
@@ -16,8 +5,6 @@ import { statusVar, type StatusVariant } from "./utils";
 interface Props {
   status: StatusVariant;
   size?: "sm" | "md";
-  /** Hide the leading icon — useful for list rows where the dot already
-   *  conveys the same information. */
   bare?: boolean;
   className?: string;
   style?: CSSProperties;

@@ -1,66 +1,5 @@
 "use client";
 
-/**
- * Sticky panel rendered directly above ChatInput when the agent has called
- * `ask_user_questions`. Always at the bottom of the user's view (because
- * ChatInput is always at the bottom), so the user can't miss it.
- *
- * Layout: a fixed-height column with three zones —
- *   1. Tab bar (when count > 1): one tab per question. Each tab shows a
- *      status dot (filled = answered, hollow = not) and the question's
- *      `header` chip text. Required tabs render the header text in the
- *      accent color (instead of a separate red asterisk). ←/→ on the
- *      tab bar switch tabs; Home/End jump to first/last.
- *   2. Active question card: only the visible tab's question renders
- *      here, with its own internal scroll. The question's long-form text
- *      is shown; the header chip is NOT repeated (it lives on the tab).
- *   3. Footer: prev/next arrows (multi-question panels) + Submit + Cancel
- *      always visible at the bottom so the user doesn't have to scroll
- *      the question card to find them. Cancel uses a red border + red
- *      text on a transparent background; Submit uses the theme accent.
- *
- * Interaction model (borrowed from the "approval card" reference):
- *   - A single-select (radio) pick auto-advances to the next question
- *     after a short beat; on the last question it auto-submits when every
- *     required question has a real answer. "Other" never auto-advances —
- *     the user still has to type. Multi-select (checkbox) questions wait
- *     for the user to move on (Submit / tab / arrow).
- *   - Question switches are animated (fade-up) and reset the card scroll.
- *   - After Submit, a brief "Answers sent ✓" confirmation shows before
- *     the panel closes.
- *
- * Data flow:
- *   - `askUserQuestionsStore` carries one pending entry per sessionId.
- *   - On mount / store change, we read the entry for our sessionId.
- *   - When the user clicks Submit, we POST the decision to
- *     `/api/agent/[id]` with `type: "ask_user_questions_decision"`; the
- *     SSE handler on the server resolves the wrapper Promise and the tool
- *     continues. The store entry is kept alive during the "Answers sent"
- *     confirmation and cleared a beat later (the panel schedules it).
- *   - When the user clicks Cancel, we POST the same shape with
- *     `{cancelled: true}` and drop the entry immediately.
- *
- * UX rules:
- *   - multiSelect=false: each option is a radio. Selecting one replaces
- *     the previous choice. "Other" is the special label that, when
- *     selected, surfaces a single-line text input.
- *   - multiSelect=true: each option is a checkbox. "Other" alongside a
- *     checkbox surfaces the text input without removing the box.
- *   - Submit is disabled when any required question has no answer, or when
- *     "Other" is selected but its text is empty (for a required question).
- *   - The panel itself never steals focus from the chat input — the user
- *     can still type in ChatInput while a question is pending.
- *
- * Component split:
- *   - `useAskUserQuestionsForm` lives next to this file and owns all
- *     form state + auto-submit/auto-advance bookkeeping. This file holds
- *     only the rendered chrome.
- *   - `QuestionCard` renders a single question; it's a pure presentation
- *     component driven by callbacks.
- *   - The CSS @keyframes + `.askq-icon-btn` class are defined once in
- *     `constants.ts` (the main panel's `<style>` block reads the literal).
- */
-
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { isQuestionAnswered } from "@/lib/shared/ask-user-questions-tool-types";
@@ -70,9 +9,6 @@ import { ASK_PANEL_STYLES, PANEL_HEIGHT_PX } from "./ask-user-questions-panel/co
 
 interface Props {
   sessionId: string | null;
-  /** Invoked when a new `ask_user_questions` request appears (the panel
-   *  renders from scratch). Used by ChatWindow to force-scroll the message
-   *  list to the bottom so the question sits against the latest messages. */
   onAppear?: () => void;
 }
 
@@ -108,21 +44,11 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
     tabScrollRef,
   } = form;
 
-  // aria-label for the panel: kept short — the tab list has its own
-  // descriptive label, so the region just needs a name for screen readers.
   const regionLabel = count === 1
     ? t("Ask User Questions")
     : t("{n} questions pending").replace("{n}", String(count));
 
   return (
-    // Outer wrapper is purely spacing — mirrors ChatInput's padding
-    // container (`padding: 0 16px 8px` here) so the panel's right edge
-    // lines up with the input box on any chat-area width. The actual
-    // surface (background / border / shadow) lives inside the inner div
-    // below, which adds `maxWidth: 820 + margin: auto` — same pattern
-    // ChatInput uses. Previous single-layer `margin: 0 12px 8px 12px`
-    // stretched the surface edge-to-edge, drifting away from the input
-    // box once the chat area was wider than ~852px.
     <div
       className="ask-panel-in"
       style={{
@@ -135,10 +61,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
         role="region"
         aria-label={regionLabel}
         style={{
-          // Plain background (matches other panels in the app). The shadow +
-          // border alone carry the "this is a focused interaction surface"
-          // affordance; tinting with the accent color made the panel feel
-          // louder than necessary when it's a regular in-app UI element.
           maxWidth: 820,
           margin: "0 auto",
           width: "100%",
@@ -146,8 +68,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           border: "1px solid var(--border)",
           borderRadius: 10,
           boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
-          // Fixed height with a flex column so the tab bar and footer stay
-          // pinned while only the active question's body scrolls.
           display: "flex",
           flexDirection: "column",
           height: PANEL_HEIGHT_PX,
@@ -156,7 +76,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
       >
       <style>{ASK_PANEL_STYLES}</style>
 
-      {/* ── Tab bar (hidden when there's only one question) ── */}
       {!sent && count > 1 && (
         <div
           style={{
@@ -182,24 +101,10 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           >
             {pending.questions.map((q, qIdx) => {
               const isActive = qIdx === safeTab;
-              // Tab dot is filled only when the question is *actually*
-              // answered — i.e. selecting "Other" without typing anything
-              // doesn't light it up. (See isQuestionAnswered in the types
-              // module for the full definition.)
               const answered = isQuestionAnswered(answers[qIdx]);
-              // Required tabs always use the accent color for the header text
-              // (the affordance is "this tab title is theme-colored because
-              // the question is mandatory"). Non-required tabs use the
-              // standard active/muted colors. Keeps the indicator tied to
-              // the tab itself rather than as a noisy red asterisk.
               const tabColor = q.required
                 ? "var(--accent)"
                 : (isActive ? "var(--text)" : "var(--text-muted)");
-              // Tooltip shows the full header on hover. Headers are capped
-              // at 12 chars and tab text at maxWidth 96px, so truncation is
-              // uncommon, but a tooltip guarantees the user can always see
-              // the full question identifier — useful when the header uses
-              // wide characters or the panel is narrow.
               return (
                 <Tooltip key={qIdx} content={q.header} side="bottom">
                   <button
@@ -228,10 +133,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                       flexShrink: 0,
                     }}
                   >
-                    {/* Small status dot on the left of each tab. Filled accent
-                        when the question has been answered; hollow border when
-                        not. Distinct from the header pulse so they don't
-                        read as the same signal. */}
                     <span
                       aria-hidden
                       style={{
@@ -258,7 +159,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
         </div>
       )}
 
-      {/* ── Sent confirmation (replaces the card + tabs briefly) ── */}
       {sent ? (
         <div
           style={{
@@ -315,7 +215,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           </span>
         </div>
       ) : (
-        /* ── Active question (only render the visible tab's card) ── */
         <div
           ref={tabScrollRef}
           role="tabpanel"
@@ -329,8 +228,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
             padding: "10px 14px 4px 14px",
           }}
         >
-          {/* key={safeTab} remounts on every tab switch so the fade-up
-              animation replays and the card starts at its top. */}
           <div key={safeTab} className="askq-fade-up">
             {question && (
               <QuestionCard
@@ -347,7 +244,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
         </div>
       )}
 
-      {/* ── Footer: optional error + nav arrows + Submit/Cancel row ── */}
       {!sent && (
         <>
           {submitError && (
@@ -372,10 +268,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
               flexShrink: 0,
             }}
           >
-            {/* Optional whole-batch note. Cancel expands this row in place;
-                Enter sends it, while Esc / an empty value / clicking Cancel
-                again is a plain cancel. It deliberately does not autofocus —
-                the chat input keeps focus. */}
             {replyOpen && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input
@@ -435,8 +327,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                 gap: 8,
               }}
             >
-            {/* Prev / next — linear navigation for multi-question panels
-                (the tab bar is the progress display). */}
             {count > 1 && (
               <span style={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <button

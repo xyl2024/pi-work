@@ -9,19 +9,12 @@ import {
 } from "@/lib/client/models-config-store";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
 
-/**
- * The panel's fixed save footer. It never scrolls away, and it is where both
- * the save feedback (saving / saved) and the failure text live — the panel
- * writes the whole draft to `models.json` in one PUT.
- */
 export function ModelsConfigSaveBar() {
   const { t } = useI18n();
   const state = useModelsConfigStore();
   const { saving, savedOk, saveError } = state;
   const dirty = selectModelsConfigDirty(state);
   const problem = selectModelsConfigProblem(state);
-  // An unparsable raw edit is not part of the draft; the save button stays down
-  // and the bar says what is wrong so the text can be repaired in place.
   const blockedText = modelsConfigProblemText(problem, t);
   const disabled = saving || savedOk || !dirty || problem !== null;
 

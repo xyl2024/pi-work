@@ -24,7 +24,6 @@ export async function POST(req: Request, { params }: Params) {
 
   let workspaceId: string;
   try {
-    // Server-side path validation: allowed root + real directory.
     workspaceId = await validateWorkspaceId(raw);
   } catch (err) {
     if (err instanceof WorkspaceError) {
@@ -33,8 +32,6 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "workspace_invalid" }, { status: 400 });
   }
 
-  // Switching workspace clears the channel's current session — the next
-  // inbound message cold-starts a fresh session in the new workspace.
   const next = updateChannel(channelId, { workspaceId, currentSessionId: null });
   return NextResponse.json({ currentWorkspaceId: next?.workspaceId ?? null, currentSessionId: null });
 }

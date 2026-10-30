@@ -1,18 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { api, type Json } from "./helpers";
 
-/**
- * /api/workspaces is read-only: it aggregates pi session JSONLs by cwd.
- * The isolated agent dir starts empty, so business assertions focus on
- * response shape, pagination parameters and cursor robustness. Seeding
- * real session JSONLs is planned as part of the sessions-domain batch.
- */
 describe("workspaces api", () => {
   it("returns a paged response with the documented shape", async () => {
     const res = await api("/api/workspaces");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.workspaces)).toBe(true);
-    // nextCursor: string | null
     expect(["string", "object"]).toContain(typeof res.body.nextCursor);
 
     for (const ws of res.body.workspaces as Json[]) {
@@ -42,8 +35,6 @@ describe("workspaces api", () => {
       expect(rows.length).toBeLessThanOrEqual(limit);
       for (const ws of rows) {
         const cwd = ws.cwd as string;
-        // No row may appear twice across pages — the deep-refresh rule
-        // (limit = max(pageSize, loadedCount)) relies on a monotonic cursor.
         expect(seen.has(cwd)).toBe(false);
         seen.add(cwd);
       }

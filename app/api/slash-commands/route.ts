@@ -16,7 +16,6 @@ type SlashResource = {
   path: string;
 };
 
-// Module-level cache: cwd → { commands, expiresAt }
 const SLASH_CACHE_TTL_MS = 30_000;
 type CachedSlash = {
   commands: SlashResource[];
@@ -61,12 +60,6 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
   }
 
   const loadPromise = (async (): Promise<CachedSlash> => {
-    // This endpoint only needs skill resources. Do not execute user extensions
-    // here: an extension factory may perform arbitrary startup work (for
-    // example, a network probe) and make slash-command loading depend on
-    // unrelated services. Prompt templates are skipped as well — Pi Work only
-    // surfaces skills (`/skill:<name>`); pi itself still expands a typed
-    // `/name` prompt template server-side.
     const loader = new DefaultResourceLoader({
       cwd,
       agentDir: getAgentDir(),
@@ -77,12 +70,7 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
     });
     await loader.reload();
 
-    // Hide Skills the user has disabled (disabled_skills in Pi Work config,
-    // keyed by cwd) from the slash menu — same rule /api/skills uses for
-    // `disableModelInvocation`.
     const disabledSkillPaths = new Set(readConfig().disabled_skills[cwd] ?? []);
-    // Merge in Pi Work–owned skills (~/.pi-work/skills/), which pi's loader
-    // does not discover — same merge rule as /api/skills and rpc-manager.
     const loaderAndPiWorkSkills = [
       ...loader.getSkills().skills,
       ...loadPiWorkSkillsSafety(),

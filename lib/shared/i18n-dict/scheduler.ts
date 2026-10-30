@@ -1,9 +1,3 @@
-// Scheduler modal + cron builder + run history + per-action toasts.
-// Generic "Failed to load/save" toasts that fire from inside the
-// scheduler modal (Models / API key / Prompt / Skill / File / Export /
-// HTTP collection) are kept here because the user always sees them in
-// the scheduler-driven save flows.
-
 export const scheduler = {
   "Failed to toggle task": "操作定时任务失败",
   "Please fix form errors first": "请先修正表单错误",
@@ -117,7 +111,6 @@ export const scheduler = {
   "Failed to delete item": "删除请求失败",
   "Failed to load collections": "加载集合失败",
 
-  // Top-level entry / list page (open from avatar menu)
   "Scheduled tasks": "定时任务",
   "Open scheduled tasks": "打开定时任务",
   "No scheduled tasks yet": "暂无定时任务",
@@ -138,7 +131,6 @@ export const scheduler = {
   "Open session": "打开会话",
   "Copy output": "复制输出",
 
-  // Task form
   "Task name": "任务名称",
   "Working directory": "工作目录",
   "Prompt": "提示词",
@@ -162,18 +154,15 @@ export const scheduler = {
   "Failed to delete task": "删除定时任务失败",
   "Failed to trigger task": "触发运行失败",
 
-  // Status enums
   "success": "成功",
   "error": "失败",
   "timeout": "超时",
   "interrupted": "已中断",
 
-  // Cron examples
   "Cron examples": "Cron 示例",
   "Cron examples hint": "按每天 / 每周 / 每 N 小时 / 单次可视化设置，或切换到高级模式直接编辑 cron 表达式",
   "Mark all as read": "全部标记为已读",
 
-  // Max lifetime
   "Max lifetime": "最大运行时长",
   "Max lifetime hint": "单次运行的最长等待时间。超过则强制结束。留空使用默认（120 分钟）。",
   "Max lifetime must be between 1 and 1440 minutes": "最大运行时长需在 1 ~ 1440 分钟之间",
@@ -182,7 +171,6 @@ export const scheduler = {
   "Long-running run warning": "该任务已运行超过 10 分钟，agent 仍在正常工作，可继续等待真实结果",
   "default": "默认",
 
-  // Notifications
   "Notifications": "通知",
   "Send notifications when this task runs": "任务运行时发送通知",
   "Notification hint": "在任务运行完成、失败或超时时，通过配置的渠道（如微信）发送通知。",
@@ -198,7 +186,6 @@ export const scheduler = {
   "Known contacts": "已知联系人",
   "No outcome selected": "未选择任何通知时机",
 
-  // Panel view (originally a modal): close guard + missing-task page
   "Your scheduled task changes will be lost.": "你的定时任务改动将会丢失。",
   "Task not found": "未找到该任务",
   "Timezone": "时区",

@@ -1,15 +1,5 @@
 "use client";
 
-/**
- * SubagentEditor — create or edit one subagent profile.
- *
- * A portal modal (so it escapes the settings modal's scroll container) with
- * every profile field: name, description, system prompt, tools, model,
- * thinking level, timeout and the Pi Bot appearance. Writes immediately via
- * `/api/subagents` on Save; the caller refreshes the list and the client
- * profile cache.
- */
-
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
@@ -82,7 +72,6 @@ export function SubagentEditor({
   onClose,
   onSaved,
 }: {
-  /** null = create a new profile. */
   profile: SubagentProfile | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;

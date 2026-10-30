@@ -1,12 +1,3 @@
-/**
- * TaskConfigTab — read-only view of a task's execution config.
- *
- * Mirrors the structure of the form's "Basic config" section so the user
- * can review what the task will run with without accidentally editing
- * anything. Each row has a small "modify" link that scrolls up to the
- * edit button (parent handler will pop the form modal).
- */
-
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
@@ -18,7 +9,6 @@ interface Props {
   modelIcons?: Record<string, string>;
   modelIconPreferences?: Record<string, string>;
   onEdit: () => void;
-  /** channelId → { name, status } for wechat channels (TaskDetail fetches). */
   channelMeta?: Record<string, { name: string; status: string }> | null;
 }
 
@@ -27,8 +17,6 @@ export function TaskConfigTab({ task, modelIcons, modelIconPreferences, onEdit, 
   const { provider, modelId, thinkingLevel, toolNames, cwd, maxLifetimeMs } = task;
   const modelIcon = resolveProviderIcon(provider, modelId, modelIcons, modelIconPreferences);
 
-  // Render the max lifetime as a human-friendly "Xh Ym" string. The
-  // server-side default is the shared runner default (2h).
   const lifetimeDisplay = (() => {
     const ms = maxLifetimeMs ?? RUNNER_DEFAULT_MAX_LIFETIME_MS;
     const totalMinutes = Math.round(ms / 60_000);
@@ -219,9 +207,6 @@ export function ThinkingBadge({ level }: { level: string }) {
   );
 }
 
-// `Provider` / `Model` / `Thinking level` are all required on scheduled tasks.
-// A missing or "auto" value means an old task needs re-picking — surface that
-// as an obvious error-tinted "Not set" so the user knows to open Modify.
 function Missing({ children }: { children: React.ReactNode }) {
   return <span style={{ color: "var(--error)", fontSize: 11 }}>{children}</span>;
 }

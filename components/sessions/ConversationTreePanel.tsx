@@ -28,15 +28,12 @@ import {
   sketchRotateDeg,
 } from "@/lib/client/rough";
 
-/** Pixels (pre-scale). */
 const CARD_W = 200;
 const CARD_H = 64;
 const COL_GAP = 72;
 const ROW_GAP = 54;
 
-/** Canvas padding around the tree, in unscaled pixels. */
 const PAD = 24;
-/** Multiplier per zoom button click. */
 const ZOOM_STEP = 1.2;
 
 function formatRoundLabel(
@@ -51,11 +48,6 @@ function formatRoundLabel(
   return { text, width: estimateLabelWidth(text) };
 }
 
-/**
- * Pixel-width estimate for the round label at fontSize 9, var(--font-mono).
- * CJK glyphs are ~9px wide; digits ~5.5px; spaces ~3px. The +16 budget
- * leaves room for 8px horizontal padding on each side of the chip rect.
- */
 function estimateLabelWidth(text: string): number {
   let width = 0;
   for (const ch of text) {
@@ -72,25 +64,14 @@ function estimateLabelWidth(text: string): number {
 }
 
 interface Props {
-  /** True while the agent is streaming tokens. Drives auto-follow scroll. */
   isStreaming: boolean;
-  /**
-   * True for the *entire* agent turn (waiting_model / streaming / running_tools /
-   * retrying), from agent_start to agent_end. We lock every card for this
-   * whole window — switching branches mid-round would race the in-flight
-   * response even during the non-streaming gaps between LLM calls.
-   */
   agentRunning: boolean;
-  /** Called when the user clicks a card; the parent (AppShell) decides whether to navigate_tree or scroll. */
   onCardClick: (card: LayoutCard) => void;
 }
 
 export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }: Props) {
   const { t } = useI18n();
   const { branchTree, branchActiveLeafId } = useSessionUiState();
-  // When set, opens the full-branch preview modal for the clicked card's
-  // entry. The viewer reads `branchTree` itself, so the panel stays
-  // stateless about branch content.
   const [zoomEntryId, setZoomEntryId] = useState<string | null>(null);
 
   const tree = useMemo(
@@ -101,9 +82,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     () => layoutConversationTree(tree.cards),
     [tree.cards],
   );
-  // Precompute the sketchy decorations for each card: a stable pseudo-
-  // random tilt plus the double-stroked hand-drawn border strokes. Seeded
-  // by card id so geometry never flickers between renders.
   const cardSketch = useMemo(() => {
     const map = new Map<string, { angle: number; borderPaths: string[] }>();
     for (const c of layout.cards) {
@@ -122,18 +100,11 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
   const rowPitch = CARD_H + ROW_GAP;
   const totalWidth = layout.widthCols * colPitch - COL_GAP;
   const totalHeight = layout.heightRows * rowPitch - ROW_GAP;
-  // Canvas size in unscaled pixels, padding included.
   const canvasW = totalWidth + PAD * 2;
   const canvasH = totalHeight + PAD * 2;
 
-  // ---- Canvas zoom ---------------------------------------------------
-  // `scale` is the live zoom. `scaleRef` mirrors it so native wheel
-  // handlers and burst events (several wheel ticks before React commits)
-  // always read the latest value.
   const [scale, setScale] = useState(DEFAULT_CANVAS_SCALE);
   const scaleRef = useRef(scale);
-  // Set right before a scale change; applied in useLayoutEffect once the
-  // scaled canvas has its new size, so the point under the cursor stays put.
   const pendingAnchor = useRef<ZoomAnchor | null>(null);
 
   const applyScale = useCallback((next: number, pointer?: { x: number; y: number }) => {
@@ -168,7 +139,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     el.scrollTop = scroll.top;
   }, [scale]);
 
-  /** Zoom the whole canvas so it fits the viewport, then reset the scroll. */
   const fitToView = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -181,14 +151,10 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
       return;
     }
     scaleRef.current = next;
-    // Anchor at the canvas origin so the fitted view starts at the top-left.
     pendingAnchor.current = { contentX: 0, contentY: 0, mx: 0, my: 0 };
     setScale(next);
   }, [canvasW, canvasH]);
 
-  // Ctrl/Cmd + wheel zooms toward the pointer. Registered natively because
-  // React's `onWheel` is passive at the root, so preventDefault() (needed to
-  // stop the browser's page zoom) would be ignored.
   const cardCount = layout.cards.length;
   useEffect(() => {
     const el = scrollRef.current;
@@ -196,7 +162,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      // deltaMode: 0 = pixels, 1 = lines, 2 = pages.
       const unit =
         event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? el.clientHeight : 1;
       const factor = Math.exp(-event.deltaY * unit * 0.0015);
@@ -206,8 +171,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     return () => el.removeEventListener("wheel", onWheel);
   }, [applyScale, cardCount]);
 
-  // Drag anywhere on the canvas background to pan (cards keep their own
-  // click behavior). Pointer capture keeps the drag alive outside the panel.
   const panRef = useRef<{
     startX: number;
     startY: number;
@@ -218,11 +181,9 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
 
   const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
-    // Leave touch scrolling to the browser.
     if (event.pointerType === "touch") return;
     const el = scrollRef.current;
     if (!el) return;
-    // Let cards handle their own pointer events.
     if ((event.target as HTMLElement).closest("[data-card-id]")) return;
     panRef.current = {
       startX: event.clientX,
@@ -248,8 +209,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     }
   };
 
-  // Auto-follow: scroll the panel to keep the latest active card visible
-  // while streaming, and only when the active leaf is the deepest one.
   useEffect(() => {
     if (!isStreaming) return;
     if (!branchActiveLeafId) return;
@@ -257,7 +216,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
       `[data-card-id="${branchActiveLeafId}"]`,
     ) as HTMLElement | null;
     if (!el) return;
-    // Only auto-scroll if the card is below the visible viewport.
     const parent = scrollRef.current;
     if (!parent) return;
     const elRect = el.getBoundingClientRect();
@@ -300,7 +258,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     );
   }
 
-  // Build the SVG path for each edge.
   return (
     <div style={{ height: "100%", position: "relative", overflow: "hidden" }}>
       <div
@@ -315,18 +272,13 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
           position: "relative",
           cursor: panning ? "grabbing" : "grab",
           userSelect: panning ? "none" : undefined,
-          // Faint dot grid — the sketch pad the tree is drawn on.
           backgroundColor: "var(--bg)",
           backgroundImage:
             "radial-gradient(color-mix(in srgb, var(--text-dim) 22%, transparent) 0.7px, transparent 0.8px)",
           backgroundSize: "18px 18px",
         }}
       >
-        {/* In-flow spacer: gives the scroll container the *scaled* canvas
-            footprint so the scrollbars track the zoom level. */}
         <div aria-hidden style={{ width: canvasW * scale, height: canvasH * scale }} />
-        {/* Canvas layer: unscaled size, visually zoomed by the transform.
-            Out of flow so the spacer above alone decides the scroll extent. */}
         <div
           style={{
             position: "absolute",
@@ -347,7 +299,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
             height: totalHeight,
           }}
         >
-          {/* SVG overlay for edges + edge labels */}
           <svg
             width={totalWidth}
             height={totalHeight}
@@ -359,11 +310,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               if (!parent || !child) return null;
               const onActive =
                 tree.activePathIds.has(parent.id) && tree.activePathIds.has(child.id);
-              // The active leaf path is the ONLY indicator of the current
-              // branch (cards themselves are uniform). Bump the active
-              // stroke well above the inactive one so it reads at a glance.
-              // Edges touching a compaction card use a dashed stroke so
-              // users can spot the "before" / "after" split at a glance.
               const touchesCompaction = parent.role === "compaction" || child.role === "compaction";
               const stroke = onActive ? "var(--accent)" : "var(--text-dim)";
               const strokeWidth = onActive ? 2.5 : 1;
@@ -372,22 +318,16 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               const py = parent.y * rowPitch + CARD_H;
               const cx = child.x * colPitch + CARD_W / 2;
               const cy = child.y * rowPitch;
-              // Same column: straight vertical line.
-              // Different column: down, jog horizontal, then down. Both are
-              // drawn as rough hand-drawn curves seeded by the edge id.
               let labelX: number;
               let labelY: number;
               let points: [number, number][];
               if (parent.x === child.x) {
                 points = [[px, py], [cx, cy]];
-                // Center the chip on the vertical line at its midpoint.
                 labelX = px;
                 labelY = (py + cy) / 2;
               } else {
                 const midY = py + ROW_GAP / 2;
                 points = [[px, py], [px, midY], [cx, midY], [cx, cy]];
-                // Park the chip on the horizontal jog so it doesn't fight
-                // the right-angle bends.
                 labelX = (px + cx) / 2;
                 labelY = midY;
               }
@@ -397,11 +337,7 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                   ? formatRoundLabel(edge.roundStats, t)
                   : null;
               const chipH = 14;
-              // The chip itself gets a tiny sketchy tilt (seeded, stable).
               const labelRotate = sketchRotateDeg(`${edge.fromId}->${edge.toId}:label`, 3.5);
-              // While the agent is working, the active branch's connector
-              // animates: dashes march from the parent card (start point)
-              // toward the child card (end point). See .tree-edge-flow.
               const flowing = agentRunning && onActive;
               return (
                 <g key={`${edge.fromId}->${edge.toId}`}>
@@ -418,10 +354,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                   />
                   {label && (
                     <g transform={`rotate(${labelRotate.toFixed(2)} ${labelX} ${labelY})`}>
-                      {/* Background pill that breaks the line so the label
-                          reads as a chip *on* the connector (not a label
-                          floating over the line). fill = panel bg → the
-                          dashed line "passes behind" the chip. */}
                       <rect
                         x={labelX - label.width / 2}
                         y={labelY - chipH / 2}
@@ -447,10 +379,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               );
             })}
           </svg>
-          {/* Card layer. The active leaf path is communicated solely via the
-              edge strokes above — cards themselves are uniform (no per-card
-              highlight/dim) so the only "lit vs unlit" signal is which line
-              connects them. */}
           {layout.cards.map((card) => {
             const sketch = cardSketch.get(card.id);
             return (
@@ -461,11 +389,9 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                   position: "absolute",
                   left: card.x * colPitch,
                   top: card.y * rowPitch,
-                  // Slight tilt per card — hand-written sticky note look.
                   transform: `rotate(${sketch?.angle.toFixed(2) ?? 0}deg)`,
                 }}
               >
-                {/* Hand-drawn border strokes, above the card's flat fill. */}
                 {sketch && (
                   <svg
                     width={CARD_W}
@@ -499,10 +425,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                 )}
                 <ConversationTreeCard
                   card={card}
-                  // Lock every card for the entire agent turn, not just the
-                  // streaming sub-window. The agent can be busy with tool
-                  // calls between LLM turns, and switching branches then
-                  // would race the in-flight response just the same.
                   disabled={agentRunning}
                   width={CARD_W}
                   height={CARD_H}
@@ -516,7 +438,6 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
         </div>
         </div>
       </div>
-      {/* Zoom controls, pinned to the panel (not the scrolling canvas). */}
       <div
         style={{
           position: "absolute",

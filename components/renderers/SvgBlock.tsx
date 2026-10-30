@@ -9,38 +9,11 @@ import { FullscreenOverlay } from "@/components/ui/FullscreenOverlay";
 
 interface Props {
   code: string;
-  /**
-   * When true (parent is mid-stream), suppresses error display so partial
-   * SVG during streaming doesn't flash "Failed to render" on every token.
-   * The render attempt still runs on every code change, so a complete
-   * block switches to the rendered view as soon as the closing </svg>
-   * tag is written — even if the rest of the message is still streaming.
-   */
   isStreaming?: boolean;
 }
 
-// Match a real <svg> element opener, not just the substring "svg". Whitespace
-// OR ">" must follow the tag name so that `<svg>` and `<svg foo="bar">` both
-// qualify but `<svgfoo>` (not real SVG) does not.
 const SVG_TAG_RE = /<svg[\s>]/i;
 
-/**
- * Renders a `svg` fenced code block as an inline SVG image. Used wherever
- * MessageView and FileViewer detect
- * ```svg blocks inside markdown and want to replace react-markdown's
- * default `pre > code` fallback with an actual image.
- *
- * The SVG string is sanitized through DOMPurify's built-in SVG profile
- * before injection via dangerouslySetInnerHTML. That profile strips
- * `<script>`, event handlers, `javascript:` URLs, and other active content
- * while preserving the SVG element + attribute set — so a hostile SVG
- * cannot execute JS in the pi-work page context.
- *
- * If the sanitized output doesn't contain an `<svg>` element (invalid
- * markup, empty block, comments-only, host of active content that DOMPurify
- * removed entirely) we fall through to the raw source view so the user
- * can still see what was written.
- */
 export function SvgBlock({ code, isStreaming }: Props) {
   const { t } = useI18n();
   const [copied, flashCopied] = useTransientFlag();
@@ -69,8 +42,6 @@ export function SvgBlock({ code, isStreaming }: Props) {
 
   const onDownload = useCallback(() => {
     if (!svg) return;
-    // The sanitized SVG is emitted without an XML prolog; a prolog makes
-    // the file open cleanly in standalone viewers.
     const blob = new Blob(
       ['<?xml version="1.0" encoding="UTF-8"?>\n', svg],
       { type: "image/svg+xml;charset=utf-8" },
@@ -85,13 +56,6 @@ export function SvgBlock({ code, isStreaming }: Props) {
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }, [svg]);
 
-  // Body swap mirrors MermaidBlock: show the sanitized SVG when in rendered
-  // mode and sanitization produced an `<svg>` element; otherwise show the
-  // raw source. The outer scroll viewport owns `overflow: auto` so both
-  // axes can scroll; the inner wrapper enforces `max-width: 100%` so wide
-  // diagrams scale down rather than forcing horizontal scroll on narrow
-  // viewports (the SVG's own viewBox / preserveAspectRatio governs
-  // proportions).
   const showRendered = viewMode === "rendered" && svg;
   const body = showRendered ? (
     <div

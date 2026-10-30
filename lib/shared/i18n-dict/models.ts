@@ -1,9 +1,4 @@
-// ModelsConfig + provider/model configuration UI.
-// All keys relating to /api/models, ~/.pi/agent/models.json, provider cards.
-
 export const models = {
-  // Panel view label (tab strip). The right-bar tooltip and palette entry
-  // reuse the longer "Open models config" wording from the commands dict.
   "Models config": "模型配置",
   "Test connection": "测试连接",
   "Testing connection...": "正在测试连接…",
@@ -14,7 +9,6 @@ export const models = {
   "Save configuration before testing.": "请先保存配置，再测试连接。",
   "Tests saved configuration with a short request. May incur API charges. Diagnostics are redacted; review before sharing.": "使用已保存的配置发送简短请求，可能产生 API 费用。诊断信息已脱敏，分享前仍请检查。",
 
-  // About / sources
   "About model catalog sources": "关于模型目录来源",
   "Pi's pi-ai SDK builds the static catalog with generate-models.ts. It combines external catalogs with Pi-maintained provider-specific overrides, then generates the bundled model metadata files.": "Pi 的 pi-ai SDK 会在构建时运行 generate-models.ts，合并外部目录与 Pi 维护的 provider 专属覆盖配置，再生成随 SDK 发布的模型元数据文件。",
   "Build-time sources": "构建时数据来源",
@@ -50,7 +44,6 @@ export const models = {
   "Failed to load model catalog": "加载模型目录失败",
   "No matching providers or models": "没有匹配的厂商或模型",
 
-  // Model card fields
   "API": "API",
   "Context window": "上下文窗口",
   "Max output": "最大输出",
@@ -77,7 +70,6 @@ export const models = {
   "Raw JSON must be an object": "原始 JSON 必须是一个对象",
   "Raw metadata hint": "未在表单中暴露的字段（如 compat）可点击\u201c以 JSON 编辑\u201d直接修改，或手编 ~/.pi/agent/models.json。",
 
-  // Provider / model management
   "Provider": "提供商",
   "Model": "模型",
   "Default model": "默认模型",
@@ -113,10 +105,8 @@ export const models = {
   "Enter new key to replace...": "输入新 key 以替换...",
   "Removing...": "正在移除...",
   "Disconnect": "断开连接",
-  // Panel close guard: the tab × while a subscription login is running.
   "Close while signing in?": "登录尚未完成，确认关闭？",
   "The authorization in progress will be cancelled.": "进行中的授权将被取消。",
-  // Panel close guard: the tab × while the draft has unsaved changes.
   "Your model configuration changes will be lost.": "你的模型配置改动将会丢失。",
   "Your model configuration changes will be lost and the authorization in progress will be cancelled.": "你的模型配置改动将会丢失，进行中的授权也将被取消。",
   "new model": "新模型",
@@ -124,19 +114,16 @@ export const models = {
   "Add provider": "添加提供商",
   "No providers configured": "还没有配置任何提供商",
 
-  // Common action labels reused inside the models panel
   "Add Skill": "添加技能",
   "Select a skill": "选择一个技能",
   "Search skills hint": "搜索 skills.sh，为你的 Agent 发现并安装技能。",
   "Visible in model prompt - click to disable": "在模型提示词中可见 - 点击禁用",
   "Hidden from model prompt - click to enable": "对模型提示词隐藏 - 点击启用",
 
-  // Skills locked by SKILL.md frontmatter (disable-model-invocation: true)
   "Locked": "已锁定",
   "Locked by SKILL.md frontmatter (disable-model-invocation)": "已由 SKILL.md frontmatter（disable-model-invocation）锁定",
   "This skill sets disable-model-invocation: true in its frontmatter, so pi never lists it in the system prompt. It can still be invoked explicitly via /skill:name.": "该技能在 frontmatter 中声明了 disable-model-invocation: true，pi 不会将其列入系统提示词，只能通过 /skill:name 手动调用。",
 
-  // Save / load feedback
   "Failed to load models": "加载模型配置失败",
   "API key saved": "API 密钥已保存",
   "API key removed": "API 密钥已移除",

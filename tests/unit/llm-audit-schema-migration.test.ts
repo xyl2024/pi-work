@@ -5,18 +5,10 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import type { ProviderCallInsert } from "@/lib/shared/llm-audit-types";
 
-/**
- * The audit DB of an install that ran before request bodies were linked to
- * model calls has no `call_id` column. Opening it must still work (idempotent
- * migration), keep the old rows readable, and accept new rows with a call id —
- * the chat's download button relies on that column existing.
- */
-
 let dir: string;
 const originalLogFile = process.env.PI_WORK_LOG_FILE;
 process.env.PI_WORK_LOG_FILE = "off";
 
-/** Schema as shipped before `call_id` (and before cwd/session_name). */
 const LEGACY_SCHEMA = `
   CREATE TABLE provider_calls (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,

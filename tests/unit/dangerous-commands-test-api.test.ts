@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { api } from "./helpers";
 
-/**
- * `POST /api/dangerous-commands/test` over the real HTTP path: the verdict the
- * settings page's command tester shows, reached through auth, JSON parsing and
- * the server-side evaluator the `tool_call` gate also calls.
- *
- * The three-outcome detail (including a user-rule match, which needs a rule in
- * `config.yaml`) is driven at the route level in
- * `dangerous-commands-test-route.test.ts`; the read/write faces of this
- * endpoint's route live in `dangerous-commands-api.test.ts`. This file pins the
- * part only real HTTP can show: the verdict survives auth, JSON and the
- * server-side evaluator, in the contract's shape.
- */
 describe("dangerous command test api", () => {
   it("reports a command self-protection would hard-block", async () => {
     const { status, body } = await api("/api/dangerous-commands/test", {

@@ -1,32 +1,5 @@
 "use client";
 
-/**
- * Toast notification overlay — provider, viewport, and per-item card.
- *
- * Design notes
- * ────────────
- *  • Live in the bottom-right corner. Less likely than top-center to
- *    fight header / chat scrolls and easier to ignore when the toast
- *    is purely informational.
- *  • Four kinds: success / error / info / warning. Audio falls back to
- *    `toast_info` for the warning kind because `toast_warning` is not
- *    a sound event id; extending the closed `UI_SOUND_EVENT_IDS` enum
- *    would force migration on every existing config.yaml.
- *  • Visual hierarchy: leading tinted icon disc → bold message →
- *    optional muted description → trailing optional action button.
- *  • Progress bar shows remaining time. Hovering or focusing pauses the
- *    countdown; leaving / blurring resumes it. Clicks dismiss.
- *  • Honors `prefers-reduced-motion`: entrance/exit animations and the
- *    progress bar are disabled — toasts still appear and dismiss.
- *  • Dedupes identical kind+message within a 1s window so a rapid-fire
- *    success doesn't stack 5 copies.
- *  • Caps concurrent toasts at MAX_VISIBLE; older ones dismiss instantly
- *    (no exit animation) to make room.
- *  • API: `show(input)` and `dismiss(id)`. Inputs are backward-compatible
- *    with the original `{ kind, message, durationMs }` shape — adding
- *    fields never breaks callers.
- */
-
 import {
   createContext,
   useCallback,
@@ -53,7 +26,6 @@ export interface ToastInput {
   durationMs?: number;
   description?: string;
   action?: ToastAction;
-  /** Pass `false` to hide the leading icon disc. Default `true`. */
   icon?: boolean;
 }
 
@@ -65,10 +37,6 @@ interface ToastItem extends Required<Pick<ToastInput, "kind" | "durationMs" | "i
 }
 
 interface ToastContextValue {
-  /**
-   * Show a toast. Returns the toast id so the caller can dismiss it
-   * later (e.g. when a follow-up event supersedes the message).
-   */
   show: (input: ToastInput) => string;
   dismiss: (id: string) => void;
 }
@@ -86,12 +54,6 @@ function nextId(): string {
   return `toast-${Date.now()}-${_idCounter}`;
 }
 
-// ── Color palettes ───────────────────────────────────────────────────────
-// Each kind gets a foreground (icon + progress), a low-tint background fill,
-// and a border that's slightly stronger than the fill. Tones intentionally
-// avoid using `var(--success)` etc. directly because the toast is overlaid
-// on top of opaque panels — slightly darker/saturated values read better on
-// both the light and dark themes.
 interface KindTone {
   fg: string;
   bg: string;
@@ -126,22 +88,16 @@ const KIND_TONE: Record<ToastKind, KindTone> = {
   },
 };
 
-// ── Provider ────────────────────────────────────────────────────────────
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Push the current ui_sounds config into the sound dispatcher. Module-
-  // scoped state means a second consumer sees the same snapshot the user
-  // just toggled in Settings.
   const settings = useEnsureSettings();
   useEffect(() => {
     setUiSoundsConfig(settings?.ui_sounds ?? null);
   }, [settings?.ui_sounds]);
 
-  // Browsers only allow an AudioContext to resume after a user gesture. Unlock
-  // once, then later toasts (including async agent results) can be audible.
   useEffect(() => {
     const unlock = () => {
       unlockUiSounds();
@@ -156,11 +112,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Mirror last-shown timestamps so deduplication is robust to rapid callers.
-  // The window is short (1s) and the map is bounded; no eviction needed.
   const lastShownRef = useRef<Map<string, number>>(new Map());
 
-  // ── Mutation helpers ────────────────────────────────────────────────
   const removeItem = useCallback((id: string) => {
     setItems((prev) =>
       prev.some((it) => it.id === id) ? prev.filter((it) => it.id !== id) : prev,
@@ -178,9 +131,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Kick off the exit animation, then remove from state after the duration
-  // matches CSS. The dismiss id is stable so multiple clicks don't restart
-  // the animation.
   const dismiss = useCallback(
     (id: string) => {
       setExitingIds((prev) => {
@@ -199,26 +149,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const kind: ToastKind = input.kind ?? "info";
       const message = input.message;
       const durationMs = input.durationMs ?? DEFAULT_DURATION_MS;
-      const icon = input.icon !== false; // default true
+      const icon = input.icon !== false;
 
       if (!message || typeof message !== "string") {
-        // Defensive: callers occasionally pass null / undefined. We refuse
-        // rather than render "(no text)" as a visible toast — that would
-        // just confuse the user.
         return "";
       }
 
-      // Dedup identical kind+message inside the window so a flaky retry
-      // loop can't spam the viewport with the same copy five times.
       const dedupKey = `${kind}:${message}`;
       const now = Date.now();
       const last = lastShownRef.current.get(dedupKey) ?? 0;
       if (now - last < DEDUPE_WINDOW_MS) return "";
       lastShownRef.current.set(dedupKey, now);
 
-      // Sound dispatch. The user can silence any of these via Settings →
-      // UI Sounds; "warning" intentionally reuses the toast_info event so we
-      // don't have to extend the closed sound-event-id enum.
       playUiSoundEvent(
         kind === "success"
           ? "toast_success"
@@ -241,9 +183,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setItems((prev) => {
         const next = [...prev, item];
         if (next.length > MAX_VISIBLE) {
-          // Drop the oldest without an exit animation so the user sees
-          // fewer state transitions on a hot path. The kept cap means
-          // a burst still renders only MAX_VISIBLE simultaneously.
           return next.slice(next.length - MAX_VISIBLE);
         }
         return next;
@@ -272,9 +211,6 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-// ── Viewport ────────────────────────────────────────────────────────────
-// Bottom-right corner: doesn't fight header dropdowns / chat scrolls and
-// matches the convention macOS / GitHub / Linear use.
 function ToastViewport({
   items,
   exitingIds,
@@ -315,7 +251,6 @@ function ToastViewport({
   );
 }
 
-// ── Card ────────────────────────────────────────────────────────────────
 function ToastCard({
   item,
   exiting,
@@ -326,9 +261,6 @@ function ToastCard({
   onDismiss: () => void;
 }) {
   const tone = KIND_TONE[item.kind];
-  // Pause auto-dismiss while the user is hovering or has focus inside the
-  // toast. The pause is communicated through a CSS class so the progress
-  // bar transitions smoothly instead of jumping when the user mouses over.
   const [paused, setPaused] = useState(false);
 
   return (
@@ -361,21 +293,13 @@ function ToastCard({
         color: "var(--text)",
         cursor: "pointer",
         overflow: "hidden",
-        // Soft, layered shadow. The first shadow hugs the card; the second
-        // lifts it off the page so a glance picks it up even on a busy
-        // background.
         boxShadow:
           "0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
-        // Backdrop blur is gated behind the @supports below; unsupported
-        // browsers fall back to the opaque panel background.
         backdropFilter: "blur(8px) saturate(140%)",
         WebkitBackdropFilter: "blur(8px) saturate(140%)",
         willChange: "transform, opacity",
       }}
     >
-      {/* Tinted kind wash — gives each toast a faint colored bias toward
-          its tone so the user can read the kind at a glance, even before
-          reading the icon. */}
       <div
         aria-hidden
         style={{
@@ -453,9 +377,6 @@ function ToastCard({
             </button>
           )}
         </div>
-        {/* Manual close — small × button. The whole card is also clickable,
-            but offering an explicit × is the expected affordance on
-            notification cards. */}
         <button
           type="button"
           aria-label="Dismiss"
@@ -490,10 +411,6 @@ function ToastCard({
         </button>
       </div>
 
-      {/* Progress bar at the bottom. Always rendered; the inner element
-          shrinks horizontally instead of moving, so a paused state can
-          hold the bar frozen mid-way with a `paused` class flag. The
-          duration is unique per toast so they animate independently. */}
       <div
         aria-hidden
         style={{
@@ -523,7 +440,6 @@ function ToastCard({
   );
 }
 
-// ── Icon ────────────────────────────────────────────────────────────────
 function ToastIcon({
   kind,
   tone,

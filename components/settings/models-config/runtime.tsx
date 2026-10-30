@@ -10,10 +10,6 @@ import { ModelCard } from "./ModelCard";
 import { ModelConnectionTest } from "./ModelConnectionTest";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
-/**
- * Icon-only "up one level" control, shared by the panel pages that host these
- * bodies.
- */
 function BodyBackButton({ onClick }: { onClick: () => void }) {
   const { t } = useI18n();
   return (
@@ -64,8 +60,6 @@ export function RuntimeModelCatalog() {
   const query = search.trim().toLowerCase();
   const visibleProviders = useMemo(() => catalog.providers.map((provider) => {
     if (!query) return provider;
-    // Provider metadata only: `JSON.stringify(provider)` would embed every model,
-    // so a model hit would make the whole provider look like a match.
     const providerMatches = `${provider.id} ${provider.name} ${JSON.stringify({ ...provider, models: undefined })}`
       .toLowerCase()
       .includes(query);
@@ -248,11 +242,6 @@ export function ModelCatalogPickerBody({
   );
 }
 
-/**
- * First step of the "add custom model" flow: type a model name, full-text
- * search the runtime catalog, pick a result with ↑/↓ + Enter to fill the
- * model entry, or skip to continue with an empty form.
- */
 export function AddModelNameStepBody({
   onSelect,
   onSkip,

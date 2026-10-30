@@ -1,19 +1,6 @@
-/**
- * Pure helpers for the scheduler UI: cron → natural language, relative
- * time formatting, run stats, and a thin fetch wrapper with friendly
- * errors. No React imports here — keeps it easy to unit-test in plain TS.
- */
-
 import type { Locale } from "@/lib/shared/i18n-dict";
 import type { TaskRun, TaskRunStatus } from "@/lib/shared/scheduler";
 
-// ── Time helpers ─────────────────────────────────────────────────
-
-/**
- * "2 minutes ago", "in 3 hours", "just now". Falls back to the absolute
- * timestamp once the gap exceeds 7 days in either direction. Always
- * stable for a given `(now, ts)` pair so the UI doesn't flicker.
- */
 export function formatRelative(now: number, ts: number | null, locale: Locale = "zh"): string {
   if (ts === null || !Number.isFinite(ts)) return "—";
   const diffMs = ts - now;
@@ -45,10 +32,6 @@ export function formatRelative(now: number, ts: number | null, locale: Locale = 
   return new Date(ts).toLocaleString();
 }
 
-/**
- * Compact "Next 2h14m" / "Last 3d". Used in the list rows where the full
- * "2 hours 14 minutes from now" would be too wide.
- */
 export function formatCompactRelative(now: number, ts: number | null, locale: Locale = "zh"): string {
   if (ts === null || !Number.isFinite(ts)) return "—";
   const diffMs = ts - now;
@@ -69,7 +52,6 @@ export function formatCompactRelative(now: number, ts: number | null, locale: Lo
   return new Date(ts).toLocaleDateString();
 }
 
-/** "5.2s" / "1m 12s" / null. */
 export function formatDuration(ms: number | null): string | null {
   if (ms === null || !Number.isFinite(ms)) return null;
   if (ms < 1000) return `${ms}ms`;
@@ -80,20 +62,13 @@ export function formatDuration(ms: number | null): string | null {
   return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
 }
 
-// ── Cron → natural language ──────────────────────────────────────
-
 const WEEKDAY_NAMES: Record<Locale, readonly string[]> = {
   zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
   en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 };
 
-/** UI 展示顺序：周一到周日（cron 值 1..6, 0）。 */
 export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-/**
- * 解析 cron day-of-week 字段（`*` / `1,3,5` / `1-5` / `7`），按 UI 顺序
- * （周一到周日）返回选中的 cron 值集合。`*` 视为全选。
- */
 export function parseDowList(dow: string): number[] {
   if (dow === "*") return [...DAY_ORDER];
   const set = new Set<number>();
@@ -111,10 +86,6 @@ export function parseDowList(dow: string): number[] {
   return DAY_ORDER.filter((d) => set.has(d));
 }
 
-/**
- * 是否为 7 段单次 cron（秒=0、周=*、年具体）。单次任务执行后 croner
- * 的 `nextRun()` 返回 null，调度 loop 把 `next_run_at` 置空、任务自动停止。
- */
 export function isOnceCron(cron: string): boolean {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 7) return false;
@@ -128,18 +99,10 @@ function joinNames(locale: Locale, days: number[]): string {
   return locale === "zh" ? names.join("、") : names.join(", ");
 }
 
-/**
- * Convert a 5-segment cron (minute hour day-of-month month day-of-week)
- * into a short human sentence. Best-effort: any segment we can't fully
- * describe falls back to "*" / "each". Always returns *something* — we
- * never throw on parse failures so the UI can render a row even with a
- * broken cron (the form's cron builder will show the syntax error).
- */
 export function cronHumanize(cron: string, locale: Locale = "zh"): string {
   const parts = cron.trim().split(/\s+/);
   const zh = locale === "zh";
 
-  // 单次（7 段：秒 分 时 日 月 周 年）→ "一次性 · YYYY年M月D日 HH:MM"
   if (parts.length === 7) {
     const [sec, min, hour, dom, mon, dow, year] = parts;
     if (sec === "0" && dow === "*" && /^\d{4}$/.test(year)
@@ -158,12 +121,10 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
 
   const [min, hour, dom, mon, dow] = parts;
 
-  // Special: "@every minute"
   if (min === "*" && hour === "*" && dom === "*" && mon === "*" && dow === "*") {
     return zh ? "每分钟" : "every minute";
   }
 
-  // @hourly / @daily / @weekly / @monthly / @yearly
   if (min === "0" && hour === "*" && dom === "*" && mon === "*" && dow === "*") return zh ? "每小时整点" : "every hour";
   if (min === "0" && hour === "0" && dom === "*" && mon === "*" && dow === "*") return zh ? "每天 00:00" : "daily at 00:00";
   if (min === "0" && hour === "0" && dom === "*" && mon === "*" && (dow === "1" || dow === "1-5" || dow === "MON-FRI")) {
@@ -171,17 +132,14 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
     return zh ? "每个工作日" : "every weekday";
   }
 
-  // Specific minute + hour + everything wildcard  → "每天 HH:MM"
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "*") {
     return zh ? `每天 ${pad(hour)}:${pad(min)}` : `daily at ${pad(hour)}:${pad(min)}`;
   }
 
-  // "工作日 HH:MM"
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "1-5") {
     return zh ? `每个工作日 ${pad(hour)}:${pad(min)}` : `every weekday at ${pad(hour)}:${pad(min)}`;
   }
 
-  // "每周X HH:MM"（X 为 1-7 天）
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*") {
     const days = parseDowList(dow);
     if (days.length > 0) {
@@ -189,12 +147,10 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
     }
   }
 
-  // "每 N 分钟" — */N in minute field
   if (min.startsWith("*/") && hour === "*" && dom === "*" && mon === "*" && dow === "*") {
     return zh ? `每 ${min.slice(2)} 分钟` : `every ${min.slice(2)} minutes`;
   }
 
-  // "每 N 小时" — 0 in minute, */N in hour（可带星期限定）
   if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*") {
     const n = hour.slice(2);
     if (dow === "*") return zh ? `每 ${n} 小时` : `every ${n} hours`;
@@ -204,7 +160,6 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
     }
   }
 
-  // Generic fallback: show raw cron in a code-like phrase
   return cron;
 }
 
@@ -216,26 +171,18 @@ function pad(s: string): string {
   return s.padStart(2, "0");
 }
 
-// ── Run stats ────────────────────────────────────────────────────
-
 export interface TaskRunStats {
   total: number;
   success: number;
-  failed: number;          // error + timeout + interrupted
+  failed: number;
   timedOut: number;
   interrupted: number;
-  successRate: number;     // 0..1, or 0 if no completed runs
+  successRate: number;
   avgDurationMs: number | null;
   lastSuccessAt: number | null;
   lastFailedAt: number | null;
 }
 
-/**
- * Compute aggregate stats from a list of runs. Used by the overview tab.
- * Treats running/in-flight runs as "in progress, not counted" — they're
- * excluded from success/failure denominators so a long-running task
- * doesn't temporarily deflate the success rate.
- */
 export function computeStats(runs: TaskRun[]): TaskRunStats {
   let total = 0;
   let success = 0;
@@ -283,15 +230,9 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
   };
 }
 
-/**
- * 单次任务是否已执行完毕：7 段 cron + 无下次运行时间 + 已有历史运行。
- * 执行后 loop 会把 next_run_at 置空，任务不会再次触发。
- */
 export function isOnceDone(task: { cron: string; nextRunAt: number | null; lastRunAt: number | null }): boolean {
   return isOnceCron(task.cron) && task.nextRunAt === null && task.lastRunAt !== null;
 }
-
-// ── Status helpers ───────────────────────────────────────────────
 
 export type StatusVariant = TaskRunStatus | "paused" | "disabled" | "enabled" | "done";
 

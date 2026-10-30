@@ -1,20 +1,3 @@
-/**
- * CRUD + aggregate queries for `token_calls`. Mirrors the conventions in
- * `lib/scheduler-store.ts`: snake_case SQL columns, typed `Row` interface,
- * `rowToCall()` mapper, prepared-statement lookups.
- *
- * Writes use `INSERT OR IGNORE` (with `UNIQUE(session_id, message_id)` from
- * the schema) because pi can replay `message_end` events across SSE
- * reconnects and during compaction rebuilds — a duplicate row must be
- * silently skipped, not surface as a `SqliteError`.
- *
- * Types and pure helpers live in sibling client-safe modules
- * (`lib/token-audit-types.ts`, `lib/hour-series.ts`) so the panel can
- * `import type` from them without dragging `better-sqlite3` / `fs` into
- * the client bundle. The re-exports below are kept for backward compat
- * with existing server-side callers.
- */
-
 import { getTokenAuditDb } from "./token-audit-db";
 import { createLogger } from "./logger";
 import { parseLocalHourKey } from "./hour-series";
@@ -39,7 +22,6 @@ import type {
 
 const log = createLogger("token-audit-store");
 
-// Re-export types so existing server-side callers don't have to change.
 export type { CallPurpose, CallSource, CallStatus, HourBucket, Range, GroupBy, MessageCallMetrics, ModelCallInsert, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
 
 const CALL_PURPOSES = new Set<CallPurpose>([
@@ -65,7 +47,6 @@ function mapStatus(value: string | null): CallStatus {
   return value && CALL_STATUSES.has(value as CallStatus) ? (value as CallStatus) : "unknown";
 }
 
-/** One unified row: a billing row, a model-call row, or both joined. */
 interface Row {
   id: number;
   call_id: string;
@@ -131,7 +112,6 @@ function rowToCall(r: Row): TokenCall {
   };
 }
 
-/** Compute the lower-bound epoch-ms for a range, or null for "all". */
 function rangeCutoff(range: Range): number | null {
   const now = Date.now();
   if (range === "today") {
@@ -173,25 +153,10 @@ const INSERT_MODEL_CALL_SQL = `
      @ttftMs, @generationDurationMs, @durationMs, @outputTokens, @error)
 `;
 
-/**
- * Persist the timing/usage facts of one logical model call. Throwing is
- * intentional: the caller (the runtime wrapper) treats a storage failure as
- * log-and-continue so the model call itself never fails because of metrics.
- */
 export function recordModelCall(input: ModelCallInsert): void {
   getTokenAuditDb().prepare(INSERT_MODEL_CALL_SQL).run(input);
 }
 
-/**
- * Unified per-call query: one row per real call.
- *
- * - A billing row with no matching model-call row is exposed as a historical
- *   call (`status = 'unknown'`, nullable metrics NULL), never retrofitted.
- * - A model-call row is exposed once and enriched with its billing row's
- *   usage/cost when one exists (matched by session + message timestamp).
- * - A model-call row whose billing row has not been written yet (or never
- *   will be, e.g. failure) still appears on its own.
- */
 function unifiedCallsQuery(range: Range, sessionId?: string | null): { sql: string; args: unknown[] } {
   const cutoff = rangeCutoff(range);
 
@@ -302,7 +267,6 @@ export function listCalls(p: ListCallsParams): { rows: TokenCall[]; total: numbe
   const totalRow = db
     .prepare(`SELECT COUNT(*) AS n FROM (${sql})`)
     .get(...args) as { n: number };
-  // Same start time is ordered by the stable call id so pages never reorder.
   const rows = db
     .prepare(
       `SELECT * FROM (${sql}) ORDER BY started_at DESC, call_id DESC LIMIT ? OFFSET ?`,
@@ -321,16 +285,6 @@ interface MessageMetricRow {
   generation_duration_ms: number | null;
 }
 
-/**
- * Per-assistant-message timing facts for one session.
- *
- * The chat footer joins these by `String(message.timestamp)` — the same key
- * `recordModelCall` stores — so no extra id has to travel through the session
- * JSONL. Rows without a message id (failed-before-first-message calls) are
- * skipped: they have no bubble to decorate. A message id never repeats inside
- * one session (`UNIQUE(session_id, message_id)`), but the map keeps the last
- * row per id so a future schema change can't produce duplicate keys.
- */
 export function listMessageCallMetrics(sessionId: string): MessageCallMetrics[] {
   const rows = getTokenAuditDb()
     .prepare(
@@ -363,11 +317,6 @@ export function listMessageCallMetrics(sessionId: string): MessageCallMetrics[] 
   return [...byMessage.values()];
 }
 
-/**
- * Logical call ids that produced one assistant message, oldest first. The chat
- * uses it to reach the captured HTTP request behind a message: `message_id` is
- * `String(message.timestamp)`, the same key the metrics wrapper stores.
- */
 export function listMessageCallIds(sessionId: string, messageId: string): string[] {
   const rows = getTokenAuditDb()
     .prepare(
@@ -462,10 +411,6 @@ export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[])
   }
 
   if (groupBy === "hour") {
-    // Hour-of-day buckets (local time), keyed by SQLite-format 'YYYY-MM-DD HH:00'.
-    // We recover each bucket's tsMs (local-time hour boundary) by parsing the
-    // returned key string — 'localtime' gives us back the same wall-clock hour
-    // we wrote in, so going through Date in local time keeps us consistent.
     const hourCols = `
       (strftime('%Y-%m-%d %H:00', ts / 1000, 'unixepoch', 'localtime')) AS key,
       COUNT(*)                    AS calls,
@@ -503,7 +448,6 @@ export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[])
         ? "(provider || '/' || model_id)"
         : "strftime('%Y-%m-%d', ts / 1000, 'unixepoch', 'localtime')";
 
-  // Aggregate per bucket AND overall, in one pass, by UNION ALL.
   const rows = db
     .prepare(
       `
@@ -538,7 +482,6 @@ export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[])
     }
   }
 
-  // Sort buckets by costTotal DESC, then by calls DESC as tiebreak.
   buckets.sort((a, b) => {
     if (b.costTotal !== a.costTotal) return b.costTotal - a.costTotal;
     return b.calls - a.calls;
@@ -564,18 +507,8 @@ interface SessionCallMetricRow {
   generation_duration_ms: number | null;
 }
 
-/**
- * Shortest generation window that counts as a measured speed.
- *
- * The window is first → last output delta. A non-streamed or burst-delivered
- * call (translation, auto-naming, compaction, or a provider that hands every
- * delta over in one tick) compresses it to a few dozen milliseconds while the
- * provider still reports the full output usage — one such call would otherwise
- * claim thousands of tok/s and drag the session average with it.
- */
 const MIN_GENERATION_WINDOW_MS = 200;
 
-/** The "nothing measured yet" rollup: zeros for sums, `null` for every ratio. */
 function emptySessionUsage(): SessionUsageSummary {
   return {
     inputTokens: 0,
@@ -591,25 +524,6 @@ function emptySessionUsage(): SessionUsageSummary {
   };
 }
 
-/**
- * Usage + latency rollup for a set of sessions, used by the bottom status bar.
- *
- * The caller passes the selected conversation plus every session it spawned
- * (`listDescendantSubagentSessionIds`), so the numbers describe the work a
- * conversation actually caused rather than only its own turns. Both queries are
- * indexed lookups on `session_id`; the status bar polls them with the rest of
- * its snapshot.
- *
- * - Cache hit rate is aggregate (weighted by tokens, same formula as the
- *   audit panel). Input shown to the user includes cache, so the total is
- *   simply that plus output.
- * - TTFT is the mean over calls that recorded one; a reported 0ms counts.
- * - Generation speed is `Σ outputTokens / Σ generationDurationMs` over chat
- *   calls whose window is long enough to measure. Weighting by duration keeps
- *   a burst call from outweighing a long real one, and excluding non-chat
- *   purposes keeps non-interactive workloads out of a number users read as
- *   "how fast is this conversation".
- */
 export function summarizeSessions(sessionIds: readonly string[]): SessionUsageSummary {
   const ids = [...new Set(sessionIds.filter((id) => id.length > 0))];
   if (ids.length === 0) return emptySessionUsage();
@@ -647,9 +561,6 @@ export function summarizeSessions(sessionIds: readonly string[]): SessionUsageSu
   let throughputTokens = 0;
   let throughputDurationMs = 0;
   for (const row of metricRows) {
-    // TTFT is not a denominator: a reported 0ms is a real measurement, so only
-    // negative/non-finite values are rejected (unlike the throughput guard,
-    // which demands a positive duration).
     if (typeof row.ttft_ms === "number" && Number.isFinite(row.ttft_ms) && row.ttft_ms >= 0) {
       ttftSum += row.ttft_ms;
       ttftCount += 1;
@@ -661,9 +572,6 @@ export function summarizeSessions(sessionIds: readonly string[]): SessionUsageSu
     ) {
       continue;
     }
-    // `deriveCallThroughput` owns the "completed + reported usage" rules; using
-    // its verdict (rather than re-testing status here) keeps the badge in the
-    // chat and the status bar from disagreeing about what counts as a call.
     const { generationTps } = deriveCallThroughput({
       status: mapStatus(row.status),
       outputTokens: row.output_tokens,

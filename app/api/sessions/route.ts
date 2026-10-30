@@ -27,7 +27,7 @@ function decodeCursor(raw: string): Cursor | null {
     if (typeof parsed.modified === "string" && typeof parsed.id === "string") {
       return { modified: parsed.modified, id: parsed.id };
     }
-  } catch { /* fall through */ }
+  } catch {}
   return null;
 }
 
@@ -44,27 +44,6 @@ function recentCwds(sessions: SessionInfo[], topN: number): string[] {
     .map(([cwd]) => cwd);
 }
 
-/**
- * GET /api/sessions
- *
- * Query params:
- *   - `cwd`     filter to a single workspace (already filtered at the SDK layer)
- *   - `limit`   page size; if absent the response returns ALL sessions
- *               (backward-compatible with existing unpaged callers — weixin
- *               workspace refresh, etc.). When present, `cursor` may follow.
- *   - `cursor`  base64url-encoded `{modified, id}` from the previous page's
- *               last row. The next page starts strictly AFTER this point.
- *   - `q`       case-insensitive substring filter. Matches against the
- *               session name (`session_info` entry) AND against user /
- *               assistant message content. When present, the response
- *               includes `matchCount` / `snippet` / `matchLocation` per
- *               row and a `total` count for pagination. The existing
- *               /api/sessions/search endpoint (Cmd+K) stays untouched.
- *
- * Response shape (always): { sessions, recentCwds, nextCursor? }
- * `nextCursor` is included only when `limit` was supplied; null means "no more".
- * When `q` is set, `total` is appended so the modal can render a count.
- */
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const url = new URL(request.url);
@@ -87,19 +66,8 @@ export async function GET(request: Request) {
   });
 
   try {
-    // Always scan the full set under the hood (cache hit within 5s) so the
-    // recentCwds sidecar is accurate regardless of the cwd filter the caller
-    // asked for. The header-only reader stops after the first 16KB chunk
-    // (vs. full EOF scan via SessionManager.listAll) — much cheaper on hosts
-    // with many large sessions. See listAllSessionsHeaderOnly for the
-    // field-precision trade-offs vs. the full scan.
     const allSessions = await listAllSessionsHeaderOnly();
-    // The child_session_id relation is the authoritative marker. Do this
-    // before pagination so hidden subagents never consume a visible slot.
     const subagentIds = new Set(listSubagentChildSessionIds());
-    // One directory read for the whole list, not one per session: only the
-    // sessions that opted into full access (ADR-0021) appear in it, and the
-    // sidebar badge needs to know about them even before they are opened.
     const permissionModes = readSessionPermissionModes();
     const withPermissionMode = <T extends { id: string }>(row: T): T => ({
       ...row,
@@ -108,9 +76,6 @@ export async function GET(request: Request) {
     const all = allSessions.filter((session) => !subagentIds.has(session.id));
     const recent = recentCwds(all, 5);
 
-    // Search branch: paged search runs only when the caller passed both
-    // `q` and `limit`. Without `limit` we fall back to the unpaged list
-    // (caller didn't ask for pagination — don't pay the search cost).
     if (q && limit > 0) {
       if (!cwd) {
         log.warn("sessions search requires cwd", { durationMs: elapsedMs(startedAt) });
@@ -133,9 +98,6 @@ export async function GET(request: Request) {
         hasNextCursor: search.nextCursor !== null,
         durationMs: elapsedMs(startedAt),
       });
-      // Wrap the search's raw id cursor in the same base64url envelope
-      // the unpaged branch uses, so the cursor stays opaque / format-stable
-      // between pages.
       const nextCursor = search.nextCursor
         ? encodeCursor({ modified: "", id: search.nextCursor })
         : null;
@@ -147,19 +109,12 @@ export async function GET(request: Request) {
       });
     }
 
-    // Filter the workspace subset the caller asked for, then enrich with running.
     const filtered = all.filter((s) => (!cwd || s.cwd === cwd) && matchesSessionDate(s.modified, dateRange));
 
     let page = filtered;
     let nextCursor: string | null = null;
 
     if (limit > 0) {
-      // Slice starting strictly after the cursor. If the cursor's session
-      // was deleted since the previous page, fall back to the start of the
-      // list so the client still receives content. If the same id is found
-      // but its `modified` timestamp has shifted (in-session activity since
-      // the last page), start from idx+1 to skip past its new position —
-      // this avoids re-emitting a row the client already has.
       let startIdx = 0;
       if (cursor) {
         const idx = filtered.findIndex((s) => s.id === cursor.id);

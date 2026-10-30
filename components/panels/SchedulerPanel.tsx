@@ -12,16 +12,6 @@ import { SchedulerRootPage } from "./scheduler/SchedulerRootPage";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
 
-/**
- * The 定时任务 panel view body.
- *
- * The panel card only mounts the active tab's body, so this component owns no
- * page state: the list, the selection, the filters, the page stack and the form
- * draft all live in `lib/client/scheduler-store.ts`. Here it wires the re-read
- * on entry, dispatches the current page to a full-width view, and turns Escape
- * into "up one level" — falling back to the panel tab's close rule from the
- * task list.
- */
 export function SchedulerPanel({
   cwd,
   onOpenSession,
@@ -40,8 +30,6 @@ export function SchedulerPanel({
 
   const page = currentSchedulerPage(pages);
 
-  // Focus is kept inside the panel while it is the active surface, so a
-  // palette / dialog that has taken focus keeps its own Escape.
   useEffect(() => {
     const el = containerRef.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
@@ -58,8 +46,6 @@ export function SchedulerPanel({
       style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
     >
       {page.kind === "detail" ? (
-        // Remounting on taskId keeps the run history / block scoped to the task
-        // actually on screen when one detail page replaces another.
         <SchedulerDetailPage key={page.taskId} taskId={page.taskId} onOpenSession={onOpenSession} />
       ) : page.kind === "form" ? (
         <SchedulerFormPage key={page.taskId ?? "new"} />

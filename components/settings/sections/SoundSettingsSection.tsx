@@ -13,22 +13,6 @@ import {
   type UiSoundEventId,
 } from "@/lib/shared/config-types";
 
-/**
- * Section: UI sounds.
- *
- * - Master toggle + master volume slider (immediate-apply, same shape as
- *   append_system).
- * - Per-event sound picker. The first dropdown entry is "None" (empty string),
- *   which the parser keeps as "do not play for this event".
- * - "Restore defaults" button rewrites the per-event map only; the user's
- *   master volume and master switch are kept.
- * - Clicking the small speaker button next to a built-in name plays it for
- *   preview without committing to the setting.
- *
- * Lives in `components/settings/sections/`; shares the same
- * "immediate-apply" mechanism (`apply()` prop from `use-settings-write.ts`).
- */
-
 const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {
   toast_success: "Event: toast success",
   toast_error: "Event: toast error",
@@ -51,9 +35,6 @@ export function SoundSettingsSection({
   const toast = useToast();
   const sounds = config.ui_sounds;
 
-  // Master volume is an immediate setting, but the slider only writes once the
-  // drag is finished (pointerup / blur / keyboard commit). Dragging updates
-  // local state only, so one drag is one write instead of dozens.
   const [volume, setVolume] = useState(Math.round(sounds.masterVolume * 100));
   useEffect(() => {
     setVolume(Math.round(sounds.masterVolume * 100));
@@ -108,7 +89,6 @@ export function SoundSettingsSection({
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
-        {/* Master toggle */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--text)" }}>
             {t("Sounds enabled")}
@@ -120,7 +100,6 @@ export function SoundSettingsSection({
           />
         </div>
 
-        {/* Master volume */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--text)", minWidth: 100 }}>
             {t("Master volume")}
@@ -143,7 +122,6 @@ export function SoundSettingsSection({
         </div>
       </div>
 
-      {/* Per-event sound picker */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {UI_SOUND_EVENT_IDS.map((eventId) => {
           const current = sounds.events[eventId] ?? "";
@@ -175,7 +153,6 @@ export function SoundSettingsSection({
         })}
       </div>
 
-      {/* Restore defaults + preview */}
       <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <SecondaryButton onClick={restoreDefaults}>
           {t("Restore sound defaults")}

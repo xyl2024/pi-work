@@ -1,6 +1,5 @@
 import type { SoundPatch } from "@/lib/client/ui-sounds";
 
-// 破晓
 export const DAWN: SoundPatch = {
   layers: [
     {

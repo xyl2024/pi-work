@@ -17,8 +17,6 @@ import { useProcessFoldMotion } from "./hooks/useProcessFoldMotion";
 
 const MAX_TOOL_BREAKDOWN = 3;
 
-/** One process row the fold can show. ChatWindow owns what a row is (its node
- *  and its own tool calls); this component owns which slice is on screen. */
 export interface ProcessDetailsItem {
   key: string;
   node: React.ReactNode;
@@ -49,10 +47,6 @@ export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) 
     [beginTransition, fold, total],
   );
 
-  // The global "collapse all" broadcast zeroes this fold. It does not reset
-  // per-block expand state itself: the blocks unmount while collapsed and
-  // remount in their default state (the feature spec accepts that trade-off).
-  // The nonce is consumed once so a later manual expansion stays open.
   const handledCollapseNonce = useRef(0);
   useEffect(() => {
     if (collapseNonce === handledCollapseNonce.current) return;
@@ -111,7 +105,6 @@ export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) 
         aria-expanded={!collapsed}
         onClick={() => applyFoldEvent({ type: "row-click" })}
         onKeyDown={(event) => {
-          // Child buttons handle their own keys; only the row itself toggles.
           if (event.target !== event.currentTarget) return;
           if (event.key !== "Enter" && event.key !== " ") return;
           event.preventDefault();
@@ -206,8 +199,6 @@ export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) 
         style={{
           height: bodyHeight,
           overflow: "hidden",
-          // Our prepend compensation is explicit; browser scroll anchoring must
-          // not also move the viewport or the two would cancel each other out.
           overflowAnchor: "none",
           transition: motion === "animate" ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
         }}

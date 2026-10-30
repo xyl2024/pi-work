@@ -8,12 +8,9 @@ const log = createLogger("api/sessions/[id]/subagents");
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** GET /api/sessions/[id]/subagents — list children spawned by this session. */
 export async function GET(_request: Request, { params }: RouteContext) {
   const { id } = await params;
   try {
-    // Same status source as the tool's list/get: a stale `running` row that no
-    // live task backs is reported as interrupted, so the panel stops polling it.
     const base = listSubagentTasks(id).map((task) => ({
       taskId: task.taskId,
       childSessionId: task.childSessionId,

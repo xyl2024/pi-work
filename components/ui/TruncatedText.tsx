@@ -3,16 +3,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Tooltip } from "@/components/ui/Tooltip";
 
-/**
- * Text that shows Pi Work's unified `Tooltip` with the full content — but
- * only when the text is actually visually truncated (ellipsis or
- * `-webkit-line-clamp`). Untruncated text renders bare, so short names /
- * descriptions never pop a redundant tooltip.
- *
- * Works for both single-line ellipsis (`overflow:hidden` + `text-overflow`)
- * and multi-line clamp: `scrollWidth` catches the former, `scrollHeight` the
- * latter. Measurement runs after each content change.
- */
 export function TruncatedText({
   text,
   style,
@@ -24,8 +14,6 @@ export function TruncatedText({
   style?: CSSProperties;
   side?: "top" | "right" | "bottom" | "left";
   maxWidth?: number;
-  /** Show the tooltip even when the text is not truncated (e.g. for a skill
-   *  name, where the tooltip is useful regardless of overflow). */
   always?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);

@@ -4,12 +4,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../../ui/Tooltip";
 import { SectionTitle } from "./form-fields";
 
-/**
- * The raw-JSON view of a model: the serialized entry to read or copy, and a
- * textarea to edit it. Purely presentational — the owner decides what `draft`
- * means (the panel keeps it in the store) and translates `error` before passing
- * it in.
- */
 export function ModelRawSection({
   summaryJson,
   editing,

@@ -3,11 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
 
-/**
- * The "?" beside the model catalog: where the runtime catalog comes from and
- * how to refresh it. Shared by the panel's catalog page so the explanation lives
- * in one place instead of being copied around.
- */
 export function CatalogSourcesHelp() {
   const { t } = useI18n();
 

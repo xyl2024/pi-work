@@ -18,14 +18,6 @@ import { McpEntryForm } from "./McpEntryForm";
 import { McpNotice } from "./McpNotice";
 import { mcpScopeLabelKey } from "./scopeLabel";
 
-/**
- * One server's entry page: the full-width form / raw-JSON editor, plus the
- * scope picker for a server added in this session and the delete affordances.
- *
- * The page owns no state: the draft entry comes from the module store, and every
- * edit writes straight back to it, so leaving the page (or the tab) cannot lose
- * a keystroke.
- */
 export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry: McpDraftEntry }) {
   const { t } = useI18n();
   const scopeLabel = (scope: McpScope) => t(mcpScopeLabelKey(scope));

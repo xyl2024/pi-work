@@ -24,7 +24,6 @@ const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<PendingConfirm | null>(null);
-  // Hold the latest pending in a ref so async resolves always see the right one.
   const pendingRef = useRef<PendingConfirm | null>(null);
   pendingRef.current = pending;
 
@@ -36,7 +35,6 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    // If a dialog is already open, resolve the previous one as false first.
     if (pendingRef.current) {
       pendingRef.current.resolve(false);
     }
@@ -88,7 +86,6 @@ function ConfirmDialogView({
   const confirmLabel = options.confirmLabel ?? t("Delete");
   const cancelLabel = options.cancelLabel ?? t("Cancel");
 
-  // Portal target. Mount after first client render to avoid SSR mismatch.
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setPortalEl(document.body);
@@ -101,7 +98,6 @@ function ConfirmDialogView({
       role="dialog"
       aria-modal="true"
       onMouseDown={(e) => {
-        // Click on backdrop (outside the card) cancels
         if (e.target === e.currentTarget) onResolve(false);
       }}
       style={{

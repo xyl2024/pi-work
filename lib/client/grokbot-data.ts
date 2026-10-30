@@ -1,9 +1,3 @@
-// GrokBot face/expression dataset — vendored from
-// https://github.com/zhulin025/LaoA-GrokBot (MIT License, Copyright (c) 2026 老A玩AI).
-// Every expression is two eye-outline rings (left eye, right eye), each a closed
-// 48-point polygon in a 229x229 design space centered around (114.27, 114.5).
-// Data is emitted by script (scripts/convert-grokbot.mjs) — do not hand-edit.
-
 export type GrokPoint = readonly [number, number];
 export type GrokRing = readonly GrokPoint[];
 export type GrokExpression = readonly [GrokRing, GrokRing];
@@ -29,8 +23,6 @@ export interface GrokBlinkMap {
   [state: string]: [number, number] | null;
 }
 export const GROKBOT_BLINK: GrokBlinkMap = {"sleeping":null,"waking":null,"idle":[6000,14000],"listening":[3000,7000],"thinking":[3500,7000],"searching":[1600,4000],"working":[2800,5500],"excited":[2000,4000],"surprised":[1800,3500],"suspicious":[4500,8000],"angry":[3500,7000],"drowsy":null,"happy":[2500,5000],"curious":[2500,5500],"confused":[2800,5500],"bored":[4000,8000],"proud":[3500,7000],"shy":[3000,6000],"sad":[4000,8000],"laughing":[2500,5000],"scared":[1200,3000],"playful":[2000,4500],"celebrate":[2200,4500],"orbit":null,"radar":null,"progress":null,"spawning":null,"humming":[4000,8000],"loading":null,"dictating":null,"sending":null,"receiving":null,"uploading":null,"writing":null,"notifying":[2000,4000],"alerting":null,"bouncing":null,"dragging":[2200,4500],"powering-down":null};
-
-// ── Customization catalogs (from customizer.js / enhancements.js) ──
 
 export interface GrokShapeDef {
   id: string;
@@ -64,8 +56,6 @@ export const GROKBOT_ACCESSORIES: GrokToggleDef[] = [
   { id: "bowtie", name: "蝴蝶结" },
   { id: "cape", name: "披风" },
 ];
-
-// ── Display names (zh) for states / groups ──
 
 export const GROKBOT_STATE_NAMES: Record<string, string> = {
   sleeping: "睡眠", waking: "唤醒", idle: "待机", listening: "倾听", thinking: "思考",

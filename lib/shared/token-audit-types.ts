@@ -1,15 +1,6 @@
-/**
- * Client-safe shared types for the token-audit feature.
- *
- * Kept dependency-free so the panel and any other browser-side importer can
- * `import type` from here without dragging `better-sqlite3` / `fs` /
- * `@earendil-works/pi-coding-agent` into the client bundle.
- */
-
 export type Range = "today" | "7d" | "30d" | "all";
 export type GroupBy = "none" | "session" | "model" | "day" | "hour";
 
-/** Who drove the logical model call. */
 export type CallSource =
   | "user"
   | "scheduled"
@@ -17,10 +8,8 @@ export type CallSource =
   | "direct"
   | "btw"
   | "unknown";
-/** Backward-compatible alias for the billing row's source column. */
 export type Source = CallSource;
 
-/** What the call was for, independent of who drove it. */
 export type CallPurpose =
   | "chat"
   | "channel"
@@ -30,26 +19,15 @@ export type CallPurpose =
   | "auto-name"
   | "unknown";
 
-/**
- * Optional attribution for one command dispatched to a session. The call source
- * lives on the session; the purpose describes what this command's model calls
- * are for (a channel message, a compaction, …).
- */
 export interface ModelCallCommandOptions {
   purpose?: CallPurpose;
 }
 
-/**
- * Terminal state of one logical call. `unknown` exists for historical billing
- * rows that predate call-metric collection — it is never treated as success.
- */
 export type CallStatus = "completed" | "failed" | "cancelled" | "unknown";
 
 export interface TokenCall {
   id: number;
-  /** Stable identifier for this logical call (not derived from a timestamp). */
   callId: string;
-  /** Epoch ms when the logical call started. */
   ts: number;
   sessionId: string | null;
   messageId: string | null;
@@ -59,9 +37,7 @@ export interface TokenCall {
   provider: string;
   modelId: string;
   api: string | null;
-  /** `null` when billing facts are unavailable (e.g. a failed call). */
   inputTokens: number | null;
-  /** Provider-reported output tokens; `null` when usage was not reported. */
   outputTokens: number | null;
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
@@ -72,13 +48,9 @@ export interface TokenCall {
   costTotal: number | null;
   durationMs: number | null;
   error: string | null;
-  /** First effective output − call start. `null` when no output was observed. */
   ttftMs: number | null;
-  /** First effective output → last effective output. */
   generationDurationMs: number | null;
-  /** Derived at read time; never stored. */
   generationTps: number | null;
-  /** Derived at read time; never stored. */
   endToEndTps: number | null;
 }
 
@@ -114,24 +86,17 @@ export interface SummaryBucket {
   durationMs: number;
   firstAt: number;
   lastAt: number;
-  /** Average per-call duration. Present in `groupBy="hour"` output. */
   avgDurationMs?: number;
 }
 
-/** Hourly bucket — extends SummaryBucket with the absolute timestamp of the
- *  hour start, used by the 24h bar chart in the UI. */
 export interface HourBucket extends SummaryBucket {
-  /** Epoch-ms of the hour bucket's start (local-time hour boundary). */
   tsMs: number;
 }
 
-/** Persisted facts for one logical model call (performance record). */
 export interface ModelCallInsert {
   callId: string;
-  /** Epoch ms when the logical call started (wall clock, for sorting/filtering). */
   startedAt: number;
   sessionId: string | null;
-  /** Matches `token_calls.message_id` when a billing row exists for this call. */
   messageId: string | null;
   source: CallSource;
   purpose: CallPurpose;
@@ -153,20 +118,11 @@ export interface ListCallsParams {
   sessionId?: string | null;
 }
 
-/**
- * Timing facts for the assistant message one logical call produced, keyed by
- * the message timestamp the recorder stored (`String(message.timestamp)`).
- *
- * Compact by design: the chat footer asks for a whole session at once, so the
- * payload carries only what it renders. Throughput is derived at read time by
- * `deriveCallThroughput`, exactly like `TokenCall`.
- */
 export interface MessageCallMetrics {
   messageId: string;
   status: CallStatus;
   ttftMs: number | null;
   generationDurationMs: number | null;
-  /** Derived at read time; `null` for anything but a completed call. */
   generationTps: number | null;
   outputTokens: number | null;
 }
@@ -176,35 +132,15 @@ export interface SummarizeResult {
   totals: SummaryBucket;
 }
 
-/**
- * Whole-session usage rollup shown in the bottom status bar.
- *
- * Tokens/cost come from the session's billing rows; the latency facts come
- * from its model-call rows, so an unrecorded call simply contributes nothing
- * instead of a zero. `null` marks "nothing measurable" for every derived
- * number — it never means 0.
- */
 export interface SessionUsageSummary {
-  /** Uncached input only (what the provider reports as `input`). */
   inputTokens: number;
-  /**
-   * Input as the provider bills it: uncached input + cache read + cache write.
-   * This is the "In" the status bar shows, so `totalTokens` equals
-   * `inputTokensWithCache + outputTokens` with no token counted twice.
-   */
   inputTokensWithCache: number;
   outputTokens: number;
-  /** `inputTokensWithCache + outputTokens`. */
   totalTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
   costTotal: number;
-  /** `cacheReadTokens / (inputTokens + cacheReadTokens)`; `null` when no input
-   *  was billed, so "no data" never renders as 0%. */
   cacheHitRate: number | null;
-  /** Mean TTFT across calls that recorded one. */
   avgTtftMs: number | null;
-  /** `Σ outputTokens / Σ generationDurationMs` over measurable chat calls
-   *  (token-weighted, so a short burst call cannot outweigh a long one). */
   avgGenerationTps: number | null;
 }

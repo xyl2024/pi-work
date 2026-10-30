@@ -1,12 +1,3 @@
-/**
- * Pure rules shared by the model-call metrics recorder and the query mapper.
- *
- * Kept free of Node, SQLite and SDK imports so the no-metric / zero-metric
- * rules can be read (and tested) in one place. The persisted facts are the
- * raw intervals and the provider-reported output usage; TPS is always derived
- * here at read time so storage and API can never disagree about the formula.
- */
-
 import type { CallSource, CallStatus } from "./token-audit-types";
 
 const CALL_SOURCES = new Set<CallSource>([
@@ -18,18 +9,14 @@ const CALL_SOURCES = new Set<CallSource>([
   "unknown",
 ]);
 
-/** Runtime guard for values coming from the database or an audit context. */
 export function isCallSource(value: string | null | undefined): value is CallSource {
   return typeof value === "string" && CALL_SOURCES.has(value as CallSource);
 }
 
 export interface CallMetricFacts {
   status: CallStatus;
-  /** Provider-reported output tokens; `null` when usage was not reported. */
   outputTokens: number | null;
-  /** First effective output → last effective output. `null` when never observed. */
   generationDurationMs: number | null;
-  /** Logical call start → terminal event. `null` when unknown. */
   durationMs: number | null;
 }
 
@@ -42,25 +29,10 @@ export function isValidTokenCount(value: number | null | undefined): value is nu
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-/**
- * A throughput denominator is usable only when it is a positive, finite
- * number. Zero-length windows mean "no measurable generation window" (e.g. a
- * single output chunk), never "infinite speed".
- */
 export function isValidDurationMs(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
-/**
- * TPS for one logical model call.
- *
- * - Failed/cancelled calls never expose throughput, even when partial usage
- *   and a positive window were observed.
- * - Missing usage (`null`) is not zero usage; it yields `null`.
- * - A genuinely reported zero output on a completed call yields `0` for
- *   end-to-end TPS (when the denominator is valid) and `null` for generation
- *   TPS, which also requires a positive generation window.
- */
 export function deriveCallThroughput(facts: CallMetricFacts): CallThroughput {
   const completed = facts.status === "completed";
   const tokens = facts.outputTokens;

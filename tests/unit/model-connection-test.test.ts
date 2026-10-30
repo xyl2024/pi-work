@@ -51,7 +51,7 @@ describe("model connection diagnostics", () => {
 
   it("treats upstream error messages as failure and redacts echoed credentials", async () => {
     mocks.streamSimple.mockReturnValue({
-      async *[Symbol.asyncIterator]() { /* no deltas */ },
+      async *[Symbol.asyncIterator]() {},
       result: async () => ({ stopReason: "error", errorMessage: "Rejected test-secret" }),
     });
     const result = await testModelConnection("test", "model", new AbortController().signal);
@@ -94,7 +94,7 @@ describe("model connection diagnostics", () => {
     mocks.streamSimple.mockImplementation((_model, _context, options) => {
       options.onProviderStreamEvent({ delta: "x".repeat(300_000) });
       return {
-        async *[Symbol.asyncIterator]() { /* no deltas */ },
+        async *[Symbol.asyncIterator]() {},
         result: async () => ({ stopReason: "stop", content: [{ text: "y".repeat(300_000) }] }),
       };
     });

@@ -72,10 +72,10 @@ describe("buildChatTimeline visible messages", () => {
 
 describe("buildChatTimeline session ↔ visible index", () => {
   const messages: AgentMessage[] = [
-    user("one"), // session 0 → visible 0
-    assistant([toolCall("call-1")]), // session 1 → visible 1
-    toolResult("call-1"), // session 2 → invisible
-    user("two"), // session 3 → visible 2
+    user("one"),
+    assistant([toolCall("call-1")]),
+    toolResult("call-1"),
+    user("two"),
   ];
 
   it("maps session indices forward", () => {
@@ -118,7 +118,7 @@ describe("buildChatTimeline session ↔ visible index", () => {
   it("resolves an entry id to its visible index, and unknown ids to null", () => {
     const timeline = timelineOf(messages, ["e0", "e1", "e2", "e3"]);
     expect(timeline.visibleIndexOfEntry("e0")).toBe(0);
-    expect(timeline.visibleIndexOfEntry("e2")).toBe(2); // tool result → next visible
+    expect(timeline.visibleIndexOfEntry("e2")).toBe(2);
     expect(timeline.visibleIndexOfEntry("e3")).toBe(2);
     expect(timeline.visibleIndexOfEntry("missing")).toBeNull();
   });
@@ -187,9 +187,8 @@ describe("buildChatTimeline replay crop", () => {
   });
 
   it("still pairs a call with a result sitting past the crop", () => {
-    const slice = timeline.sliceForReplay(2); // tool result at index 2 is cropped out
+    const slice = timeline.sliceForReplay(2);
     expect(slice.messages.some((m) => m.role === "toolResult")).toBe(false);
-    // Pairing is built from the full conversation, so the result is still there.
     expect(timeline.toolCallVisibleIndices.get("call-a")).toBe(1);
     expect(indexToolResults(messages).get("call-a")).toBe(messages[2]);
   });

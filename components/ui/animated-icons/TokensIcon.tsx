@@ -1,5 +1,3 @@
-// Token-audit-panel glyph (ChartSpline). Hovering strokes the spline up.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -75,4 +73,3 @@ export const TokensIcon = forwardRef<TokensIconHandle, TokensIconProps>(
 );
 
 TokensIcon.displayName = "TokensIcon";
-

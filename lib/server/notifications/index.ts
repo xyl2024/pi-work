@@ -1,15 +1,3 @@
-/**
- * Notification dispatcher.
- *
- * Two entry points:
- *   - `sanitizeNotification(raw)`  — validate + normalize a whole task's
- *     notification config for persistence (used by the scheduler store).
- *   - `notify(task, outcome, payload)` — fan a run outcome out to every
- *     enabled channel configured on the task that cares about that outcome.
- *
- * Channels are self-registering (see `./channels/wechat`); importing the
- * notification index pulls them in via a side-effect import below.
- */
 import { getChannel } from "./channel";
 import "./channels/wechat";
 import { createLogger } from "@/lib/server/logger";
@@ -21,7 +9,6 @@ import type {
 
 const log = createLogger("notify");
 
-/** An outcome whose notification flag is on and that has ≥1 channel. */
 export function shouldNotify(
   notification: TaskNotification | null | undefined,
   outcome: TaskRunOutcome,
@@ -34,15 +21,9 @@ export function shouldNotify(
   return true;
 }
 
-/**
- * Validate + normalize a task's notification config. Returns null when the
- * input is null/undefined/empty (no notification configured). Throws a
- * human message when a channel is unregistered or its config is invalid.
- */
 export function sanitizeNotification(raw: unknown): TaskNotification | null {
   if (raw === null || raw === undefined) return null;
 
-  // Accept a plain object or a pre-parsed TaskNotification.
   let input: TaskNotification;
   if (typeof raw === "string") {
     try {
@@ -57,7 +38,6 @@ export function sanitizeNotification(raw: unknown): TaskNotification | null {
   }
 
   const channels = Array.isArray(input.channels) ? input.channels : [];
-  // Dedupe by (type, recipientId) and preserve order.
   const seen = new Set<string>();
   const normalizedChannels: TaskNotification["channels"] = [];
   for (const c of channels) {
@@ -83,11 +63,6 @@ export function sanitizeNotification(raw: unknown): TaskNotification | null {
   };
 }
 
-/**
- * Fan a run outcome out to every enabled channel that cares. Each channel is
- * tried independently — one failing channel never blocks the others. Returns
- * the number of successful sends (for logging/runs telemetry).
- */
 export async function notify(
   notification: TaskNotification,
   payload: NotificationPayload,

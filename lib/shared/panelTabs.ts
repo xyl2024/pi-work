@@ -1,26 +1,3 @@
-// ── Panel tab strip: identity registry + pure state machine ──────────────
-// The panel tab strip owns the whole of the right panel's open/close
-// behaviour: which panel views are open, which one is active, and whether the
-// panel itself is closed / normal / expanded. Everything in this module is
-// pure and lives in the shared layer — no React, no DOM, no server imports —
-// so its rules are unit-testable without a browser.
-//
-// Two halves:
-//   • PANEL_TAB_SPEC_BY_KIND — panel identity: kind, tab id, label key,
-//     default mode, session binding and the optional command-palette entries.
-//     This is the single source of truth for "what a panel view is".
-//   • panelTabsReducer + selectors — the strip's state machine. Label text is
-//     resolved at render time from `labelKey`, so open tabs follow a locale
-//     switch; each tab carries an `openCount` so a re-open can be observed by
-//     panels that need to refresh (git diff).
-//
-// Presentation (icon and panel body) deliberately stays outside this module:
-// the right-bar descriptors look a body up by kind. Adding a panel view is
-// three registrations — one spec here (plus its tab-id constant in ./types),
-// one presentation entry there, one body entry in the shell's
-// `PANEL_BODY_BY_KIND`. The shell holds the reducer state directly, so there is
-// no adapter layer duplicating the tab shape here.
-
 import {
   CHANNELS_TAB_ID,
   CONTEXT_TAB_ID,
@@ -36,14 +13,6 @@ import {
   TRANSLATE_TAB_ID,
 } from "./types";
 
-// ── Kinds & per-kind payloads ────────────────────────────────────────────
-
-/**
- * Kind → payload map for everything that can live in the strip. Panel views
- * carry no payload yet (so their entry is `undefined`); adding one later is a
- * single map entry, and the type of `PanelTab.params` follows automatically.
- * `file` is the file-preview tab: a viewer for one path, not a panel view.
- */
 export interface PanelTabParams {
   favorites: undefined;
   translate: undefined;
@@ -60,55 +29,37 @@ export interface PanelTabParams {
   file: { path: string };
 }
 
-/** Everything the strip can show. */
 export type PanelTabKind = keyof PanelTabParams;
-/** The panel views proper — everything except the file preview. */
 export type PanelViewKind = Exclude<PanelTabKind, "file">;
-/** Panel views label themselves through `t(labelKey)`; file tabs carry a name. */
 export type LabelKeyOf<K extends PanelTabKind> = K extends "file" ? null : string;
 
-/** The panel's own open state. Only `open` upgrades it, `set_mode` can lower it. */
 export type PanelMode = "closed" | "normal" | "expanded";
 export interface PanelTab<K extends PanelTabKind = PanelTabKind> {
-  /** Stable strip identity. A panel view reuses its tab id on every open. */
   id: string;
   kind: K;
-  /** i18n key resolved when the strip renders — never a baked-in label. */
   labelKey: LabelKeyOf<K>;
   params: PanelTabParams[K];
-  /** Incremented on every open, including re-opens of an existing tab. */
   openCount: number;
-  /** Display name — only file preview tabs carry one. */
   label?: string;
 }
 
-/**
- * The strip's tab shape, distributed over every kind so `tab.kind`
- * discriminates `tab.params` and `tab.labelKey` at the type level. This is the
- * only place the kind ↔ payload link is declared; callers narrow by kind
- * instead of maintaining their own unions.
- */
 export type AnyPanelTab = { [K in PanelTabKind]: PanelTab<K> }[PanelTabKind];
 
 export interface PanelTabsState {
-  /** Open tabs, newest first — the order the strip renders them in. */
   tabs: AnyPanelTab[];
   activeId: string | null;
   mode: PanelMode;
 }
 
 export type PanelTabsAction =
-  // Existing tab is reused; mode only upgrades; openCount++
   | { type: "open"; kind: PanelViewKind; params?: PanelTabParams[PanelViewKind] }
   | { type: "open_file"; path: string; label: string }
   | { type: "activate"; id: string }
-  // Active and open → collapse the panel; otherwise behaves like `open`
   | { type: "toggle"; kind: PanelViewKind }
   | { type: "close"; id: string }
   | { type: "close_left"; id: string }
   | { type: "close_right"; id: string }
   | { type: "close_others"; id: string }
-  // Cascade of a deleted path: closes every file preview tab at or under it.
   | { type: "close_files_under"; path: string }
   | { type: "set_mode"; mode: PanelMode };
 
@@ -116,48 +67,25 @@ export function createPanelTabsState(): PanelTabsState {
   return { tabs: [], activeId: null, mode: "closed" };
 }
 
-/** Strip id of a file preview tab. Matches the id the shell has always used. */
 export function fileTabId(path: string): string {
   return `file:${path}`;
 }
 
-// ── Identity registry ────────────────────────────────────────────────────
-
 export interface PanelTabCommand {
-  /** i18n key for the command-palette entry. */
   labelKey: string;
-  /** Palette search keywords (english + chinese, matching the palette). */
   keywords: readonly string[];
-  /** Palette id suffix: the generated id is `panel.<kind>` when omitted and
-   *  `panel.<kind>.<id>` otherwise. */
   id?: string;
 }
 
 export interface PanelTabSpec<K extends PanelViewKind = PanelViewKind> {
   kind: K;
-  /** Tab page id — see lib/shared/types.ts for the constants. */
   tabId: string;
-  /** i18n key; the strip resolves it on every render. */
   labelKey: string;
-  /** Mode `open` upgrades to (never downgrades to). */
   defaultMode: Exclude<PanelMode, "closed">;
-  /** True when the panel reads state of the selected session. */
   sessionBound: boolean;
-  /** Command-palette entries. Panels without any get no palette command. */
   commands?: readonly PanelTabCommand[];
 }
 
-/**
- * Panel view identity, declared once. The object is keyed by right-bar button
- * id, so this key list *is* `RightBarButtonId` — the id union is derived from
- * it (below) instead of being restated in `lib/shared/right-bar.ts`.
- * Declaration order is also the strip/settings default order, and it matches
- * the ordering of the right-bar descriptor list.
- *
- * The value type is the kind-keyed mirror of the same list, so each key must
- * carry its own kind (`kind: K` where `K` is the key): a spec cannot register
- * under a button id it does not actually implement.
- */
 export const PANEL_TAB_SPEC_BY_KIND = {
   context: {
     kind: "context",
@@ -234,12 +162,8 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   modelsConfig: {
     kind: "modelsConfig",
     tabId: MODELS_CONFIG_TAB_ID,
-    // Tab-strip label; the right-bar button and the palette entry keep the
-    // longer "Open models config" wording (see the descriptor registry).
     labelKey: "Models config",
     defaultMode: "normal",
-    // Provider / API-key / OAuth configuration is global, not a property of
-    // the selected session — it stays enabled on the new-session page.
     sessionBound: false,
     commands: [
       {
@@ -251,14 +175,8 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   mcp: {
     kind: "mcp",
     tabId: MCP_TAB_ID,
-    // Tab-strip label reuses the existing "MCP 服务器" entry; the right-bar
-    // button and the palette entry keep the "Open MCP servers" wording.
     labelKey: "mcp.title",
     defaultMode: "normal",
-    // Session-bound: the list follows the selected session's cwd (the
-    // workspace mcp.json section), so the button groups with the other
-    // live-state buttons. The flag only drives column grouping — the button
-    // stays enabled on the new-session page.
     sessionBound: true,
     commands: [
       {
@@ -270,14 +188,8 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   skills: {
     kind: "skills",
     tabId: SKILLS_TAB_ID,
-    // Strip label; the right-bar button and the palette entry keep the
-    // "Open skills" wording (see the descriptor registry).
     labelKey: "Skills",
     defaultMode: "normal",
-    // Session-bound: the list follows the selected session's cwd (project
-    // skills), so the button groups with the other live-state buttons. It
-    // still renders Pi Work's own skills plus pi's global ones on the
-    // new-session page — the flag only drives column grouping, not disabling.
     sessionBound: true,
     commands: [
       {
@@ -289,13 +201,8 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   scheduler: {
     kind: "scheduler",
     tabId: SCHEDULER_TAB_ID,
-    // Strip label; the right-bar button and the palette entry keep the
-    // "Open scheduled tasks" wording (see the descriptor registry).
     labelKey: "Scheduled tasks",
     defaultMode: "normal",
-    // The task list is global data — it stays available on the new-session
-    // page. The flag only drives column grouping; the form's working-directory
-    // default still follows the selected session's cwd.
     sessionBound: false,
     commands: [
       {
@@ -307,12 +214,8 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   channels: {
     kind: "channels",
     tabId: CHANNELS_TAB_ID,
-    // Strip label reuses the existing "Channels" entry; the right-bar button
-    // and the palette entry keep the "Open channels" wording.
     labelKey: "Channels",
     defaultMode: "normal",
-    // The channel list is global data (it does not depend on the selected
-    // session's cwd), so the button stays enabled on the new-session page.
     sessionBound: false,
     commands: [
       {
@@ -330,25 +233,14 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 
-/**
- * Every configurable right-bar button id, in registry declaration order. The
- * registry is keyed by button id, so this union is its key list — the panel
- * registry is the only place the id list is written down, and the server's
- * config defaults read the same keys.
- */
 export type RightBarButtonId = keyof typeof PANEL_TAB_SPEC_BY_KIND;
 
-/** Every panel view spec, in declaration (default) order. */
 export const PANEL_TAB_SPECS: readonly PanelTabSpec[] = Object.values(PANEL_TAB_SPEC_BY_KIND);
 
-/** Every panel view kind, in declaration (default) order. */
 export const PANEL_TAB_KINDS: readonly PanelViewKind[] = PANEL_TAB_SPECS.map((spec) => spec.kind);
-
-// ── State machine ────────────────────────────────────────────────────────
 
 const MODE_RANK: Record<PanelMode, number> = { closed: 0, normal: 1, expanded: 2 };
 
-/** `open` never lowers the panel: the wider of current and target wins. */
 function upgradeMode(current: PanelMode, target: Exclude<PanelMode, "closed">): PanelMode {
   return MODE_RANK[target] > MODE_RANK[current] ? target : current;
 }
@@ -367,7 +259,6 @@ function createPanelTab<K extends PanelViewKind>(
   } as AnyPanelTab;
 }
 
-/** Keep `activeId` when it survived the cut, otherwise fall back to the ref tab. */
 function keepActive(
   activeId: string | null,
   tabs: readonly AnyPanelTab[],
@@ -377,12 +268,10 @@ function keepActive(
   return tabs.some((tab) => tab.id === activeId) ? activeId : fallbackId;
 }
 
-/** Count the open on the tab that already had this id (re-opens included). */
 function bumpOpenCount(tabs: readonly AnyPanelTab[], id: string): AnyPanelTab[] {
   return tabs.map((tab) => (tab.id === id ? { ...tab, openCount: tab.openCount + 1 } : tab));
 }
 
-/** True when `path` is the deleted path itself or lives under it. */
 function isPathAtOrUnder(path: string, deleted: string): boolean {
   return (
     path === deleted ||
@@ -391,18 +280,6 @@ function isPathAtOrUnder(path: string, deleted: string): boolean {
   );
 }
 
-/**
- * Pure strip reducer. Owns every open/close rule of the panel:
- *   • `open` reuses the tab, activates it, bumps its openCount and only
- *     upgrades the mode;
- *   • `toggle` collapses the panel when its own tab is active and open;
- *   • closing the active tab falls back to the oldest remaining tab (tabs are
- *     stored newest-first, so that is the last element);
- *   • closing the last tab collapses the panel, while the batch closes always
- *     keep the reference tab and therefore never empty the strip;
- *   • deleting a file (or directory) closes every file tab at or under it in
- *     one step — the cascade is a rule of the strip, not of the shell.
- */
 export function panelTabsReducer(
   state: PanelTabsState,
   action: PanelTabsAction,
@@ -493,8 +370,6 @@ export function panelTabsReducer(
   }
 }
 
-// ── Selectors ────────────────────────────────────────────────────────────
-
 export function selectTab(state: PanelTabsState, id: string): AnyPanelTab | null {
   return state.tabs.find((tab) => tab.id === id) ?? null;
 }
@@ -503,21 +378,14 @@ export function selectActiveTab(state: PanelTabsState): AnyPanelTab | null {
   return state.activeId === null ? null : selectTab(state, state.activeId);
 }
 
-/** The strip's tab for a panel view, open or not. */
 export function selectTabByKind(state: PanelTabsState, kind: PanelViewKind): AnyPanelTab | null {
   return state.tabs.find((tab) => tab.kind === kind) ?? null;
 }
 
-/**
- * How many times a panel view has been opened, 0 when it never was. Drives
- * re-open side effects (git-diff refresh) without a second
- * counter living in the shell.
- */
 export function selectOpenCount(state: PanelTabsState, kind: PanelViewKind): number {
   return selectTabByKind(state, kind)?.openCount ?? 0;
 }
 
-/** Active strip kind — null while the panel is collapsed. */
 export function selectActiveKind(state: PanelTabsState): PanelTabKind | null {
   if (state.mode === "closed") return null;
   return selectActiveTab(state)?.kind ?? null;
@@ -531,16 +399,9 @@ export function selectHasTabs(state: PanelTabsState): boolean {
   return state.tabs.length > 0;
 }
 
-/** Whether the expand button may be shown: only once the open strip has tabs. */
 export function selectCanExpand(state: PanelTabsState): boolean {
   return selectIsOpen(state) && selectHasTabs(state);
 }
-
-// ── Kind → right-bar button id ─────────────────────────────────────────
-// Derived from the registry instead of a second hand-kept mapping: the
-// registry is already keyed by `RightBarButtonId`, so flipping it gives the
-// button that owns each panel view (and nothing for the file preview, which
-// has no configurable button behind it).
 
 export const PANEL_BUTTON_ID_BY_KIND: Record<PanelViewKind, RightBarButtonId> =
   Object.fromEntries(
@@ -550,7 +411,6 @@ export const PANEL_BUTTON_ID_BY_KIND: Record<PanelViewKind, RightBarButtonId> =
     ]),
   ) as Record<PanelViewKind, RightBarButtonId>;
 
-/** Button id behind a strip kind; null for the file preview. */
 export function panelButtonIdForKind(kind: PanelTabKind): RightBarButtonId | null {
   return kind === "file" ? null : PANEL_BUTTON_ID_BY_KIND[kind];
 }

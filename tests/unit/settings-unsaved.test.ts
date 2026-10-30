@@ -110,7 +110,6 @@ describe("selectSectionLeave", () => {
   const dirtyState = (...keys: SettingsSectionId[]) =>
     reduce(INITIAL_UNSAVED_CHANGES, ...keys.map((key) => ({ type: "dirty" as const, key })));
 
-  /** The confirm decision, narrowed, or a failed assertion. */
   function expectConfirm<K extends string>(
     decision: SectionLeaveDecision<K>,
   ): Extract<SectionLeaveDecision<K>, { kind: "confirm" }> {
@@ -119,7 +118,6 @@ describe("selectSectionLeave", () => {
     return decision;
   }
 
-  /** Grant the confirm and apply the discard it was asked about. */
   const discardOnLeave = (state: UnsavedChangesState<SettingsSectionId>, from: SettingsSectionId, to: SettingsSectionId) =>
     reduce(state, { type: "saved", key: expectConfirm(selectSectionLeave(state, from, to)).key });
 

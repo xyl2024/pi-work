@@ -1,18 +1,5 @@
 "use client";
 
-/**
- * LLM API audit panel — per-call detail log of every actual HTTP request pi
- * made to an LLM provider (`~/.pi-work/llm-audit.db` → `provider_calls`).
- *
- * Unlike the Token audit panel (aggregate usage/cost), this shows the raw
- * request/response pair: URL, full request body, response status + headers,
- * and for failed calls the full error response body — the thing that tells
- * you *why* a model call stopped with no trace.
- *
- * List rows come from /api/llm-audit/calls; expanding a row fetches the full
- * record (bodies included) from /api/llm-audit/calls/[id].
- */
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
@@ -26,8 +13,6 @@ const PAGE_LIMIT = 10;
 
 type StatusFilter = "" | "ok" | "error";
 type SourceFilter = "" | "user" | "scheduled" | "subagent" | "direct" | "unknown";
-
-// ── formatters ────────────────────────────────────────────────────────────
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);
@@ -44,7 +29,6 @@ function statusLabel(status: number | null): string {
   return status === null ? "—" : String(status);
 }
 
-/** Pretty-print JSON bodies; fall back to the raw string if not JSON. */
 function formatBody(raw: string | null): string {
   if (!raw) return "";
   try {
@@ -63,10 +47,7 @@ function parseHeaders(raw: string | null): Record<string, string> | null {
   }
 }
 
-// ── main panel ────────────────────────────────────────────────────────────
-
 interface LlmAuditPanelProps {
-  /** The currently selected session id (null when on the new-session page). */
   currentSessionId: string | null;
 }
 
@@ -83,8 +64,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
   const [detail, setDetail] = useState<ProviderCall | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Auto-follow the current session; on the new-session page (null id) the
-  // panel shows all sessions.
   const effectiveSessionId = currentSessionId;
 
   const load = useCallback(async () => {
@@ -96,8 +75,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
       });
       if (filter) params.set("status", filter);
       if (sourceFilter) params.set("source", sourceFilter);
-      // LLM audit is session-scoped whenever a main session is active; never
-      // broaden the filter to all sessions.
       if (effectiveSessionId) params.set("sessionId", effectiveSessionId);
       const res = await fetch(`/api/llm-audit/calls?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -119,7 +96,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
     load();
   }, [load]);
 
-  // Reset paging on filter or session change.
   useEffect(() => {
     setOffset(0);
   }, [filter, sourceFilter, effectiveSessionId]);
@@ -167,8 +143,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
       />
 
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Pagination — at the top so the page controls stay adjacent to the
-            controls (Toolbar) and the user can jump pages without scrolling. */}
         {total > PAGE_LIMIT && (
           <Pagination
             offset={offset}
@@ -178,7 +152,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
           />
         )}
 
-        {/* KPI strip */}
         <div style={{ display: "flex", gap: 12 }}>
           <Kpi label={t("Total calls")} value={String(total)} accent={false} />
           <Kpi label={t("Errors")} value={String(errorCount)} accent={errorCount > 0} />
@@ -206,8 +179,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
   );
 }
 
-// ── pagination ────────────────────────────────────────────────────────────
-
 const pageBtnStyle = (active: boolean, disabled: boolean): CSSProperties => ({
   minWidth: 26,
   padding: "3px 6px",
@@ -218,16 +189,10 @@ const pageBtnStyle = (active: boolean, disabled: boolean): CSSProperties => ({
   color: active ? "#fff" : "var(--text-muted)",
   fontSize: 12,
   opacity: disabled ? 0.5 : 1,
-  // Keep buttons at their natural content width. Without flexShrink: 0 the
-  // flex algorithm squeezes them below `minWidth`, which forces CJK text
-  // (e.g. "上一页") to wrap character-by-character. `whiteSpace: nowrap` is
-  // a defensive belt-and-braces — if the container ever does overflow, the
-  // text clips horizontally instead of breaking mid-character.
   whiteSpace: "nowrap",
   flexShrink: 0,
 });
 
-/** Page-number navigation with a jump-to-page input. */
 function Pagination({
   offset,
   total,
@@ -249,9 +214,6 @@ function Pagination({
     onChangeOffset((clamped - 1) * pageSize);
   };
 
-  // Window of page numbers: current ± 1, with first/last pinned. Most
-  // navigation goes through the jump-to-page input, so the buttons are
-  // just for stepping ±1 from the current page.
   const pages: number[] = [];
   const start = Math.max(1, currentPage - 1);
   const end = Math.min(pageCount, currentPage + 1);
@@ -336,8 +298,6 @@ function Pagination({
     </div>
   );
 }
-
-// ── toolbar ───────────────────────────────────────────────────────────────
 
 function Toolbar({
   filter,
@@ -449,8 +409,6 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent: b
   );
 }
 
-// ── call list ─────────────────────────────────────────────────────────────
-
 function CallList({
   rows,
   expandedId,
@@ -539,8 +497,6 @@ function CallList({
   );
 }
 
-// ── detail view ───────────────────────────────────────────────────────────
-
 function DetailView({ row }: { row: ProviderCall }) {
   const { t } = useI18n();
   const requestHeaders = parseHeaders(row.requestHeaders);
@@ -548,7 +504,6 @@ function DetailView({ row }: { row: ProviderCall }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 12 }}>
-      {/* Meta row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, fontSize: 11, color: "var(--text-muted)" }}>
         <MetaTag label={`${t("Status")}: ${statusLabel(row.status)}`} />
         {row.provider && <MetaTag label={`${t("Provider")}: ${row.provider}`} />}
@@ -645,7 +600,6 @@ function Section({ title, body, mono }: { title: string; body: string; mono?: bo
               e.currentTarget.style.background = "transparent";
             }}
           >
-            {/* Two overlapping squares — standard copy glyph. */}
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
               <path d="M8.5 3.5V2.5a1 1 0 0 0-1-1h-5a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h1" />

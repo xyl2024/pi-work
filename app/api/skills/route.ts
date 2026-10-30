@@ -24,26 +24,17 @@ async function loadSkills(cwd: string) {
   return loader.getSkills();
 }
 
-// GET /api/skills?cwd=<path> — returns discovered Skills with Pi Work overrides applied.
 export async function GET(req: Request) {
   const cwd = new URL(req.url).searchParams.get("cwd");
   if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
 
   try {
     const { skills, diagnostics } = await loadSkills(cwd);
-    // Merge in the Pi Work–owned skills (~/.pi-work/skills/), which pi's
-    // loader does not discover. Same per-cwd disable overrides apply.
     const piWorkSkills = loadPiWorkSkills().skills;
     const allSkills = [...skills, ...piWorkSkills];
     const disabled = new Set(readConfig().disabled_skills[cwd] ?? []);
     const mapped: Skill[] = allSkills.map((skill) => ({
       ...skill,
-      // The SKILL.md frontmatter (`disable-model-invocation: true`) is
-      // authoritative in pi: such a skill is NEVER rendered into the system
-      // prompt's <available_skills> (it is only invocable via /skill:name),
-      // no matter what Pi Work's per-cwd config says. Merge both sources so
-      // the UI shows the effective state, and expose `frontmatterDisabled`
-      // so the UI can explain why the toggle is locked.
       disableModelInvocation: skill.disableModelInvocation || disabled.has(skill.filePath),
       frontmatterDisabled: skill.disableModelInvocation === true,
     }));
@@ -54,8 +45,6 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH /api/skills — toggle a Skill in Pi Work's per-cwd config.
-// The SKILL.md and all other installed resources remain untouched.
 export async function PATCH(req: Request) {
   try {
     const body = await req.json() as SkillToggleRequest;
@@ -72,9 +61,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "skill is not loaded for this cwd" }, { status: 404 });
     }
 
-    // A skill disabled by its SKILL.md frontmatter (disable-model-invocation:
-    // true) is authoritative in pi and cannot be re-enabled from Pi Work's
-    // per-cwd config — only editing the SKILL.md frontmatter can.
     if (!disableModelInvocation && loaderSkill.disableModelInvocation) {
       return NextResponse.json(
         { error: "Disabled by SKILL.md frontmatter (disable-model-invocation: true); edit the frontmatter to enable it." },

@@ -10,8 +10,6 @@ declare global {
 
 const INVALID_DIR_NAME_RE = /[/\\\0]/;
 
-// POST /api/create-space
-// Creates <data root>/workspace/{dir_name} and returns the absolute cwd.
 export async function POST(req: Request) {
   try {
     const body = await req.json() as { dir_name?: unknown };

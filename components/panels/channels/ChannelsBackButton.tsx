@@ -3,11 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { channelsBack } from "@/lib/client/channels-store";
 
-/**
- * The channels panel's "up one level" control. The detail page draws one so
- * the page stack is navigable with the mouse, matching what Escape does with
- * the keyboard (see `escapeChannels`).
- */
 export function ChannelsBackButton() {
   const { t } = useI18n();
   return (

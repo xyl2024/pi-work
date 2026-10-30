@@ -1,7 +1,3 @@
-// GrokBot companion (vendored from zhulin025/LaoA-GrokBot, MIT).
-// The companion sits on the new-session welcome screen as a clickable
-// ornament that opens an in-browser sprite editor / animator.
-
 export const grokbot = {
   "Pi Bot Lab": "Pi Bot 实验室",
   "Expression": "表情",

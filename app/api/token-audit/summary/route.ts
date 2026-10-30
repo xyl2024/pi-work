@@ -1,10 +1,3 @@
-/**
- * GET /api/token-audit/summary?range=today|7d|30d|all&groupBy=none|session|model|day&sessionId=...
- *
- * Returns `{ buckets, totals }` aggregated from token_calls. Range defaults to
- * "7d", groupBy defaults to "none". Mirrors the response shape from
- * `lib/token-audit-store.summarize`.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";

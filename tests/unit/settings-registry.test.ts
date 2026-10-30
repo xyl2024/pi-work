@@ -35,7 +35,6 @@ describe("settings registry invariants", () => {
       sectionsForGroup(group.id).map((section) => section.id),
     );
     expect([...SETTINGS_SECTION_IDS]).toEqual(renderOrder);
-    // …and that flat order is exactly the declared section order.
     expect(renderOrder).toEqual(SETTINGS_SECTIONS.map((s) => s.id));
   });
 
@@ -45,14 +44,6 @@ describe("settings registry invariants", () => {
   });
 });
 
-/**
- * Page map guard: every registry section has exactly one page, and the map
- * has no page for a section that is not in the registry.
- *
- * The map is typed `Record<SettingsSectionId, …>`, so the compiler already
- * rejects a missing or extra page; this test pins the keyset explicitly so the
- * invariant is visible here too.
- */
 describe("settings page map covers exactly the registry", () => {
   it("keys the page map by the registry's section ids", () => {
     expect(Object.keys(SETTINGS_PAGES).sort()).toEqual([...SETTINGS_SECTION_IDS].sort());

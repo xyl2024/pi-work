@@ -17,24 +17,6 @@ import {
   transportOf,
 } from "./utils";
 
-/**
- * One entry's editor.
- *
- * The required face is only what a server cannot do without: name, transport,
- * and the command or URL. Everything else (args / env / cwd / headers / timeout
- * / exposure / description) lives in a collapsed advanced section. The raw JSON
- * is no longer a sibling mode of the form — it is an action ("edit raw JSON")
- * that still covers the fields the form does not model (`oauth`, `auth`,
- * `toolExposure`), and it reports how many such fields an entry carries.
- *
- * A transport-less project entry is an **override**: it only sets `enabled` /
- * `exposure` / `toolExposure` on the global server of the same name, so the
- * form shows exactly those, not a transport.
- *
- * `config === null` means the text is not a JSON object: only the raw editor is
- * usable until it is fixed, and the panel refuses to save it.
- */
-
 const STDIO_ONLY_KEYS = ["command", "args", "env", "cwd"];
 const HTTP_ONLY_KEYS = ["url", "headers", "oauth"];
 
@@ -152,7 +134,6 @@ function RawJsonEditor({ value, onChange }: { value: string; onChange: (text: st
   );
 }
 
-/** The whole editable surface of a transport-less project override. */
 function OverrideFields({
   config,
   onChange,
@@ -217,8 +198,6 @@ function McpFormFields({
     onChange(next);
   };
 
-  // `type` is redundant once one of command / url is present (pi resolves the
-  // transport from them), and the abandoned side's keys would otherwise linger.
   const switchTransport = (next: "stdio" | "http") => {
     const out: Record<string, unknown> = { ...config };
     delete out.type;

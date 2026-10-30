@@ -8,13 +8,10 @@ const SPEEDS = [0.5, 1, 1.5, 2] as const;
 const BASE_TICK_MS = 700;
 
 interface ReplayBarProps {
-  /** Total number of messages in the session (slider max). */
   total: number;
-  /** Current cutoff N — the chat renders messages[0..N]. */
   index: number;
   playing: boolean;
   speed: number;
-  /** Pre-formatted "12 / 47 · 14:23:01". */
   positionLabel: string;
   onIndexChange: (n: number) => void;
   onPlayingChange: (p: boolean) => void;
@@ -22,11 +19,6 @@ interface ReplayBarProps {
   onClose: () => void;
 }
 
-/**
- * Message-level "time travel" scrubber. Purely presentational + owns its own
- * playback clock; all replay state lives in ChatWindow. Reuses the scrubber /
- * IconButton interaction language used elsewhere in the chat UI.
- */
 export function ReplayBar({
   total, index, playing, speed, positionLabel,
   onIndexChange, onPlayingChange, onSpeedChange, onClose,
@@ -36,14 +28,10 @@ export function ReplayBar({
   const trackRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
 
-  // Focus the bar on open so Space / Esc / Arrow keys work immediately.
   useEffect(() => {
     groupRef.current?.focus();
   }, []);
 
-  // Playback clock: advance one message per tick while playing; stop at the end.
-  // Depending on `index` re-arms the timer each tick (self-rescheduling), so
-  // there is no interval drift.
   useEffect(() => {
     if (!playing) return;
     if (index >= total) {
@@ -82,13 +70,10 @@ export function ReplayBar({
   };
 
   const togglePlay = () => {
-    // Restart from the beginning if we're parked at the end.
     if (index >= total) onIndexChange(0);
     onPlayingChange(!playing);
   };
 
-  // Nudge the cutoff by one message. Manual stepping pauses playback so the
-  // user keeps precise control (same rationale as scrubbing).
   const stepBack = () => {
     onPlayingChange(false);
     onIndexChange(Math.max(0, index - 1));
@@ -223,4 +208,3 @@ export function ReplayBar({
     </div>
   );
 }
-

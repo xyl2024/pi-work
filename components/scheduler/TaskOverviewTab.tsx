@@ -1,12 +1,3 @@
-/**
- * TaskOverviewTab — at-a-glance stats + metadata for one scheduled task.
- *
- * Four KPI cards at the top (total / success rate / avg duration / failures),
- * then a metadata block listing the task's identity fields. Stats are
- * computed locally from the loaded `runs` list — no extra request — so
- * updating them is free as soon as the runs tab fetches.
- */
-
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { StatusBadge } from "./StatusBadge";
@@ -20,11 +11,8 @@ import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/component
 interface Props {
   task: ScheduledTask;
   runs: TaskRun[];
-  /** channelId → { name, status } for wechat channels (passed from TaskDetail). */
   channelMeta?: Record<string, { name: string; status: string }> | null;
-  /** "<provider>:<modelId>" → provider id map, for model icons. */
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
 }
 
@@ -35,7 +23,6 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIcon
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         <KpiCard label={t("Total runs")} value={stats.total.toString()} hint={t("{n} succeeded", { n: stats.success })} tone="muted" />
         <KpiCard
@@ -58,7 +45,6 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIcon
         />
       </div>
 
-      {/* Identity metadata */}
       <section>
         <SectionTitle>{t("Basic info")}</SectionTitle>
         <dl style={dlStyle}>
@@ -83,7 +69,6 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIcon
         </dl>
       </section>
 
-      {/* Notification metadata */}
       <section>
         <SectionTitle>{t("Notifications")}</SectionTitle>
         <dl style={dlStyle}>
@@ -117,7 +102,6 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIcon
         </dl>
       </section>
 
-      {/* Execution metadata */}
       <section>
         <SectionTitle>{t("Execution config")}</SectionTitle>
         <dl style={dlStyle}>
@@ -154,8 +138,6 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIcon
     </div>
   );
 }
-
-// ── Helpers ──────────────────────────────────────────────────────
 
 const kpiToneColor: Record<"muted" | "success" | "warning" | "error", string> = {
   muted: "var(--text)",
@@ -218,10 +200,6 @@ const monoStyle: CSSProperties = {
   color: "var(--text)",
 };
 
-// `Provider` / `Model` / `Thinking level` are all required on scheduled tasks.
-// A missing or "auto" value means an old task needs re-picking — surface that
-// as an obvious error-tinted "Not set" so the user can see at a glance that
-// the task has dangling required fields.
 function Missing({ children }: { children: React.ReactNode }) {
   return <span style={{ color: "var(--error)", fontSize: 11 }}>{children}</span>;
 }

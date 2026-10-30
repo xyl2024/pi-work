@@ -1,10 +1,3 @@
-// Pure helpers for classifying assistant-message content blocks.
-//
-// Used by the chat window to split an assistant message into "process"
-// (thinking + tool calls + intermediate text) and "answer" (the trailing
-// text/image blocks that should always stay visible). The split powers
-// the per-turn "Process details" foldable group.
-
 import type {
   AgentMessage,
   AssistantContentBlock,
@@ -12,13 +5,10 @@ import type {
   ThinkingContent,
 } from "./types";
 
-
 interface DisplayOptions {
   isStreaming?: boolean;
 }
 
-/** Drop completed thinking blocks that have no content. Streaming thinking
- *  blocks are kept even when empty so the live spinner remains visible. */
 export function isEmptyThinkingBlock(
   block: AssistantContentBlock,
   options: DisplayOptions = {},
@@ -30,7 +20,6 @@ export function isEmptyThinkingBlock(
   );
 }
 
-/** Visible assistant blocks for a message, with empty thinking blocks removed. */
 export function getDisplayableAssistantBlocks(
   message: AssistantMessage,
   options: DisplayOptions = {},
@@ -40,17 +29,10 @@ export function getDisplayableAssistantBlocks(
   );
 }
 
-/** Final-answer blocks are text and images. Thinking + tool calls are process. */
 function isFinalAnswerBlock(block: AssistantContentBlock): boolean {
   return block.type === "text" || block.type === "image";
 }
 
-/**
- * Split the final assistant message into trailing-answer and leading-process
- * blocks. "Final" is defined as the suffix of consecutive text/image blocks
- * after the last thinking/tool-call block. Anything before that boundary —
- * including text emitted between tools — stays in the process group.
- */
 export function splitFinalAssistantBlocks(
   message: AssistantMessage,
   options: DisplayOptions = {},
@@ -68,11 +50,6 @@ export function splitFinalAssistantBlocks(
   };
 }
 
-/** Count tool-call blocks by tool name across message indices plus extra
- *  blocks (used to summarise the process group, e.g. "3× bash, 2× read"). */
-
-/** Count tool-call blocks by tool name across message indices plus extra
- *  blocks (used to summarise the process group, e.g. "3× bash, 2× read"). */
 export function countToolCallsByName(
   messages: AgentMessage[],
   indices: number[],

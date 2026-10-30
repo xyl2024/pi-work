@@ -3,29 +3,13 @@
 import * as React from "react";
 
 export interface ToggleSwitchProps {
-  /** Whether the switch is in the "on" state. */
   on: boolean;
-  /** Receives the next boolean when the user flips the switch. */
   onChange: (next: boolean) => void;
-  /** Disables interaction and dims the switch. */
   disabled?: boolean;
-  /** Accessible label for screen readers. */
   label?: string;
-  /** Visual size. `sm` is for compact rows; `md` (default) matches the settings page. */
   size?: "sm" | "md";
 }
 
-/**
- * ToggleSwitch — the app-wide On/Off two-state switch (settings-page style).
- *
- * A single button with role="switch", fully keyboard accessible
- * (Space/Enter toggles). Rendering is a 40×22 sliding-knob pill:
- * accent background + knob on the right when on, muted track + knob
- * on the left when off.
- *
- * Stops click propagation so it can be safely embedded inside
- * clickable list rows / cards without triggering the parent handler.
- */
 export function ToggleSwitch({
   on,
   onChange,
@@ -37,7 +21,7 @@ export function ToggleSwitch({
   const width = isSm ? 32 : 40;
   const height = isSm ? 18 : 22;
   const knob = height - 4;
-  const travel = width - knob - 4; // 2px inset on each side
+  const travel = width - knob - 4;
   return (
     <button
       type="button"
@@ -50,9 +34,6 @@ export function ToggleSwitch({
         if (disabled) return;
         onChange(!on);
       }}
-      // Enter / Space activate the switch natively; they must not bubble to a
-      // clickable parent card, which would treat the same keypress as a click
-      // on the card (and open it).
       onKeyDown={(event) => event.stopPropagation()}
       style={{
         width,

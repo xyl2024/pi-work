@@ -11,22 +11,10 @@ import { startSkillInstall, useSkillsStore } from "@/lib/client/skills-store";
 import type { SkillInstallRequest, SkillInstallScope, SkillSearchResult } from "@/lib/shared/skills";
 import { SkillsBackButton } from "./SkillsBackButton";
 
-// One page of results at a time; the footer button (and reaching the bottom of
-// the list) pulls the next one.
 const PAGE_SIZE = 6;
 const SCROLL_THRESHOLD_PX = 240;
-/** how many trailing log lines the failure block echoes back */
 const FAILURE_TAIL_LINES = 12;
 
-/**
- * One skills.sh hit. Deliberately a sibling of `SkillCard` (same initial-letter
- * avatar + name + clamped description) so a search hit reads as the same kind
- * of object as an installed skill — only the trailing control differs
- * (Install instead of the toggle) and a meta row carries installs / repo.
- *
- * The package arrives as `owner/repo@skill`; the avatar / title use the skill
- * part and the meta row shows the repo so the two never look swapped.
- */
 function ResultCard({
   result,
   isInstalled,
@@ -165,20 +153,6 @@ function ResultCard({
   );
 }
 
-/**
- * The panel's Add-Skill page: search skills.sh, page through the hits, then
- * install one into either the global path (`~/.pi/agent/skills/`) or the
- * selected session's project path (`<cwd>/.pi/agent/skills/`).
- *
- * Install progress is streamed: the CLI's lines appear one by one instead of a
- * spinner with nothing behind it. The stream itself belongs to
- * `skills-store`, not to this mount — switching panel tabs or collapsing the
- * panel must not stop it — so this page only renders the store's install slot
- * and starts new runs through it. Success leaves the page: the store re-reads
- * the list (which also draws the page stack back to the grid), so the new
- * skill is already there. Failure keeps the log on screen, shows the server's
- * message and a Retry that re-runs the same package.
- */
 export function SkillsAddPage() {
   const { t } = useI18n();
   const toast = useToast();
@@ -197,7 +171,6 @@ export function SkillsAddPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  // Guards against a late answer to an older query overwriting a newer one.
   const requestSeqRef = useRef(0);
 
   useEffect(() => {
@@ -206,11 +179,8 @@ export function SkillsAddPage() {
 
   const running = install.phase === "running";
   const installingPackage = running ? install.request?.package ?? null : null;
-  // A failure keeps the tail of the log on screen; a running install keeps all
-  // of it.
   const visibleLogs = running ? install.logs : install.logs.slice(-FAILURE_TAIL_LINES);
 
-  // Keep the progress log pinned to the newest line.
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -271,10 +241,6 @@ export function SkillsAddPage() {
     }
   }, [hasMore, loadingMore, searching, loadMore]);
 
-  // The store owns the stream and the convergence rule (back to the grid +
-  // re-read on success); the page only asks for the run and raises the result
-  // toast. The toast provider outlives this page, so a completion that lands
-  // after a tab switch still notifies.
   const runInstall = useCallback(
     (request: SkillInstallRequest) => {
       startSkillInstall(request, () =>
@@ -284,8 +250,6 @@ export function SkillsAddPage() {
     [t, toast],
   );
 
-  // The scope is resolved at click time so a Retry re-runs the same
-  // destination even if the toggle moved in between.
   const requestFor = useCallback(
     (pkg: string): SkillInstallRequest => ({ package: pkg, scope, cwd: cwd ?? undefined }),
     [scope, cwd],
@@ -314,7 +278,6 @@ export function SkillsAddPage() {
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Add Skill")}</span>
       </div>
 
-      {/* Search + scope stay put; only the results below them scroll. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 12px 10px", flexShrink: 0 }}>
         <div style={{ display: "flex", gap: 8 }}>
           <input
@@ -476,7 +439,6 @@ export function SkillsAddPage() {
                 <div style={{ fontSize: 11.5, color: "var(--error)", wordBreak: "break-word" }}>
                   {install.error}
                 </div>
-                {/* Re-run the package that just failed, with the same scope. */}
                 <button
                   type="button"
                   onClick={() => {

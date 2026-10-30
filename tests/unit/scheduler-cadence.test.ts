@@ -7,13 +7,6 @@ import {
   type SchedulerPollTier,
 } from "@/lib/shared/scheduler-cadence";
 
-/**
- * The scheduler panel's polling cadence (lib/shared/scheduler-cadence.ts).
- * Pure: "where is the panel + is the browser tab visible" → the next delay, or
- * null for "stop". The store is the only caller; this file pins each cell of
- * the state table.
- */
-
 const TIERS: SchedulerPollTier[] = ["runs", "panel", "collapsed"];
 
 describe("schedulerPollTier", () => {

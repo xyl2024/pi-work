@@ -5,14 +5,6 @@ import {
   unavailableAgentShellTools,
 } from "@/lib/shared/agent-shell-tools";
 
-/**
- * The platform rule behind "which shells does the agent get". Two consumers
- * depend on it: the SDK registry denylist `rpc-manager` hands to
- * `createAgentSession` (so a tool the platform cannot run never reaches the
- * model), and the read-only tool set of the subagent profiles. The platform is
- * an explicit argument (ADR-0003 rule 3), so the Windows branch is covered
- * from Linux.
- */
 const PLATFORMS = ["win32", "linux", "darwin"];
 
 describe("agent shell tools per platform", () => {

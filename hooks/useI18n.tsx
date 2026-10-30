@@ -9,13 +9,6 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   toggleLocale: () => void;
-  /**
-   * Look up a translation by English key. Optional `params` substitutes
-   * `{name}` placeholders in the resolved string (both the English
-   * source and the Chinese translation). Missing keys return the key
-   * itself verbatim in English; missing placeholders are left as the
-   * literal `{name}` token so they surface during review.
-   */
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -24,10 +17,8 @@ const STORAGE_KEY = "pi-locale";
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 function detectInitialLocale(): Locale {
-  // Always return "en" during SSR to ensure hydration match.
-  // The real locale will be set in useEffect after mount.
   if (typeof window === "undefined") return "en";
-  return "en"; // placeholder until useEffect runs
+  return "en";
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
@@ -38,7 +29,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      // ignore
     }
   }, []);
 
@@ -47,7 +37,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, [locale, setLocale]);
 
   useEffect(() => {
-    // Read real locale after hydration to avoid mismatch
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === "en" || saved === "zh") {
@@ -58,7 +47,6 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         document.documentElement.lang = "zh-CN";
       }
     } catch {
-      // ignore
     }
   }, []);
 

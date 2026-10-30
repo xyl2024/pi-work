@@ -7,15 +7,6 @@ import {
 import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
 import type { SessionEvent } from "@/lib/shared/session-events";
 
-/**
- * Tests for the interaction gates.
- *
- * The only seam is the module's public interface (docs/adr/0008-…): a gate is
- * opened, decided and torn down through it, and the assertions are about the
- * events it emits, the decision it hands back, and the one sentence it refuses
- * with. No pi SDK, no HTTP, no React, no private fields.
- */
-
 function makeGates(source = "user") {
   const emitted: SessionEvent[] = [];
   const gates = new InteractionGates({
@@ -195,7 +186,6 @@ describe("deadlines", () => {
     const pending = gates.requestUserInput(inputGate({ timeoutMs: null }));
 
     vi.advanceTimersByTime(24 * 60 * 60 * 1000);
-    // Still on the table: the card is still waiting for the user.
     expect(gates.snapshot()).toHaveLength(1);
     expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(true);
     await expect(pending).resolves.toEqual({ kind: "cancelled" });
@@ -288,9 +278,6 @@ describe("one table, two adapters", () => {
     const { gates } = makeGates();
     const permission = gates.runPermissionGate(bashGate());
 
-    // The ids share one table now, so the owning adapter is checked on the way
-    // out: before the move, a question decision simply missed the permission
-    // map. Same outcome, now by kind rather than by two maps.
     expect(gates.resolveUserInput("call-1", { cancelled: true })).toBe(false);
 
     expect(gates.resolvePermission("call-1", "allow_once")).toBe(true);
@@ -314,8 +301,6 @@ describe("snapshot", () => {
     const permission = gates.runPermissionGate(bashGate());
     const question = gates.requestUserInput(inputGate());
 
-    // The snapshot *is* what went out over the wire — same shape, same
-    // vocabulary, no promise / settle / memo / timer fields in it.
     const snapshot = gates.snapshot();
     expect(snapshot).toEqual(emitted);
     expect(snapshot.map((event) => event.type)).toEqual([
@@ -352,8 +337,6 @@ describe("snapshot", () => {
     const permission = gates.runPermissionGate(bashGate());
     const question = gates.requestUserInput(inputGate());
 
-    // The question is answered first; a refresh after that still replays the
-    // permission confirmation, which is the behaviour this ticket delivers.
     gates.resolveUserInput("question-1", { cancelled: true });
     await question;
     expect(gates.snapshot()).toEqual([
@@ -387,13 +370,10 @@ describe("tearing down with the session", () => {
     );
 
     gates.invalidateAll();
-    // The wrapper has always rejected with the bare string "destroyed";
-    // the agent sees the same failure it saw before the move.
     await expect(openA).rejects.toBe("destroyed");
     await expect(openB).rejects.toBe("destroyed");
     expect(gates.resolvePermission("call-2", "allow_once")).toBe(false);
 
-    // The memo went with it: the "always allowed" rule asks again.
     const again = gates.runPermissionGate(bashGate({ toolCallId: "call-4" }));
     expect(emitted).toHaveLength(4);
     gates.resolvePermission("call-4", "deny");
@@ -409,7 +389,6 @@ describe("tearing down with the session", () => {
     const question = gates.requestUserInput(inputGate());
 
     gates.invalidateAll();
-    // The question tool has always seen the same bare "destroyed" rejection.
     await expect(permission).rejects.toBe("destroyed");
     await expect(question).rejects.toBe("destroyed");
     expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(false);

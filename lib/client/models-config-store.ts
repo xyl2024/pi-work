@@ -1,22 +1,5 @@
 "use client";
 
-/**
- * Module-scoped holder for the models-config *panel view*.
- *
- * The panel card only renders the active tab's body, so switching panel tabs
- * unmounts the view. Everything the user would notice losing — the draft, the
- * page-stack position, the OAuth / API-key provider lists — therefore has to
- * live outside that mount. That is the whole reason this module exists; ADR-0003
- * rule 1 gives a concern a module-level store only when its state must outlive
- * a single mount, and this is exactly that case.
- *
- * The rules stay pure and live in `lib/shared/models-config-draft.ts` (draft,
- * dirty) and `lib/shared/models-config-pages.ts` (page stack). This file is only
- * the wiring — requests, the `useSyncExternalStore` subscription, the "first
- * open loads, later opens keep the draft" policy — which ADR-0003 rule 3 leaves
- * to the manual checklist.
- */
-
 import { useSyncExternalStore } from "react";
 import { isContentEqual } from "./shallowEqual";
 import {
@@ -61,18 +44,13 @@ import type {
 } from "@/lib/shared/models-config";
 
 export interface ModelsConfigStoreState {
-  /** A read is in flight (first open only — later opens reuse the draft). */
   loading: boolean;
-  /** At least one read has completed, so `config` / `baseline` are real. */
   loaded: boolean;
-  /** The last read failed; the panel shows this instead of the list. */
   loadError: string | null;
   config: ModelsJson;
-  /** Name input text, keyed by the provider's unchanged name until Save succeeds. */
   providerNames: Record<string, string>;
   baseline: ModelsJson;
   pages: ModelsConfigPage[];
-  /** The model being edited through the raw-JSON view, if any. */
   rawEdit: ModelsConfigRawEdit | null;
   saving: boolean;
   savedOk: boolean;
@@ -106,7 +84,6 @@ function emit(): void {
   for (const listener of listeners) listener();
 }
 
-/** Content-equality guarded write — a no-op patch never re-renders. */
 function patch(partial: Partial<ModelsConfigStoreState>): void {
   let changed = false;
   for (const key of Object.keys(partial) as (keyof ModelsConfigStoreState)[]) {
@@ -139,26 +116,19 @@ export function useModelsConfigStore(): ModelsConfigStoreState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/** The single "unsaved changes" rule, read from one snapshot. */
 export function selectModelsConfigDirty(snapshot: ModelsConfigStoreState): boolean {
   return Object.entries(snapshot.providerNames).some(([name, text]) => text !== name)
     || isModelsConfigDirty({ config: snapshot.config, baseline: snapshot.baseline });
 }
 
-/** Non-reactive read of the same rule — the close guard asks at confirm time. */
 export function getModelsConfigDirty(): boolean {
   return selectModelsConfigDirty(state);
 }
 
-/**
- * Subscribe to just the dirty flag (the right-bar badge). A boolean snapshot
- * keeps the shell from re-rendering on every other store change.
- */
 export function useModelsConfigDirty(): boolean {
   return useSyncExternalStore(subscribe, getModelsConfigDirty, () => false);
 }
 
-/** The single "cannot save yet" rule — the save bar and the raw editor read it. */
 export function selectModelsConfigProblem(
   snapshot: ModelsConfigStoreState,
 ): ModelsConfigProblem | null {
@@ -177,16 +147,12 @@ export function selectModelsConfigProblem(
   return modelsConfigProblem(snapshot.rawEdit?.text);
 }
 
-// ── Loading ─────────────────────────────────────────────────────────────
-
-/** Re-read the subscription provider list (after an OAuth login / logout). */
 export function reloadModelsConfigOAuthProviders(): void {
   void fetchOAuthProviders()
     .then((providers) => patch({ oauthProviders: providers }))
     .catch(() => {});
 }
 
-/** Re-read the API-key provider list (after a key is saved / removed). */
 export function reloadModelsConfigApiKeyProviders(): void {
   void fetchApiKeyProviders()
     .then((providers) => patch({ apiKeyProviders: providers }))
@@ -212,25 +178,11 @@ async function loadFromDisk(): Promise<void> {
   }
 }
 
-/**
- * Read the config the first time the panel opens. Later opens reuse the draft
- * and the page stack, so a panel collapse or a tab switch never loses edits.
- * The draft is released when the tab closes (`releaseModelsConfigDraft`), which
- * is what makes the next open read disk again — see
- * `selectModelsConfigOpenAction` in lib/shared/models-config-close.ts.
- */
 export function ensureModelsConfigLoaded(): void {
   if (selectModelsConfigOpenAction({ loaded: state.loaded, loading: state.loading }) === "reuse") return;
   void loadFromDisk();
 }
 
-/**
- * Throw the draft away. Called by the shell when the models-config tab closes:
- * the tab is the lifetime of the draft in #109's model, so the next open reads
- * disk and rebuilds the page stack instead of resurrecting discarded edits.
- * Collapsing the panel or switching tabs does not close the tab, so it never
- * lands here.
- */
 export function releaseModelsConfigDraft(): void {
   if (state === INITIAL) return;
   state = INITIAL;
@@ -238,12 +190,8 @@ export function releaseModelsConfigDraft(): void {
 }
 
 export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string }> {
-  // An in-flight raw edit that does not parse is not part of the draft; saving
-  // around it would drop it silently.
   const problem = selectModelsConfigProblem(state);
   if (problem) return { ok: false, error: problem.message };
-  // Snapshot what we are about to write: an edit made while the PUT is in
-  // flight must stay dirty against this payload, not silently become saved.
   const pendingNames = { ...state.providerNames };
   const renames = Object.entries(pendingNames)
     .map(([name, text]) => [name, text.trim()] as const)
@@ -260,7 +208,6 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
       patch({ saving: false, saveError: error });
       return { ok: false, error };
     }
-    // Commit names only after the write succeeds. Preserve edits made during PUT.
     let config = state.config;
     let pages = state.pages;
     let rawEdit = state.rawEdit;
@@ -288,66 +235,48 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
   }
 }
 
-// ── Navigation ──────────────────────────────────────────────────────────
-
-/** Open a provider's detail page (replacing a sibling detail page). */
 export function openModelsConfigProvider(name: string): void {
   patch({ pages: openModelsConfigPage({ kind: "provider", name }), rawEdit: null });
 }
 
-/** Open a model's detail page (nested under its provider's page). */
 export function openModelsConfigModel(providerName: string, index: number): void {
   patch({ pages: openModelsConfigPage({ kind: "model", providerName, index }), rawEdit: null });
 }
 
-/** Open a subscription (OAuth) provider's detail page. */
 export function openModelsConfigOAuth(providerId: string): void {
   patch({ pages: openModelsConfigPage({ kind: "oauth", providerId }), rawEdit: null });
 }
 
-/** Open the read-only model catalog as a root-level sibling of the list. */
 export function openModelsConfigCatalog(): void {
   patch({ pages: openModelsConfigPage({ kind: "catalog" }), rawEdit: null });
 }
 
-/** Open an API-key provider's detail page. */
 export function openModelsConfigApiKey(providerId: string): void {
   patch({ pages: openModelsConfigPage({ kind: "apikey", providerId }), rawEdit: null });
 }
 
-/** Open the add-provider picker above the list. */
 export function openModelsConfigAddProvider(): void {
   patch({ pages: openModelsConfigPage({ kind: "addProvider" }), rawEdit: null });
 }
 
-/** Open the "name a model" catalog search above the provider page. */
 export function openModelsConfigAddModelName(providerName: string): void {
   patch({ pages: openModelsConfigPage({ kind: "addModelName", providerName }), rawEdit: null });
 }
 
-/** Open the "fill this model from the catalog" picker above the model page. */
 export function openModelsConfigFillModel(providerName: string, index: number): void {
   patch({ pages: openModelsConfigPage({ kind: "fillModel", providerName, index }), rawEdit: null });
 }
 
-/** Pop one level; the provider list is the floor. */
 export function modelsConfigBack(): void {
   patch({ pages: backPageStack(state.pages), rawEdit: null });
 }
 
-/**
- * Run Escape against the page stack: pop one level, or — when the list is
- * already on top — report that the panel tab is free to run its close rules.
- */
 export function escapeModelsConfig(): { closePanel: boolean } {
   if (isModelsConfigRootPage(state.pages)) return { closePanel: true };
   patch({ pages: backPageStack(state.pages), rawEdit: null });
   return { closePanel: false };
 }
 
-// ── Provider edits ──────────────────────────────────────────────────────
-
-/** Create a custom provider under a free name and open its detail page. */
 export function addModelsConfigCustomProvider(): void {
   const { config, name } = withCustomProvider(state.config);
   patch({ config, pages: openModelsConfigPage({ kind: "provider", name }), rawEdit: null });
@@ -361,7 +290,6 @@ export function renameModelsConfigProvider(oldName: string, newName: string): vo
   patch({ providerNames: { ...state.providerNames, [oldName]: newName }, savedOk: false });
 }
 
-/** Delete a provider and draw the panel back to the list. */
 export function deleteModelsConfigProvider(name: string): void {
   const providerNames = { ...state.providerNames };
   delete providerNames[name];
@@ -373,17 +301,10 @@ export function deleteModelsConfigProvider(name: string): void {
   });
 }
 
-// ── Model edits ─────────────────────────────────────────────────────────
-
-/** Replace one model entry in place (key unchanged). */
 export function updateModelsConfigModel(providerName: string, index: number, model: ModelEntry): void {
   patch({ config: withModel(state.config, providerName, index, model) });
 }
 
-/**
- * Append a model to a provider's list and open its detail page. Both the add
- * and any subsequent edit stay in the draft — only a save writes them.
- */
 export function addModelsConfigModel(providerName: string): void {
   const { config, index } = withAddedModel(state.config, providerName);
   patch({
@@ -393,10 +314,6 @@ export function addModelsConfigModel(providerName: string): void {
   });
 }
 
-/**
- * Append a model cloned from a catalog entry and open its detail page. Like
- * `addModelsConfigModel`, the addition stays in the draft until a save.
- */
 export function addModelsConfigModelFromCatalog(
   providerName: string,
   source: RuntimeModelInfo,
@@ -409,7 +326,6 @@ export function addModelsConfigModelFromCatalog(
   });
 }
 
-/** Fill an existing model's fields from a catalog entry and return to it. */
 export function fillModelsConfigModelFromCatalog(
   providerName: string,
   index: number,
@@ -422,7 +338,6 @@ export function fillModelsConfigModelFromCatalog(
   });
 }
 
-/** Remove a model from the draft and draw the panel back to the list. */
 export function removeModelsConfigModel(providerName: string, index: number): void {
   patch({
     config: withoutModel(state.config, providerName, index),
@@ -431,19 +346,10 @@ export function removeModelsConfigModel(providerName: string, index: number): vo
   });
 }
 
-// ── Raw-JSON editing ────────────────────────────────────────────────────
-
-/** Start editing a model as raw JSON, seeded with its current serialization. */
 export function beginModelsConfigRawEdit(providerName: string, index: number, text: string): void {
   patch({ rawEdit: { providerName, index, originalJson: text, text } });
 }
 
-/**
- * The raw text is the editable model: a parse that succeeds lands on the draft
- * immediately (so the edit counts as unsaved and a save writes it), while a
- * parse that fails keeps the text and blocks the save through
- * `selectModelsConfigProblem`.
- */
 export function updateModelsConfigRawEdit(text: string): void {
   const rawEdit = state.rawEdit;
   if (!rawEdit) return;
@@ -456,14 +362,12 @@ export function updateModelsConfigRawEdit(text: string): void {
   });
 }
 
-/** Leave the raw view. The text is already applied on every keystroke. */
 export function applyModelsConfigRawEdit(): void {
   if (!state.rawEdit) return;
   if (!parseModelEntryJson(state.rawEdit.text).ok) return;
   patch({ rawEdit: null });
 }
 
-/** Abandon the raw edit and restore the model to how it was when it began. */
 export function cancelModelsConfigRawEdit(): void {
   const rawEdit = state.rawEdit;
   if (!rawEdit) return;

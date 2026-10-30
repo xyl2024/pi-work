@@ -8,7 +8,6 @@ const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
 
-// GET /api/profile/avatar  →  avatar image bytes, or 404 if no avatar
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -17,8 +16,6 @@ export async function GET() {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }
     log.info("avatar served", { size: avatar.buffer.length, mime: avatar.mime, durationMs: elapsedMs(startedAt) });
-    // No caching — the profile block uses ?k=<refreshKey> as cache-buster,
-    // and we want a fresh upload to be visible immediately.
     return new NextResponse(new Uint8Array(avatar.buffer), {
       headers: {
         "Content-Type": avatar.mime,
@@ -31,7 +28,6 @@ export async function GET() {
   }
 }
 
-// POST /api/profile/avatar  multipart/form-data "file"  (common image types)
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
@@ -70,7 +66,6 @@ export async function POST(req: Request) {
   }
 }
 
-// DELETE /api/profile/avatar
 export async function DELETE() {
   const startedAt = Date.now();
   try {

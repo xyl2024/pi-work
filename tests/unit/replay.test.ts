@@ -95,8 +95,6 @@ describe("replayReducer", () => {
   it("leaves a settled session untouched", () => {
     const open = state({ open: true, index: 9, playing: true });
     expect(replayReducer(open, { type: "liveStateChanged", signals: settled })).toBe(open);
-    // A live signal on an already closed scrubber is a no-op too, so the
-    // effect that dispatches it every render never churns state.
     const closed = state();
     expect(replayReducer(closed, { type: "liveStateChanged", signals: streaming })).toBe(closed);
   });
@@ -109,7 +107,6 @@ describe("replayCropIndex", () => {
 
   it("crops to the cutoff once the scrubber is open on a settled session", () => {
     expect(replayCropIndex(state({ open: true, index: 4 }), settled)).toBe(4);
-    // Index 0 means "render nothing" and must not collapse into "no replay".
     expect(replayCropIndex(state({ open: true, index: 0 }), settled)).toBe(0);
   });
 

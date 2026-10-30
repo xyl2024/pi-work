@@ -1,11 +1,3 @@
-/**
- * Process-startup hook for the scheduled-tasks scheduler.
- *
- * Mirrors `lib/wechat/startup.ts`: called from `instrumentation.ts` so the
- * loop boots as soon as the server is ready, regardless of whether any
- * page has been requested. Idempotent — safe to call multiple times.
- */
-
 import { ensureLoop } from "./loop";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { listRunningRuns, recordRunEnd } from "./store";
@@ -15,12 +7,6 @@ const log = createLogger("scheduler/startup");
 
 let bootstrapped = false;
 
-/**
- * Reconcile durable runs left behind by a previous server process. A live
- * wrapper is kept as running so this remains safe across Next.js HMR reloads;
- * a missing wrapper means the process that owned the run is gone and could not
- * have delivered agent_end.
- */
 function reconcileInterruptedRuns(now: number): void {
   const runs = listRunningRuns();
   let interrupted = 0;

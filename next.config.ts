@@ -7,13 +7,9 @@ let piVersion = "unknown";
 try {
   const piPkgPath = join(__dirname, "node_modules/@earendil-works/pi-coding-agent/package.json");
   piVersion = (JSON.parse(readFileSync(piPkgPath, "utf8")) as { version: string }).version;
-} catch { /* package not found, use default */ }
+} catch {}
 
 const nextConfig: NextConfig = {
-  // NEXT_DIST_DIR lets test/dev instances (tests/global-setup.ts,
-  // scripts/dev-isolated.mjs) build into their own directory so they can
-  // never clobber the .next/ artifacts a production server is serving from
-  // this same checkout. Default stays .next for normal runs.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: [
     "@earendil-works/pi-coding-agent",
@@ -21,10 +17,6 @@ const nextConfig: NextConfig = {
     "better-sqlite3",
     "node-pty",
     "ws",
-    // lib/server/network-proxy.ts hands undici a process-wide dispatcher that
-    // Node's built-in fetch then resolves through. Keep undici out of the
-    // bundle so the class we construct is the same module this file resolves
-    // at runtime, not a second webpack-inlined copy.
     "undici",
   ],
   allowedDevOrigins: ['192.168.*.*'],

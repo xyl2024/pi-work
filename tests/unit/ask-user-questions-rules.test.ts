@@ -10,14 +10,6 @@ import {
   type AskUserQuestionsParams,
 } from "@/lib/shared/ask-user-questions-tool-types";
 
-/**
- * Tests for the ask_user_questions rules that live in the shared, SDK-free
- * module: the "every question needs a recommendation" validation, the
- * Claude-Code suffix normalization, and the resolution → tool-result mapping.
- * They assert only what the module hands back (ADR-0003 rule 3).
- */
-
-/** A minimal valid single-select question with one recommended option. */
 const question = (over: Partial<AskUserQuestion> = {}): AskUserQuestion => ({
   question: "Where should the new file go?",
   header: "Location",
@@ -142,7 +134,6 @@ describe("recommendation suffix normalization", () => {
     const q = question();
     expect(optionIsRecommended(q.options[0])).toBe(true);
     expect(optionIsRecommended(q.options[1])).toBe(false);
-    // Recommending an option selects nothing: the question is still unanswered.
     expect(
       hasUnansweredRequired(
         [q],
@@ -185,8 +176,6 @@ describe("resolution → tool result", () => {
   });
 
   it("never puts a recommendation into the answer", () => {
-    // The user picked the non-recommended option: the recommended label ("src")
-    // must not leak into what the agent reads as the user's choice.
     const answers = [{ questionIndex: 0, selectedLabels: ["tests"], otherText: null }];
     const result = userInputToolResult(questions, { kind: "answered", answers });
     expect(result.details.answers[0].selectedLabels).toEqual(["tests"]);

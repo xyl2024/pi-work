@@ -58,20 +58,6 @@ function serializeModel(model: {
   };
 }
 
-/**
- * Custom-model icon map, read from ~/.pi/agent/models.json. Both custom
- * providers and custom models can carry an `icon` field whose value is a
- * builtin provider id (chosen in ModelsConfig); the assistant message header
- * uses this to render an icon for custom models.
- *
- * Only an **explicit model-level** `icon` feeds the model keys —
- * "<provider>:<modelId>" plus a bare modelId fallback mirroring how modelNames
- * resolves display names. A **provider-level** `icon` only feeds the bare
- * provider key. Folding the provider icon into every model key would let it
- * outrank the auto match (spec priority: explicit model-level icon >
- * auto-match > provider icon), which story 10 deliberately accepts as a
- * display change for providers configured with a brand-level icon.
- */
 async function readModelIcons(): Promise<Record<string, string>> {
   const icons: Record<string, string> = {};
   try {
@@ -91,7 +77,6 @@ async function readModelIcons(): Promise<Record<string, string>> {
         const mIcon = typeof (m as { icon?: unknown } | null)?.icon === "string"
           ? (m as { icon: string }).icon.trim()
           : "";
-        // Only the model's own icon feeds the model keys; no provider fallback.
         if (!mIcon) continue;
         const qualified = `${providerName}:${id}`;
         if (!icons[qualified]) icons[qualified] = mIcon;
@@ -108,7 +93,6 @@ export async function GET(req: Request) {
   const startedAt = Date.now();
   const params = new URL(req.url).searchParams;
   const refreshCatalog = params.get("refresh") === "true";
-  // Optional provider scope for a per-provider "refresh models" action.
   const refreshProvider = params.get("provider")?.trim() || undefined;
   const nameMap = new Map<string, string>();
   let modelList: RuntimeModelInfo[] = [];
@@ -128,9 +112,6 @@ export async function GET(req: Request) {
   const thinkingLevels: Record<string, string[]> = {};
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
   const modelIcons = await readModelIcons();
-  // 图标偏好 (icon preferences) live in their own namespace: same
-  // `provider:modelId` key shape as modelIcons but a different meaning, so they
-  // are deliberately never merged into that map.
   const modelIconPreferences = readModelIconPreferences();
 
   try {
@@ -142,10 +123,6 @@ export async function GET(req: Request) {
         force: true,
         ...(refreshProvider ? { providers: [refreshProvider] } : {}),
       });
-      // The refresh above persisted the catalog into ~/.pi/agent/models-store.json.
-      // Mirror it into the process-wide session runtime so a freshly fetched model
-      // becomes selectable without restarting the server. Best-effort: a sync
-      // failure must not discard the freshly fetched catalog from this response.
       try {
         await refreshAuditModelRuntime(refreshProvider ? { providers: [refreshProvider] } : {});
       } catch (error) {
@@ -155,11 +132,6 @@ export async function GET(req: Request) {
     const available = await runtime.getAvailable();
     modelList = available.map(serializeModel);
 
-    // Keep the selectable `modelList` auth-filtered, but expose the complete
-    // credential-blind runtime catalog separately for the Models settings UI.
-    // `getModels()` includes providers/models that are not currently
-    // authenticated, plus models loaded from models.json and the cached pi.dev
-    // catalog.
     const allModels = runtime.getModels();
     const modelsByProvider = new Map<string, RuntimeModelInfo[]>();
     for (const model of allModels) {

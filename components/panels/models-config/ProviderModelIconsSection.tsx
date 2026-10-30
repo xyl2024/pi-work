@@ -25,20 +25,6 @@ interface ModelsApiResponse {
   modelIconPreferences?: ModelIconPreferences;
 }
 
-/**
- * The "Models" section of one Subscriptions / API Key provider detail page.
- *
- * Both detail pages render this one component so the two entry points cannot
- * drift. It reads the provider's models from **模型目录** (`/api/models`
- * response `catalog`), which is credential-blind: models the provider is not
- * currently authenticated for are listed too. `modelList` is auth-filtered and
- * deliberately not used.
- *
- * Every decision (which rows get the toggle, the collapse threshold) lives in
- * `lib/shared/model-icon-match.ts`; this file is a thin shell that writes the
- * preference and renders the resulting icon. The write is immediate and does
- * not touch the panel's models-config draft / Save bar (ADR-0009 / ADR-0012).
- */
 export function ProviderModelIconsSection({ providerId }: { providerId: string }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -75,8 +61,6 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
     return () => { cancelled = true; };
   }, [providerId, t]);
 
-  // A toggle in another provider's page (or a second window) still lands here:
-  // the full preference map is broadcast, so patch the cached copy in place.
   useModelIconPreferencesSync(setPreferences);
 
   const providerIconId = useMemo(

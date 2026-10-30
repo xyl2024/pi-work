@@ -6,12 +6,6 @@ import {
 } from "@/lib/shared/skill-files";
 import type { SkillDetailFile } from "@/lib/shared/skills";
 
-/**
- * The pure attached-file helpers (lib/shared/skill-files.ts) shared by the
- * panel detail page and the retiring modal: frontmatter stripping, language
- * detection and the manifest grouping rule.
- */
-
 function file(relativePath: string, opts: Partial<SkillDetailFile> = {}): SkillDetailFile {
   const name = relativePath.split("/").pop() ?? relativePath;
   return {

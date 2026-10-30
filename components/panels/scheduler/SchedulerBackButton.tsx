@@ -3,11 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { schedulerBack } from "@/lib/client/scheduler-store";
 
-/**
- * The scheduler panel's "up one level" control. Every page above the task list
- * draws one so the page stack is navigable with the mouse, matching what
- * Escape does with the keyboard (see `escapeScheduler`).
- */
 export function SchedulerBackButton() {
   const { t } = useI18n();
   return (

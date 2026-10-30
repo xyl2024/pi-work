@@ -9,16 +9,6 @@ import {
 } from "@/lib/shared/session-runtime-state";
 import type { InFlightToolCall } from "@/lib/shared/session-runtime-state";
 
-// Pure unit tests for the session runtime state (#59). The state used to live
-// as eleven useState calls and six refs inside `useAgentSession`, and one of
-// its dedupe ledgers was a module-level `Set` shared across every session.
-// These tests pin the two properties that move was for:
-//
-//   • ledgers are per-session — the same tool-call id in two sessions must not
-//     let one suppress the other's reaction;
-//   • the state shape is a single object with identity-preserving patches, so
-//     a no-op write does not churn consumers.
-
 describe("session runtime state", () => {
   it("gives every session its own in-flight tool table", () => {
     const a = createSessionRuntimeState();
@@ -34,13 +24,11 @@ describe("session runtime state", () => {
     const a = createSessionRuntimeState();
     const b = createSessionRuntimeState();
 
-    // Same tool-call id claimed in session A …
     expect(a.seenCelebrateToolEndIds.claim("celebrate-1")).toBe(true);
     expect(a.seenSubagentToolCallIds.claim("spawn-1")).toBe(true);
     expect(a.seenSubagentToolStartIds.claim("spawn-1")).toBe(true);
     expect(a.seenSubagentToolEndIds.claim("spawn-1")).toBe(true);
 
-    // … must not be remembered in session B: the ledger is state, not module scope.
     expect(b.seenCelebrateToolEndIds.has("celebrate-1")).toBe(false);
     expect(b.seenSubagentToolCallIds.has("spawn-1")).toBe(false);
     expect(b.seenSubagentToolStartIds.has("spawn-1")).toBe(false);
@@ -82,7 +70,6 @@ describe("session runtime state", () => {
     expect(next).not.toBe(state);
     expect(next.agentRunning).toBe(true);
     expect(state.agentRunning).toBe(false);
-    // Untouched fields (including the ledgers) are carried over by reference.
     expect(next.seenCelebrateToolEndIds).toBe(state.seenCelebrateToolEndIds);
     expect(next.inFlightTools).toBe(state.inFlightTools);
   });
@@ -119,8 +106,6 @@ describe("session runtime state", () => {
   });
 
   it("keeps the accumulated result when a start is replayed", () => {
-    // SSE reconnects can replay tool_execution_start for a call already in
-    // flight; that must not wipe the streaming output that already arrived.
     const started = upsertInFlightTool(new Map(), "call-1", "bash", { command: "ls" });
     const withStreamingOutput = new Map(started);
     withStreamingOutput.set("call-1", {

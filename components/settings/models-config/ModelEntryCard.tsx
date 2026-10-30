@@ -4,22 +4,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { ModelCardShell } from "./ModelCard";
 import type { ModelEntry } from "./types";
 
-/**
- * One custom model (`ModelEntry` under a user-defined provider) rendered as a
- * card, reusing the same shell as the runtime-catalog `ModelCard` so both
- * grids look identical.
- *
- * Unlike the runtime card it does not expand — clicking opens that entry's
- * edit view (the right chevron hints at the navigation). Fields are all
- * optional on `ModelEntry`, so the summary only lists what is set.
- */
 export function ModelEntryCard({
   model,
   providerIcon,
   onOpen,
 }: {
   model: ModelEntry;
-  /** The provider-level icon id chosen in ProviderDetail, used when the model has none. */
   providerIcon?: string;
   onOpen: () => void;
 }) {

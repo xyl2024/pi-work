@@ -13,12 +13,6 @@ import {
   type McpPage,
 } from "@/lib/shared/mcp-pages";
 
-/**
- * The MCP panel's page stack (lib/shared/mcp-pages.ts). Driven as plain data —
- * the store holds the current stack and the panel renders `currentMcpPage`. No
- * React, no DOM, no server.
- */
-
 function entry(uid: string): McpPage {
   return { kind: "entry", uid };
 }

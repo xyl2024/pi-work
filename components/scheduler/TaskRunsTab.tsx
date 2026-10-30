@@ -1,16 +1,3 @@
-/**
- * TaskRunsTab — run history for one task.
- *
- * Card-style list (vs. the old cramped rows) that shows:
- *   - status pill (success / error / timeout / interrupted / running)
- *   - relative timestamp + duration
- *   - reply preview (expandable), or error message
- *   - "open session" link when a session id is attached
- *
- * Auto-refreshes every 2s while a run is in flight so the running badge
- * stays accurate without the user having to manually refresh.
- */
-
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -60,7 +47,6 @@ export function TaskRunsTab({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {FILTERS.map((f) => {
@@ -131,7 +117,6 @@ export function TaskRunsTab({
         </div>
       )}
 
-      {/* List */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {loading && runs.length === 0 && (
           <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
@@ -161,14 +146,7 @@ export function TaskRunsTab({
   );
 }
 
-/** Threshold over which a running run is flagged as "long-running" in the
- *  UI. The status stays `running` (the agent is still doing real work) but
- *  the user gets a visible warning so they can decide whether to wait or
- *  abort. 10 minutes — matches the previous blanket timeout, but this is
- *  advisory only; the agent is allowed to keep running. */
 const LONG_RUNNING_THRESHOLD_MS = 10 * 60 * 1000;
-
-// ── Single run card ──────────────────────────────────────────────
 
 function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpenSession: (id: string) => void }) {
   const { t, locale } = useI18n();
@@ -176,9 +154,6 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
   const markdownComponents = useMarkdownComponents(false);
   const hasReply = !!run.replyText?.trim();
 
-  // For in-flight runs we don't know the duration yet, so we surface the
-  // live elapsed time instead — and flag it as "long-running" once the
-  // threshold is crossed so the user knows the agent is still busy.
   const isRunning = run.status === "running";
   const elapsedMs = isRunning ? Math.max(0, now - run.startedAt) : null;
   const isLongRunning = elapsedMs !== null && elapsedMs >= LONG_RUNNING_THRESHOLD_MS;
@@ -194,7 +169,6 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
         gap: 8,
       }}
     >
-      {/* Header row — clicking it toggles the stored reply. */}
       <div
         role={hasReply ? "button" : undefined}
         tabIndex={hasReply ? 0 : undefined}
@@ -277,7 +251,6 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
         </div>
       </div>
 
-      {/* Body */}
       {run.error && (
         <div
           style={{

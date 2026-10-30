@@ -16,14 +16,6 @@ import {
   useModelsConfigStore,
 } from "@/lib/client/models-config-store";
 
-/**
- * One provider's detail page. Full width, with a back control that returns to
- * the provider list — the panel navigates in levels instead of the modal's
- * 210px sidebar plus a detail column.
- *
- * Its model grid opens each model's own detail page; the model-detail slice
- * adds the grid and the "open a model" navigation the provider slice left out.
- */
 export function ModelsConfigProviderPage({ name }: { name: string }) {
   const { t } = useI18n();
   const state = useModelsConfigStore();

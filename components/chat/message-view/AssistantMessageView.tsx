@@ -27,7 +27,6 @@ interface AssistantMessageViewProps {
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
   showTimestamp?: boolean;
   keywords?: string[];
@@ -35,11 +34,9 @@ interface AssistantMessageViewProps {
   afterContent?: React.ReactNode;
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
-  /** Turn-level aggregate added/deleted line counts (footer label). */
   turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   cwd?: string | null;
-  /** Session id used to resolve the captured request body (null = unknown). */
   sessionId?: string | null;
   entryId?: string;
 }
@@ -65,10 +62,6 @@ function AssistantMessageViewInner({
   const { t } = useI18n();
   const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
-  // TTFT / TPS come from the model-call metrics DB (not the session JSONL),
-  // joined on the message id the recorder stamped — `String(message.timestamp)`.
-  // They are independent of `usage`, and `null` for messages whose call was
-  // never recorded (older history, metrics DB disabled, failed-before-output).
   const callMetrics = useMessageCallMetrics(message.timestamp);
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const gallery = useMemo<ImageItem[]>(() => {
@@ -107,9 +100,6 @@ function AssistantMessageViewInner({
       .join("\n"),
     [blocks, textContent],
   );
-  // Estimated chars while streaming — extracted out of the JSX IIFE so
-  // it doesn't run on every render (only when blocks grow / streaming
-  // flag flips).
   const streamChars = useMemo(() => {
     if (!isStreaming) return 0;
     return countContentChars(blocks);
@@ -125,9 +115,6 @@ function AssistantMessageViewInner({
       });
   };
 
-  // Download the provider request body that produced this message (captured by
-  // the LLM API audit). "Not recorded" is a normal state for older history, so
-  // it is reported as information rather than as a failure.
   const downloadRequestBody = async () => {
     if (!sessionId || downloading) return;
     setDownloading(true);
@@ -177,9 +164,6 @@ function AssistantMessageViewInner({
       const elapsed = (now - streamStartRef.current) / 1000;
       if (elapsed > 0.5) {
         const next = chars / 4 / elapsed;
-        // Skip the re-render when the rounded value is unchanged (tps is
-        // displayed with one decimal). With a 300 ms tick this often
-        // avoids 1-2 redundant renders per second during streaming.
         setTps((prev) => (prev !== null && Math.abs(prev - next) < 0.05 ? prev : next));
       }
     };
@@ -210,9 +194,6 @@ function AssistantMessageViewInner({
             <span>{message.provider} - {modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
           </>
         )}
-        {/* TTFT / TPS sit next to the model name and stay hidden until the
-            message is hovered. They render nothing when the call was never
-            recorded, so no empty gap is left in the row. */}
         {!isStreaming && <CallMetricsBadges metrics={callMetrics} hidden={!hovered} />}
         {isStreaming && (() => {
           const est = Math.round(streamChars / 4);
@@ -399,18 +380,5 @@ function AssistantMessageViewInner({
   );
 }
 
-/**
- * `message` is the heavy prop. For historical entries it's stable, so
- * the default shallow memo short-circuits the surrounding re-renders
- * that flow through ChatWindowContent when the streaming store ticks.
- * The streaming bubble intentionally re-renders on every snapshot
- * flip (it lives outside the memoized boundary in StreamingBubble),
- * so memo here is the safety net for *historical* messages.
- *
- * `afterContent` and `toolResults` are caller-owned React/Map refs;
- * callers that want to avoid extra renders should pass stable refs
- * (which ChatWindow already does — toolResults only changes when an
- * in-flight tool result actually changes).
- */
 export const AssistantMessageView = memo(AssistantMessageViewInner);
 AssistantMessageView.displayName = "AssistantMessageView";

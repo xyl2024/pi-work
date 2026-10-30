@@ -1,19 +1,5 @@
 "use client";
 
-/**
- * MoreActionsRow — the five session actions that used to live in the chat
- * input's "…" More menu, re-surfaced as circular icon buttons in the chat
- * window's bottom launcher row (left of SubagentSessionsButton / Collapse
- * all / Scroll to bottom). Same visual language as the other launchers:
- * h-9 w-9 rounded-full bordered circles with shadow, dimmed + disabled when
- * the action doesn't apply.
- *
- * "Notification channel" keeps its own upward popover (channel list +
- * "no notification"), same content as the menu submenu it replaces.
- *
- * All state comes from the chatHeaderActionsStore snapshot owned by
- * ChatWindowContent; the row renders nothing when no action is visible.
- */
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../../ui/Tooltip";
@@ -29,8 +15,6 @@ import {
 } from "@/components/ui/icons";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
-/** Shared launcher-button look — mirrors the Collapse-all / Scroll-to-bottom
- *  buttons in ChatWindow's launcher row so the whole row stays consistent. */
 const launcherButtonClass =
   "pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100";
 
@@ -53,9 +37,6 @@ export function MoreActionsRow() {
 
   const notifyVisible = headerActions?.notifyVisible ?? false;
 
-  // Channel list powers the notification popover and resolves the current
-  // binding's display name. Refreshed on each open so channels bound or
-  // removed elsewhere show up immediately.
   useEffect(() => {
     if (!notifyOpen) return;
     let cancelled = false;
@@ -65,12 +46,10 @@ export function MoreActionsRow() {
         if (!cancelled) setChannels(d.channels ?? []);
       })
       .catch(() => {
-        // transient — the popover stays usable with an empty list
       });
     return () => { cancelled = true; };
   }, [notifyOpen]);
 
-  // Close the notification popover on outside click / Escape.
   useEffect(() => {
     if (!notifyOpen) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
@@ -105,8 +84,6 @@ export function MoreActionsRow() {
       : null;
 
   return (
-    // Extra right margin visually separates the five actions from the
-    // pre-existing launchers (Subagent sessions / Collapse all / Bottom).
     <div className="flex items-end gap-2" style={{ marginRight: 8 }}>
       {headerActions.replayVisible && (
         <Tooltip content={t("Replay")}>
@@ -154,8 +131,6 @@ export function MoreActionsRow() {
           <button
             type="button"
             onClick={async () => {
-              // Compacting is disruptive (older messages leave the visible
-              // context), so ask for a second confirmation before dispatching.
               const ok = await confirm({
                 title: t("Compact context?"),
                 description: t(

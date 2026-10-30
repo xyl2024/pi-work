@@ -18,7 +18,6 @@ interface Props {
   onCloseTab: (tabId: string) => void;
   onNewSession?: () => void;
   onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
-  /** Force-remount the chat controller for this tab. No-op for draft tabs. */
   onReload?: (tabId: string) => void;
   leadingControl?: ReactNode;
 }
@@ -89,9 +88,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         height: 34,
         flexShrink: 0,
         background: "transparent",
-        // Top corners match the parent panel's rounded top; bottom stays
-        // flat so the bar reads as "attached" to the content below instead
-        // of "floating above" it.
         borderRadius: "var(--panel-radius) var(--panel-radius) 0 0",
         overflow: "hidden",
         padding: "0 6px",

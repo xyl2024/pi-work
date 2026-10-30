@@ -50,38 +50,11 @@ import { InteractionGates, type PermissionDecision } from "./interaction-gates";
 
 const log = createLogger("rpc-manager");
 
-// ============================================================================
-// Ask user questions
-//
-// The `ask_user_questions` custom tool blocks until the user answers a
-// batch of structured questions or cancels. Its gate lives on the wrapper's
-// `gates` (lib/server/interaction-gates.ts, ADR-0008) together with the
-// permission gates: the module emits the synthetic
-// `ask_user_questions_request` SSE event, keeps the wait on its table, and
-// settles it when the client POSTs back an `ask_user_questions_decision`
-// command. This wrapper holds no question state of its own.
-//
-// No deadline is imposed (the gate is opened with `timeoutMs: null`), so an
-// abandoned question stays on the table until the session is destroyed or the
-// tool's AbortSignal fires — same as before the move.
-// ============================================================================
-
-/** The wrapper-synthesised question event, as the protocol declares it. */
 export type AskUserQuestionsRequestEvent = Extract<SessionEvent, { type: "ask_user_questions_request" }>;
-
-// ============================================================================
-// Types
-// ============================================================================
 
 type EventListener = (event: SessionEvent) => void;
 
-/** Per-command audit attribution (see `AgentSessionWrapper.send`). */
 export type SendOptions = ModelCallCommandOptions;
-
-// ============================================================================
-// AgentSessionWrapper
-// Wraps AgentSession with the same interface the rest of the app expects
-// ============================================================================
 
 export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
@@ -89,49 +62,16 @@ export class AgentSessionWrapper {
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly destroyCallbacks = new Set<() => void>();
   private _alive = true;
-  // True between agent_start and agent_end (and during compaction). Spans the
-  // whole turn including tool calls so the sidebar dot covers the full
-  // "agent is busy" window, not just the model streaming phase.
   private _running = false;
-  // Set synchronously before awaiting AgentSession.compact(). SDK compaction
-  // state is not observable until compact() advances past its initial abort,
-  // so this closes the same-tick race between concurrent compact requests.
   private compactInFlight = false;
-  /** This session's interaction gates (ADR-0008): the pending permission
-   *  confirmations, the pending questions and the "always allow" memo all
-   *  live on that one module now. */
   readonly gates: InteractionGates;
-  // Text of the latest assistant body reply of the current turn — used by
-  // per-session reply notifications (see start() + deliverSessionNotify).
-  // Reset on agent_start, updated on each assistant message_end.
   private lastAssistantText = "";
-  // Raw tool selection that is live for this session — "all" or the string[]
-  // exactly as the user picked it (trailing-`*` patterns included). Kept in
-  // sync by set_tools and at session start, so `get_state` can hand the UI the
-  // selection it needs to label the tools button: the expanded active-tool list
-  // (getActiveToolNames) can't be mapped back to a named preset.
   private _toolSelection: ToolSelection = "all";
-  // This session's permission mode (ADR-0021). Per wrapper, never global: the
-  // user's authorization covers one session at a time. Restored from the
-  // sidecar at start, changed only through `set_permission_mode` (a human
-  // clicking a button or the palette — there is no agent-reachable path).
   private _permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE;
-  // Local context-composition estimate (ADR-0005), rendered by `get_state` and
-  // refreshed on `message_end` — never computed on a read path. See
-  // `scheduleContextCompositionRefresh`.
   private contextComposition: ContextComposition | null = null;
-  // Monotonic id + serialized promise chain: a newer refresh supersedes an
-  // in-flight one, and the tokenizer's 2.4MB first load can never interleave
-  // two writes into the cache.
   private compositionRefreshId = 0;
-  // 消息来源（ADR-0023）：非网页来源的 prompt 入队后，由该 user message 的
-  // message_end 事件消费（见 consumePromptOrigin）。网页端从不入队。
   private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
   private compositionRefreshChain: Promise<void> = Promise.resolve();
-  // Last accepted refresh inputs, so a `message_end` that didn't move the
-  // anchor (a tool result, say) costs nothing. Message/tool *counts* are
-  // enough to notice an append: the transcript only ever grows, and a tool
-  // change rebuilds the system prompt, which is compared in full.
   private lastCompositionInput: {
     anchoredTotalTokens: number | null;
     systemPrompt: string;
@@ -143,8 +83,6 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
-    /** The mode to start in. Session start passes the persisted value; only
-     *  `set_permission_mode` changes it afterwards. */
     permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE,
   ) {
     this._permissionMode = permissionMode;
@@ -154,14 +92,11 @@ export class AgentSessionWrapper {
     });
   }
 
-  /** Fan a synthesized event out to the wrapper's listeners without letting a
-   *  listener error break the emitting path. */
   private emit(event: SessionEvent): void {
     for (const l of this.listeners) {
       try {
         l(event);
       } catch {
-        // listener errors must not break the emitting flow
       }
     }
   }
@@ -174,13 +109,10 @@ export class AgentSessionWrapper {
     return this.inner.sessionFile ?? "";
   }
 
-  /** The raw (un-expanded) tool selection live for this session. */
   get toolSelection(): ToolSelection {
     return this._toolSelection;
   }
 
-  /** Record the raw selection the caller just applied. Malformed values are
-   *  ignored so a bad RPC payload can't blank out the stored selection. */
   setToolSelection(selection: unknown): void {
     if (selection === "all") this._toolSelection = "all";
     else if (Array.isArray(selection) && selection.every((name) => typeof name === "string")) {
@@ -188,7 +120,6 @@ export class AgentSessionWrapper {
     }
   }
 
-  /** This session's permission mode (ADR-0021). Read by the `tool_call` gate. */
   get permissionMode(): PermissionMode {
     return this._permissionMode;
   }
@@ -197,14 +128,10 @@ export class AgentSessionWrapper {
     return this._alive;
   }
 
-  /** True while the agent is between agent_start and agent_end (or compacting). */
   isRunning(): boolean {
     return this._running || this.compactInFlight || this.inner.isStreaming || this.inner.isCompacting;
   }
 
-  /** Context-window occupancy ({percent, contextWindow, tokens}) for the live
-   *  session — the same value pi draws in the chat top-bar circle. Shared with
-   *  estimation logic. */
   getContextUsage(): ContextUsage | undefined {
     return this.inner.getContextUsage();
   }
@@ -214,34 +141,16 @@ export class AgentSessionWrapper {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile || undefined,
     });
-    // The listener is annotated with pi's own event type on purpose: handing
-    // the event to our `SessionEvent`-typed listeners below is what proves, at
-    // compile time, that every SDK event is part of the protocol (see
-    // `PiSessionEventsAreKnownToProtocol` in ./pi-types).
     this.unsubscribe = this.inner.subscribe((event: AgentSessionEvent) => {
-      // A running turn may legitimately spend far longer than the idle TTL in
-      // one model request or tool call. Update state first so the idle reaper
-      // is suspended for the entire active turn instead of detaching its SSE
-      // listeners after ten quiet minutes.
       this.updateRunningState(event);
       this.resetIdleTimer();
       if (event.type === "agent_end") {
         this.logEmptyTerminalReply(event);
-        // Safety net for the end of the turn: re-anchor with the final branch
-        // state. A no-op when the `message_end` refresh already covered it
-        // (the input dedupe below skips identical anchor + prompt).
         this.scheduleContextCompositionRefresh();
       }
-      // Per-session reply notifications: track the last assistant body reply of
-      // this turn (agent_start → agent_end) and, when the turn ends, forward it
-      // to the session's configured notification channel. Only fires for
-      // sessions that explicitly opted in on the new-session page — others have
-      // no sidecar and this is a no-op.
       if (event.type === "agent_start") {
         this.lastAssistantText = "";
       } else if (event.type === "message_end") {
-        // 消息来源（ADR-0023）：user 消息的 message_end 事件在此处消费排队中的
-        // origin —— 先附加到即将转发给 SSE 监听者的事件上，再推迟一步写 entry。
         if ((event.message as { role?: string }).role === "user") {
           this.consumePromptOrigin(event);
         }
@@ -250,19 +159,10 @@ export class AgentSessionWrapper {
       } else if (event.type === "agent_end") {
         void this.deliverSessionNotify();
       }
-      // Push the freshest conversation tree after every persisted message
-      // (message_end is when pi writes the entry to the session file), so
-      // the conversation-tree panel can render new cards without waiting
-      // for the whole turn to finish (agent_end → full session reload).
       if (event.type === "message_end") {
         this.emitTreeUpdate();
         this.scheduleContextCompositionRefresh();
       }
-      // Mirror the latest session display name into the sidecar index
-      // (see lib/server/session-names.ts). The mutation path that
-      // rewrites the JSONL in place ALSO writes the sidecar (it doesn't
-      // emit session_info_changed), so this is the second-safety-net
-      // path for renames that came in via the live SDK RPC.
       if (event.type === "session_info_changed") {
         const name = (event as { name?: unknown }).name;
         if (typeof name === "string" && name.trim()) {
@@ -284,34 +184,6 @@ export class AgentSessionWrapper {
     this.resetIdleTimer();
   }
 
-  /**
-   * Recompute the local context-composition estimate out of band and cache it
-   * on this session. Called on `message_end` / `agent_end` / branch navigation
-   * and once at startup — never from `get_state` itself, so a request path (and
-   * therefore hover) only ever reads the cache.
-   *
-   * Deferred by one microtask on purpose: pi emits `message_end` *before* it
-   * appends the message to the session manager, and the anchor walks that
-   * branch — reading it synchronously here would anchor one message behind.
-   * The continuation runs after pi's own synchronous persistence.
-   */
-  /**
-   * 消息来源的消费点与写入点（ADR-0023）。
-   *
-   * pi 对一条 user message 是先向监听者发 `message_end`、再同步 persist 该
-   * entry（见 scheduleContextCompositionRefresh 的注释）——所以这里同步把
-   * origin 附加到即将转发给 SSE 监听者的事件上（实时与历史一致），并推迟一
-   * 个微任务把 `pi_work_message_origin` custom entry 追加到 JSONL：微任务运
-   * 行时该 user message entry 必然已写入，entry 由 appendCustomEntry 自然挂
-   * 在当前叶（即该 user message）之后，随消息树走：分支自然脱落、压缩随旧
-   * 分支消失。只有非网页来源才有排队中的 origin；origin 永远不会被写回
-   * JSONL 的消息体。
-   *
-   * 匹配规则：用消息文本前缀找 pending 中最先匹配者。prompt 派发到 user
-   * message 写入之间可能有 steer/followUp 插队（文本不匹配则不消耗）；单个
-   * pending 且新鲜时直接消费，容忍文本被模板/图片 hints 扩写。prompt_failed
-   * 时清空 pending（对应的 user message 永远不会写入）。
-   */
   private consumePromptOrigin(event: { message?: unknown }): void {
     if (this.pendingPromptOrigins.length === 0) return;
     const cutoff = Date.now() - 10 * 60_000;
@@ -325,10 +197,6 @@ export class AgentSessionWrapper {
     (event as { origin?: MessageOrigin }).origin = consumed.origin;
     void Promise.resolve().then(() => {
       try {
-        // 只要会话还活着就补写 entry（appendCustomEntry 走既有 persist 路
-        // 径）：不用 unsubscribe 判断放弃——未 start（如还没人订阅 SSE）
-        // 不代表会话文件写不了，此时放弃会让 origin 永久丢失。persist 通
-        // 道真死了（会话已释放）才会走到 _alive 检查之外，由 catch 兕底。
         if (!this._alive) return;
         this.inner.sessionManager.appendCustomEntry(MESSAGE_ORIGIN_ENTRY_TYPE, consumed);
       } catch (err) {
@@ -343,11 +211,6 @@ export class AgentSessionWrapper {
       .then(async () => {
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
         const agentState = this.inner.agent.state;
-        // `AgentSession.systemPrompt`, not `agent.state.systemPrompt`: the
-        // agent-level field is replayed from the transcript's system messages
-        // and stays empty until the first turn is persisted (pi 0.86+), which
-        // would leave the panel with an empty system-prompt bucket on a fresh
-        // session.
         const systemPrompt = this.inner.systemPrompt ?? "";
         const tools = agentState?.tools ?? [];
         const messages = agentState?.messages ?? [];
@@ -364,15 +227,9 @@ export class AgentSessionWrapper {
         try {
           countTokens = await getContextTokenCounter();
         } catch {
-          // Already logged by the tokenizer module; keep the previous cache
-          // rather than blanking the tooltip.
           return;
         }
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
-        // The four top-level buckets (ADR-0005): system prompt (minus skills),
-        // tool schemas, skills, messages. Every classified number is anchored
-        // to the provider total; the system prompt is counted by prefix
-        // differencing so `system prompt + skills` equals the whole exactly.
         this.contextComposition = computeContextComposition({
           systemPrompt,
           tools,
@@ -395,23 +252,11 @@ export class AgentSessionWrapper {
       });
   }
 
-  /**
-   * Emit a synthetic `session_tree_update` event carrying the session's
-   * latest tree + leaf id. Called after every message_end, and once by the
-   * SSE route on connect, so the conversation-tree panel renders new cards
-   * in near-real-time instead of waiting for agent_end to reload the file.
-   */
   emitTreeUpdate(): void {
     try {
       const sm = this.inner.sessionManager;
       const treeEvent: SessionEvent = {
         type: "session_tree_update",
-        // Apply the same session_info cleanup the /api/sessions/[id] GET
-        // performs, so the live tree matches the disk-loaded one. Without
-        // this, a rename's session_info node (hung off the then-current
-        // leaf) becomes a side-branch that misroutes buildConversationTree's
-        // per-round children[0] walk — the round's final assistant gets
-        // locked early and every intermediate message renders as a card.
         tree: stripSessionInfoNodes(sm.getTree()),
         leafId: fallbackSessionLeafId(sm, sm.getLeafId()),
       };
@@ -419,7 +264,6 @@ export class AgentSessionWrapper {
         try {
           l(treeEvent);
         } catch {
-          // listener errors must not break the event loop
         }
       }
     } catch (e) {
@@ -430,12 +274,6 @@ export class AgentSessionWrapper {
     }
   }
 
-  /**
-   * A successful HTTP stream can still become an empty terminal assistant
-   * message after provider/adapter processing. Emit only safe metadata here;
-   * paired with llm-audit's SSE-terminal log this makes the next occurrence
-   * attributable without logging prompts, replies, or tool arguments.
-   */
   private logEmptyTerminalReply(event: Extract<SessionEvent, { type: "agent_end" }>): void {
     const messages = Array.isArray(event.messages) ? event.messages : [];
     const lastAssistant = [...messages].reverse().find((message) => (
@@ -454,12 +292,6 @@ export class AgentSessionWrapper {
     });
   }
 
-  /**
-   * Forward this turn's final assistant reply to the session's configured
-   * notification channel (set on the new-session page). Reads the sidecar at
-   * send time so a channel re-scan / config update is always picked up.
-   * No-op when the session has no notification config or the reply is empty.
-   */
   private async deliverSessionNotify(): Promise<void> {
     const text = this.lastAssistantText;
     if (!text) return;
@@ -474,7 +306,6 @@ export class AgentSessionWrapper {
     try {
       sessionName = this.inner.sessionManager.getSessionName()?.trim() ?? "";
     } catch {
-      // ignore — fall back to a generic label
     }
     const taskName = sessionName || "Session notification";
     const notification: TaskNotification = {
@@ -513,7 +344,6 @@ export class AgentSessionWrapper {
         this._running = true;
         break;
       case "agent_end":
-        // A retryable attempt ends before the overall agent run settles.
         if (event.willRetry !== true) this._running = false;
         break;
       case "agent_settled":
@@ -527,17 +357,9 @@ export class AgentSessionWrapper {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
 
-    // The TTL is for inactive wrappers only. In particular, do not treat a
-    // silent long-running tool/model request as an abandoned browser session:
-    // destroy() unsubscribes the wrapper but does not abort the underlying
-    // AgentSession, which otherwise makes the UI look interrupted while the
-    // agent can still continue and eventually finish in the background.
     if (this.isRunning()) return;
 
     this.idleTimer = setTimeout(() => {
-      // An event can start a turn just as this callback is queued. Never reap
-      // an active wrapper in that race; its terminal event will arm the idle
-      // timer again.
       if (this.isRunning()) return;
       this.destroy();
     }, 10 * 60 * 1000);
@@ -556,29 +378,11 @@ export class AgentSessionWrapper {
     return () => this.destroyCallbacks.delete(cb);
   }
 
-  /** What a reconnecting client must still be told: the line-protocol events
-   *  of every gate this session has waiting, both kinds. The
-   *  /api/agent/[id]/events route encodes them verbatim after an SSE reconnect,
-   *  so a page refresh mid-confirmation or mid-question brings the surface
-   *  back instead of stranding the user.
-   *
-   *  The gate module owns both the table and the wire shapes (ADR-0008), so
-   *  this is a bare pass-through — the route filters nothing. */
   snapshotPendingGates(): SessionEvent[] {
     return this.gates.snapshot();
   }
 
   async send(command: Record<string, unknown>, options: SendOptions = {}): Promise<unknown> {
-    // Every command runs inside an LLM-audit context so the fetch patch can
-    // attribute each provider call to this session (AsyncLocalStorage
-    // propagates through the whole prompt → agent-loop → stream → fetch chain,
-    // including fire-and-forget prompts and pi-internal auto-compaction calls).
-    // cwd + sessionName are snapshotted at command time for audit attribution.
-    // `options.purpose` lets a caller describe what this command's model calls
-    // are for (e.g. a channel message) without changing the session's source.
-    // Re-install the fetch patch defensively: after an HMR reload of llm-audit.ts
-    // the running session's wrapper may still be old-code, so we make sure the
-    // active patch is the newest incarnation before dispatching.
     installLlmFetchAudit();
     return runWithLlmAuditContext(
       {
@@ -599,14 +403,7 @@ export class AgentSessionWrapper {
 
     switch (type) {
       case "prompt": {
-        // Fire and forget — events come via subscribe. Rejections surface
-        // as a synthetic prompt_failed event so the client can react instead
-        // of silently hanging (e.g. missing API key, unregistered model).
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
-        // 消息来源收口（ADR-0023）：可选 origin 字段由非网页发送方（频道
-        // inbound、定时任务 runner、subagent 手动补输入）填好；网页端不传，
-        // 行为与现状完全一致（不写任何 entry）。非法 origin 按缺省（网页端）
-        // 处理，不抛错。
         const rawOrigin = (command as { origin?: unknown }).origin;
         if (rawOrigin !== undefined) {
           const origin = isMessageOrigin(rawOrigin) ? rawOrigin : normalizeMessageOrigin(rawOrigin);
@@ -619,14 +416,11 @@ export class AgentSessionWrapper {
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             log.warn("prompt failed", { sessionId: this.sessionId, error });
-            // prompt 失败意味着对应的 user message 永远不会被写入；排队中的
-            // origin 丢弃，避免错挂到之后不相干的消息上。
             this.pendingPromptOrigins = [];
             for (const l of this.listeners) {
               try {
                 l({ type: "prompt_failed", error: message });
               } catch {
-                // listener errors must not break the dispatch loop
               }
             }
           });
@@ -634,13 +428,6 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
-        // The user's stop covers the whole delegation: the parent turn and
-        // every unfinished child task (running and queued). Stopping the tasks
-        // first also closes the spawn window before the parent turn unwinds,
-        // so a tool call racing the stop cannot start new child work. A child
-        // session's own abort (a single task's cancel, or its runtime limit)
-        // must not be mistaken for a parent-session stop, and it cannot own
-        // subagent tasks anyway (recursion is disabled).
         if (this.source !== "subagent") {
           stopAllSubagentTasksForParent(this.sessionId, SUBAGENT_PARENT_STOPPED);
         }
@@ -648,23 +435,6 @@ export class AgentSessionWrapper {
         return null;
 
       case "compact": {
-        // Manual compaction. Mirrors pi TUI's bare `/compact` (the optional
-        // `[focus]` tail the kernel previously accepted was dropped to match
-        // the simplified UI). Pi's `AgentSession.compact()` first aborts any
-        // in-progress agent run, then synchronously waits for the summary
-        // call to finish and emits `compaction_start` / `compaction_end` via
-        // the same `subscribe()` channel that the SSE route forwards. The
-        // compact() promise resolves with the persisted `CompactionResult`,
-        // which we narrow to the subset the UI actually needs.
-        //
-        // Front-end should refuse to dispatch when `agentRunning` is true on a
-        // different path (UI button + slash command gated on !isStreaming);
-        // if it slips through, the upstream abort() makes the call safe but
-        // cancels the user's in-flight turn, which we treat as a caller bug.
-        //
-        // Server-side guard for multi-tab / stale-widget races: if the
-        // session is actually mid-turn, refuse instead of aborting the user's
-        // in-flight work (the kernel's compact() would abort it).
         if (
           this.compactInFlight ||
           this.isRunning() ||
@@ -714,10 +484,6 @@ export class AgentSessionWrapper {
         const isStreaming = this.inner.isStreaming;
         const isCompacting = this.compactInFlight || this.inner.isCompacting;
         const isRunning = this.isRunning();
-        // Startup/wrapper-reuse path: the cache is filled asynchronously (the
-        // tokenizer is a dynamic import), and nothing else would wake an idle
-        // session up to publish it. Joining that in-flight refresh here is
-        // still a cache read — it never starts a new computation.
         if (!this.contextComposition) await this.compositionRefreshChain;
         return {
           sessionId: this.inner.sessionId,
@@ -732,18 +498,10 @@ export class AgentSessionWrapper {
           contextUsage: contextUsage
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
             : null,
-          // Local estimate of what the context is made of (ADR-0005) — the
-          // exact total stays in `contextUsage` above; every classified number
-          // is anchored to it. `null` until the first refresh lands.
           contextComposition: this.contextComposition,
           systemPrompt: this.inner.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
-          // The session's permission mode. Without it a remounted client would
-          // have to wait for the next `permission_mode_changed`, and that event
-          // is live, not replayed (ADR-0021).
           permissionMode: this.permissionMode,
-          // Raw selection (patterns included) — lets the UI render the active
-          // preset label instead of re-deriving it from the expanded tool list.
           toolNames: this.toolSelection,
         };
       }
@@ -758,8 +516,6 @@ export class AgentSessionWrapper {
       }
       case "navigate_tree": {
         const result = await this.inner.navigateTree(command.targetId as string, {});
-        // The leaf changed, so the anchor (which walks the current branch) did
-        // too — re-anchor the cached composition to the branch being shown.
         if (!result.cancelled) this.scheduleContextCompositionRefresh();
         log.info("navigate tree completed", {
           sessionId: this.sessionId,
@@ -772,9 +528,6 @@ export class AgentSessionWrapper {
       case "set_thinking_level": {
         const level = command.level as string;
         this.inner.setThinkingLevel(level);
-        // setThinkingLevel clamps xhigh→high for models where supportsXhigh()===false.
-        // If the model has DeepSeek thinking compat (reasoningEffortMap maps xhigh→max),
-        // force the state back so the compat layer can use it correctly.
         if (level === "xhigh" && (this.inner.model as { compat?: { thinkingFormat?: string } } | null)?.compat?.thinkingFormat === "deepseek" && this.inner.agent?.state) {
           this.inner.agent.state.thinkingLevel = "xhigh";
         }
@@ -796,12 +549,6 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
-        // Only the declarable tools are worth listing: a tool the user cannot
-        // activate must not show up as an (un-toggleable) row in the picker.
-        // pi's own `codemode` / `tool_search` are `model-only`, so they stay.
-        // MCP tools at their default `codemode` exposure stay reachable from
-        // codemode scripts but are intentionally absent here; set the server's
-        // exposure to `direct` to manage them per session.
         return all.filter((t) => isDeclarableTool(t)).map((t) => ({
           name: t.name,
           description: t.description,
@@ -812,18 +559,10 @@ export class AgentSessionWrapper {
 
       case "set_tools": {
         const toolNames = command.toolNames as ToolSelection;
-        // Non-declarable tools (MCP servers at `codemode` / `deferred`
-        // exposure) are not selectable: activating them would declare them to
-        // the model, which is not what that exposure means. They stay callable
-        // from codemode scripts either way.
         const declarableSet = new Set(declarableToolNames(this.inner.getAllTools()));
         if (toolNames === "all") {
           this.inner.setActiveToolsByName([...declarableSet]);
         } else if (Array.isArray(toolNames)) {
-          // Entries may carry trailing-`*` prefix patterns (e.g. `pi_work_*`);
-          // resolve them against the live registry before applying. The raw
-          // selection (patterns included) is what gets persisted below, so a
-          // restart re-expands against the then-current registry.
           const allNames = this.inner.getAllTools().map((t) => t.name);
           this.inner.setActiveToolsByName(
             (expandToolSelection(toolNames, allNames) as string[]).filter((name) =>
@@ -832,8 +571,6 @@ export class AgentSessionWrapper {
           );
         }
         this.setToolSelection(toolNames);
-        // Mirror to the sidecar so the selection survives a server restart.
-        // Best-effort: a failed write must not fail the tool switch.
         if (!writeSessionToolSelection(this.sessionId, toolNames)) {
           log.warn("failed to persist session tool selection", { sessionId: this.sessionId });
         }
@@ -841,27 +578,18 @@ export class AgentSessionWrapper {
       }
 
       case "set_permission_mode": {
-        // An explicit enumeration, not a cast: an unknown value must be
-        // rejected, never treated as `full_access` (ADR-0008's "unknown
-        // decision means allow" trap, deliberately not repeated here).
         const mode = command.mode;
         if (!isPermissionMode(mode)) {
           throw new Error(`Unknown permission mode: ${String(mode)}`);
         }
         this._permissionMode = mode;
-        // Leaving full access also revokes the "allow similar for this
-        // session" memo: both are "what this session is authorized to do".
         if (mode === "confirm") this.gates.clearSessionMemo();
-        // Best-effort persistence: a failed write means "back to confirm after
-        // a restart", which must never fail the switch that is happening now.
         if (!writeSessionPermissionMode(this.sessionId, mode)) {
           log.warn("failed to persist session permission mode", {
             sessionId: this.sessionId,
             mode,
           });
         }
-        // Pending gates are deliberately untouched in both directions: a mode
-        // switch approves nothing and denies nothing.
         this.emit({ type: "permission_mode_changed", mode });
         log.info("permission mode changed", { sessionId: this.sessionId, mode });
         return { mode };
@@ -905,7 +633,6 @@ export class AgentSessionWrapper {
       }
     }
     this.destroyCallbacks.clear();
-    // One teardown for every gate: permissions and questions share the table.
     this.gates.invalidateAll();
     log.info("agent wrapper destroyed", {
       sessionId: this.sessionId,
@@ -914,12 +641,6 @@ export class AgentSessionWrapper {
   }
 }
 
-/**
- * Extract the plain-text body of an assistant message, skipping thinking /
- * tool-call / image blocks. Returns "" when the message isn't an assistant
- * body reply (user, errored, no text). Used to build per-session reply
- * notifications.
- */
 function extractAssistantBodyText(message: unknown): string {
   if (!message || typeof message !== "object") return "";
   const m = message as { role?: unknown; content?: unknown; stopReason?: unknown };
@@ -938,17 +659,6 @@ function extractAssistantBodyText(message: unknown): string {
   return parts.join("\n\n");
 }
 
-// ============================================================================
-// Session registry
-// ============================================================================
-//
-// The live-session map (`__piSessions`) plus `getRpcSession` /
-// `listRunningRpcSessions` live in lib/server/session-registry.ts so the
-// server-only self-management tools can read them without a circular import.
-// They are re-exported here for backward compatibility with existing
-// importers. `__piStartLocks` is only used internally by this module, so it
-// stays local.
-
 declare global {
   var __piStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
 }
@@ -961,55 +671,17 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 export { getRpcSession, listRunningRpcSessions } from "./session-registry";
 export { runTurnRpcSession, type RunTurnRpcSpec } from "./turn/rpc-factory";
 
-// `stripDefaultSystemPromptSections` / `stripPiDocumentationSection` live in
-// `lib/shared/system-prompt-segments` next to the rest of the knowledge about
-// pi's prompt section boundaries (and are unit-tested there).
-
-/**
- * Get or create an AgentSession for the given session.
- * For new sessions (sessionFile === ""), pi generates its own id.
- * Pass toolNames to pre-configure active tools (empty array = all tools disabled, "all" = every available tool).
- * Omit toolNames to auto-resolve: existing sessions restore their persisted
- * per-session selection (~/.pi-work/session-tools/, falling back to the cwd
- * default in ~/.pi-work/cwd-tools.json, then "all"); new sessions use the
- * cwd default, then "all". The resolved selection is mirrored to the
- * per-session sidecar so restarts are cache-stable.
- */
 type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface StartRpcSessionOptions {
-  /** Use a specific model for a newly-created session. */
   model?: { provider: string; modelId: string };
-  /** Use a specific thinking level for a newly-created session. */
   thinkingLevel?: RpcThinkingLevel;
-  /** Restrict the tool registry exposed to this session. */
   allowedToolNames?: string[];
-  /** Prefix the generated system prompt for specialized sessions. */
   systemPromptPrefix?: string;
-  /**
-   * Replace the system prompt verbatim, skipping the generated one entirely.
-   * Used by subagent profiles that inherit the parent's prompt exactly; the
-   * normal append/skills/MCP contributions are suppressed for this session.
-   */
   systemPromptOverride?: string;
-  /** Remove Pi's generic documentation / harness sections from the prompt. */
   stripDefaultSystemPromptSections?: boolean;
-  /**
-   * Whether to mirror this start's tool selection into the session-tools
-   * sidecar (default true). A read-only reopen that had to fall back to an
-   * empty tool set passes false: it must not overwrite the selection a later
-   * restoration (or an explicit failure about it) depends on.
-   */
   persistToolSelection?: boolean;
-  /** Persist the parent session id in a newly-created session header. */
   parentSessionId?: string;
-  /**
-   * Whether this session may connect MCP servers from pi's `mcp.json`
-   * (default: only plain user sessions — see the check at the call site).
-   * The ephemeral tool-catalog probe passes `false` explicitly: it exists to
-   * list tools, and connecting would spawn every configured stdio server on
-   * each tools-popover open.
-   */
   mcp?: boolean;
 }
 
@@ -1021,14 +693,6 @@ export async function startRpcSession(
   source: "user" | "scheduled" | "subagent" = "user",
   options: StartRpcSessionOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
-  // Resolve the effective tool selection before the IIFE so it is stable.
-  // `undefined` means "caller did not specify": for an existing session file
-  // (e.g. after a server restart) restore the selection persisted for this
-  // session — falling back to the cwd default for legacy sessions, and to
-  // "all" only when nothing is recorded. An explicit argument ("all" or an
-  // array) is honored as-is. Without the restore, a restarted server would
-  // re-open every old conversation with the full tool registry, changing the
-  // system prompt and tool block and killing the prompt cache hit rate.
   const effectiveToolNames: ToolSelection =
     toolNames !== undefined
       ? toolNames
@@ -1069,11 +733,6 @@ export async function startRpcSession(
     const { SessionManager, getAgentDir } = await import("@earendil-works/pi-coding-agent");
     const agentDir = getAgentDir();
 
-    // Install the LLM API audit fetch patch once per process, and share a
-    // single wrapped ModelRuntime across all sessions so the audit context
-    // (session/source) reaches every provider call and host allowlist stays
-    // fresh. ModelRuntime is a stateless catalog/auth/stream layer, so reuse
-    // across sessions is safe.
     installLlmFetchAudit();
     const modelRuntime = getAuditModelRuntime(
       await ModelRuntime.create({
@@ -1097,40 +756,13 @@ export async function startRpcSession(
         );
     const isNewSession = !sessionFile;
 
-    // Inline extension that mirrors every outgoing provider request and
-    // its response headers into our in-memory ring buffer. Each session
-    // gets its own loader/closure, so `capturedSessionId` only ever holds
-    // the id for this wrapper.
     let capturedSessionId: string | null = null;
-    // Source of this session (user-driven tab vs scheduler-fired task).
-    // Captured once at construction so token-audit rows can attribute cost.
     const capturedSource: "user" | "scheduled" | "subagent" = source;
-    // Forward reference — the tool_call handler runs inside the agent's
-    // extension context but needs to call back into the wrapper to surface
-    // permission requests and resolve them. Set immediately after the
-    // wrapper is constructed below. Using a box object so TypeScript does
-    // not narrow the type to `never` inside the closure.
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
-    // Same forward-reference pattern for the `ask_user_questions` tool:
-    // the tool closure captures this ref and reads the wrapper at execute
-    // time. Set immediately after the wrapper is constructed below.
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
-    // APPEND_SYSTEM.md loader toggle (see PiWorkConfig.append_system): when the
-    // user has disabled it, we hand DefaultResourceLoader an explicit empty
-    // array so the `??` on `appendSystemPromptSource` short-circuits and
-    // `discoverAppendSystemPromptFile()` never runs. Read once per session
-    // start — toggling at runtime only affects sessions started afterward.
     let appendSystemPromptLoaderOption: string[] | undefined;
     let disabledSkillPaths = new Set<string>();
-    // Whether pi's built-in "Pi documentation" section should be loaded into
-    // this session's system prompt (PiWorkConfig.load_pi_docs). When off we
-    // register a before_agent_start extension below that strips only that
-    // block. Read once per session start, like the append toggle above.
     let loadPiDocs = true;
-    // PiWorkConfig.mcp. The MCP extension connects its servers from
-    // `session_start`, which only fires once this session binds the extension
-    // runtime (see the `bindExtensions` call after createAgentSession), so the
-    // policy is decided here, once, and never re-read mid-session.
     let mcpProjectServers = false;
     let mcpStartupWaitMs = 3000;
     try {
@@ -1139,65 +771,34 @@ export async function startRpcSession(
       loadPiDocs = cfg.load_pi_docs;
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
-      // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
       if (options.systemPromptPrefix || options.systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
     } catch {
-      // readConfig already logs and falls back to defaults; this catch is defensive only.
     }
-    // MCP servers are process-spawning (stdio) and long-lived, so they are
-    // only connected for the session a user is actually talking to:
-    //  - subagent sessions (systemPromptPrefix) and scheduled tasks run
-    //    unattended and are narrowed by allowedToolNames anyway;
-    //  - the ephemeral tool-catalog probe passes `mcp: false` explicitly.
-    // A caller can still force it on or off through options.mcp.
     const mcpEnabled = options.mcp
       ?? (source === "user" && !options.systemPromptPrefix && !options.systemPromptOverride);
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      // Pass `[]` (not `undefined`) when the toggle is off — the loader's
-      // `??` on appendSystemPromptSource treats an explicit empty array as
-      // "user-supplied, nothing to append" and skips file discovery.
-      // Leaving `undefined` here would fall through to discovery.
       ...(appendSystemPromptLoaderOption !== undefined
         ? { appendSystemPrompt: appendSystemPromptLoaderOption }
         : {}),
-      // Builtin hardcoded append blocks contributed by enabled custom tools.
-      // These flow through the same channel as user APPEND_SYSTEM.md entries
-      // (joined with "\n\n" and appended at the very end of the system
-      // prompt), but live in code instead of a configurable file. Gated here
-      // once per session so a mid-session toggle doesn't change the prompt.
       appendSystemPromptOverride: (baseAppend) => {
         if (options.systemPromptPrefix || options.systemPromptOverride) return [];
-        // Whole-block system-prompt contributions from the agent-side custom
-        // tools. Gate each block on the session's actual tool selection: if a
-        // tool is excluded from this session (per-session tool picker, cwd
-        // default, or allowedToolNames), its append block must not leak into
-        // the system prompt.
         const sessionHasTool = (name: string): boolean =>
           (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
           (effectiveToolNames === "all" ||
-            // The stored selection may carry trailing-`*` prefix patterns
-            // (bound groups registered in TOOL_GROUPS, or named presets like
-            // the Assistant's "pi_work_*"); expand them here,
-            // matching expandToolSelection applied to the live registry below.
             effectiveToolNames.some((entry) =>
               entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
             ));
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
-        // Both names are checked: a stored selection written before the rename
-        // is migrated on read, but the check is cheap and keeps a session whose
-        // cache predates the migration from silently losing its guidelines.
         if (sessionHasTool(SUBAGENT_TOOL_NAME) || sessionHasTool(LEGACY_SPAWN_SUBAGENT_TOOL_NAME)) {
           blocks.push(buildSubagentSystemPromptBlock());
         }
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
-      // Codebase explorers receive no Skills section. Other sessions retain
-      // the existing per-cwd disabled-skill filtering behavior.
       noSkills: Boolean(options.systemPromptPrefix || options.systemPromptOverride),
       skillsOverride: (base) => ({
         ...base,
@@ -1205,33 +806,14 @@ export async function startRpcSession(
           ? []
           : [
               ...base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
-              // Pi Work–owned skills (~/.pi-work/skills/) are not discovered by
-              // pi's loader; merge them here so sessions can actually invoke
-              // the same list the UI shows. Same per-cwd disable list applies.
               ...loadPiWorkSkillsSafety(),
             ].filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
-        // pi 把 codemode / tool_search / MCP 作为「内置扩展」，只有 CLI 会自动加载；
-        // SDK 会话（Pi Work 走的路径）必须显式挂上，否则注册表里根本没有这个工具。
-        // codemode 注册为 inactive（defaultActive: false），由会话的工具选择来激活：
-        // 默认选择 "all" 会把注册表里可声明的工具都激活（含 codemode），用户在工具
-        // 选择器里也能单独关掉。
-        // tool_search 只在 MCP 服务器配了 `deferred` exposure 时才需要，暂时不挂：
-        // 挂上它就得让用户能关，多一个 UI 面不如等真有 deferred 服务器再说。
         createCodemodeExtension(),
-        // MCP：读 pi 自己的 ~/.pi/agent/mcp.json（以及用户显式信任时的项目
-        // .pi/mcp.json），把服务器的工具注册成 mcp__<server>__<tool>。
-        // 服务器是在 `session_start` 里连接的，而 SDK 会话只有调用
-        // bindExtensions() 才会发这个事件 —— 见下面 createAgentSession 之后的
-        // 那一次调用，那是整条链路的开关。
         ...(mcpEnabled
           ? [
               createMcpExtension({
-                // 不用 pi 的默认 loader：它按 SettingsManager.isProjectTrusted()
-                // 决定要不要读项目文件，而 SDK 建这个 manager 时 projectTrusted
-                // 默认就是 true。项目文件能拉起任意 stdio 命令，Pi Work 又是 Web
-                // 界面，所以改成由 PiWorkConfig.mcp.project_servers 显式打开。
                 loadConfig: (ctx) =>
                   loadMcpConfigForPiWork({
                     agentDir,
@@ -1254,57 +836,32 @@ export async function startRpcSession(
               });
             }]
           : []),
-        // Verbatim override: the profile inherits the parent's system prompt
-        // exactly, so every generated or appended contribution is discarded.
         ...(options.systemPromptOverride
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", () => ({ systemPrompt: options.systemPromptOverride! }));
             }]
           : []),
-        // PiWorkConfig.load_pi_docs toggle: when disabled, strip pi's built-in
-        // "Pi documentation" section from freshly-generated system prompts for
-        // normal (non-subagent) sessions. Prefix/override sessions are excluded
-        // — the subagent path already handles the prompt itself.
         ...(options.systemPromptPrefix || options.systemPromptOverride || loadPiDocs
           ? []
           : [
               (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
                 pi.on("before_agent_start", (event) => {
-                  // Always return the (possibly unchanged) prompt — the regex
-                  // is a no-op pass-through when the block is already absent.
                   return { systemPrompt: stripPiDocumentationSection(event.systemPrompt) };
                 });
               },
             ]),
         (pi) => {
           pi.on("tool_call", async (event) => {
-            // Both agent shells are matched against the dangerous-command
-            // rules. The gate used to key on `bash` alone, which left the
-            // Windows-only `powershell` tool as a shell no rule could match —
-            // the confirmation gate silently off on the one platform whose
-            // commands the user's bash rules do not describe.
             const isShellCall =
               isToolCallEventType("bash", event) || isToolCallEventType("powershell", event);
             if (!isShellCall) return;
             const command = event.input.command;
-            // Commands that would kill this very server are blocked
-            // unconditionally — no permission prompt, no per-session
-            // allowance, not user-configurable. The rest go to the
-            // confirmation gate.
-            // The mode is this session's, read off the live wrapper. Full
-            // access turns a rule match into "no match" inside the evaluator;
-            // self-protection is decided before the mode is even consulted.
             const verdict = evaluateDangerousCommand(
               command,
               wrapperRef.current?.permissionMode ?? DEFAULT_PERMISSION_MODE,
             );
             if (verdict.kind === "self_protected") {
               log.warn("self-protection blocked shell command", { command, reason: verdict.reason });
-              // The plain reason travels with the refusal: after a blocked
-              // `pkill node` the user's question is "why", and "it was blocked"
-              // is not an answer. Self-protection is the one block full access
-              // does not lift (ADR-0021), so it is also the one whose reason the
-              // agent must be able to relay.
               return {
                 block: true,
                 reason: `The command was blocked by self-protection: ${verdict.reason}. Don't try it again and tell the user what you want to do.`,
@@ -1323,39 +880,15 @@ export async function startRpcSession(
             if (outcome.decision === "deny") {
               return { block: true, reason: outcome.reason };
             }
-            // 'allow_once' and 'allow_similar' both let the tool run.
-            // 'allow_similar' was already recorded on the session gates.
             return undefined;
           });
         },
-        // ── Token audit capture ──────────────────────────────────────────
-        // One row per assistant `message_end`. Uses `INSERT OR IGNORE` against
-        // UNIQUE(session_id, message_id) so retries / SSE reconnects / compaction
-        // replays never inflate the audit log.
-        //
-        // duration_ms = (Date.now() at hook time) − msg.timestamp. In the SDK,
-        // `msg.timestamp` is the request start (Unix ms), NOT the moment the
-        // message completed. So the gap below spans the whole model request
-        // including streaming, up to our `message_end` hook (a few ms of RPC
-        // dispatch on top). It is legacy billing duration semantics; the
-        // logical-call TTFT/TPS facts live in `model_calls` (see
-        // lib/server/model-call-metrics.ts), not in this column.
-        //
-        // We deliberately do NOT use `before_provider_request` for the start
-        // stamp: in observed runs, that event can fire *after* `msg.timestamp`
-        // by a few ms (likely pi-internal preflight + a second dispatch), which
-        // produces negative durations after clamping.
         (pi) => {
           pi.on("message_end", (event) => {
             const ev = event as { message?: { role?: string; provider?: string; model?: string; api?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number } }; timestamp?: number; stopReason?: string; errorMessage?: string } };
             const msg = ev.message;
             if (!msg || msg.role !== "assistant") return;
             if (!capturedSessionId) return;
-            // AssistantMessage has no `id` field on the in-memory object — the
-            // JSONL entry id is on the OUTER entry, not available to extensions.
-            // Use `timestamp` (ms) as the dedup key; collisions only occur on
-            // SDK replays (compaction, SSE reconnect), which is what we want to
-            // dedupe via the UNIQUE(session_id, message_id) constraint.
             const finalizedAt = msg.timestamp ?? Date.now();
             const hookAt = Date.now();
             const u = msg.usage ?? {};
@@ -1378,10 +911,6 @@ export async function startRpcSession(
                 provider: msg.provider ?? "unknown",
                 modelId: msg.model ?? "unknown",
                 api: msg.api ?? null,
-                // Store `finalizedAt` as `ts` for sorting/filtering. It is the
-                // request start (SDK message timestamps mark when the request
-                // began), which is the right "when this call happened" anchor
-                // for human-scale audit purposes.
                 ts: finalizedAt,
                 inputTokens: input,
                 outputTokens: output,
@@ -1403,22 +932,8 @@ export async function startRpcSession(
             }
           });
         },
-        // Clearing the system prompt when every tool is disabled. Since pi
-        // 0.87 the prompt is replayed from the transcript's system messages
-        // and `agent.state.systemPrompt` is read-only, so the old one-shot
-        // `agent.state.systemPrompt = ""` write is gone: the only way to
-        // truly clear the prompt (pi's buildSystemPrompt always renders a
-        // non-empty one) is to force an empty prompt per run from here.
-        // `systemPromptOptions.selectedTools` mirrors the live tool loadout
-        // (`setActiveToolsByName` rebuilds the base options), so an empty
-        // list means "no tools active". Registered last on purpose: the last
-        // handler to set `forceSystemPrompt` wins, so this must run after the
-        // prefix / pi-docs handlers above.
         (pi) => {
           pi.on("before_agent_start", (event) => {
-            // Only sessions opened with an explicit (non-"all") selection can
-            // legitimately end up with zero tools; an "all" session with an
-            // empty registry keeps pi's normal prompt.
             if (
               effectiveToolNames !== "all" &&
               event.systemPromptOptions.selectedTools.length === 0
@@ -1440,27 +955,11 @@ export async function startRpcSession(
       resourceLoader,
       ...(requestedModel ? { model: requestedModel } : {}),
       ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
-      // Per-session customTools. The set is fixed at startRpcSession time —
-      // already-running sessions keep their original tool set.
       customTools: [
-        // Override the SDK built-in bash definition. Its hook runs after
-        // session PI_* variables are injected and does not mutate process.env.
         createPiWorkBashTool(cwd),
-        // Same override for PowerShell. It is registered on every platform and
-        // the platform denylist below drops it where the machine cannot run it
-        // (`excludeTools` filters custom definitions too), so "which shells
-        // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
-        // Core orchestration tool. Never registered inside a subagent session:
-        // recursion is blocked by construction, not only by a profile's tool
-        // list — which also means a stale `spawn_subagent` name in a profile
-        // cannot bring recursion back after the rename.
         ...(capturedSource === "subagent" ? [] : [subagentTool]),
         ...buildAskUserQuestionsTool({
-          // Read the wrapper lazily at execute time. By the time the
-          // agent can invoke the tool, the wrapper exists and the slot
-          // is filled (see below). If the slot is somehow still null
-          // (defensive), the tool returns an error result.
           requestUserInput: (toolCallId, questions) => {
             const w = requestUserInputRef.current;
             if (!w) {
@@ -1468,70 +967,31 @@ export async function startRpcSession(
                 new Error("ask_user_questions wrapper not initialized"),
               );
             }
-            // The gate module owns the wait (ADR-0008). No deadline:
-            // today a question never expires (#66 keeps that out of scope).
             return w.gates.requestUserInput({ toolCallId, questions, timeoutMs: null });
           },
           source: capturedSource,
         }),
         celebrateTool,
-        // Pi Work platform dispatcher: read-only visibility into Pi Work's
-        // own live sessions + disk-backed session details, consolidated into
-        // one tool (pi_work_call) to keep tool descriptions out of the
-        // system prompt.
         piWorkCallTool,
       ],
-      // The SDK's public option is `tools`; it becomes the hard allowlist
-      // passed to AgentSession.allowedToolNames. This is intentionally used
-      // for specialized sessions rather than relying only on active tools.
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
-      // Two kinds of built-in never enter the registry: shells this platform
-      // cannot run, and tools the product does not ship (the reasons live in
-      // lib/server/agent-tool-denylist.ts). Denylisting here (rather than only
-      // hiding rows in the UI) is what makes `get_tools`, the tool picker and
-      // an "all tools" selection agree.
       excludeTools: [...agentToolDenylist(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
 
-    // Drop the cached /api/sessions list so the sidebar sees this new session
-    // on its next refresh. Only needed when we actually created a new file —
-    // re-opening an existing one doesn't change the set of sessions.
     if (isNewSession) {
       invalidateSessionListCache();
     }
 
-    // Bind the extension runtime and emit `session_start`. This is what makes
-    // the MCP extension read mcp.json and start connecting; without it the
-    // extension is loaded but never runs. Nothing else in Pi Work needs the
-    // event, so it is skipped for sessions that do not connect MCP servers.
-    // (MCP tools themselves arrive later: the extension connects through a
-    // dynamic import on the next tick. Those are registered declarable-only
-    // when their exposure is `direct`, and pi activates them on registration.)
     if (mcpEnabled) {
       await inner.bindExtensions({});
     }
 
-    // Pi Work's tool selection has always meant "every registered tool", but
-    // that no longer agrees with pi once MCP is in play: a server left at its
-    // default `codemode` exposure registers its tools without declaring them,
-    // and pi's loadout only drops `hidden` — putting one of those names into
-    // setActiveToolsByName would declare it to the model after all. Restrict
-    // every "activate tools" path to the declarable subset; the rest stay
-    // reachable from codemode scripts.
     const declarableNames = declarableToolNames(inner.getAllTools());
 
-    // Keep pi's full tool registry available so later switches to "all" can
-    // include extension/custom tools, then set the active subset before the
-    // first prompt. "all" activates every declarable tool pi registered at
-    // runtime (see the filter above).
     if (effectiveToolNames === "all") {
       inner.setActiveToolsByName(declarableNames);
     } else if (Array.isArray(effectiveToolNames)) {
-      // Resolve trailing-`*` prefix patterns (e.g. "pi_work_*") against the
-      // registry pi built for this session before applying. The raw selection
-      // is what gets persisted, so a pattern that only matches a
-      // non-declarable MCP tool still re-expands correctly on restore.
       const declarableSet = new Set(declarableNames);
       const expanded = (
         expandToolSelection(
@@ -1541,23 +1001,14 @@ export async function startRpcSession(
       ).filter((name) => declarableSet.has(name));
       inner.setActiveToolsByName(expanded);
 
-      // When all tools are disabled the prompt is cleared per run by the
-      // `before_agent_start` handler registered in `extensionFactories` above
-      // (it forces an empty system prompt while `selectedTools` is empty).
     }
 
-    // The persisted permission mode comes with the construction (ADR-0021): a
-    // missing / unreadable sidecar reads as `confirm`, so an upgrade changes
-    // nothing for sessions that never opted in.
     const wrapper = new AgentSessionWrapper(
       inner,
       source,
       cwd,
       readSessionPermissionMode(inner.sessionId),
     );
-    // Remember the raw selection this session started with so `get_state` can
-    // report it (restored-from-sidecar selection included) — the UI labels the
-    // tools button from it.
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;
     requestUserInputRef.current = wrapper;
@@ -1566,18 +1017,12 @@ export async function startRpcSession(
     const realSessionId = inner.sessionId as string;
     const realSessionFile = inner.sessionFile as string | undefined;
     if (realSessionFile) cacheSessionPath(realSessionId, realSessionFile);
-    // Mirror the live selection to the sidecar so a server restart can
-    // restore exactly this set when re-opening the session (per-session
-    // selection has no home inside pi's session JSONL).
     if (options.persistToolSelection !== false) {
       writeSessionToolSelection(realSessionId, effectiveToolNames);
     }
 
     wrapper.onDestroy(() => {
       registry.delete(realSessionId);
-      // Note: payload capture file is intentionally NOT cleared here.
-      // It survives session unload and is only removed when the session
-      // itself is deleted (see app/api/sessions/[id]/route.ts DELETE).
     });
     registry.set(realSessionId, wrapper);
 

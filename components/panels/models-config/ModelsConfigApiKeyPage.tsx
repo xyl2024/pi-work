@@ -6,11 +6,6 @@ import { reloadModelsConfigApiKeyProviders, useModelsConfigStore } from "@/lib/c
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
-/**
- * One API-key provider's page: paste / replace / remove the key plus the
- * runtime model list, reusing the shared `ApiKeyDetail` body with the panel's
- * level-up control instead of a close button.
- */
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
   const { t } = useI18n();
   const { apiKeyProviders } = useModelsConfigStore();

@@ -10,12 +10,6 @@ import {
   type ModelsConfigPage,
 } from "@/lib/shared/models-config-pages";
 
-/**
- * The models-config panel page stack (lib/shared/models-config-pages.ts).
- * Driven as plain data: push a detail page, back out, and keep the stack from
- * growing or underflowing — no DOM, no React.
- */
-
 function provider(name: string): ModelsConfigPage {
   return { kind: "provider", name };
 }

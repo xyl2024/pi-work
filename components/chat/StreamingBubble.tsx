@@ -1,13 +1,5 @@
 "use client";
 
-/**
- * Renders the in-flight streaming assistant message. Subscribes to the
- * streaming-message store directly so ChatWindowContent doesn't need to
- * re-render on every token — only this subtree does. Wrapped in
- * React.memo to keep prop changes (modelNames/modelIcons) from
- * triggering re-renders when the message payload alone changed.
- */
-
 import { memo } from "react";
 import type { AgentMessage, ToolResultMessage } from "@/lib/shared/types";
 import { MessageView } from "./MessageView";

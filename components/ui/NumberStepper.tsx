@@ -1,16 +1,3 @@
-/**
- * NumberStepper — 紧凑型整数步进器：[- 数字 +]，取代原生
- * `<input type="number">` 的丑陋 spinner。用于"每 N 小时"等需要 1–N
- * 范围整数输入的场景。
- *
- * 设计要点：
- *   - 受控 value（number；NaN 表示空）。输入流实时 clamp 到 [min, max]
- *     并同步 draft，避免用户输入超界值后还要手动删字符。
- *   - 按钮、键盘 ↑↓、输入框直输三种交互并存。越界时按钮 disabled。
- *   - 视觉上是一个连续的 group，左右两侧按钮带分隔线；group focus 状态
- *     时整体边框高亮（accent），按钮 hover/active 用 bg-hover/bg-selected。
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface NumberStepperProps {
@@ -22,7 +9,6 @@ interface NumberStepperProps {
   ariaLabel?: string;
   placeholder?: string;
   disabled?: boolean;
-  /** 数字框宽度（px）。 */
   width?: number;
 }
 
@@ -45,7 +31,6 @@ export function NumberStepper({
   const [active, setActive] = useState<"none" | "dec" | "inc">("none");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // 外部 value 变化时同步 draft。输入框正在编辑时不打断用户。
   useEffect(() => {
     if (document.activeElement === inputRef.current) return;
     setDraft(Number.isInteger(value) ? String(value) : "");

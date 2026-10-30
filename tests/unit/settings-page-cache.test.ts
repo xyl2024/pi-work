@@ -28,7 +28,6 @@ describe("settings page data cache", () => {
     await expect(cache.fetch("retry", loader)).resolves.toBe(retryConfig);
     expect(cache.read("retry")).toBe(retryConfig);
 
-    // Switching away and back calls fetch again, but it must not hit the loader.
     await expect(cache.fetch("retry", loader)).resolves.toBe(retryConfig);
     expect(loader).toHaveBeenCalledTimes(1);
   });
@@ -59,7 +58,6 @@ describe("settings page data cache", () => {
     await expect(cache.refresh("retry", loader)).resolves.toBe(next);
     expect(loader).toHaveBeenCalledTimes(1);
     expect(cache.read("retry")).toBe(next);
-    // A subsequent fetch now sees the refreshed value.
     await cache.fetch("retry", loader);
     expect(loader).toHaveBeenCalledTimes(1);
   });
@@ -101,7 +99,6 @@ describe("settings page data cache", () => {
     const loader = vi.fn(async () => fresh);
 
     const refresh = cache.refresh("retry", loader);
-    // The forced read must not settle with the older in-flight response.
     expect(loader).not.toHaveBeenCalled();
 
     releaseFirst(retryConfig);

@@ -10,18 +10,6 @@ import {
 import type { DangerousPatternRule, DangerousPatternsConfig } from "@/lib/shared/config-types";
 import { api, uniqueId, type Json } from "./helpers";
 
-/**
- * `GET /api/dangerous-commands` — the read side of the dangerous-command
- * config: this platform's built-in rule set (what the gate actually enforces)
- * plus the user rules that fail to compile.
- *
- * `PUT` — the page's write face, exercised through the real HTTP path (auth
- * proxy + server) against the isolated instance's `config.yaml`. Policy matches
- * `settings.test.ts`: snapshot the rules on disk, make a reversible change,
- * assert, restore. The invalid-rule half of the GET contract is driven at the
- * route level in `dangerous-commands-route.test.ts`, where a hand-edited config
- * cannot race this file.
- */
 describe("dangerous command rule set api", () => {
   it("returns this platform's built-in set, in matching order", async () => {
     const { status, body } = await api("/api/dangerous-commands");
@@ -29,13 +17,10 @@ describe("dangerous command rule set api", () => {
 
     expect(body.platform).toBe(process.platform);
     const builtins = body.builtins as DangerousPatternRule[];
-    // The isolated instance runs on the same platform as the test process, so
-    // the expectation is the platform's real set — not a copy kept in the test.
     expect(builtins).toEqual([...defaultDangerousRules(process.platform)]);
     expect(builtins.map((rule) => rule.name)).toEqual(
       defaultDangerousRules(process.platform).map((rule) => rule.name),
     );
-    // Every platform gets the bash floor.
     expect(builtins.map((rule) => rule.name)).toEqual(
       expect.arrayContaining(DEFAULT_BASH_DANGEROUS_RULES.map((rule) => rule.name)),
     );
@@ -62,7 +47,6 @@ describe("PUT /api/dangerous-commands", () => {
   });
 
   afterEach(async () => {
-    // Leave the isolated instance's config as it was found.
     await writeRules(original.rules, original.timeout_ms);
   });
 
@@ -80,7 +64,6 @@ describe("PUT /api/dangerous-commands", () => {
     expect(onDisk.rules).toEqual(rules);
     expect(onDisk.timeout_ms).toBe(original.timeout_ms);
 
-    // The effective-set route agrees: everything the page just saved compiles.
     const snapshot = await api("/api/dangerous-commands");
     expect(snapshot.status).toBe(200);
     expect((snapshot.body as Json).invalidUserRules).toEqual([]);
@@ -93,7 +76,6 @@ describe("PUT /api/dangerous-commands", () => {
     expect(cleared.status).toBe(200);
 
     expect((await readRules()).rules).toEqual([]);
-    // The built-in floor is not part of this config item and stays in force.
     const snapshot = await api("/api/dangerous-commands");
     expect((snapshot.body as Json).builtins).toEqual([...defaultDangerousRules(process.platform)]);
   });
@@ -104,8 +86,6 @@ describe("PUT /api/dangerous-commands", () => {
     const put = await writeRules([{ name: ruleName, pattern: command }], original.timeout_ms);
     expect(put.status).toBe(200);
 
-    // The same server-side judgement a real tool call goes through — no
-    // session was created between the write and this check.
     const test = await api("/api/dangerous-commands/test", {
       method: "POST",
       body: JSON.stringify({ command }),
@@ -123,10 +103,8 @@ describe("PUT /api/dangerous-commands", () => {
     const put = await writeRules([keep, after], original.timeout_ms);
     expect(put.status).toBe(200);
 
-    // Disk holds the edited list in place: same order, other rule untouched.
     expect((await readRules()).rules).toEqual([keep, after]);
 
-    // And the gate now matches the edited pattern under the same rule name.
     const test = await api("/api/dangerous-commands/test", {
       method: "POST",
       body: JSON.stringify({ command: "AFTER-EDIT" }),
@@ -140,8 +118,6 @@ describe("PUT /api/dangerous-commands", () => {
     const last = { name: uniqueId("user-rule"), pattern: "last-rule" };
     expect((await writeRules([first, doomed, last], original.timeout_ms)).status).toBe(200);
 
-    // The rule is live before the delete, so "gone afterwards" is not just a
-    // pattern that never matched anything.
     const before = await api("/api/dangerous-commands/test", {
       method: "POST",
       body: JSON.stringify({ command: "doomed-rule" }),
@@ -152,8 +128,6 @@ describe("PUT /api/dangerous-commands", () => {
     expect(put.status).toBe(200);
     expect((await readRules()).rules).toEqual([first, last]);
 
-    // The deleted rule is gone from the effective set, so its pattern no
-    // longer asks for confirmation.
     const test = await api("/api/dangerous-commands/test", {
       method: "POST",
       body: JSON.stringify({ command: "doomed-rule" }),
@@ -174,7 +148,6 @@ describe("PUT /api/dangerous-commands", () => {
     );
 
     expect(put.status).toBe(400);
-    // The message names both the clashing rule and the row already using it.
     expect(String(put.body.error)).toContain(name);
     expect(String(put.body.error)).toContain("rule 1");
     expect((await readRules()).rules).toEqual(before.rules);
@@ -182,8 +155,6 @@ describe("PUT /api/dangerous-commands", () => {
 
   it("rejects a name the platform's built-in set reserves, with 400", async () => {
     const before = await readRules();
-    // Whatever this platform enforces: shadowing it would make one "always
-    // allow" cover two rules, so it is refused rather than renamed.
     const builtinName = defaultDangerousRules(process.platform)[0].name;
 
     const put = await writeRules([{ name: builtinName, pattern: "x" }], before.timeout_ms);
@@ -211,8 +182,6 @@ describe("PUT /api/dangerous-commands", () => {
       expect(put.status).toBe(400);
     }
 
-    // A refused timeout is not a silent fallback: disk still holds the value
-    // that was just written.
     expect((await readRules()).timeout_ms).toBe(next);
   });
 
@@ -222,7 +191,6 @@ describe("PUT /api/dangerous-commands", () => {
 
     const put = await writeRules([{ name, pattern: "(" }], before.timeout_ms);
     expect(put.status).toBe(400);
-    // The message names the rule, so the rejection is actionable.
     expect(String(put.body.error)).toContain(name);
 
     expect((await readRules()).rules).toEqual(before.rules);

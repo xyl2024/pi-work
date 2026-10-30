@@ -7,22 +7,6 @@ import {
   selectChannelsCloseConfirm,
 } from "@/lib/shared/channels-close";
 
-/**
- * The channels panel's close guard (lib/shared/channels-close.ts). One
- * question: would closing the panel tab abandon a live scan login? Driven as
- * plain data — the shell is the only caller and maps the returned i18n keys
- * through `t()`. The panel holds no draft (every input writes through), so
- * "a login session in flight" is the whole rule.
- */
-
-/**
- * `redirected` is the one phase the issue left to the implementer ("跟随其实际
- * 语义决定"). It is NOT guarded here, on purpose: the server is mid-switch to
- * another IDC node and the client has no action to take on it, so the issue's
- * guard rule stops at `verifying`. `verify_blocked` is excluded too — too many
- * wrong pairing codes means the session can no longer confirm without a fresh
- * QR, so nothing is lost by closing.
- */
 const GUARDED: readonly LoginPhase[] = ["waiting", "scanned", "verifying"];
 const NOT_GUARDED: readonly LoginPhase[] = [
   "verify_blocked",
@@ -70,11 +54,6 @@ describe("selectChannelsCloseConfirm", () => {
   });
 });
 
-/**
- * The poll predicate (lib/shared/channels-login.ts) is a different question from
- * the guard: it keeps the 2s poll alive for every phase the user can still act
- * on, which is a wider set than the guarded one.
- */
 describe("isLoginInProgress", () => {
   it("keeps polling for the live phases, including verify_blocked / redirected", () => {
     const running: LoginPhase[] = ["waiting", "scanned", "verifying", "verify_blocked", "redirected"];

@@ -24,16 +24,6 @@ import { McpEntryCard } from "./McpEntryCard";
 import { McpNotice } from "./McpNotice";
 import { mcpScopeLabelKey } from "./scopeLabel";
 
-/**
- * The MCP panel's list page: both `mcp.json` files, one section each, in the
- * fixed global-first order pi reads them in.
- *
- * One problem summary at the top (expandable) is the single voice for every
- * parse / validation / trust error; each file section only carries its own
- * affordances — the codemode switch when it can do something, and the entries
- * as cards. Everything reads and writes the module store, so a tab switch never
- * resets the draft or the page the user is on.
- */
 export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
   const { t } = useI18n();
   const { data, draft } = bucket;
@@ -150,8 +140,6 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
                 )}
               </div>
 
-              {/* A parse error is already spoken by the summary above; repeating it
-                  here would be the second voice the panel is trying to remove. */}
               {file.parseError ? null : !file.exists ? (
                 <McpNotice tone="info">{t("mcp.fileMissing")}</McpNotice>
               ) : entries.length === 0 ? (

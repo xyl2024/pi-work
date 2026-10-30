@@ -18,12 +18,6 @@ import {
 } from "@/lib/shared/models-config-draft";
 import type { ModelsJson } from "@/lib/shared/models-config";
 
-/**
- * The models-config draft model (lib/shared/models-config-draft.ts): the
- * server payload arrives, the user edits, and exactly one rule decides whether
- * there is anything unsaved. Driven as plain data — no DOM, no fetch.
- */
-
 function draft(config: ModelsJson, baseline?: ModelsJson): ModelsConfigDraft {
   return { config, baseline: baseline ?? config };
 }

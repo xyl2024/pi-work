@@ -1,6 +1,5 @@
 import type { SoundPatch } from "@/lib/client/ui-sounds";
 
-// 萤火
 export const FIREFLY: SoundPatch = {
   layers: [
     {

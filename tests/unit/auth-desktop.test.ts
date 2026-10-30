@@ -1,12 +1,3 @@
-/**
- * The desktop track's session signer and the three auth-session endpoints that
- * mint, clear and report it. Driven directly through the modules (no HTTP
- * instance): the isolated instance the interface tests use always runs on the
- * server track, and this is the one place that has to be told otherwise.
- *
- * Every test sets/restores its own PI_WORK_* environment — the modules read
- * process.env at call time.
- */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as statusRoute } from "@/app/api/auth/session/status/route";
 import { POST as loginRoute } from "@/app/api/auth/session/login/route";

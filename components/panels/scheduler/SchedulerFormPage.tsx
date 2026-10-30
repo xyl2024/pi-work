@@ -25,20 +25,6 @@ import {
 import type { SchedulerTaskForm } from "@/lib/shared/scheduler";
 import type { ToolInfo } from "@/lib/shared/types";
 
-/**
- * The scheduler panel's form page: create or edit one task.
- *
- * The old modal's three-section left nav is gone — everything is one vertical
- * scroll with the section titles as separators, so a validation error can never
- * hide in a section the user did not open. The save / cancel bar is pinned
- * outside the scroll area so it is always in reach.
- *
- * The form is a saved item (ADR-0009): it submits once, it is not auto-saved per
- * field, and the store keeps the draft plus the snapshot it opened with so the
- * close guard can ask before dropping unsaved edits. The stores values live in
- * the module store; the ephemeral bits (WeChat channels, the tool catalog,
- * "submitted") are re-fetched on mount.
- */
 export function SchedulerFormPage() {
   const { t } = useI18n();
   const toast = useToast();
@@ -52,22 +38,17 @@ export function SchedulerFormPage() {
   const [toolsError, setToolsError] = useState<string | null>(null);
   const [customExpanded, setCustomExpanded] = useState(false);
 
-  // Best-effort WeChat channels for the recipient picker.
   useEffect(() => {
     void fetchWechatChannels().then(setChannels).catch(() => setChannels([]));
   }, []);
 
   const formCwd = form?.cwd ?? "";
-  // Every zone once; keep the task's own zone selectable even if the runtime's
-  // list does not include it (e.g. a legacy alias).
   const timezones = useMemo(() => {
     const zones = listTimezones();
     const current = form?.timezone;
     return current && !zones.includes(current) ? [current, ...zones] : zones;
   }, [form?.timezone]);
 
-  // Keep the tool catalog in sync with the selected working directory, using
-  // the same catalog endpoint as the chat tool picker.
   useEffect(() => {
     if (!formCwd.trim()) return;
     let cancelled = false;
@@ -121,7 +102,6 @@ export function SchedulerFormPage() {
       (form.notifyEnabled && (!recipientId || !form.channelId));
     if (hasError) {
       toast.show({ kind: "error", message: t("Please fix form errors first") });
-      // The errors are rendered inline in one scroll; bring the first one into view.
       requestAnimationFrame(() => {
         const el = scrollRef.current?.querySelector("[data-field-error='true']") as HTMLElement | null;
         el?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -138,7 +118,6 @@ export function SchedulerFormPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
         <SchedulerBackButton />
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
@@ -146,7 +125,6 @@ export function SchedulerFormPage() {
         </span>
       </div>
 
-      {/* One vertical scroll */}
       <div
         ref={scrollRef}
         data-scroll-wide
@@ -173,8 +151,6 @@ export function SchedulerFormPage() {
               style={textareaStyle}
             />
           </Field>
-          {/* One selector per line: the cwd needs its full path, and the other
-              three each open a dialog, so squeezing them sideways buys nothing. */}
           <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
             <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
           </Field>
@@ -245,7 +221,6 @@ export function SchedulerFormPage() {
         </Section>
       </div>
 
-      {/* Fixed save bar */}
       <div
         style={{
           display: "flex",

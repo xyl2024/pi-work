@@ -60,12 +60,6 @@ import {
   WrenchIcon,
 } from "./animated";
 
-/**
- * 基础静态图标 registry。
- *
- * 约定：业务组件优先通过这个 registry 取基础图标；需要 hover/path 动画
- * 的图标使用 ANIMATED_ICONS；文件和 Provider 图标使用 domains.ts 的领域 API。
- */
 export const ICONS = {
   alert: AlertIcon,
   arrowLeft: ArrowLeftIcon,

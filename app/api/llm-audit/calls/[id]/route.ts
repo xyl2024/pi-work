@@ -1,7 +1,3 @@
-/**
- * GET /api/llm-audit/calls/[id] — one full provider call record, including
- * the complete request body and (for errors) the complete response body.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { getProviderCall } from "@/lib/server/llm-audit-db";

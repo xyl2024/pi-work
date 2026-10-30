@@ -1,9 +1,4 @@
-// All right-panel tabs (HTTP / JSON / Canvas / Git Diff / Tokens /
-// LLM API audit) plus the per-tab open/close verbs reused by the
-// command palette. Token audit and LLM API audit are appended below.
-
 export const rightPanels = {
-  // Git diff
   "Git Diff": "Git 变更",
   "Open git diff": "打开 Git 变更",
   "Staged": "已暂存",
@@ -24,7 +19,6 @@ export const rightPanels = {
   "Open a session first": "请先打开一个会话",
   "{n} files changed": "共 {n} 个文件变更",
 
-  // Git log (commit history view)
   "Diff": "变更",
   "Log": "历史",
   "Branch": "分支",
@@ -44,7 +38,6 @@ export const rightPanels = {
   "Show all": "全部日期",
   "No commits in this date range": "该日期范围内暂无提交",
 
-  // HTTP debug panel
   "HTTP": "HTTP",
   "Resend": "重新发送",
   "Params": "参数",
@@ -83,7 +76,6 @@ export const rightPanels = {
   "Import cURL command is empty.": "cURL 命令为空。",
   "cURL command is missing a URL.": "cURL 命令缺少 URL。",
 
-  // HTTP collections drawer
   "Collections": "集合",
   "Search collections...": "搜索集合…",
   "No collections yet": "暂无集合",
@@ -114,7 +106,6 @@ export const rightPanels = {
   "Scroll to bottom": "回到底部",
   "Scroll to top": "回到顶部",
 
-  // Token audit
   "Token audit": "Token 用量",
   "Open token audit": "打开 Token 用量",
   "Filter by cwd": "按 cwd 筛选",
@@ -150,7 +141,6 @@ export const rightPanels = {
   "Scheduled": "定时任务",
   "Avg duration": "平均耗时",
 
-  // LLM API audit
   "LLM API audit": "LLM API 审计",
   "Open LLM API audit": "打开 LLM API 审计",
   "Total calls": "总调用",
@@ -192,10 +182,6 @@ export const rightPanels = {
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
 
-  // Skills panel. Its other copy lives with the older skills strings in
-  // ./models (the grid and add page), so only the panel's close guard is here.
-  // The install keeps running server-side — the route never watches the client
-  // connection — so the prompt promises the log, not the install.
   "Close while installing?": "安装尚未完成，确认关闭？",
   "The installation keeps running in the background, but its log will be lost.":
     "安装会在后台继续，但本次安装日志将不再显示。",

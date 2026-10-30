@@ -38,12 +38,6 @@ const SUMMARY_STYLE = {
   color: "var(--text-muted)",
 } as const;
 
-/**
- * Round avatar shared by the model cards. Renders the provider's brand icon
- * when one is available, otherwise a deterministic pastel initial avatar
- * (same palette as `SkillCard`). Mirrors the skill card so both card grids
- * read as the same kind of object.
- */
 export function ModelAvatar({ iconId, seed, size = 30 }: { iconId?: string; seed: string; size?: number }) {
   const resolved = iconId && hasProviderIcon(iconId) ? iconId : undefined;
   if (resolved) {
@@ -87,11 +81,6 @@ export function ModelAvatar({ iconId, seed, size = 30 }: { iconId?: string; seed
   );
 }
 
-/**
- * Shared card shell — the SkillCard visual (rounded border, hover lift,
- * avatar + title header, muted meta lines) that both `ModelCard` (runtime
- * catalog) and `ModelEntryCard` (custom models) build on.
- */
 export function ModelCardShell({
   iconId,
   seed,
@@ -165,19 +154,6 @@ export function ModelCardShell({
   );
 }
 
-/**
- * One runtime model rendered as a card in `RuntimeModelList`, mirroring the
- * `SkillCard` (round avatar + bold name + muted meta lines) in the skills panel.
- *
- * Card anatomy:
- *   ┌──────────────────────────────────────────┐
- *   │ (A)  model-name                 [T]  [⌄] │
- *   │      provider / model-id                 │
- *   │  Context window · Max output · Reasoning │
- *   ├───────────── (click to expand) ──────────┤
- *   │ API / Input / Thinking levels / Cost ... │
- *   └──────────────────────────────────────────┘
- */
 export function ModelCard({
   model,
   expanded,

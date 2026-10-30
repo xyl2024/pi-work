@@ -1,31 +1,5 @@
 "use client";
 
-// Column that owns every toggle button on the right edge of the chat
-// layout. Pulled out of AppShell so the 36×36 column is a single visual
-// concern — AppShell only wires the ctx. Adding a new toggle-button is
-// now a one-line append to RIGHT_BAR_DESCRIPTORS in `./desc`.
-//
-// Layout (top → bottom):
-//   1. 'fixed' descriptors with slot='top' (the panel show/hide button).
-//      The expand/collapse toggle used to live here too; it now lives
-//      on the right panel's tab bar (AppShell) so it stays reachable
-//      regardless of how tall this column is.
-//   2. The configurable row, split by `cfg.session_bound_alignment`:
-//        - "top":    session-bound group first, then global group
-//                    (both groups render in document order — no spacer).
-//        - "bottom": global group first, then a flex:1 spacer, then
-//                    the session-bound group. The spacer pushes the
-//                    session-bound group all the way to the bottom of
-//                    the column regardless of how tall the chat panel
-//                    is, which is what "向下对齐" means here (default).
-//        - "inline": the full user-configured `order` as one list
-//                    (legacy behavior, no spacer).
-//      Within each group the user's `order` is honored (filtered to ids
-//      in the group). Visibility per id is gated by `cfg[id] !== false`;
-//      a missing key (settings not loaded yet) is treated as visible so
-//      the column is never empty on first paint.
-//
-
 import { Fragment, useMemo } from "react";
 import {
   isRightBarButtonVisible,
@@ -48,9 +22,6 @@ interface RightBarColumnProps {
 }
 
 export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
-  // Resolve the user-configured order, filtering stale/missing ids and
-  // appending any new ones at the tail. Same algorithm as SettingsModal
-  // so the modal list and the live column always agree.
   const orderedConfigurable = useMemo<typeof RIGHT_BAR_BUTTON_IDS[number][]>(() => {
     const overrides = cfg?.order;
     const valid = new Set<string>(RIGHT_BAR_BUTTON_IDS);
@@ -73,23 +44,12 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
     return out;
   }, [cfg?.order]);
 
-  // Map ordered ids back to descriptors. Every id in RIGHT_BAR_BUTTON_IDS
-  // corresponds to a 'configurable' descriptor in RIGHT_BAR_DESCRIPTORS,
-  // so the filter is just defensive — a stale registry entry never breaks
-  // the column.
   const orderedDescriptors = useMemo(() => {
     return orderedConfigurable
       .map((id) => RIGHT_BAR_DESCRIPTORS.find((d) => d.id === id))
       .filter((d): d is RightBarDescriptor => d !== undefined);
   }, [orderedConfigurable]);
 
-  // Apply cfg.session_bound_alignment: partition the configurable row into
-  // session-bound + global groups, then concatenate in the chosen order.
-  // Within each group the user's `order` is honored (filtered to ids in
-  // that group). "inline" keeps the single-list behavior used before this
-  // axis was introduced. The actual *layout* (spacer or not) is handled
-  // in the render path below — this hook only resolves the descriptor
-  // partition.
   const { alignment, sessionBound, global } = useMemo(() => {
     const a = resolveSessionBoundAlignment(cfg?.session_bound_alignment);
     const sb: RightBarDescriptor[] = [];
@@ -100,9 +60,6 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
     return { alignment: a, sessionBound: sb, global: g };
   }, [orderedDescriptors, cfg?.session_bound_alignment]);
 
-  // Fixed descriptors partitioned by their slot. The top group contains
-  // panel show/hide plus the conditional expand/collapse toggle; any
-  // future fixed descriptor without a slot remains inline.
   const topFixed = RIGHT_BAR_DESCRIPTORS.filter(
     (d) => d.kind === "fixed" && d.slot === "top",
   );
@@ -110,10 +67,6 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
     (d) => d.kind === "fixed" && d.slot === undefined,
   );
 
-  // The column sits in a row-flex parent (AppShell's main row) whose
-  // default `align-items: stretch` already pulls this div to the parent's
-  // height — no explicit `height: 100%` needed here. `min-height: 0` is
-  // set defensively in case a future change makes the parent shrink-wrap.
   return (
     <div
       style={{
@@ -124,28 +77,13 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
         minHeight: 0,
         background: "var(--bg-panel)",
         border: "1px solid var(--panel-border)",
-        // Floating-card mode (matches the 3 main panels): round the four
-        // corners and surface a 10px gap to the right panel on its left
-        // edge. `overflow: hidden` clips each 36×36 button to the
-        // rounded shape so the top + bottom buttons pick up rounded
-        // outer corners; middle buttons stay square. No transition here
-        // because this column's width never animates.
         borderRadius: "var(--panel-radius)",
         overflow: "hidden",
         marginLeft: "var(--panel-gap)",
       }}
     >
-      {/* Top: fixed panel controls (show/hide plus conditional expand). */}
       {topFixed.map((d) => renderDescriptor(d, ctx, cfg, `top-${d.id}`))}
 
-      {/* Configurable row, laid out per session_bound_alignment.
-          - "inline": single ordered list (legacy).
-          - "top":    session-bound first, global second (no spacer).
-          - "bottom": global first, then a flex:1 spacer that pushes
-                      the session-bound group to the very bottom of the
-                      column. This is the default — visually pins the
-                      per-session buttons to the lower edge regardless
-                      of how tall the chat panel is. */}
       {alignment === "inline" ? (
         orderedDescriptors.map((d) => renderDescriptor(d, ctx, cfg, `cfg-${d.id}`))
       ) : alignment === "top" ? (
@@ -156,17 +94,11 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
       ) : (
         <Fragment>
           {global.map((d) => renderDescriptor(d, ctx, cfg, `cfg-${d.id}`))}
-          {/* Spacer — absorbs every unused pixel between the global group
-              and the session-bound group so the latter sits flush with
-              the bottom of the column. `flex: 1` + `min-height: 0`
-              guarantees it actually grows in a column-flex parent. */}
           <div style={{ flex: 1, minHeight: 0 }} aria-hidden="true" />
           {sessionBound.map((d) => renderDescriptor(d, ctx, cfg, `cfg-${d.id}`))}
         </Fragment>
       )}
 
-      {/* Any future unslotted fixed descriptors render after the
-          configurable groups. */}
       {inlineFixed.map((d) =>
         d.isVisible && !d.isVisible(ctx) ? null : renderDescriptor(d, ctx, cfg, `fixed-${d.id}`),
       )}
@@ -180,8 +112,6 @@ function renderDescriptor(
   cfg: RightSideBarConfig | null,
   key: string,
 ): React.ReactNode {
-  // Configurable descriptors are gated by cfg[id] !== false. Missing keys
-  // (settings not loaded yet) → visible. Fixed descriptors always render.
   if (desc.kind === "configurable" && !isRightBarButtonVisible(cfg, desc.id)) {
     return null;
   }

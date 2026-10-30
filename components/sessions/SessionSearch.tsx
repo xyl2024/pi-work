@@ -68,7 +68,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasResultsRef = useRef(false);
 
-  // Focus input when opened
   useEffect(() => {
     if (visible) {
       setQuery("");
@@ -82,7 +81,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
     }
   }, [visible]);
 
-  // Cleanup debounce + abort on unmount
   useEffect(() => {
     return () => {
       debounceRef.current && clearTimeout(debounceRef.current);
@@ -178,14 +176,12 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
     }
   }, [query, handleInputChange, results, selectedIndex, handleJumpTo, onClose]);
 
-  // Scroll selected item into view
   useEffect(() => {
     if (!listRef.current) return;
     const selectedEl = listRef.current.querySelector(`[data-search-index="${selectedIndex}"]`);
     selectedEl?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  // Notify parent of cleared results when query becomes empty
   useEffect(() => {
     if (!query && hasResultsRef.current) {
       hasResultsRef.current = false;
@@ -209,7 +205,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
         background: "var(--bg-panel, #1a1a2e)",
       }}
     >
-      {/* Search input row */}
       <div
         style={{
           display: "flex",
@@ -248,13 +243,11 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             fontFamily: "inherit",
           }}
         />
-        {/* Match count */}
         {status === "results" && (
           <span style={{ fontSize: 11, color: "var(--text-dim, #666)", flexShrink: 0 }}>
             {selectedIndex + 1}/{totalMatches}
           </span>
         )}
-        {/* Navigation arrows */}
         {status === "results" && totalMatches > 1 && (
           <>
             <button
@@ -303,7 +296,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             </button>
           </>
         )}
-        {/* Loading spinner */}
         {status === "loading" && (
           <div
             style={{
@@ -317,7 +309,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             }}
           />
         )}
-        {/* Close button */}
         <button
           onClick={onClose}
           style={{
@@ -341,7 +332,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
         </button>
       </div>
 
-      {/* Results list */}
       {(status === "results" || status === "no_results" || status === "error") && (
         <div
           ref={listRef}

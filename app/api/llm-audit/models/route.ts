@@ -1,6 +1,3 @@
-/**
- * GET /api/llm-audit/models — distinct audited model ids (for the filter).
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listAuditedModelIds } from "@/lib/server/llm-audit-db";

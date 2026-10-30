@@ -1,19 +1,3 @@
-/*
- * Browser-only player for procedural UI sound recipes.
- *
- * A recipe is data: layers of oscillators/noise, envelopes, optional filters,
- * and delay/reverb effects. Keeping the player here means generated sounds can be
- * added by pasting a recipe without adding audio files or a runtime package.
- *
- * Nine named recipes ship with the product. The user picks which one plays
- * for each event through the Settings UI; see
- * `lib/shared/config-types.ts#UiSoundsConfig` and the SoundSettingsSection.
- *
- * The nine recipes live in `ui-sounds-presets/` so each recipe can be edited
- * and shared in isolation. This module owns the player, the named registry,
- * and the event dispatcher; presets only export typed `SoundPatch` data.
- */
-
 import type { UiSoundEventId, UiSoundsConfig } from "@/lib/shared/config-types";
 import { MORNING_LIGHT } from "./ui-sounds-presets/morning-light";
 import { LONELY_SHADOW } from "./ui-sounds-presets/lonely-shadow";
@@ -87,13 +71,6 @@ interface SoundLayer {
 
 export type SoundPatch = SoundLayer | { layers: SoundLayer[] };
 
-/**
- * Stable IDs for the built-in sounds. The Settings UI renders these
- * names through i18n so they can be renamed without code changes.
- *
- * Names are kept as lowercase identifiers with hyphens so they read well as
- * object keys and as filenames; the display label is localizable.
- */
 export const SOUND_IDS = [
   "morning-light",
   "lonely-shadow",
@@ -149,17 +126,11 @@ function resumeAudio(ctx: AudioContext): void {
   if (ctx.state === "suspended") void ctx.resume().catch(() => {});
 }
 
-/** Resume the shared context from a user gesture to satisfy autoplay policy. */
 export function unlockUiSounds(): void {
   const ctx = getAudioContext();
   if (ctx) resumeAudio(ctx);
 }
 
-/**
- * Update the master volume (0..1) used by every recipe. Survives a single
- * context rebuild: the next `playSound` rebuilds the master gain with the
- * latest value.
- */
 export function setUiSoundsMasterVolume(volume: number): void {
   if (!Number.isFinite(volume)) return;
   currentMasterVolume = Math.max(0, Math.min(1, volume));
@@ -453,13 +424,11 @@ function renderLayer(ctx: AudioContext, layer: SoundLayer, destination: AudioNod
       try {
         node.disconnect();
       } catch {
-        // The browser may already have collected or disconnected the node.
       }
     }
   }, cleanupMs);
 }
 
-/** Play one generated recipe. Safe to call from any UI path. */
 export function playSound(patch: SoundPatch, options?: { volume?: number }): void {
   const now = typeof performance === "undefined" ? Date.now() : performance.now();
   if (now - lastPlayedAt < MIN_SOUND_GAP_MS) return;
@@ -475,32 +444,19 @@ export function playSound(patch: SoundPatch, options?: { volume?: number }): voi
     }
     lastPlayedAt = now;
   } catch {
-    // Audio is an enhancement. A browser/device audio failure must not affect UI actions.
   }
 }
 
-/** Play one of the built-in named sounds. Unknown ids are silent. */
 export function playNamedSound(id: string, options?: { volume?: number }): void {
   if (typeof id !== "string") return;
   const patch = (NAMED_SOUND_PATCHES as Record<string, SoundPatch | undefined>)[id];
   if (patch) playSound(patch, options);
 }
 
-/**
- * Play a raw recipe as a sound effect, honoring the global sounds toggle and
- * master volume but bypassing the per-event mapping. Used by visuals that
- * trigger their own synced SFX (e.g. the celebration overlay).
- */
 export function playUiSoundEffect(patch: SoundPatch): void {
   if (!currentUiSounds || !currentUiSounds.enabled) return;
   playSound(patch);
 }
-
-/* ── The built-in recipes. ──
- *
- * See the import block at the top of the file for the per-recipe modules.
- * This map is the single registry consulted by `playNamedSound`.
- */
 
 export const NAMED_SOUND_PATCHES: Record<SoundId, SoundPatch> = {
   "morning-light": MORNING_LIGHT,
@@ -514,8 +470,6 @@ export const NAMED_SOUND_PATCHES: Record<SoundId, SoundPatch> = {
   celebration: CELEBRATION,
 };
 
-/* ── Event dispatcher (reads ui_sounds from the settings snapshot). ──── */
-
 let currentUiSounds: UiSoundsConfig | null = null;
 
 export function setUiSoundsConfig(config: UiSoundsConfig | null): void {
@@ -523,10 +477,6 @@ export function setUiSoundsConfig(config: UiSoundsConfig | null): void {
   if (config) setUiSoundsMasterVolume(config.masterVolume);
 }
 
-/**
- * Fire the sound attached to `eventId`. Honors the global `enabled` switch,
- * an empty/unknown per-event id (silent), and the volume from settings.
- */
 export function playUiSoundEvent(eventId: UiSoundEventId): void {
   if (!currentUiSounds || !currentUiSounds.enabled) return;
   const id = currentUiSounds.events[eventId];

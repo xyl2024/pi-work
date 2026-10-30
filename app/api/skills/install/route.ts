@@ -10,10 +10,6 @@ const ANSI_RE = /\x1B\[[0-9;]*m/g;
 const INSTALL_TIMEOUT_MS = 60000;
 const log = createLogger("api/skills/install");
 
-// POST /api/skills/install  body: { package: string; scope: "global" | "project"; cwd?: string }
-// Streams the underlying `npx skills add` output as an SSE body of
-// `data: {type:"log", line}` events, terminating with one `done` / `error`
-// event so the UI can render live install progress instead of a silent wait.
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
@@ -40,7 +36,6 @@ export async function POST(req: Request) {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           } catch {
-            // client disconnected — remaining writes fail harmlessly
           }
         };
         try {
@@ -87,7 +82,6 @@ export async function POST(req: Request) {
       },
     });
   } catch (e: unknown) {
-    // Body parse failure etc. — nothing streamed yet, answer as plain JSON.
     log.error("skill install error", { error: String(e), durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

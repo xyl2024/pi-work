@@ -1,4 +1,3 @@
-/** Browser-local calendar day expressed as absolute instants (DST-safe). */
 export interface SessionDateRange {
   from: number;
   before: number;
@@ -17,7 +16,6 @@ export function matchesSessionDate(modified: string, range: SessionDateRange | n
   return time >= range.from && time < range.before;
 }
 
-/** null = unfiltered; undefined = malformed/incomplete range. */
 export function parseSessionDateRange(params: URLSearchParams, prefix = "modified"): SessionDateRange | null | undefined {
   const from = params.get(`${prefix}From`);
   const before = params.get(`${prefix}Before`);

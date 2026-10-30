@@ -1,34 +1,14 @@
-// Shared file-extension → language ID map. Used by:
-//   - server `lib/server/files/handler.ts` to label the `language` field
-//     returned by the files API
-//   - client `components/files/file-viewer/MonacoViewer.tsx` to choose
-//     which Monaco language to register / tokenize a file with
-//
-// The IDs are deliberately shared between Prism (used by react-syntax-
-// highlighter for chat message code blocks) and Monaco so we don't have
-// to maintain two parallel maps; Monaco lumps tsx/jsx under "typescript"
-// and jsx under "javascript", which lines up with the existing map.
-//
-// Add new entries here, NOT in handler.ts — both consumers import from
-// this module. If you need a language Monaco doesn't have built-in,
-// register it via `useMonacoLoader.ts` and add it to `preinstalled`
-// there, and add an entry here keyed by file extension.
-
 export interface FileLanguageInfo {
-	/** Monaco / Prism language ID. Falls back to "plaintext". */
 	id: string;
-	/** Human-readable label shown in the status bar. */
 	label: string;
 }
 
-/** Filename → language lookup, special cases first. */
 const FILENAME_MAP: Record<string, FileLanguageInfo> = {
 	dockerfile: { id: "dockerfile", label: "Dockerfile" },
 	makefile: { id: "makefile", label: "Makefile" },
 	gnumakefile: { id: "makefile", label: "Makefile" },
 };
 
-/** Extension → language lookup, lower-cased. */
 const EXTENSION_MAP: Record<string, FileLanguageInfo> = {
 	ts: { id: "typescript", label: "TypeScript" },
 	tsx: { id: "typescript", label: "TypeScript" },
@@ -66,7 +46,7 @@ const EXTENSION_MAP: Record<string, FileLanguageInfo> = {
 	ndjson: { id: "json", label: "JSON" },
 	yaml: { id: "yaml", label: "YAML" },
 	yml: { id: "yaml", label: "YAML" },
-	toml: { id: "ini", label: "TOML" }, // Monaco has no toml; ini is close
+	toml: { id: "ini", label: "TOML" },
 	ini: { id: "ini", label: "INI" },
 	xml: { id: "xml", label: "XML" },
 	svg: { id: "xml", label: "SVG" },
@@ -90,19 +70,10 @@ const EXTENSION_MAP: Record<string, FileLanguageInfo> = {
 	log: { id: "text", label: "Log" },
 };
 
-/**
- * Resolve a file path to its Monaco language info.
- *
- * Order of checks (most → least specific):
- *   1. Special full filenames (Dockerfile, Makefile, .env*, etc.)
- *   2. File extension (lower-cased, including the last `.`-segment)
- *   3. Fallback to plaintext
- */
 export function getFileLanguage(filePath: string): FileLanguageInfo {
 	const base = filePath.replace(/\\/g, "/").split("/").pop() ?? "";
 	const lowerBase = base.toLowerCase();
 
-	// Special filenames
 	if (lowerBase === "dockerfile" || lowerBase.startsWith("dockerfile.")) {
 		return FILENAME_MAP.dockerfile!;
 	}
@@ -113,13 +84,11 @@ export function getFileLanguage(filePath: string): FileLanguageInfo {
 		return { id: "bash", label: "Env" };
 	}
 
-	// Extension
 	const dot = lowerBase.lastIndexOf(".");
 	const ext = dot >= 0 ? lowerBase.slice(dot + 1) : "";
 	if (ext && EXTENSION_MAP[ext]) {
 		return EXTENSION_MAP[ext];
 	}
 
-	// Fallback
 	return { id: "text", label: "Plain Text" };
 }

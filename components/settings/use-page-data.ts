@@ -1,19 +1,5 @@
 "use client";
 
-/**
- * Hook over the settings page-data cache (`lib/client/settings-page-cache.ts`).
- * Pages still unmount when the user switches away (that is what makes "leave
- * the page = drop the draft" honest), but the data they loaded is kept for the
- * rest of the modal's lifetime. On a later entry the hook starts from the
- * cached value — no request, no "Loading…" flash — and only the first entry
- * (or an explicit `reload`) talks to the server.
- *
- * `mutate` is the write side: after a save the page hands the new value here so
- * a later re-entry shows it instead of the pre-save snapshot. `reload` is for
- * data edited elsewhere (e.g. the subagent editor): it re-fetches, replaces the
- * cache and resolves once the shown value is up to date.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   SettingsPageDataCache,
@@ -22,18 +8,10 @@ import type {
 } from "@/lib/client/settings-page-cache";
 
 export interface SettingsPageData<K extends SettingsPageDataKey> {
-  /** Cached or freshly loaded value; undefined until the first successful load. */
   data: SettingsPageDataMap[K] | undefined;
-  /** True only while there is no value to show yet (never flashes on re-entry). */
   loading: boolean;
-  /** The last load error, cleared when a load starts. */
   error: string | null;
-  /**
-   * Force a fresh request and resolve once the result is shown. The currently
-   * displayed value stays on screen while the request is in flight.
-   */
   reload: () => Promise<void>;
-  /** Update the shown value and the cache together (a save made by this page). */
   mutate: (
     next:
       | SettingsPageDataMap[K]
@@ -46,8 +24,6 @@ export function useSettingsPageData<K extends SettingsPageDataKey>(
   key: K,
   loader: () => Promise<SettingsPageDataMap[K]>,
 ): SettingsPageData<K> {
-  // The loader closes over component state (config, i18n). Keep the latest one
-  // in a ref so a new closure does not re-trigger a load.
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
@@ -58,9 +34,6 @@ export function useSettingsPageData<K extends SettingsPageDataKey>(
 
   const load = useCallback((mode: "fetch" | "refresh"): Promise<void> => {
     setError(null);
-    // The cache decides whether `fetch` touches the network. Here we only
-    // decide whether there is anything to show while it resolves: a re-entry
-    // starts from the cached value, so it never takes the loading state.
     if (cache.read(key) === undefined) setLoading(true);
 
     const run = () => loaderRef.current();

@@ -1,20 +1,3 @@
-/**
- * Pure terminal-state judgement for one turn.
- *
- * This is the decision half of the turn module (see
- * `docs/adr/0004-turn-execution-has-one-seam-and-waits-for-agent-settled.md`):
- * no session, no I/O, no side effects. Given the snapshot a turn's event stream
- * has produced so far and the reason the wait ended, it answers the only
- * question this layer owns — how did the turn end, and what was the final
- * reply text?
- *
- * It reports facts, not verdicts. In particular "the turn produced no reply
- * text" is a fact (`hasReply === false`); whether that counts as success is the
- * caller's policy (the scheduler treats it as a failure, wechat
- * replies with a fallback line and treats it as success).
- */
-
-/** The message shape `agent_end` reports: the low-level run's conversation. */
 export interface TurnMessage {
   role?: string;
   content?: Array<{ type?: string; text?: string }> | unknown;
@@ -22,33 +5,18 @@ export interface TurnMessage {
   errorMessage?: string;
 }
 
-/** Minimal event shape the module reads. */
 export interface TurnEvent {
   type: string;
   [key: string]: unknown;
 }
 
-/**
- * Everything a turn's event stream has told us so far, folded into data.
- *
- * `agent_end` is the only event that carries a messages snapshot, and
- * `agent_settled` carries no payload at all — so the last finished low-level
- * run is where the final assistant message lives.
- */
 export interface TurnSnapshot {
-  /**
-   * Messages of the most recent `agent_end`, or null if none happened yet.
-   * Every `agent_end` replaces it, so a retry's snapshot supersedes the failed
-   * attempt's.
-   */
   lastRunMessages: TurnMessage[] | null;
-  /** Error reported by the most recent `agent_end`, if any (null once a retry ends cleanly). */
   error: string | null;
 }
 
 export const EMPTY_TURN_SNAPSHOT: TurnSnapshot = { lastRunMessages: null, error: null };
 
-/** Fold one event into the snapshot. Only `agent_end` contributes state. */
 export function observeTurnEvent(snapshot: TurnSnapshot, event: TurnEvent): TurnSnapshot {
   if (event.type !== "agent_end") return snapshot;
   const messages = Array.isArray(event.messages) ? (event.messages as TurnMessage[]) : null;
@@ -56,19 +24,8 @@ export function observeTurnEvent(snapshot: TurnSnapshot, event: TurnEvent): Turn
   return { lastRunMessages: messages, error };
 }
 
-/** Neutral terminal states. Callers map these onto their own vocabulary. */
 export type TurnStatus = "completed" | "aborted" | "failed" | "timeout" | "interrupted" | "cancelled";
 
-/**
- * Why the wait for the turn ended. `settled`/`failed` come from the event
- * stream; `timeout`/`interrupted`/`cancelled` are the caller's own policy (the
- * caller owns the deadline and the abort sources, and it is the caller's
- * session-destroy listener that reports an interruption).
- *
- * `aborted` (a session that stopped itself with `stopReason === "aborted"`) is a
- * different fact from `cancelled` (one of the caller's abort sources fired and
- * the module told the session to stop); both are terminal states.
- */
 export type TurnEndReason =
   | { kind: "settled" }
   | { kind: "timeout"; deadlineMs: number }
@@ -76,27 +33,14 @@ export type TurnEndReason =
   | { kind: "failed"; error: string }
   | { kind: "cancelled"; reason: string };
 
-/** What one turn ended up being. */
 export interface TurnOutcome {
   status: TurnStatus;
-  /** Final assistant reply text, raw (not trimmed); "" when there was none. */
   text: string;
-  /** The distinguishable fact "this turn produced reply text". Not a verdict. */
   hasReply: boolean;
-  /** Human-readable reason for a failed/aborted/timeout/interrupted turn; null on a clean completion. */
   error: string | null;
-  /** Raw `stopReason` of the last assistant message, or null. "length" here is the output-limit stop. */
   stopReason: string | null;
 }
 
-/**
- * The end reason an event implies, or null when the event does not end the turn.
- *
- * Only `agent_settled` settles a turn. `agent_end` marks one low-level run and
- * may still be followed by a retry, a compaction retry or a queued
- * continuation — `willRetry` only says whether *this* attempt will retry, so
- * neither value of it makes `agent_end` terminal.
- */
 export function eventTurnEndReason(event: TurnEvent): TurnEndReason | null {
   if (event.type === "agent_settled") return { kind: "settled" };
   if (event.type === "prompt_failed") {
@@ -106,14 +50,8 @@ export function eventTurnEndReason(event: TurnEvent): TurnEndReason | null {
   return null;
 }
 
-/**
- * Judge a turn that ended for the given reason, using the snapshot observed so
- * far for the final reply text.
- */
 export function classifyTurnEnd(snapshot: TurnSnapshot, reason: TurnEndReason): TurnOutcome {
   if (reason.kind === "timeout") {
-    // Wording kept from the pre-seam runners so migrating callers record the
-    // same error text they used to.
     return outcome("timeout", "", false, `max lifetime exceeded: ${reason.deadlineMs}ms`, null);
   }
   if (reason.kind === "interrupted") {
@@ -123,9 +61,6 @@ export function classifyTurnEnd(snapshot: TurnSnapshot, reason: TurnEndReason): 
     return outcome("failed", "", false, reason.error, null);
   }
   if (reason.kind === "cancelled") {
-    // The caller's abort source fired; `reason` is its wording. No reply text:
-    // the turn was cut short, and a partial result is the caller's to re-read
-    // (the subagent path does) rather than something this layer invents.
     return outcome("cancelled", "", false, reason.reason, null);
   }
 
@@ -143,9 +78,6 @@ export function classifyTurnEnd(snapshot: TurnSnapshot, reason: TurnEndReason): 
   if (stopReason === "aborted") {
     return outcome("aborted", text, hasReply, last?.errorMessage || "assistant stopReason=aborted", stopReason);
   }
-  // A clean settle. `stopReason === "length"` still lands here: the truncation
-  // is reported through `stopReason`, and whether it is a failure is the
-  // caller's call (the subagent path treats it as one).
   return outcome("completed", text, hasReply, null, stopReason);
 }
 
@@ -167,7 +99,6 @@ function lastAssistantMessage(messages: TurnMessage[] | null): TurnMessage | nul
   return null;
 }
 
-/** Concatenate the message's text blocks, exactly as the pre-seam runners did. */
 function assistantText(message: TurnMessage): string {
   if (!Array.isArray(message.content)) return "";
   return message.content

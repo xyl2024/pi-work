@@ -1,6 +1,5 @@
 import type { SoundPatch } from "@/lib/client/ui-sounds";
 
-// 海风
 export const SEA_BREEZE: SoundPatch = {
   layers: [
     {

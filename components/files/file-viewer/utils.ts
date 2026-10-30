@@ -3,17 +3,9 @@ import { getFileName } from "@/lib/shared/file-paths";
 export interface FileViewerProps {
 	filePath: string;
 	cwd?: string;
-	/** Right-side panel state. MonacoViewer uses `"expanded"` as the gate
-	 *  for showing its minimap ("展开面板" toggle = expanded = show minimap).
-	 *  Other viewers ignore it. */
 	rightPanelState?: "closed" | "normal" | "expanded";
 }
 
-/**
- * Extension sets used by the top-level FileViewer dispatcher to pick
- * the right specialized viewer (image / audio / video / PDF). Anything
- * not matched here falls through to MonacoViewer.
- */
 export const IMAGE_EXTS = new Set([
 	"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif",
 ]);
@@ -45,14 +37,12 @@ export function isPdfPath(filePath: string): boolean {
 	return PDF_EXTS.has(ext);
 }
 
-/** Human-readable file size. Used in the viewer toolbar. */
 export function formatSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** mm:ss formatter for audio/video duration display. */
 export function formatDuration(seconds: number): string {
 	if (!Number.isFinite(seconds)) return "";
 	const totalSeconds = Math.round(seconds);

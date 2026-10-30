@@ -1,6 +1,5 @@
 import type { SoundPatch } from "@/lib/client/ui-sounds";
 
-// 水墨
 export const INK: SoundPatch = {
   layers: [
     {

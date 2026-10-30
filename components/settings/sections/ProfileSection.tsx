@@ -21,15 +21,6 @@ const SUPPORTED_AVATAR_TYPES = [
 ];
 const AVATAR_ACCEPT = SUPPORTED_AVATAR_TYPES.join(",");
 
-/**
- * Section 0: Profile (avatar + display name). Owns its own loading /
- * saving / saved-ok state machine and a local `originalUsername`
- * snapshot for the dirty check — independent from the rest of the
- * modal because the profile lives at /api/profile (and /api/profile/
- * avatar), not /api/settings. Calls `onProfileSaved` so the parent
- * can refresh anything that depends on the avatar (e.g. the sidebar
- * avatar).
- */
 export function ProfileSection({
   onProfileSaved,
   onDirtyChange,
@@ -49,7 +40,6 @@ export function ProfileSection({
   const [profileSavedOk, flashProfileSavedOk] = useTransientFlag();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load profile (username + avatar presence) once on mount
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -70,12 +60,9 @@ export function ProfileSection({
       }
     };
     void load();
-    // Probe avatar with HEAD-equivalent: use GET and read the response.
-    // If the response is 200, the avatar exists; if 404, it does not.
     fetch("/api/profile/avatar", { method: "GET", cache: "no-store" })
       .then((r) => {
         if (!cancelled) setHasAvatar(r.ok);
-        // Burn the body so the connection is released.
         if (r.ok) void r.arrayBuffer();
         else void r.text();
       })
@@ -119,7 +106,7 @@ export function ProfileSection({
 
   const handleAvatarFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file
+    e.target.value = "";
     if (!file) return;
     if (!SUPPORTED_AVATAR_TYPES.includes(file.type)) {
       toast.show({ kind: "error", message: t("Unsupported image type") });

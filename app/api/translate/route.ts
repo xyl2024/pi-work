@@ -46,26 +46,17 @@ export async function POST(req: Request) {
   const requestedProvider = typeof body.provider === "string" ? body.provider : null;
   const requestedModelId = typeof body.modelId === "string" ? body.modelId : null;
 
-  // Resolve the system prompt from the requested target language. Invalid or
-  // missing values fall back to the default target — the client never gets to
-  // choose an arbitrary prompt string.
   const target: LanguageCode = isLanguageCode(body.target)
     ? body.target
     : DEFAULT_TARGET_LANGUAGE;
   const systemPrompt = TRANSLATE_PROMPTS[target];
   if (systemPrompt.length > MAX_TRANSLATE_PROMPT_CHARS) {
-    // Defensive — TRANSLATE_PROMPTS is static and curated well below this
-    // limit, but a stale build / accidental edit should fail loudly rather
-    // than silently ship a giant prompt.
     return Response.json(
       { error: `server prompt for target ${target} exceeds ${MAX_TRANSLATE_PROMPT_CHARS} characters` },
       { status: 500 },
     );
   }
 
-  // Resolve model via the shared direct-LLM helper. The wrapper handles
-  // reading ~/.pi/agent/settings.json (read-only) and falling back to the
-  // user's default model when the client didn't pick one.
   let model: { provider: string; id: string };
   try {
     const resolved = await resolveDirectModel({
@@ -91,7 +82,6 @@ export async function POST(req: Request) {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         } catch {
-          // controller already closed (client disconnected)
           closed = true;
         }
       };
@@ -109,7 +99,6 @@ export async function POST(req: Request) {
         try { controller.close(); } catch {}
       };
 
-      // Heartbeat every 30s — keeps proxies from killing the stream.
       heartbeat = setInterval(() => {
         if (closed) return;
         try { controller.enqueue(encoder.encode(":\n\n")); } catch { closed = true; }

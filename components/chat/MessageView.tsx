@@ -12,50 +12,27 @@ interface Props {
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
-  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
   entryId?: string;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
   onEditContent?: (content: string) => void;
   showTimestamp?: boolean;
-  /** Keywords to highlight with <mark> (from in-session search) */
   keywords?: string[];
-  /** If this entryId matches, apply a flash animation */
   highlightEntryId?: string | null;
-  /** Whether this message contains a search match (for highlight) */
   isSearchMatch?: boolean;
-  /** Content rendered between the assistant message body and its footer row */
   afterContent?: React.ReactNode;
-  /** Per-turn duration for the LAST assistant message of a turn. */
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
-  /** Files surfaced by this turn's `read` tool calls (footer chips). */
   readFiles?: ReadFileInfo[];
-  /** Turn-level aggregate added/deleted line counts (footer label). */
   turnDiffStats?: ToolDiffStats | null;
-  /** Open a file in the right-hand panel (threaded from AppShell). */
   onOpenFile?: (filePath: string, fileName: string) => void;
-  /** Working directory used to render bash tool prompts. */
   cwd?: string | null;
-  /** Session the message belongs to — the key for its captured request body. */
   sessionId?: string | null;
 }
 
-/**
- * `message` is the heavy prop. For history entries it's stable across
- * token updates (we re-render only on prop change), and for the
- * streaming bubble we deliberately want re-render on every snapshot
- * flip — that's why StreamingBubble doesn't memo its inner prop
- * comparison further. Default shallow memoization short-circuits
- * historical re-renders when neither message content nor props move,
- * which is the common case during a streaming turn.
- */
 function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
-  // Feeds the markdown link renderer so bare file paths open in the right
-  // panel instead of navigating; null when the shell gave no opener.
   const fileLinkHandler = useMemo(
     () => (onOpenFile ? { openFile: onOpenFile, cwd } : null),
     [onOpenFile, cwd],

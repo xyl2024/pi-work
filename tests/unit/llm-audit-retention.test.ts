@@ -4,18 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProviderCallInsert } from "@/lib/shared/llm-audit-types";
 
-/**
- * Retention tests for the LLM API audit log. Rows carry request/response
- * bodies, so the table is pruned to a rolling window (`pruneProviderCalls`
- * plus the throttled, off-turn trigger on insert / DB open).
- *
- * The module caches its handle on globalThis and reads
- * `PI_WORK_LLM_AUDIT_DB` / `PI_WORK_LLM_AUDIT_RETENTION_DAYS` lazily, so each
- * test points both env vars at its own temp file and drops the cached
- * globals. Retention is forced to 0 while seeding so the prune scheduled by
- * DB open can never race the rows a test is about to insert.
- */
-
 type DbModule = typeof import("@/lib/server/llm-audit-db");
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -63,7 +51,6 @@ function insert(db: DbModule, ts: number, id = ts): void {
   db.insertProviderCall(row);
 }
 
-/** Let the setImmediate-scheduled prune inside the module run. */
 async function drainImmediates(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await new Promise((resolve) => setImmediate(resolve));
@@ -94,7 +81,6 @@ describe("llm-audit retention", () => {
     process.env.PI_WORK_LLM_AUDIT_RETENTION_DAYS = "30";
     expect(db.pruneProviderCalls(now)).toBe(2);
     expect(db.auditTotals().calls).toBe(2);
-    // Idempotent: a second pass has nothing left to remove.
     expect(db.pruneProviderCalls(now)).toBe(0);
   });
 
@@ -137,12 +123,9 @@ describe("llm-audit retention", () => {
     insert(db, now - 90 * DAY);
     expect(db.auditTotals().calls).toBe(1);
 
-    // Retention was 0 while seeding (open-time prune is throttled out); flip
-    // it on and let the next insert schedule the cleanup.
     process.env.PI_WORK_LLM_AUDIT_RETENTION_DAYS = "30";
     delete (globalThis as { __piLlmAuditLastPrune?: number }).__piLlmAuditLastPrune;
     insert(db, now);
-    // Prune is deferred: the insert itself must not have deleted anything.
     expect(db.auditTotals().calls).toBe(2);
 
     await drainImmediates();
@@ -160,7 +143,6 @@ describe("llm-audit retention", () => {
     await drainImmediates();
     expect(db.auditTotals().calls).toBe(1);
 
-    // A second old row written right after is held back by the throttle.
     insert(db, now - 91 * DAY);
     await drainImmediates();
     expect(db.auditTotals().calls).toBe(2);

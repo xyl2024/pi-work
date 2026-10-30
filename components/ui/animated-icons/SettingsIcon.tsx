@@ -1,5 +1,3 @@
-// Settings glyph. The gear rotates 180° on hover (snappy spring).
-
 "use client";
 
 import { motion, useAnimation } from "motion/react";
@@ -67,4 +65,3 @@ export const SettingsIcon = forwardRef<SettingsIconHandle, SettingsIconProps>(
 );
 
 SettingsIcon.displayName = "SettingsIcon";
-

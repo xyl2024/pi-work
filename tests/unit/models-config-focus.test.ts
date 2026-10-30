@@ -1,8 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// Exercise the actual focus effect without a browser or a running server.
-// Updating a provider name changes `page` even though no navigation occurred.
 const source = readFileSync("components/panels/ModelsConfigPanel.tsx", "utf8");
 const focusCall = source.indexOf("containerRef.current?.focus");
 const start = source.lastIndexOf("  useEffect(() => {", focusCall);

@@ -1,25 +1,3 @@
-/**
- * Vitest global setup: makes sure an *isolated* Pi Work instance is available
- * for the interface test suite.
- *
- * Strategy:
- *   1. probe TEST_BASE_URL (default: the isolated instance on port 30143) —
- *      if it answers, reuse it and leave it running afterwards;
- *   2. otherwise start it ourselves (`next dev`, same as
- *      `pnpm run dev:isolated`) and stop it on teardown.
- *
- * There is deliberately no production-shaped run: tests never build or start
- * a production server, and never target a production instance.
- *
- * Isolation is identical in both modes (same layout as scripts/dev-isolated.mjs):
- * PI_WORK_DATA_DIR=~/.pi-work-dev, PI_CODING_AGENT_DIR=~/.pi-dev/agent,
- * terminal WS on its own port. Never touches the production instance
- * (including its .next/ artifacts — test builds go to .next-test/) or the
- * real ~/.pi / ~/.pi-work data.
- *
- * Caveat: none — test builds go to .next-test/ (via NEXT_DIST_DIR), so the
- * shared .next/ of a running production server is never touched.
- */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -34,7 +12,6 @@ import {
 } from "./config";
 
 let server: ChildProcess | undefined;
-/** True when global-setup started the instance itself (→ stop it on teardown). */
 let owned = false;
 
 function expandTilde(p: string): string {
@@ -43,7 +20,6 @@ function expandTilde(p: string): string {
   return p;
 }
 
-/** Resolve next's CLI entry (same trick as scripts/dev-isolated.mjs). */
 function resolveNext(): string {
   const require = createRequire(import.meta.url);
   try {
@@ -61,9 +37,6 @@ function isolatedEnv(): NodeJS.ProcessEnv {
     PI_CODING_AGENT_DIR: expandTilde(ISOLATED_AGENT_DIR),
     PI_WORK_TERMINAL_PORT: String(TEST_TERM_PORT),
     PI_WORK_PUBLIC_BASE_URL: TEST_BASE_URL,
-    // Own build artifacts dir: a production server serving from this checkout
-    // reads .next/ — tests must never write into it (next.config.ts honors
-    // NEXT_DIST_DIR).
     NEXT_DIST_DIR: ".next-test",
   };
 }
@@ -107,7 +80,6 @@ export async function setup(): Promise<void> {
 
   console.log(`[test] starting isolated dev server at ${TEST_BASE_URL} ...`);
 
-  // detached so we can kill the whole process tree (next server + terminal WS server)
   server = runNext(["dev", "-p", String(TEST_PORT)], { detached: true });
   owned = true;
   await waitForServer();
@@ -118,7 +90,6 @@ export async function teardown(): Promise<void> {
   try {
     process.kill(-server.pid, "SIGTERM");
   } catch {
-    /* already gone */
   }
   const exited = new Promise<void>((resolve) => server?.on("exit", () => resolve()));
   const killer = new Promise<void>((resolve) =>
@@ -126,7 +97,6 @@ export async function teardown(): Promise<void> {
       try {
         if (server?.pid) process.kill(-server.pid, "SIGKILL");
       } catch {
-        /* already gone */
       }
       resolve();
     }, 10_000),

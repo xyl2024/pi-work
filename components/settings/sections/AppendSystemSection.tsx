@@ -12,7 +12,6 @@ import type { DirtyReporter } from "../use-unsaved-changes";
 import type { AppendSystemFile, SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 import { useSettingsPageData } from "../use-page-data";
 
-/** One read of APPEND_SYSTEM.md; the modal's page-data cache keeps it for the modal's lifetime. */
 async function loadAppendSystem(): Promise<AppendSystemFile> {
   const response = await fetch("/api/append-system");
   const data = (await response.json().catch(() => ({}))) as
@@ -24,27 +23,6 @@ async function loadAppendSystem(): Promise<AppendSystemFile> {
   return { content: data.content, path: data.path, exists: !!data.exists };
 }
 
-/**
- * Section 3: System Prompt — two sub-blocks, each with its own loader
- * toggle:
- *
- * **Append System Prompt** (APPEND_SYSTEM.md):
- * 1. **Loader toggle** (immediate-apply via the `apply` prop) — flips
- *    `PiWorkConfig.append_system.enabled`. Changes only take effect on
- *    sessions started AFTER the PUT (rpc-manager reads the flag once
- *    per session start).
- * 2. **Textarea + Save** — edits the file content on disk via the
- *    separate `/api/append-system` PUT endpoint. Has its own
- *    dirty/saving/savedOk state machine since the loader toggle and
- *    the content edit are conceptually separate (you can edit the
- *    file while the loader is off; the change just won't take effect
- *    until you turn it back on).
- *
- * **Pi documentation**: a loader toggle that flips
- * `PiWorkConfig.load_pi_docs` (also immediate-apply; rpc-manager strips
- * pi's built-in documentation block for sessions started after it is
- * switched off).
- */
 export function AppendSystemSection({
   config,
   apply,
@@ -58,11 +36,6 @@ export function AppendSystemSection({
 }) {
   const { t } = useI18n();
   const toast = useToast();
-  // The disk content is cached per modal: first entry reads the file, later
-  // entries start from that value instead of flashing "Loading…". The draft is
-  // deliberately *not* cached — leaving the page still discards unsaved edits.
-  // A failed read is not cached either, so the next entry retries; until then
-  // the textarea stays disabled.
   const {
     data: appendSystem,
     loading: appendSystemLoading,
@@ -94,8 +67,6 @@ export function AppendSystemSection({
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      // The saved text becomes the new baseline. Writing it to the page cache
-      // means a later entry into this page shows it without a re-read.
       mutateAppendSystem({ ...appendSystem, content, exists: true });
       setDraft(null);
       flashAppendSystemSavedOk();
@@ -123,8 +94,6 @@ export function AppendSystemSection({
           />
         </div>
       </div>
-      {/* APPEND_SYSTEM.md loader toggle — immediate-apply. Independent
-          from the Save button above (which only writes file content). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, color: "var(--text)" }}>
           {config.append_system.enabled ? t("Loading on") : t("Loading off")}
@@ -163,7 +132,6 @@ export function AppendSystemSection({
         <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: "0 0 10px" }}>
           {t("Pi documentation")}
         </h4>
-        {/* Pi documentation loader toggle — immediate-apply. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: "var(--text)" }}>
             {config.load_pi_docs ? t("Loading on") : t("Loading off")}

@@ -3,11 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { skillsBack } from "@/lib/client/skills-store";
 
-/**
- * The skills panel's "up one level" control. Every page above the grid draws
- * one so the page stack is navigable with the mouse, matching what Escape does
- * with the keyboard (see `escapeSkills`).
- */
 export function SkillsBackButton() {
   const { t } = useI18n();
   return (

@@ -25,20 +25,6 @@ import {
 
 const log = createLogger("config");
 
-/**
- * In-process `config.yaml` cache.
- *
- * State lives on `globalThis` because Next.js may evaluate this module more
- * than once (the instrumentation bundle vs. a route bundle, dev hot reload);
- * `network-proxy.ts` keeps its state there for the same reason. The contract is
- * deliberately small:
- *
- *   • a `writeConfig` in this process is visible to the very next `readConfig`;
- *   • a hand edit (or another process) is picked up as soon as the file's mtime
- *     or size changes — the guard below — not necessarily instantly;
- *   • cross-process real-time consistency is not promised (AGENTS.md already
- *     says to use `dev:isolated` when two instances must not race).
- */
 declare global {
   var __piWorkConfigCache: { config: PiWorkConfig; mtimeMs: number; size: number } | undefined;
 }
@@ -47,38 +33,15 @@ import type { RightBarButtonId, RightSideBarConfig } from "../shared/right-bar";
 import { resolveSessionBoundAlignment } from "../shared/right-bar";
 import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 
-// ── APPEND_SYSTEM.md loader toggle ───────────────────────────────────────
-// pi's DefaultResourceLoader auto-loads ~/.pi/agent/APPEND_SYSTEM.md on
-// every session. Disabling here passes `appendSystemPrompt: []` to the
-// loader, which short-circuits `discoverAppendSystemPromptFile()` — the
-// file is left untouched on disk so re-enabling just flips the flag.
-
-// ── Dangerous-command confirmation rules ────────────────────────────────
-// Empty `rules` means "no user rules": the built-in bash / PowerShell sets in
-// `lib/shared/dangerous-commands.ts` are always enforced underneath, so the
-// confirmation gate is never silently off (a Windows box has no user bash
-// rule that could match a PowerShell command).
 const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
   rules: [],
   timeout_ms: 300_000,
 };
 
-/**
- * Configurable right-bar button ids, in panel-registry order. Derived from
- * the panel registry (its keys *are* the button ids) so that adding a panel
- * view needs no change here, and removing one (canvas, json) leaves no key
- * in `config.yaml`.
- */
 const CONFIGURABLE_BUTTON_IDS: readonly RightBarButtonId[] = Object.keys(
   PANEL_TAB_SPEC_BY_KIND,
 ) as RightBarButtonId[];
 
-/**
- * Every panel view visible by default. Session-bound buttons (context /
- * conversationTree / gitDiff / llmAudit) pin to the bottom —
- * they're meaningful only when a session is active and become empty on the
- * new-session page.
- */
 function defaultRightSideBar(): RightSideBarConfig {
   const out: RightSideBarConfig = { session_bound_alignment: "bottom" };
   for (const id of CONFIGURABLE_BUTTON_IDS) out[id] = true;
@@ -88,11 +51,7 @@ function defaultRightSideBar(): RightSideBarConfig {
 const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = defaultRightSideBar();
 
 const DEFAULT_MCP: McpConfig = {
-  // Off by default: see McpConfig.project_servers. pi's own CLI trusts project
-  // resources, but a web UI must not run workspace-defined commands on open.
   project_servers: false,
-  // Much shorter than pi's 10000: the wait happens inside `before_agent_start`,
-  // so it is dead time between "send" and the first token in the web UI.
   startup_wait_ms: 3000,
 };
 
@@ -112,13 +71,8 @@ function parseMcp(raw: unknown): McpConfig {
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
-  // Preserve pre-existing behavior: append file loads by default.
   append_system: { enabled: true },
-  // Preserve pre-existing behavior: pi's built-in Pi documentation section
-  // stays in new sessions' system prompts by default.
   load_pi_docs: true,
-  // Preserves pre-feature behavior: same hardcoded limits the route used
-  // before the value became user-configurable.
   file_viewer: {
     max_size_mb: { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB },
   },
@@ -130,8 +84,6 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   cwd_icons: {},
   cwd_aliases: {},
   disabled_skills: {},
-  // Off by default: never silently route traffic through a proxy the user
-  // did not ask for. `url` is required for the proxy to take effect.
   network_proxy: { enabled: false, url: "", no_proxy: "" },
   mcp: { ...DEFAULT_MCP },
 };
@@ -163,19 +115,10 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   const out: RightSideBarConfig = { ...DEFAULT_RIGHT_SIDE_BAR };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
-  // Iterate the registry, not the file: a key that no panel view owns any
-  // more (canvas, json) is ignored instead of resurrected, and a `false` for
-  // any registered view round-trips — the defaults enumerate every view, so
-  // nothing is silently dropped on read.
   for (const id of CONFIGURABLE_BUTTON_IDS) {
     const v = obj[id];
     if (typeof v === "boolean") out[id] = v;
-    // missing or non-boolean → keep default (true)
   }
-  // `order` is parsed at the consumer side (lib/config doesn't import
-  // RIGHT_BAR_BUTTON_IDS — the descriptor module owns the canonical id
-  // set, and any stale/unknown entries are filtered there). Here we
-  // just hand the raw array through when it's structurally valid.
   if (Array.isArray(obj.order)) {
     const arr: RightBarButtonId[] = [];
     for (const item of obj.order) {
@@ -183,28 +126,18 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
     }
     if (arr.length > 0) out.order = arr;
   }
-  // `session_bound_alignment` — tolerant enum. Anything other than the
-  // three documented values falls back to "bottom" (the on-disk default).
   if (typeof obj.session_bound_alignment === "string") {
     out.session_bound_alignment = resolveSessionBoundAlignment(obj.session_bound_alignment);
   }
   return out;
 }
 
-// Fail-open for the missing/garbled case (keep the on-by-default behavior
-// so an old config.yaml doesn't silently turn the append off). An explicit
-// `enabled: false` is honored — the user pushed the button, we trust them.
 function parseAppendSystem(raw: unknown): AppendSystemConfig {
   if (!raw || typeof raw !== "object") return { enabled: true };
   const obj = raw as Record<string, unknown>;
   return { enabled: obj.enabled !== false };
 }
 
-// File preview size limits — fail-open like every other parser here:
-// missing/garbled field → defaults; out-of-range numbers → clamped with a
-// log.warn. Strict validation lives in the PUT route so the SettingsModal
-// never lets an invalid value through, but a hand-edited YAML can never
-// break the file route.
 function parseFileViewerMaxSizeMb(raw: unknown): FileViewerMaxSizeMb {
   const out: FileViewerMaxSizeMb = { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB };
   if (!raw || typeof raw !== "object") return out;
@@ -236,10 +169,6 @@ function parseFileViewer(raw: unknown): FileViewerConfig {
   return { max_size_mb: parseFileViewerMaxSizeMb((raw as Record<string, unknown>).max_size_mb) };
 }
 
-// Fail-open for missing/garbled subtrees so an old config.yaml keeps the
-// default sound mappings. `enabled: false` and `masterVolume: 0` are honored
-// because the user pushed the toggle; unknown event ids and unknown sound ids
-// are silently dropped (a stale UI selection should never break the file route).
 function parseUiSounds(raw: unknown): UiSoundsConfig {
   const defaults = DEFAULT_CONFIG.ui_sounds;
   if (!raw || typeof raw !== "object") return { ...defaults, events: { ...defaults.events } };
@@ -268,10 +197,6 @@ function parseUiSounds(raw: unknown): UiSoundsConfig {
   };
 }
 
-// Per-cwd custom icon overrides. Missing/garbled entries are silently
-// dropped; values are validated against known lucide names at render time
-// (client assets), so here we only enforce the shape (string keys → string
-// values) to keep a hand-edited YAML from breaking the file route.
 function parseCwdIcons(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== "object") return {};
   const obj = raw as Record<string, unknown>;
@@ -292,11 +217,6 @@ function parseCwdAliases(raw: unknown): Record<string, string> {
   return out;
 }
 
-// Network proxy (Settings → Network proxy). Fail-open: a missing / garbled
-// block means "no proxy", which is the pre-feature behavior. The URL is
-// shape-checked at the PUT boundary (app/api/settings) so the UI can't
-// persist garbage; here we only keep strings and let the applier ignore an
-// unusable URL rather than throwing during readConfig.
 function parseNetworkProxy(raw: unknown): NetworkProxyConfig {
   const defaults = DEFAULT_CONFIG.network_proxy;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...defaults };
@@ -337,7 +257,6 @@ function writeDefaultConfig(): PiWorkConfig {
   return cacheConfig({ ...DEFAULT_CONFIG }, statConfig());
 }
 
-/** The file's mtime + size guard, or null when it does not exist / is unreadable. */
 function statConfig(): { mtimeMs: number; size: number } | null {
   try {
     const stat = statSync(CONFIG_PATH);
@@ -347,20 +266,11 @@ function statConfig(): { mtimeMs: number; size: number } | null {
   }
 }
 
-/** Store the returned config, or drop the cache when the file cannot be stat'd. */
 function cacheConfig(config: PiWorkConfig, stat: { mtimeMs: number; size: number } | null): PiWorkConfig {
   globalThis.__piWorkConfigCache = stat ? { config, ...stat } : undefined;
   return config;
 }
 
-/**
- * Read config from ~/.pi-work/config.yaml.
- * On any error (file missing, corrupt yaml, wrong shape),
- * overwrites with defaults and returns them.
- *
- * Served from the in-process cache while the file's mtime and size are
- * unchanged (see the cache note above).
- */
 export function readConfig(): PiWorkConfig {
   const stat = statConfig();
   const cached = globalThis.__piWorkConfigCache;
@@ -400,18 +310,10 @@ export function readConfig(): PiWorkConfig {
   }
 }
 
-/**
- * Write config to ~/.pi-work/config.yaml.
- * Returns the written config on success, throws on failure.
- */
 export function writeConfig(config: PiWorkConfig): PiWorkConfig {
   ensureConfigDir();
   writeFileSync(CONFIG_PATH, dump(config), "utf8");
   log.info("config written", { path: CONFIG_PATH });
-  // Invalidate rather than cache the argument: a caller may hand us a config
-  // carrying keys this module normalizes away (a stale `right_side_bar` id), and
-  // a read must return the normalized shape. The next `readConfig` re-parses the
-  // file we just wrote, so a same-process write is still visible immediately.
   globalThis.__piWorkConfigCache = undefined;
   return config;
 }

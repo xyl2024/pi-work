@@ -3,19 +3,6 @@
 import { useEffect, useState } from "react";
 import { LoginForm } from "./LoginForm";
 
-// Auth gate for the main app page. Checks the session cookie via
-// /api/auth/session/status before mounting the (expensive) app shell:
-//   - still checking → small centered spinner
-//   - unauthenticated → the login form
-//   - authenticated → children (AppShell etc.)
-// The proxy.ts gateway independently blocks API/page access, so this is
-// primarily a UX layer that avoids flashing the app before the 401 lands.
-//
-// Desktop mode has no login page (the shell signs and injects the cookie), so
-// a missing session there is not something signing in could fix — mount the
-// app and let it report whatever the server says. The proxy still guards every
-// /api call. (The alternative — rendering the login form — is a dead end:
-// /api/auth/session/login refuses to mint anything on the desktop track.)
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<"checking" | "login" | "authed">("checking");
 

@@ -6,16 +6,6 @@ import {
 } from "@/lib/shared/tool-selection";
 import type { ToolExposure } from "@/lib/shared/types";
 
-/**
- * Tool-selection helpers shared by the client picker and rpc-manager.
- *
- * The declarable filter exists because pi's tool loadout only drops `hidden`
- * tools: handing a `codemode`-exposure name (an MCP server's default) to
- * `setActiveToolsByName` would declare it to the model, which is the opposite
- * of what that exposure asks for. Every "activate these tools" path has to go
- * through it.
- */
-
 describe("tool-selection: declarable tools", () => {
   it("treats an absent exposure as direct (pi's own default)", () => {
     expect(isDeclarableTool({})).toBe(true);

@@ -28,8 +28,6 @@ import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
-// System-prompt segmentation lives in a pure module so the context panel and
-// the context-composition estimate share one set of boundaries (ADR-0005).
 import { splitBaseBlocks, splitSystemPrompt, type SystemPromptSegment } from "@/lib/shared/system-prompt-segments";
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
@@ -112,8 +110,6 @@ interface ToolInfo {
   active: boolean;
 }
 
-/** Everything the panel bodies read from the shell. Bundling it into one
- *  object keeps the kind → body dispatch below a single table lookup. */
 interface PanelBodyCtx {
   rightPanelState: PanelMode;
   selectedSessionId: string | null;
@@ -130,23 +126,11 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
   onExpandGitPanel: () => void;
-  /** Open a session by id without collapsing the scheduler panel. */
   openSessionById: (sessionId: string) => void;
-  /** Start a new session (the MCP footer's "servers connect at session start" action). */
   onNewSession: () => void;
-  /** Close the panel tab that is currently active (Escape at the root page). */
   onClosePanelTab: () => void;
 }
 
-/**
- * The panel view body, looked up by kind. This is the only place the shell
- * decides which component renders a panel view; the tab strip reads the same
- * kind's glyph from the presentation registry (`PANEL_TAB_ICON_BY_KIND`), so
- * adding a view touches one spec, one descriptor entry and this table.
- *
- * The file preview is intentionally absent: it is not a panel view — its path
- * rides on the tab itself, so the shell renders it directly.
- */
 const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode> = {
   favorites: (ctx) => (
     <CollectionPanel
@@ -190,21 +174,12 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
-/** The shape every panel close guard returns — the shell only needs the copy. */
 interface PanelCloseGuard {
   titleKey: string;
   descriptionKey: string;
   confirmLabelKey: string;
 }
 
-/**
- * One guard per panel view whose tab owns state a close would throw away. A
- * panel not listed here has nothing to lose and closes silently.
- *
- * This table is the only place that knowledge lives: the ask loop, the
- * batch-close check and the post-confirm side effects all read it, so they
- * cannot drift apart in what they warn about.
- */
 const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | null>> = {
   modelsConfig: () =>
     selectModelsConfigCloseConfirm({
@@ -217,7 +192,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
-/** What confirming a guard does, run only once every guard has passed. */
 const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   modelsConfig: () => {
     if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
@@ -226,10 +200,8 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   channels: () => stopLogin(),
 };
 
-/** Panel views whose tab owns close-lossy state, in guard-table order. */
 const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_CLOSE_GUARDS) as PanelViewKind[];
 
-/** Which guards a set of tabs being closed would need. */
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   const closing = new Set(tabs.map((tab) => tab.kind));
   return PANEL_KINDS_WITH_CLOSE_GUARD.filter((kind) => closing.has(kind));
@@ -242,41 +214,23 @@ function formatTokenCount(tokens: number): string {
   return String(Math.round(tokens));
 }
 
-/** First-token latency: sub-second reads better in ms, later in seconds. */
 function formatTtft(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const seconds = ms / 1000;
   return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
 }
 
-/** Generation speed: keep one decimal, drop it once it stops mattering. */
 function formatTps(tps: number): string {
   return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
-// Fixed panel ratios (drag-resize removed). Center column takes the remainder.
 const LEFT_PANEL_RATIO = 0.18;
 const RIGHT_PANEL_RATIO = 0.32;
 
-// Bottom terminal panel geometry. The chat card keeps a minimum height so
-// dragging the terminal taller can never squeeze the chat (input box + a
-// couple of messages) out of view.
 const TERMINAL_HEIGHT_KEY = "pi-terminal-panel-height";
 const MIN_TERMINAL_HEIGHT = 80;
 const MIN_CHAT_HEIGHT = 240;
 
-// True while settings haven't been fetched (or the fetch failed).
-// Until then, all right-bar buttons render as visible — the conservative
-// default that matches the on-disk default config. (The helper itself
-// lives in lib/config so SettingsModal can reuse it.)
-
-// Walk the entry tree starting at `entryId` and return the entry id of the
-// deepest leaf reachable from it. A leaf is any entry whose `children` list
-// is empty. If `entryId` isn't found in the tree we return null so the
-// caller can fall back to the original id. This is what lets us map "click
-// on this card" to "switch to the END of that card's branch" — we never
-// stop the navigation at an ancestor card just because the user happened
-// to click higher up in the tree.
 function findDeepestLeafEntryId(
   entryId: string,
   roots: SessionTreeNode[],
@@ -295,7 +249,6 @@ function findDeepestLeafEntryId(
     const node = stack.pop()!;
     deepest = node;
     if (node.children.length > 0) {
-      // Push in reverse so the leftmost branch is popped first.
       for (let i = node.children.length - 1; i >= 0; i--) {
         stack.push(node.children[i]);
       }
@@ -304,22 +257,15 @@ function findDeepestLeafEntryId(
   return deepest.entry.id;
 }
 
-// Color palette for AGENTS.md segments. Loops if there are more files than colors.
 const AGENTS_SEGMENT_COLORS = [
-  "#3b82f6", // blue
-  "#a855f7", // purple
-  "#ec4899", // pink
-  "#f59e0b", // amber
-  "#10b981", // emerald
-  "#06b6d4", // cyan
+  "#3b82f6",
+  "#a855f7",
+  "#ec4899",
+  "#f59e0b",
+  "#10b981",
+  "#06b6d4",
 ];
 
-/** Combined highlighter for the base prompt body: the skill `<name>…</name>`
- *  tags plus the first line of pi's documentation section. The tool list and
- *  the rules lost their headings when pi moved to tagged sections (`<tools>` /
- *  `<rules>`), and the tags themselves are stripped before rendering. Matched
- *  runs get an accent text colour; everything else is returned verbatim as raw
- *  strings so pre-wrap whitespace is kept. */
 const BASE_PROMPT_HIGHLIGHT_RE =
   /<name>[\s\S]*?<\/name>|Pi documentation/g;
 
@@ -354,7 +300,6 @@ interface WorkspaceChatTabProps {
   scrollToEntryId: string | null;
   onScrollComplete: () => void;
   onNewSessionRequest: (cwdOverride?: string) => void;
-  /** Open an existing session in a workspace tab. */
   onOpenSession: (sessionId: string) => void;
   onCwdChange: (cwd: string) => void;
   onRenameCompleted: () => void;
@@ -427,10 +372,6 @@ function WorkspaceChatTabView({
   );
 }
 
-// Bottom status bar state. Nothing in here animates: the bar re-reads its
-// snapshot every few seconds, and the per-session rollup only changes when a
-// model call finishes, so a timer-driven clock or tip rotation has no place.
-
 const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.tab === next.tab &&
   previous.isActive === next.isActive &&
@@ -442,56 +383,32 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t, setLocale } = useI18n();
-  // Status-bar session cost follows the header's USD/CNY choice.
   const { formatCost } = useFormatCurrency();
   const theme = useTheme();
   const toast = useToast();
-  // Strip the browser default Tab focus-traversal app-wide so that Tab can
-  // be repurposed per-surface (see useDisableDefaultTab).
   useDisableDefaultTab();
-  // External links open in a new tab instead of replacing the app
-  // (see useExternalLinks; in the Electron shell they land in the default
-  // browser).
   useExternalLinks();
   const cm = useContextMenu();
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
   const { cwds: recentCwds } = useCwdList();
-  // ── Panel tab strip ────────────────────────────────────────────────
-  // The strip's whole state — the open tabs, the active tab and the panel's
-  // open state (closed / normal / expanded) — is owned by the pure
-  // `panelTabs` reducer in lib/shared; the shell keeps no panel state of its
-  // own. Every open / toggle / activate / close below dispatches an action,
-  // and the tab bar + right-bar column read the state directly.
   const [panelTabsState, dispatchPanelTabs] = useReducer(
     panelTabsReducer,
     undefined,
     createPanelTabsState,
   );
-  // Read through a ref where a callback must keep a stable identity yet act
-  // on the latest state (the keyboard toggle, the command palette).
   const panelTabsRef = useRef(panelTabsState);
   panelTabsRef.current = panelTabsState;
-  /** Today's name for the panel open state — the right column's width and
-   *  the panel bodies still read it directly. */
   const rightPanelState = panelTabsState.mode;
   const setPanelMode = useCallback((mode: PanelMode) => {
     dispatchPanelTabs({ type: "set_mode", mode });
   }, []);
-  // The tab bar's props, derived straight from the state machine. Labels
-  // resolve from `labelKey` inside TabBar on every render, so the open tabs
-  // follow a locale switch instead of staying in the language they were
-  // opened in.
   const openTabs = panelTabsState.tabs;
   const activeFileTabId = panelTabsState.activeId;
   const activePanelTab = selectActiveTab(panelTabsState);
   const activeRightPanelKind = selectActiveKind(panelTabsState);
-  // Re-open counters carried by the tabs themselves: Git Diff refreshes off
-  // these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
 
-  // Fetch the recent-cwd list exactly once at app start (shared with the
-  // CwdPicker, which never refetches on open or remount).
   useEffect(() => {
     initCwdList();
   }, []);
@@ -508,10 +425,6 @@ export function AppShell() {
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
   const activeTab = getActiveSessionTab(workspace);
-  // The browser tab title (and, under the Electron shell, the native window
-  // title) tracks the active session so parallel windows are distinguishable.
-  // A draft tab has no session yet and falls back to the plain app name; the
-  // cleanup restores it when the shell unmounts (e.g. on the login route).
   const documentTitle = getDocumentTitleForTab(activeTab);
   useEffect(() => {
     document.title = documentTitle;
@@ -532,92 +445,54 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
-  // Text-selection toolbar scoped to the right side panel card (files /
-  // panels). Reuses the same translation / copy / quote affordances as the
-  // chat toolbar so selections inside the right panel can be acted on too.
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelSelection = useTextSelection(rightPanelRef);
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  // ── Models-config panel lifecycle ──
-  // The draft lives in a module store (the panel body unmounts on a tab
-  // switch), so the shell watches it here: the right-bar badge reads the dirty
-  // flag, and the draft is released when the tab closes so the next open reads
-  // disk again. Collapsing the panel / switching tabs keeps the tab, so the
-  // draft survives those.
   const modelsConfigDirty = useModelsConfigDirty();
   const modelsConfigTabOpen = selectTabByKind(panelTabsState, "modelsConfig") !== null;
   useEffect(() => {
     if (!modelsConfigTabOpen) releaseModelsConfigDraft();
   }, [modelsConfigTabOpen]);
-  // Same lifecycle for the skills cache: collapsing the panel / switching tabs
-  // keeps the tab and the cached list, closing the tab drops it so the next
-  // open reads disk again.
   const skillsInstalling = useSkillInstallRunning();
   const skillsTabOpen = selectTabByKind(panelTabsState, "skills") !== null;
   useEffect(() => {
     if (!skillsTabOpen) releaseSkillsState();
   }, [skillsTabOpen]);
-  // Same lifecycle for the scheduler list + draft: the task list is live data,
-  // so closing the tab drops it and the next open lands back on the list and
-  // re-reads freshly-run data. Collapsing the panel keeps the tab and the
-  // draft; a background poll keeps the running badge honest either way.
   const schedulerRunning = useSchedulerRunning();
   const schedulerTabOpen = selectTabByKind(panelTabsState, "scheduler") !== null;
   useEffect(() => {
     if (!schedulerTabOpen) releaseSchedulerState();
   }, [schedulerTabOpen]);
-  // The scheduler's poll tier follows whether its view is the active, open
-  // panel. The body stays mounted even while the panel is collapsed, so the
-  // shell — which knows both — is the one that reports it.
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
-  // Same lifecycle for the channels list: it is live data (statuses change), so
-  // closing the tab drops it and the next open lands back on the list and reads
-  // the live statuses. Collapsing the panel / switching tabs keeps the tab.
   const channelsTabOpen = selectTabByKind(panelTabsState, "channels") !== null;
   useEffect(() => {
     if (!channelsTabOpen) releaseChannelsState();
   }, [channelsTabOpen]);
-  // Same lifecycle for the MCP draft buckets: the tab is their lifetime, so
-  // closing it releases every cwd's draft (after the close guard was confirmed)
-  // and the next open re-reads disk. Collapsing / switching keeps the tab.
   const mcpDirty = useMcpDirty();
   const mcpTabOpen = selectTabByKind(panelTabsState, "mcp") !== null;
   useEffect(() => {
     if (!mcpTabOpen) releaseMcpState();
   }, [mcpTabOpen]);
-  // New sessions must pick up a just-saved default model. The refresh signal is
-  // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
 
   useEffect(() => {
     setActivePermissionSession(selectedSession?.id ?? null);
   }, [selectedSession?.id, setActivePermissionSession]);
 
-  // ── Command palette: agent controls bridge ──
-  // ChatWindow registers these on mount via the sessionUiStore (null when
-  // no session is mounted).
   const agentControls = useAgentControls();
 
   const openPalette = useCallback(() => {
-    // The palette is the top-level modal — opening it closes every other
-    // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setSettingsConfigOpen(false);
     setPaletteOpen(true);
   }, []);
   const closeTopPanel = useCallback(() => {}, []);
 
-  // Session-level UI state (branch tree, system prompt, stats, context usage)
-  // is owned by each tab controller. Only the active controller projects its
-  // snapshot into this module-level bridge for the chat footer/right panels.
   const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
-  // Tools are cached per formal session. Activating an already-open tab only
-  // reads this map; it never sends a new runtime request just because focus
-  // moved between tabs.
   const [toolsBySession, setToolsBySession] = useState<Record<string, ToolInfo[]>>({});
   const toolsFetchedRef = useRef<Set<string>>(new Set());
   const tools = selectedSession ? toolsBySession[selectedSession.id] ?? [] : [];
@@ -640,8 +515,6 @@ export function AppShell() {
     }
   }, [workspace.tabOrder, workspace.tabs, fetchTools]);
 
-  // Favorites — global list of session IDs, shared between the sidebar indicator
-  // and the right-panel CollectionPanel so the two views stay in sync.
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   useEffect(() => {
     fetch("/api/favorites")
@@ -670,7 +543,6 @@ export function AppShell() {
     }
   }, [favoriteIds, t, toast]);
 
-  // Panel widths are derived from the fixed ratios above.
   const leftWidth = `${LEFT_PANEL_RATIO * 100}%`;
   const rightWidth = `${RIGHT_PANEL_RATIO * 100}%`;
 
@@ -679,27 +551,18 @@ export function AppShell() {
     return chatInputRefs.current.get(activeTabId)?.current ?? null;
   }, [activeTabId]);
 
-  // Quote from the right panel inserts a markdown blockquote into the
-  // active tab's chat input, matching the chat toolbar's behaviour.
   const handleRightPanelQuote = useCallback((text: string) => {
     getActiveChatInput()?.insertText(`> ${text}\n\n`);
   }, [getActiveChatInput]);
 
   const handleAtMention = useCallback((filePath: string) => {
-    // Insert a cwd-relative path (no code-block backticks) so it reads as
-    // plain text in chat. Falls back to the absolute path when no cwd is
-    // active yet, e.g. before the user has picked a working directory.
     const cwd = selectedSession?.cwd ?? newSessionCwd;
     const displayPath = cwd ? getRelativeFilePath(filePath, cwd) : filePath;
     getActiveChatInput()?.insertText(displayPath);
   }, [getActiveChatInput, selectedSession?.cwd, newSessionCwd]);
 
-  // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
 
-  // The cwd picker belongs to the active tab. Picking a different project
-  // while viewing a formal session opens (or reuses) the single draft instead
-  // of destroying the formal tab and its live controller.
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd || !activeTabId) return;
     if (activeTab?.kind === "draft") {
@@ -720,10 +583,6 @@ export function AppShell() {
     closeTopPanel();
   }, [activeTab, activeTabId, closeTopPanel]);
 
-  // First entry (no session in URL, nothing selected): land directly on the
-  // new-session page with the most recently used cwd pre-picked, so typing
-  // works immediately without a placeholder detour. If there are no projects
-  // yet the CwdPicker shows "Select project..." and the user creates one.
   useEffect(() => {
     if (!initialSessionRestored) return;
     const draft = workspace.tabOrder
@@ -748,11 +607,8 @@ export function AppShell() {
     }
     void fetchTools(session.id);
     closeTopPanel();
-    // URL synchronization is centralized below and uses replace, so opening a
-    // background/existing tab never creates a browser-history entry by itself.
   }, [closeTopPanel, fetchTools]);
 
-  // Command palette: convert search result to SessionInfo and open it
   const handleSelectSearchResult = useCallback((result: SessionSearchResult) => {
     const sessionInfo: SessionInfo = {
       path: "",
@@ -783,38 +639,24 @@ export function AppShell() {
     closeTopPanel();
   }, [closeTopPanel]);
 
-  // Sign out: clears the auth cookie server-side then hard-navigates; the
-  // login screen (rendered by the proxy redirect) appears immediately.
   const handleLogout = useCallback(() => {
     void fetch("/api/auth/session/logout", { method: "POST" })
       .catch(() => undefined)
       .finally(() => { window.location.href = "/login"; });
   }, []);
 
-  // Called when /new slash command is triggered. Pass a `cwdOverride` to
-  // pick a non-active cwd (e.g. the per-cwd "+" button in the sidebar)
-  // — otherwise we reuse the currently selected session's cwd, falling
-  // back to the in-flight new-session cwd.
   const handleSlashNew = useCallback((cwdOverride?: string) => {
     const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd;
     if (!cwd) return;
     handleNewSession("draft", cwd);
   }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
 
-  // A draft upgrades in place when POST /api/agent/new returns. The tab id is
-  // supplied by WorkspaceChatTab, so no second controller or duplicate tab is
-  // created for the newly formal session.
   const handleSessionCreated = useCallback((tabId: string, session: SessionInfo) => {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
     void fetchTools(session.id);
   }, [fetchTools]);
 
-  // Called by the scheduler panel's run-history "Open session" — routes
-  // through the same de-duplicating open path as the sidebar, without
-  // collapsing the panel (the run history stays on screen next to it).
   const handleOpenScheduledSession = useCallback((sessionId: string) => {
-    // Switch immediately; the tab controller loads the session payload in the
-    // background and reports the real metadata once it arrives.
     dispatchWorkspace({ type: "open_session_by_id", sessionId });
     closeTopPanel();
   }, [closeTopPanel]);
@@ -826,9 +668,6 @@ export function AppShell() {
     }
   }, []);
 
-  // New sessions become listable only after pi persists the first assistant
-  // message (lazy .jsonl creation), so refresh at that moment — not at
-  // session creation, when the file does not exist yet.
   const handleFirstAssistantReady = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
@@ -856,8 +695,6 @@ export function AppShell() {
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
     dispatchWorkspace({ type: "close_session", sessionId });
-    // The session is gone from disk: its pending confirmation can no longer be
-    // answered, so its sidebar dot must go with it.
     removeSessionPermissionRequests(sessionId);
     closeTopPanel();
   }, [closeTopPanel, removeSessionPermissionRequests]);
@@ -940,11 +777,6 @@ export function AppShell() {
     else chatInputRefs.current.delete(tabId);
   }, []);
 
-  // Per-tab reload counters. Each tab keeps its controller mounted across
-  // activation changes so SSE + scroll survive tab switches; bumping a tab's
-  // counter folds into WorkspaceChatTab's `key`, which forces React to unmount
-  // and remount that controller — clearing all in-memory state and reloading
-  // the session from disk via `useAgentSession`'s mount effect.
   const [reloadCounters, setReloadCounters] = useState<Record<string, number>>({});
   const handleReloadSessionTab = useCallback((tabId: string) => {
     const tab = workspaceRef.current.tabs[tabId];
@@ -953,9 +785,6 @@ export function AppShell() {
     toast.show({ kind: "info", message: t("Refreshed") });
   }, [t, toast]);
 
-  // Only the active tab is written to the URL. `replace` keeps tab switching
-  // out of browser back/forward history, while a refresh still restores the
-  // one session named by the URL.
   useEffect(() => {
     if (!initialSessionRestored) return;
     const sessionId = activeTab?.sessionId ?? null;
@@ -969,15 +798,10 @@ export function AppShell() {
     dispatchPanelTabs({ type: "open_file", path: filePath, label: fileName });
   }, []);
 
-  // The single panel entry point. Every panel view is opened through this
-  // one call: tab id, default open state and session binding all come from
-  // the panel registry, and the toggle rule (clicking the active view again
-  // collapses the panel) lives in the reducer.
   const handleTogglePanel = useCallback((kind: PanelViewKind) => {
     dispatchPanelTabs({ type: "toggle", kind });
   }, []);
 
-  // Global keyboard shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -986,7 +810,6 @@ export function AppShell() {
         active instanceof HTMLInputElement ||
         active instanceof HTMLTextAreaElement ||
         (active instanceof HTMLElement && active.isContentEditable);
-      // Ctrl+B — toggle left sidebar (skipped when an editor is focused)
       if (mod && e.key === "b" && !e.altKey) {
         if (!isEditable) {
           e.preventDefault();
@@ -994,7 +817,6 @@ export function AppShell() {
         }
         return;
       }
-      // Ctrl+Alt+B — toggle right sidebar
       if (mod && e.altKey && e.key === "b") {
         e.preventDefault();
         dispatchPanelTabs({
@@ -1003,11 +825,6 @@ export function AppShell() {
         });
         return;
       }
-      // Ctrl+K — command palette. Fires regardless of focus (matches the
-      // VS Code / Slack / GitHub convention): users expect ⌘K to open the
-      // global search bar even while typing in the chat input or a rich-text
-      // editor. Ctrl+B keeps its isEditable guard so it doesn't hijack the
-      // text-editor "bold" shortcut.
       if (mod && e.key === "k") {
         e.preventDefault();
         if (paletteOpen) {
@@ -1017,7 +834,6 @@ export function AppShell() {
         }
         return;
       }
-      // Space — focus chat input when not already focused.
       if (
         e.key === " " &&
         !e.ctrlKey && !e.metaKey && !e.altKey &&
@@ -1034,13 +850,6 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, [paletteOpen, openPalette, getActiveChatInput]);
 
-  // Click on a card in the conversation-tree panel. We always resolve the
-  // clicked card to the deepest leaf entry in its subtree, so the chat
-  // jumps to the *end* of that branch rather than stopping at an ancestor
-  // card. While the agent is busy with this turn (which includes tool
-  // calls between LLM turns, not just streaming) we drop the click entirely
-  // — the card is also visually disabled at the source, but we double-check
-  // here so any non-mouse trigger (keyboard, programmatic) is also blocked.
   const handleConversationTreeCardClick = useCallback((cardId: string) => {
     if (agentRunning) return;
     const targetLeafId = findDeepestLeafEntryId(cardId, branchTree) ?? cardId;
@@ -1049,27 +858,10 @@ export function AppShell() {
     }
   }, [agentRunning, branchActiveLeafId, branchTree, handleBranchLeafChange]);
 
-  // Right-bar tab buttons toggle the panel only when their own tab is both
-  // active and visible. Opening through other entry points keeps its existing
-  // "open this tab" semantics.
-  // GitPanel widens the right panel to "expanded"
-  // when the user switches it into Log view, so the commit history gets
-  // the full column. Stable callback: the GitPanel effect keys on it.
   const handleExpandGitPanel = useCallback(() => {
     setPanelMode("expanded");
   }, [setPanelMode]);
 
-  // The panel close guards (pure, in lib/shared/models-config-close,
-  // lib/shared/skills-close, lib/shared/channels-close and lib/shared/mcp-close).
-  // Closing a panel tab can lose panel-owned state: models config an unsaved
-  // draft or a running subscription authorization, skills an install still
-  // streaming, channels a live scan login, MCP an unsaved draft in any cwd.
-  // Every close path that can drop one of those tabs asks through here — the
-  // single × and the batch closes alike, so "Close other tabs" cannot swallow a
-  // draft, a login or a running install either. Every guard is asked before any
-  // side effect runs: cancelling the second prompt must not leave the first
-  // guard's cancellation behind on a tab that stays open. Actually closing the
-  // tab is what releases the module store (the shell's lifecycle effects).
   const confirmDropPanelTabs = useCallback(
     async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
       const confirmed: PanelViewKind[] = [];
@@ -1098,9 +890,6 @@ export function AppShell() {
     dispatchPanelTabs({ type: "close", id: tabId });
   }, [panelTabsState, confirmDropPanelTabs]);
 
-  // Close every tab strictly to the left of `tabId` (the right-clicked one).
-  // If the active tab is being closed, fall back to `tabId` (still open).
-  // Tabs are stored newest-first, so "left" is the slice before the index.
   const handleCloseLeftTabs = useCallback(async (tabId: string) => {
     const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
     const drops = index > 0 ? panelTabsState.tabs.slice(0, index) : [];
@@ -1108,8 +897,6 @@ export function AppShell() {
     dispatchPanelTabs({ type: "close_left", id: tabId });
   }, [panelTabsState, confirmDropPanelTabs]);
 
-  // Close every tab strictly to the right of `tabId`. If the active tab is
-  // being closed, fall back to `tabId`.
   const handleCloseRightTabs = useCallback(async (tabId: string) => {
     const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
     const drops = panelTabsState.tabs.slice(index + 1);
@@ -1117,16 +904,12 @@ export function AppShell() {
     dispatchPanelTabs({ type: "close_right", id: tabId });
   }, [panelTabsState, confirmDropPanelTabs]);
 
-  // Close every tab other than `tabId`. The right-clicked tab is preserved
-  // (and becomes the active one if it wasn't already), so the panel never
-  // collapses from this action.
   const handleCloseOtherTabs = useCallback(async (tabId: string) => {
     const drops = panelTabsState.tabs.filter((tab) => tab.id !== tabId);
     if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
     dispatchPanelTabs({ type: "close_others", id: tabId });
   }, [panelTabsState, confirmDropPanelTabs]);
 
-  // Build the per-tab right-click menu. Single tab → no batch actions shown.
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
     const idx = openTabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
@@ -1142,15 +925,10 @@ export function AppShell() {
     cm.open({ x, y, items, triggerElement });
   }, [openTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
 
-  // A deleted path may be a directory: the cascade rule (close every file tab
-  // at or under it) lives in the reducer, so the shell only forwards the path.
   const handleFileDeleted = useCallback((filePath: string) => {
     dispatchPanelTabs({ type: "close_files_under", path: filePath });
   }, []);
 
-  // Show chat after the initial URL restore is done (or immediately when no
-  // session parameter was supplied). A draft tab exists even before a cwd is
-  // selected, so the welcome/input view can render without a placeholder.
   const showChat = initialSessionRestored && workspace.tabOrder.length > 0;
 
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -1163,7 +941,6 @@ export function AppShell() {
       const maxH = Math.max(MIN_TERMINAL_HEIGHT, window.innerHeight - 60 - MIN_CHAT_HEIGHT);
       if (Number.isFinite(v) && v >= MIN_TERMINAL_HEIGHT && v <= maxH) return v;
     } catch {
-      // ignore
     }
     return 200;
   });
@@ -1172,7 +949,6 @@ export function AppShell() {
     try {
       localStorage.setItem(TERMINAL_HEIGHT_KEY, String(terminalHeight));
     } catch {
-      // ignore
     }
   }, [terminalHeight]);
 
@@ -1180,18 +956,10 @@ export function AppShell() {
     setTerminalOpen((v) => !v);
   }, []);
 
-  // Fullscreen only has meaning while the terminal is open. Reset it when
-  // the panel is closed from the right bar or the keyboard shortcut.
   useEffect(() => {
     if (!terminalOpen) setTerminalFullscreen(false);
   }, [terminalOpen]);
 
-  // ── Right-bar button column context ──
-  // Built late because it depends on toggleTerminal, which is declared
-  // just above. The descriptor list itself is stable so the column only
-  // re-renders on actual state change, not on every callback-identity
-  // mutation. ctx is rebuilt every render anyway — RightBarColumn memoizes
-  // what matters (cfg.order → ordered ids).
   const selectedSessionId = selectedSession?.id ?? null;
   const selectedCwd = selectedSession?.cwd ?? newSessionCwd ?? null;
   const [statusBar, setStatusBar] = useState<{
@@ -1224,7 +992,6 @@ export function AppShell() {
         const data = await response.json();
         if (!cancelled) setStatusBar(data);
       } catch {
-        // The status bar is informational; retain the last known values.
       }
     };
     void refresh();
@@ -1249,7 +1016,6 @@ export function AppShell() {
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
     togglePanel: handleTogglePanel,
   };
-  // Everything the panel bodies read, in one object — see PANEL_BODY_BY_KIND.
   const panelBodyCtx: PanelBodyCtx = {
     rightPanelState,
     selectedSessionId,
@@ -1268,13 +1034,11 @@ export function AppShell() {
     onExpandGitPanel: handleExpandGitPanel,
     openSessionById: handleOpenScheduledSession,
     onNewSession: handleSlashNew,
-    // Escape from the models-config list closes its tab the same way its × does.
     onClosePanelTab: () => {
       if (activeFileTabId) handleCloseFileTab(activeFileTabId);
     },
   };
 
-  // Ctrl+` toggles the terminal panel (VS Code muscle memory).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key === "`") {
@@ -1286,7 +1050,6 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Drag the bottom panel's top edge to resize (clamped to min/max).
   const startTerminalDrag = useCallback(
     (startY: number) => {
       const startH = terminalHeight;
@@ -1307,8 +1070,6 @@ export function AppShell() {
     [terminalHeight],
   );
 
-  // New terminals default to the active session's cwd; without a session,
-  // fall back to the last-used directory.
   const terminalDefaultCwd = useMemo(() => {
     const sessionCwd = selectedSession?.cwd ?? newSessionCwd;
     if (sessionCwd) return sessionCwd;
@@ -1319,25 +1080,15 @@ export function AppShell() {
     }
   }, [selectedSession, newSessionCwd]);
 
-  // When the user hides a button whose panel is currently active, the right
-  // panel would otherwise sit open with no toggle in the bar. Auto-close the
-  // panel — the tab itself stays in the tab strip so re-enabling the button
-  // and clicking it again reopens the same view. "file" kind has no
-  // configurable button behind it so the lookup returns undefined and the
-  // panel stays open.
   useEffect(() => {
     if (rightPanelState === "closed") return;
     if (activeRightPanelKind === null) return;
     const id = panelButtonIdForKind(activeRightPanelKind);
-    if (id === null) return; // "file" kind — no configurable button
+    if (id === null) return;
     if (isRightBarButtonVisible(rightSideBarConfig, id)) return;
     setPanelMode("closed");
   }, [rightPanelState, activeRightPanelKind, rightSideBarConfig, setPanelMode]);
 
-  // ── Command palette context + command list ──
-  // Re-built whenever any input changes (cheap; buildCommands is O(N) where
-  // N is the number of declared commands). AppShell is the only place that
-  // knows about every handler the palette may call.
   const commandContext = useMemo<CommandContext>(() => ({
     setTheme: theme.setPreset,
     setLocale,
@@ -1365,22 +1116,6 @@ export function AppShell() {
     [commandContext, t],
   );
 
-  // ── Column building blocks ─────────────────────────────────────
-  // The "chat card" (SessionTabBar + the active controller) and the
-  // "panel card" (file/panel tab bar + content body) are each built
-  // once here so the JSX returned below stays flat: the chat card is
-  // the center column, the panel card is the right column. Terminal
-  // always lives in the center column, under the chat card.
-  //
-  // Two leading-control buttons decorate the column, not the card:
-  //
-  //   • `sidebarToggleLeading` sits at the *center column*'s top-left
-  //     corner — it hides/shows the global left sidebar, so it is
-  //     rendered as the SessionTabBar's `leadingControl`.
-  //
-  //   • `expandPanelLeading` sits at the *right column*'s top-left
-  //     corner — it widens/narrows the right column, so it lives on
-  //     the panel card's tab bar.
   const sidebarToggleLeading = (
     <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
       <button
@@ -1409,9 +1144,6 @@ export function AppShell() {
     </Tooltip>
   );
 
-  // The expand button is panel chrome: only shown once the panel is
-  // open *and* has tabs to show, so an empty panel keeps its leading
-  // slot empty. The rule lives in the state machine.
   const showExpandPanelLeading = selectCanExpand(panelTabsState);
 
   const expandPanelLeading = showExpandPanelLeading ? (
@@ -1442,8 +1174,6 @@ export function AppShell() {
     </Tooltip>
   ) : null;
 
-  // Terminal fullscreen hides the center column's chat card so the xterm
-  // gets the whole work area; the right column's panel card is untouched.
   const chatHiddenByTerminalFullscreen = terminalFullscreen;
   const chatCard = (
     <div
@@ -1471,9 +1201,6 @@ export function AppShell() {
         />
       )}
 
-      {/* Chat content. Every opened tab keeps its controller mounted so its
-          messages, input draft, scroll position and SSE survive activation
-          changes. Only the active controller is visible/projected. */}
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
         {showChat && workspace.tabOrder.map((tabId) => {
           const tab = workspace.tabs[tabId];
@@ -1511,14 +1238,8 @@ export function AppShell() {
     </div>
   );
 
-  // Panel card — the right-side workspace that hosts file viewers,
-  // tool lists, etc. Expanding it pushes the center column (chat +
-  // terminal) off-screen so the right column takes the full width.
   const panelCard = (
     <>
-      {/* Right panel tab bar — mirrors the SessionTabBar chrome (one
-          leading-control slot on the left, tabs filling the rest). The
-          leading slot holds the right column's expand toggle. */}
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
         {expandPanelLeading && (
           <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
@@ -1540,10 +1261,6 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* File content — one lookup by kind (`PANEL_BODY_BY_KIND`), plus the
-          file preview, which is not a panel view and takes its path from the
-          tab. Pulled into a fragment-level child so the surrounding column
-          handles flex / overflow without an extra wrapper div. */}
       <div ref={rightPanelRef} style={{ flex: 1, overflow: "hidden" }}>
         {activePanelTab === null ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
@@ -1593,7 +1310,6 @@ export function AppShell() {
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-      {/* Mobile overlay backdrop */}
       <div
         className="sidebar-overlay-backdrop"
         onClick={() => setSidebarOpen(false)}
@@ -1608,7 +1324,6 @@ export function AppShell() {
         }}
       />
 
-      {/* Left sidebar */}
       <div
         className={`sidebar-container${sidebarOpen ? "" : " sidebar-closed"}`}
         style={{
@@ -1625,22 +1340,9 @@ export function AppShell() {
           {sidebarContent}
       </div>
 
-      {/* Drag handle removed — sidebar width is fixed. */}
-
-      {/* Center column: chat card + terminal card. The terminal stays
-          anchored to this column — it is part of the "work area", not the
-          chat region. flex-grow still animates the squeeze when the right
-          panel goes expanded: center grows 1->0 while the right panel
-          grows 0->1, so the takeover slides instead of snapping. */}
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
         {chatCard}
 
-        {/* Drag handle sitting in the gap between the work card and the
-            terminal card. Always mounted so the running pty/WS and layout
-            survive collapse, but height: 0 when closed so it neither
-            overlaps the work card (which would push it past the parent's
-            overflow:hidden and clip its bottom border) nor occupies any
-            space. Transitions alongside the gap and terminal card. */}
         <div
           onMouseDown={(e) => {
             e.preventDefault();
@@ -1658,10 +1360,6 @@ export function AppShell() {
           }}
         />
 
-        {/* Terminal card — always mounted so the running pty/WS survive
-            collapse. Height animates between terminalHeight (open) and 0
-            (closed) via a flex-basis transition; border/radius collapse
-            with the height so there's no orphan frame when hidden. */}
         <div
           style={{
             flexShrink: terminalFullscreen ? 1 : 0,
@@ -1690,9 +1388,6 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Right column: the file / panel card. Width animates via
-          rightPanelState so expanding it shrinks the center column and
-          makes room. */}
       <div
         className={`right-panel-container right-panel-${rightPanelState}`}
         style={{
@@ -1709,8 +1404,6 @@ export function AppShell() {
 
       </div>
 
-      {/* Bottom status bar: spans the sidebar, chat, and right panel, but not
-          the separate right-side button column. */}
       <div
         style={{
           flexShrink: 0,
@@ -1725,8 +1418,6 @@ export function AppShell() {
           fontSize: 11,
           lineHeight: 1,
           marginTop: 4,
-          // The usage group is wider than a narrow window; clipping beats
-          // letting it push the right-aligned "Today" summary out of view.
           overflow: "hidden",
         }}
       >
@@ -1799,8 +1490,6 @@ export function AppShell() {
         <span style={{ marginLeft: 10 }}>{t("Channels")}: {statusBar.channels}</span>
         {statusBar.session && (() => {
           const usage = statusBar.session;
-          // A session with nothing recorded yet shows no metric group at all —
-          // seven zeros would read like measured data.
           if (
             usage.totalTokens === 0 &&
             usage.costTotal === 0 &&
@@ -1835,9 +1524,6 @@ export function AppShell() {
           ];
           return items.map((item) => (
             <Tooltip key={item.key} content={item.title}>
-              {/* No own color/weight/size: the metric text inherits the bar's
-                  plain text style so it reads as one line, not as a new
-                  emphasis layer. */}
               <span style={{ marginLeft: 10, whiteSpace: "nowrap" }}>
                 {item.label} {item.value}
               </span>
@@ -1850,9 +1536,6 @@ export function AppShell() {
       </div>
       </div>
 
-      {/* Right button bar — every toggle is driven by the
-          components/rightBar descriptor registry now. Adding a new button
-          is a one-line append to RIGHT_BAR_DESCRIPTORS. */}
       <RightBarColumn cfg={rightSideBarConfig} ctx={rightBarCtx} />
     </div>
 
@@ -1878,9 +1561,6 @@ export function AppShell() {
       onQuote={handleRightPanelQuote}
       onHide={rightPanelSelection.hide}
     />
-    {/* Single global translate bubble — mounted here (not inside ChatWindow)
-        so it also works over fullscreen dialogs. It is
-        position:fixed + z-index 8000, above the modal backdrop (1000). */}
     <TranslateBubble />
     </>
   );
@@ -1891,8 +1571,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
   const scrollRef = useRef<HTMLDivElement>(null);
   const [jumpOpen, setJumpOpen] = useState(false);
   const [hoveredJumpId, setHoveredJumpId] = useState<string | null>(null);
-  // Delayed close so the menu doesn't vanish mid-traversal from the trigger
-  // button across the small gap into the menu (150ms grace, cancelled on re-entry).
   const jumpCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelJumpClose = useCallback(() => {
     if (jumpCloseTimerRef.current !== null) {
@@ -1924,8 +1602,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
     scrollRef.current?.querySelector<HTMLElement>(`[data-context-anchor="${id}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
-  // Fine-grained anchors inside the base prompt (Available tools / Guidelines /
-  // Pi documentation / Append) — only shown when the heading is actually present.
   const baseBlocks = useMemo(
     () => segments.flatMap((seg) => (seg.kind === "base" ? splitBaseBlocks(seg.text) : [])),
     [segments],
@@ -1941,7 +1617,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
     if (present.has("skills")) items.push({ id: "skills", label: t("Skills"), color: "var(--accent)" });
     return items;
   }, [systemPrompt, baseBlocks, t]);
-  // Jump menu groups: base prompt sections, per-AGENTS.md instructions, tools.
   const jumpGroups = useMemo(
     () =>
       [
@@ -1959,12 +1634,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
 
   return (
     <div ref={scrollRef} style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-      {/* Floating quick-jump button (top-right). The sticky wrapper is
-          height:0 so it overlays the scroll content without reserving a row,
-          and the button + menu live in an absolutely-positioned shell. The
-          shell is a DOM child of the wrapper, so hovering the menu keeps the
-          wrapper (and thus the open state) alive; closing is deferred 150ms
-          so crossing the 2px gap never collapses the menu prematurely. */}
       <div style={{ position: "sticky", top: 0, height: 0, zIndex: 3 }} onMouseLeave={scheduleJumpClose}>
         <div style={{ position: "absolute", top: 8, right: 8 }} onMouseEnter={() => { cancelJumpClose(); setJumpOpen(true); }}>
           <button
@@ -2018,8 +1687,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
               {segments.map((seg, idx) => {
                 if (seg.kind === "base") {
-                  // Cut the base blob at its known headings so quick-jump can
-                  // target per-section anchors instead of the whole block.
                   const blocks = splitBaseBlocks(seg.text);
                   return (
                     <span key={`base-${idx}`}>
@@ -2049,9 +1716,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
         ) : (
           <div>
             {sortedTools.map((tool) => {
-              // `active` comes from the server's `get_tools` (per-session
-              // `getActiveToolNames()`); the catalog lists every available tool
-              // and greys out the ones this session didn't enable.
               const enabled = tool.active === true;
               return (
                 <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)", opacity: enabled ? 1 : 0.5 }}>

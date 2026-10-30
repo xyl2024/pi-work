@@ -7,10 +7,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/git/branches");
 
-// GET /api/git/branches?cwd=<path>
-// Returns the repo's head branches (most recently committed first) for the
-// GitPanel header dropdown. Same cwd-trust rationale as /api/git: session
-// cwd already validated at creation, response carries only branch names.
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");

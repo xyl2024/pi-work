@@ -36,14 +36,6 @@ import {
   type SubagentTaskConfigSnapshot,
 } from "@/lib/shared/subagent";
 
-/**
- * `subagent` action `continue`: every continued delegation is a new task in an
- * existing child session, reusing the configuration frozen when that session
- * was created. Driven through the tool's external interface with the real task
- * manager, a scripted turn adapter and a temp data root, so the assertions are
- * about what the parent reads and what the persisted history/management says.
- */
-
 let dir: string;
 
 function resetGlobals(): void {
@@ -126,7 +118,6 @@ const snapshot: SubagentTaskConfigSnapshot = {
   timeoutMs: 12_345,
 };
 
-/** Persist one finished task for an existing child session. */
 function seedFinishedTask(input: {
   parent: string;
   child?: string;
@@ -170,8 +161,6 @@ async function spawnTask(parentSessionId: string, description = "first task"): P
   return (spawned.details as { taskId: string }).taskId;
 }
 
-// ============================================================================
-
 describe("subagent tool — continue action", () => {
   it("starts a new task in the same child session and keeps the earlier task intact", async () => {
     const { runner, manager } = setup("parent-continue");
@@ -205,8 +194,6 @@ describe("subagent tool — continue action", () => {
     expect(details.subagentName).toBe("codebase_explorer");
     expect(details.status).not.toBe("completed");
 
-    // A second turn runs in the same child session; its runtime limit is the
-    // snapshot's and the model/thinking are re-applied from that snapshot.
     expect(runner.turns).toHaveLength(2);
     expect(runner.turns[1].spec.session).toEqual({ kind: "reuse", sessionId: childSessionId });
     expect(runner.turns[1].spec.timeoutMs).toBe(DEFAULT_SUBAGENT_TIMEOUT_MS);
@@ -247,8 +234,6 @@ describe("subagent tool — continue action", () => {
     );
     expect(continued.isError).toBeUndefined();
 
-    // No profile lookup happened: `snapshot` names a model/limit the live
-    // profile store never contained.
     expect(runner.turns[0].spec.timeoutMs).toBe(12_345);
     expect(runner.turns[0].spec.model).toEqual({ provider: "p", modelId: "m-snapshot" });
     expect(runner.turns[0].spec.thinkingLevel).toBe("high");
@@ -279,7 +264,6 @@ describe("subagent tool — continue action", () => {
     expect(runner.turns).toHaveLength(1);
     expect(listSubagentTasks("parent-busy")).toHaveLength(1);
 
-    // The running task is untouched: same status, still alive.
     expect(manager.liveStatus("parent-busy", firstId)).toBe("running");
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
@@ -323,7 +307,6 @@ describe("subagent tool — continue action", () => {
       await runner.turns.at(-1)!.settle({ text: `after ${status}` });
       await manager.idle();
       expect(getSubagentTask("parent-terminal-continue", taskId)!.result).toBe(`after ${status}`);
-      // The seeded row keeps its own terminal state and output.
       expect(getSubagentTask("parent-terminal-continue", seeded.taskId)!.status).toBe(status);
     }
   });
@@ -347,8 +330,6 @@ describe("subagent tool — continue action", () => {
     expect(manager.liveStatus("parent-continue-wait", taskId)).not.toBeNull();
     await runner.turns[1].acquire();
 
-    // A shorter wait is honoured for a continued task too: it only ends the
-    // observation, the turn keeps running with its own runtime limit.
     const shortWait = run(
       { action: "wait", task_id: taskId, wait_ms: 500 },
       "parent-continue-wait",
@@ -434,7 +415,6 @@ describe("subagent tool — continue action", () => {
     await runner.turns[0].settle({ text: "one" });
     await manager.idle();
 
-    // A different deliberate request with identical content is a new task.
     const three = await run(
       {
         action: "continue",
@@ -446,8 +426,6 @@ describe("subagent tool — continue action", () => {
     );
     expect((three.details as { taskId: string }).taskId).not.toBe((one.details as { taskId: string }).taskId);
 
-    // A request id is scoped to its parent session: the same id elsewhere
-    // never returns the first parent's task.
     const foreign = await run(
       {
         action: "spawn",
@@ -460,9 +438,6 @@ describe("subagent tool — continue action", () => {
       "parent-other",
     );
     expect(foreign.isError).toBeUndefined();
-    // Task ids are counted per parent, so `parent-other` legitimately starts at
-    // the same short id; what matters is that its own row, not the first
-    // parent's task, was returned.
     expect((foreign.details as { taskId: string }).taskId).toBe("0001");
     expect(listSubagentTasks("parent-other")).toMatchObject([
       { taskId: "0001", parentSessionId: "parent-other", description: "other parent" },
@@ -486,7 +461,6 @@ describe("subagent tool — continue action", () => {
     await runner.turns[0].settle({ text: "done" });
     await manager.idle();
 
-    // Simulate a new process: a fresh manager over the same temp database.
     setSubagentTaskManagerForTests(null);
     const restarted = createScriptedRunner();
     setSubagentTaskManagerForTests(createSubagentTaskManager({
@@ -570,8 +544,6 @@ describe("subagent tool — continue action", () => {
     expect(missingSession.isError).toBe(true);
     expect(textOf(missingSession)).toContain("requires session_id");
 
-    // Request ids belong to one child session: reusing one for another session
-    // is refused instead of returning/steering the wrong child.
     const own = seedFinishedTask({ parent: "parent-owner", status: "completed" });
     const own2 = seedFinishedTask({ parent: "parent-owner", status: "completed" });
     const first = await run(
@@ -639,7 +611,6 @@ describe("continue busy states and dedupe edge cases", () => {
     expect(busyQueued.isError).toBe(true);
     expect(textOf(busyQueued)).toContain("busy");
 
-    // Release the slot: the queued continuation starts acquiring its session.
     await runner.turns[0].settle({ text: "blocker done" });
     await untilStarted(runner.turns, 2);
     expect(manager.get("parent-busy-states", targetTask)!.status).toBe("creating");
@@ -710,8 +681,6 @@ describe("continue busy states and dedupe edge cases", () => {
     expect((retried.details as { taskId: string }).taskId).toBe(firstId);
     expect(runner.turns).toHaveLength(1);
 
-    // Reusing the id for a different request is refused instead of returning an
-    // unrelated task.
     const mismatched = await run(
       {
         action: "spawn",
@@ -768,13 +737,11 @@ describe("continue busy states and dedupe edge cases", () => {
       const indexes = (db.prepare("PRAGMA index_list(subagent_tasks)").all() as Array<{ name: string }>)
         .map((index) => index.name);
       expect(indexes).toContain("idx_subagent_tasks_request");
-      // Existing rows stay readable and are simply not dedupe-able.
       expect(getSubagentTask("parent-legacy", "legacy-task")).toMatchObject({
         requestId: null,
         result: null,
         status: "completed",
       });
-      // Re-opening (the migration runs again) is idempotent.
       expect(getSubagentDb()).toBe(db);
     } finally {
       delete (globalThis as { __piSubagentsDb?: unknown }).__piSubagentsDb;

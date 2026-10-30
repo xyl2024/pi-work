@@ -26,19 +26,9 @@ import type { SessionEvent } from "@/lib/shared/session-events";
 import { recordCall, recordModelCall, summarize } from "@/lib/server/token-audit-store";
 import { GET } from "@/app/api/token-audit/calls/route";
 
-/**
- * Acceptance boundary for issues 01/02: a controlled model runtime drives the
- * real wrapper, facts land in a real temporary SQLite database, and the real
- * per-call route handler returns them. No provider, key or user directory is
- * touched. The file is process-internal, so it can run with
- * `PI_WORK_TEST_SKIP_INSTANCE=1` (the shared global setup otherwise starts the
- * isolated instance for every `tests/unit/**` file).
- */
-
 let dir: string;
 let dbCounter = 0;
 
-// Keep server logs out of the real `~/.pi-work/logs` directory.
 const originalLogFile = process.env.PI_WORK_LOG_FILE;
 process.env.PI_WORK_LOG_FILE = "off";
 
@@ -70,8 +60,6 @@ afterAll(() => {
   else process.env.PI_WORK_LOG_FILE = originalLogFile;
   rmSync(dir, { recursive: true, force: true });
 });
-
-// ── fixtures ──────────────────────────────────────────────────────────────
 
 const MODEL = { provider: "test-provider", id: "test-model", api: "test-api" } as const;
 
@@ -182,8 +170,6 @@ interface TokenCallBody {
 
 const USER_CONTEXT = { sessionId: "s1", source: "user" as const, cwd: "/tmp", sessionName: null };
 
-// ── deterministic formula sample ──────────────────────────────────────────
-
 describe("logical model call metrics", () => {
   it("derives TTFT, generation window and both TPS values (0/2000/6000/7000, 120 tokens)", async () => {
     const c = fakeClock();
@@ -220,7 +206,6 @@ describe("logical model call metrics", () => {
     expect(call.generationDurationMs).toBe(4000);
     expect(call.generationTps).toBe(30);
     expect(call.endToEndTps).toBeCloseTo(120 / 7, 10);
-    // The 1,000 ms tail after the last output is not part of the window.
     expect(call.durationMs).toBe(7000);
   });
 
@@ -239,7 +224,6 @@ describe("logical model call metrics", () => {
         c.advance(1500);
         stream.push(delta(firstType, firstType === "toolcall_delta" ? "{" : "think"));
         c.advance(500);
-        // A single space is still real output; we never trim.
         stream.push(delta("text_delta", " "));
         stream.push(done(assistantMessage()));
         await stream.result();
@@ -292,7 +276,6 @@ describe("logical model call metrics", () => {
       const { runtime } = metricsRuntime(c.clock);
       await runWithLlmAuditContext(USER_CONTEXT, async () => {
         const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
-        // SDK placeholder usage: all zero → treated as "not reported".
         stream.push(delta("text_delta", "hi"));
         c.advance(1000);
         stream.push(done(assistantMessage({ usage: usage(0, 0) })));
@@ -378,8 +361,6 @@ describe("logical model call metrics", () => {
   });
 });
 
-// ── production composition (getAuditModelRuntime) ─────────────────────────
-
 describe("audited runtime composition", () => {
   it("records a main-chat call through getAuditModelRuntime with source/purpose/session", async () => {
     const g = globalThis as { __piLlmAuditModelRuntime?: ModelRuntime };
@@ -415,8 +396,6 @@ describe("audited runtime composition", () => {
     expect(rows[0].endToEndTps).not.toBeNull();
   });
 });
-
-// ── lifecycle edge cases (issue 02) ────────────────────────────────────────
 
 function rowByUsage(rows: TokenCallBody[], outputTokens: number | null): TokenCallBody {
   const row = rows.find((r) => r.outputTokens === outputTokens);
@@ -626,7 +605,6 @@ describe("call lifecycle edge cases", () => {
       expect(rows[0].endToEndTps).toBeNull();
     }
     {
-      // No usage object at all: also "not reported", never zero.
       switchToTempDb();
       const c = fakeClock();
       const { runtime } = metricsRuntime(c.clock);
@@ -673,7 +651,7 @@ describe("call lifecycle edge cases", () => {
         const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
         mono = 1500;
         stream.push(delta("text_delta", "a"));
-        mono = 1400; // clock moves backwards: invalid interval, never faked
+        mono = 1400;
         stream.push(delta("text_delta", "b"));
         stream.push(done(assistantMessage()));
         await stream.result();
@@ -686,7 +664,6 @@ describe("call lifecycle edge cases", () => {
       expect(rows[0].endToEndTps).toBe(300);
     }
     {
-      // A negative whole-call duration is an invalid fact, not a TPS input.
       switchToTempDb();
       let mono = 1000;
       const clock = { now: () => mono, wallNow: () => 1_700_000_000_000 };
@@ -712,9 +689,6 @@ describe("call lifecycle edge cases", () => {
     const { runtime, streams } = metricsRuntime(c.clock);
     await runWithLlmAuditContext(USER_CONTEXT, async () => {
       const first = runtime.streamSimple(MODEL as never, { messages: [] }, {});
-      // pi-ai retries a failed provider request with backoff *before* pushing
-      // any event, so this wait is part of the same logical call: one record,
-      // with TTFT including the retry/backoff time.
       c.advance(1200);
       first.push(delta("text_delta", "ok"));
       c.advance(2000);
@@ -723,8 +697,6 @@ describe("call lifecycle edge cases", () => {
       first.push(done(assistantMessage({ usage: usage(50) })));
       await first.result();
 
-      // A later generation (e.g. after a tool or an agent-level retry) is a
-      // brand-new logical call with its own clock and id.
       const second = runtime.streamSimple(MODEL as never, { messages: [] }, {});
       second.push(delta("text_delta", "second"));
       c.advance(1000);
@@ -750,8 +722,6 @@ describe("call lifecycle edge cases", () => {
   it("keeps concurrent calls isolated when they start in the same millisecond and finish in reverse order", async () => {
     const c = fakeClock();
     const { runtime } = metricsRuntime(c.clock);
-    // Same session, provider, model and start timestamp: only per-call state
-    // and the generated callId can keep these two records apart.
     const model = { provider: "provider-a", id: "model-a", api: "api-a" } as const;
     const ctxA = { sessionId: "session-shared", source: "user" as const, cwd: "/tmp", sessionName: null, purpose: "chat" as const };
     const ctxB = { sessionId: "session-shared", source: "subagent" as const, cwd: "/tmp", sessionName: null, purpose: "compaction" as const };
@@ -851,7 +821,6 @@ describe("call lifecycle edge cases", () => {
       controller.abort();
       cancelled.push(errored(assistantMessage({ stopReason: "aborted" }), "aborted"));
       await expect(cancelled.result()).resolves.toMatchObject({ stopReason: "aborted" });
-      // The wrapper passes the caller's signal through untouched.
       expect(controller.signal.aborted).toBe(true);
       expect(receivedSignals[0]).toBeUndefined();
       expect(receivedSignals[1]).toBe(controller.signal);
@@ -868,7 +837,6 @@ describe("call lifecycle edge cases", () => {
     expect(Object.prototype.hasOwnProperty.call(stream, "push")).toBe(true);
     stream.push(done(assistantMessage()));
     expect(Object.prototype.hasOwnProperty.call(stream, "push")).toBe(false);
-    // A replayed terminal event cannot add a record either.
     stream.push(done(assistantMessage()));
     expect((await queryCalls()).total).toBe(1);
   });
@@ -891,14 +859,10 @@ describe("call lifecycle edge cases", () => {
       const value = row[key];
       expect(value === null || (typeof value === "number" && Number.isFinite(value))).toBe(true);
     }
-    // No display truncation: 120 tokens over a 3,000 ms generation window
-    // and a 7,000 ms end-to-end call.
     expect(row.generationTps).toBe(40);
     expect(row.endToEndTps).toBeCloseTo(120 / 7, 10);
   });
 });
-
-// ── billing compatibility, migration and query contract ───────────────────
 
 describe("billing compatibility and query contract", () => {
   it("returns one row per real call and does not double count the cost summary", async () => {
@@ -912,7 +876,6 @@ describe("billing compatibility and query contract", () => {
       stream.push(done(message));
       await stream.result();
     });
-    // The legacy billing hook writes on message_end, i.e. after the stream.
     recordCall({
       sessionId: "s1",
       messageId: String(message.timestamp),
@@ -960,7 +923,6 @@ describe("billing compatibility and query contract", () => {
       outputTokens: null,
       error: null,
     });
-    // The billing hook always writes NOT NULL zeros when usage was missing.
     recordCall({
       sessionId: "s1",
       messageId: "m-1",
@@ -1046,7 +1008,6 @@ describe("billing compatibility and query contract", () => {
     });
     expect(first.rows[0].callId).toMatch(/^token:\d+$/);
 
-    // Re-open (runs the schema again) and add a new call beside the old row.
     resetDbGlobals();
     recordModelCall({
       callId: "new-call",
@@ -1068,7 +1029,6 @@ describe("billing compatibility and query contract", () => {
 
     const second = await queryCalls();
     expect(second.total).toBe(2);
-    // Ordered by call start desc, stable id as tie-break.
     expect(second.rows[0].callId).toBe("new-call");
     expect(second.rows[1].sessionId).toBe("legacy-session");
     expect(second.rows[0].source).toBe("direct");
@@ -1149,14 +1109,6 @@ describe("billing compatibility and query contract", () => {
   });
 });
 
-// ── background call sources (issue 03) ────────────────────────────────────
-//
-// The highest feasible server-side factory: the real turn module drives a real
-// AgentSessionWrapper over a controlled inner session. That covers the wiring
-// production uses (source on the wrapper, purpose on the prompt command) while
-// the SDK stays scripted. Background entries — scheduler, subagent and channel
-// inbound — all reach this same seam; their adapters only choose source/purpose.
-
 interface BackgroundScriptContext {
   stream: () => AssistantMessageEventStream;
   advance: (ms: number) => void;
@@ -1185,8 +1137,6 @@ class BackgroundTurnSession implements TurnSession {
   async send(command: Record<string, unknown>, options?: TurnSendOptions): Promise<unknown> {
     const result = await this.wrapper.send(command, options);
     if (command.type === "prompt") {
-      // The wrapper's dispatch is fire-and-forget; the scripted model work has
-      // to finish before the turn can settle.
       await this.promptDone();
       for (const listener of [...this.listeners]) listener({ type: "agent_settled" });
     }
@@ -1198,7 +1148,6 @@ class BackgroundTurnSession implements TurnSession {
   }
 }
 
-/** A controlled runtime + clock for one background session. */
 function backgroundRuntime(): BackgroundScriptContext & { runtime: ModelRuntime } {
   const c = fakeClock();
   const manual = manualRuntime();
@@ -1258,11 +1207,6 @@ async function runBackgroundTurn(options: {
   return { sessionId };
 }
 
-/**
- * A real wrapper whose event stream is the test's own: it lets the production
- * `runTurnRpcSession` reuse path drive it without booting pi. `send` keeps the
- * real audit-context behaviour; only terminal-event delivery is substituted.
- */
 class SettlingAgentSessionWrapper extends AgentSessionWrapper {
   private readonly ownListeners = new Set<(event: SessionEvent) => void>();
   private promptDone: Promise<void> = Promise.resolve();
@@ -1350,7 +1294,6 @@ describe("background call sources", () => {
         before.push(done(assistantMessage({ usage: usage(20), stopReason: "toolUse" })));
         await before.result();
 
-        // Simulated tool execution: neither model call may absorb this wait.
         advance(3000);
 
         const after = stream();
@@ -1367,7 +1310,6 @@ describe("background call sources", () => {
     expect(rows).toHaveLength(2);
     expect(new Set(rows.map((r) => r.callId)).size).toBe(2);
 
-    // Ordered by call start desc: the post-tool call is the newer one.
     const [afterCall, beforeCall] = rows;
     expect(afterCall).toMatchObject({
       sessionId,
@@ -1430,8 +1372,6 @@ describe("background call sources", () => {
       chatRun,
     ]);
 
-    // Unfiltered queries include the main call and both background calls;
-    // total counts the same filter the page used.
     const pages = await Promise.all([
       queryCalls("range=all&limit=1&offset=0"),
       queryCalls("range=all&limit=1&offset=1"),
@@ -1454,8 +1394,6 @@ describe("background call sources", () => {
     expect(subagentRows.total).toBe(1);
     expect(subagentRows.rows[0]).toMatchObject({ source: "subagent", outputTokens: 20 });
 
-    // Performance records are not billing rows: the existing summary still
-    // counts only the legacy token_calls table.
     expect(summarize("all", "none").totals.calls).toBe(0);
   });
 
@@ -1463,8 +1401,6 @@ describe("background call sources", () => {
     switchToTempDb();
     const channel = backgroundRuntime();
     const sessionId = "channel-inbound-session";
-    // Forward reference: the fake inner's prompt is only invoked after the
-    // wrapper exists.
     const holder: { wrapper?: SettlingAgentSessionWrapper } = {};
     const inner = {
       sessionId,

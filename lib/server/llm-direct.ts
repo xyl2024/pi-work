@@ -1,12 +1,3 @@
-// Shared "talk to an LLM without touching disk" helpers. Used by:
-//   - app/api/translate/route.ts (translation panel — streaming)
-//   - app/api/sessions/[id]/auto-name/route.ts (auto-naming — one-shot)
-//
-// Every route that needs an LLM call should go through `createDirectLlmSession`
-// rather than re-implementing the in-memory AgentSession bootstrap. Keeping
-// this in one place means model resolution logic, the no-disk loader, and
-// the noTools/no-extensions guarantee stay in sync.
-
 import {
   ModelRuntime,
   SessionManager,
@@ -27,21 +18,13 @@ export interface ResolvedModel {
 }
 
 export interface DirectPromptOptions {
-  /** System prompt prepended to the request. The user's text is passed as the single user message. */
   systemPrompt: string;
-  /** Override the default model. When omitted, falls back to the user's default model from ~/.pi/agent/settings.json. */
   provider?: string;
   modelId?: string;
-  /** Defaults to "off" — cheap-by-design calls (translate, auto-name) shouldn't waste tokens on extended thinking. */
   thinkingLevel?: ThinkingLevel;
-  /** Inactivity timeout. If no prompt() completion within this window, the session is aborted. Defaults to 50s. */
   timeoutMs?: number;
 }
 
-// Custom loader that returns no extensions / skills / prompts / themes / agents
-// files. Combined with SessionManager.inMemory() + SettingsManager.inMemory() +
-// noTools: "all", this guarantees the request never touches disk, never reads
-// ~/.pi/agent/settings.json, and never fires any extension hook.
 function buildEmptyResourceLoader(systemPrompt: string): ResourceLoader {
   return {
     getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
@@ -58,29 +41,13 @@ function buildEmptyResourceLoader(systemPrompt: string): ResourceLoader {
   };
 }
 
-/**
- * Resolve a model + provider pair. If both `provider` and `modelId` are passed,
- * they are used directly. Otherwise the user's default model from
- * ~/.pi/agent/settings.json is loaded (read-only; never written back).
- *
- * Throws with a descriptive message on failure so callers can surface it
- * directly to the user.
- */
 async function getDirectRuntime(): Promise<ModelRuntime> {
-  // Direct calls (translate / auto-name) go through the same audited wrapper as
-  // the chat runtime so their logical calls reach the per-call audit API. The
-  // wrapper is observation-only: it never adds a request or consumes the
-  // caller's stream. When the process already has the shared wrapper,
-  // `getAuditModelRuntime` returns it and the catalog built here is dropped.
   return getAuditModelRuntime(await ModelRuntime.create());
 }
 
 export async function resolveDirectModel(opts?: { provider?: string; modelId?: string }): Promise<ResolvedModel> {
   const agentDir = getAgentDir();
   const cwd = process.cwd();
-  // Model resolution is not a model call, so it stays on a fresh catalog (the
-  // caller's current settings/models.json) and is not tied to the shared,
-  // long-lived audited runtime.
   const runtime = await ModelRuntime.create();
 
   if (opts?.provider && opts?.modelId) {
@@ -102,12 +69,6 @@ export async function resolveDirectModel(opts?: { provider?: string; modelId?: s
   return { provider, modelId: modelId ?? "" };
 }
 
-/**
- * Create an in-memory LLM-only AgentSession. No tools, no extensions, no disk.
- *
- * The caller owns the returned session — call `dispose()` when done to free
- * the underlying SDK resources. For one-shot convenience, see `directPrompt`.
- */
 export async function createDirectLlmSession(
   provider: string,
   modelId: string,
@@ -131,13 +92,6 @@ export async function createDirectLlmSession(
   return session;
 }
 
-/**
- * One-shot LLM call. Resolves the model, creates a session, sends the prompt,
- * waits for the assistant to finish (or aborts after `timeoutMs`), and returns
- * the accumulated text. Always disposes the session before returning.
- *
- * Throws on timeout, model resolution failure, or session creation failure.
- */
 export async function directPrompt(promptText: string, opts: DirectPromptOptions): Promise<string> {
   const timeoutMs = opts.timeoutMs ?? 50_000;
   const thinkingLevel = opts.thinkingLevel ?? "off";
@@ -170,10 +124,10 @@ export async function directPrompt(promptText: string, opts: DirectPromptOptions
         }, timeoutMs);
       }),
     ]);
-    try { unsub(); } catch { /* ignore */ }
+    try { unsub(); } catch {}
     return fullText;
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
-    try { agentSession.dispose(); } catch { /* ignore */ }
+    try { agentSession.dispose(); } catch {}
   }
 }

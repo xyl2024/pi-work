@@ -54,15 +54,6 @@ import {
   type SubagentTaskConfigSnapshot,
 } from "@/lib/shared/subagent";
 
-/**
- * Issue 07: restart reconciliation and safe continuation.
- *
- * A "restart" is simulated by dropping the process-wide handles (the SQLite
- * connection and the task manager) and reopening the same temporary store — the
- * same thing a fresh server process does. Nothing here reads the real user data
- * directories, and no test starts a model turn: the turn seam is scripted.
- */
-
 let root: string;
 let agentDir: string;
 let seq = 0;
@@ -84,12 +75,9 @@ function resetGlobals(): void {
   delete g.__piSessionListHeaderInflight;
   delete g.__piSubagentStatsCache;
   delete g.__piSubagentLiveCache;
-  // A simulated restart is a new process: the once-per-process reconciliation
-  // guard must start from scratch.
   delete g.__piSubagentStartupReconciled;
 }
 
-/** Drop the process-wide handles without touching the files on disk. */
 function simulateRestart(): void {
   resetGlobals();
 }
@@ -124,10 +112,6 @@ afterAll(() => {
   delete process.env.PI_WORK_DATA_DIR;
   delete process.env.PI_CODING_AGENT_DIR;
 });
-
-// ---------------------------------------------------------------------------
-// Seams
-// ---------------------------------------------------------------------------
 
 type ExecuteContext = Parameters<NonNullable<typeof subagentTool.execute>>[4];
 type ExecuteParams = Parameters<NonNullable<typeof subagentTool.execute>>[1];
@@ -186,7 +170,6 @@ function row(parentSessionId: string, taskId: string): SubagentTask {
   return task;
 }
 
-/** Persist one task in a given non-terminal state (the state a restart finds). */
 function seedTask(input: {
   parent: string;
   child?: string | null;
@@ -219,7 +202,6 @@ const snapshot: SubagentTaskConfigSnapshot = {
   timeoutMs: 12_345,
 };
 
-/** One finished task with a config snapshot: an idle child session. */
 function seedFinishedChild(input: { parent: string; child: string; taskId?: string }): SubagentTask {
   const taskId = input.taskId ?? `subagent:${unique("seeded")}`;
   createSubagentTask({
@@ -236,7 +218,6 @@ function seedFinishedChild(input: { parent: string; child: string; taskId?: stri
   return row(input.parent, taskId);
 }
 
-/** A finished legacy task (no snapshot) so the child session is a known one. */
 function seedLegacyChild(parent: string, child: string): SubagentTask {
   const taskId = `subagent:${unique("legacy")}`;
   createSubagentTask({
@@ -253,7 +234,6 @@ function seedLegacyChild(parent: string, child: string): SubagentTask {
   return row(parent, taskId);
 }
 
-/** A legacy child session file: header cwd, a thinking change and one answer. */
 function writeLegacyChildSession(input: {
   sessionId: string;
   cwd: string;
@@ -297,10 +277,6 @@ function writeLegacyChildSession(input: {
   return filePath;
 }
 
-// ---------------------------------------------------------------------------
-// Startup reconciliation
-// ---------------------------------------------------------------------------
-
 describe("startup reconciliation", () => {
   it("marks every leftover non-terminal task interrupted on boot, idempotently, keeping history", async () => {
     const parent = unique("parent-reconcile");
@@ -328,16 +304,12 @@ describe("startup reconciliation", () => {
       expect(reconciled.status).toBe("interrupted");
       expect(reconciled.error).toContain("restarted");
       expect(reconciled.finishedAt).toBeTypeOf("number");
-      // The recorded input and identity survive; nothing is replayed.
       expect(reconciled.prompt).toBe("original input");
     }
-    // Partial output and the terminal rows are untouched.
     expect(row(parent, running.taskId).result).toBe("partial output");
     expect(row(parent, completed.taskId)).toMatchObject({ status: "completed", result: "old answer", error: null });
     expect(listSubagentTasks(parent)).toHaveLength(5);
 
-    // Running the reconciliation again changes nothing: the boot hook is
-    // once per process, and the store rule is itself idempotent.
     const finishedAt = row(parent, running.taskId).finishedAt;
     bootstrap();
     expect(reconcileInterruptedSubagentTasks()).toBe(0);
@@ -347,8 +319,6 @@ describe("startup reconciliation", () => {
       result: "partial output",
     });
 
-    // Starting the task manager (the production path) starts no turn for any
-    // leftover row, so no input is replayed and the parent is not woken.
     const { runner, manager } = startManager({ reconcileOnCreate: true });
     await manager.idle();
     expect(runner.turns).toHaveLength(0);
@@ -362,16 +332,11 @@ describe("startup reconciliation", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Reads and explicit continuation after a restart
-// ---------------------------------------------------------------------------
-
 describe("after a restart", () => {
   it("list/get report interrupted and an interrupted child can be continued explicitly", async () => {
     const parent = unique("parent-view");
     const child = unique("child");
     const leftover = seedTask({ parent, child, status: "running" });
-    // A real snapshot so the continue path exercises the frozen config.
     getSubagentDb().prepare("UPDATE subagent_tasks SET config_snapshot = ? WHERE task_id = ?")
       .run(JSON.stringify(snapshot), leftover.taskId);
 
@@ -391,7 +356,6 @@ describe("after a restart", () => {
     expect(detail.task).toMatchObject({ taskId: leftover.taskId, status: "interrupted" });
     expect(detail.task.error).toContain("restarted");
 
-    // An interrupted session is explicitly continuable (never auto-resumed).
     const continued = await run(
       { action: "continue", session_id: child, prompt: "pick it up", wait_ms: 0 },
       parent,
@@ -404,7 +368,6 @@ describe("after a restart", () => {
     await settle(runner.turns[0], child, "continued answer");
     await manager.idle();
 
-    // The interrupted task keeps its own history; the new task is separate.
     expect(row(parent, leftover.taskId)).toMatchObject({ status: "interrupted", result: null });
     expect(row(parent, continuedId)).toMatchObject({ status: "completed", result: "continued answer" });
     const after = await run({ action: "get", session_id: child }, parent);
@@ -447,14 +410,12 @@ describe("after a restart", () => {
     );
     expect(continued.isError).toBeUndefined();
     expect(restarted.runner.turns).toHaveLength(1);
-    // Model, thinking level and runtime limit come from the frozen snapshot.
     expect(restarted.runner.turns[0].spec).toMatchObject({
       model: { provider: "p", modelId: "m-profile" },
       thinkingLevel: "low",
       timeoutMs: 23_456,
       source: "subagent",
     });
-    // The frozen tool set and prompt are the profile's creation-time ones.
     const persisted = parseSubagentConfigSnapshot(
       row(parent, (continued.details as { taskId: string }).taskId).configSnapshot,
     );
@@ -481,15 +442,10 @@ describe("after a restart", () => {
       stripDefaultSystemPromptSections: true,
       parentSessionId: "parent-options",
     });
-    // The subagent tool disappears from every restored tool set.
     expect(config.allowedToolNames).not.toContain("subagent");
     expect(config.allowedToolNames).not.toContain("spawn_subagent");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Legacy rows (created before configuration snapshots)
-// ---------------------------------------------------------------------------
 
 describe("legacy rows without a configuration snapshot", () => {
   it("recovers only the restricted facts the persisted session proves", async () => {
@@ -536,9 +492,6 @@ describe("legacy rows without a configuration snapshot", () => {
       prompt: "carry on",
     });
 
-    // The recovered config is frozen onto the new row: restricted tools (the
-    // subagent tool never comes back) and a neutral prompt instead of today's
-    // profile. A later restart reuses it without re-deriving.
     const recovered = parseSubagentConfigSnapshot(row(parent, newTaskId).configSnapshot);
     expect(recovered).toMatchObject({
       subagentName: "codebase_explorer",
@@ -554,10 +507,8 @@ describe("legacy rows without a configuration snapshot", () => {
     await settle(runner.turns[0], child, "carried on");
     await manager.idle();
 
-    // The old task's history is untouched.
     expect(row(parent, seeded.taskId)).toMatchObject({ status: "completed", result: "legacy answer", prompt: "old input" });
 
-    // Second restart: the sidecar is gone, but the recovered snapshot is enough.
     deleteSessionToolSelection(child);
     simulateRestart();
     const restarted = startManager({ reconcileOnCreate: true });
@@ -576,7 +527,6 @@ describe("legacy rows without a configuration snapshot", () => {
     await settle(restarted.runner.turns[0], child, "third answer");
     await restarted.manager.idle();
 
-    // resolveSubagentChildConfig now answers from the frozen snapshot.
     const resolved = await resolveSubagentChildConfig({
       parentSessionId: parent,
       childSessionId: child,
@@ -590,7 +540,6 @@ describe("legacy rows without a configuration snapshot", () => {
     const parent = unique("parent-legacy-tools");
     const { runner, manager } = startManager({ reconcileOnCreate: true });
 
-    // Session exists, but its tool selection was never recorded.
     const noToolsChild = unique("child");
     writeLegacyChildSession({
       sessionId: noToolsChild,
@@ -599,7 +548,6 @@ describe("legacy rows without a configuration snapshot", () => {
     });
     seedLegacyChild(parent, noToolsChild);
 
-    // Session exists and ran with every tool: not a restricted config.
     const allToolsChild = unique("child");
     writeLegacyChildSession({
       sessionId: allToolsChild,
@@ -619,13 +567,10 @@ describe("legacy rows without a configuration snapshot", () => {
         { action: "continue", session_id: testCase.child, prompt: "continue anyway", wait_ms: 0 },
         parent,
       );
-      // The refusal happens before a task row exists, so a zero-wait continue
-      // never looks like it started work.
       expect(attempted.isError).toBe(true);
       expect(textOf(attempted)).toContain(testCase.expected);
     }
 
-    // Nothing was queued or run: only the two seeded history rows exist.
     expect(listSubagentTasks(parent)).toHaveLength(2);
     expect(runner.turns).toHaveLength(0);
     await manager.idle();
@@ -635,12 +580,10 @@ describe("legacy rows without a configuration snapshot", () => {
     const parent = unique("parent-legacy-gap");
     const { runner, manager } = startManager({ reconcileOnCreate: true });
 
-    // Tools recorded, but the session file is gone.
     const goneChild = unique("child");
     writeSessionToolSelection(goneChild, ["read"]);
     seedLegacyChild(parent, goneChild);
 
-    // Session file with a recorded model but no working directory.
     const noCwdChild = unique("child");
     const noCwdFile = writeLegacyChildSession({
       sessionId: noCwdChild,
@@ -651,8 +594,6 @@ describe("legacy rows without a configuration snapshot", () => {
     expect(noCwdFile).toContain(noCwdChild);
     seedLegacyChild(parent, noCwdChild);
 
-    // Session file with a working directory but no assistant message: the
-    // model it was created with is not recorded anywhere.
     const noModelChild = unique("child");
     const noModelFile = join(agentDir, "sessions", "--tmp-legacy-project--", `${noModelChild}.jsonl`);
     mkdirSync(join(agentDir, "sessions", "--tmp-legacy-project--"), { recursive: true });
@@ -673,8 +614,6 @@ describe("legacy rows without a configuration snapshot", () => {
     ] as const;
 
     for (const testCase of cases) {
-      // The task has to be created before these file-system checks can run, so
-      // the refusal is reported on the task instead of as a tool error.
       const attempted = await run(
         { action: "continue", session_id: testCase.child, prompt: "continue anyway", wait_ms: 0 },
         parent,
@@ -683,7 +622,6 @@ describe("legacy rows without a configuration snapshot", () => {
       const taskId = (attempted.details as { taskId: string }).taskId;
       await waitFor(() => row(parent, taskId).status === "failed", `task ${taskId} to fail`);
       expect(row(parent, taskId).error).toContain(testCase.expected);
-      // No turn ran with wider defaults, and no snapshot was invented.
       expect(row(parent, taskId).configSnapshot).toBeNull();
       const got = await run({ action: "get", task_id: taskId }, parent);
       const detail = (got.details as { detail: { task: { status: string; error: string | null } } }).detail;
@@ -714,8 +652,6 @@ describe("legacy rows without a configuration snapshot", () => {
     expect(continued.isError).toBeUndefined();
     const taskId = (continued.details as { taskId: string }).taskId;
 
-    // The legacy config is resolved asynchronously; stopping now must prevent
-    // the child session (and the row) from being started.
     manager.stop(parent, taskId);
     await waitFor(() => row(parent, taskId).status === "cancelled", "the task to cancel");
     expect(runner.turns).toHaveLength(0);
@@ -723,10 +659,6 @@ describe("legacy rows without a configuration snapshot", () => {
     await manager.idle();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Request-id dedupe across a restart
-// ---------------------------------------------------------------------------
 
 describe("request-id dedupe across a restart", () => {
   it("returns the original task for a retried spawn/continue and starts new work for a new id", async () => {
@@ -760,7 +692,6 @@ describe("request-id dedupe across a restart", () => {
     await settle(first.runner.turns[0], child);
     await first.manager.idle();
 
-    // Restart: the dedupe record must come from the store, not memory.
     simulateRestart();
     const second = startManager({ reconcileOnCreate: true });
     const retried = await run(spawnParams, parent);
@@ -768,7 +699,6 @@ describe("request-id dedupe across a restart", () => {
     expect((retried.details as { taskId: string }).taskId).toBe(firstTaskId);
     expect(second.runner.turns).toHaveLength(0);
 
-    // A different id is a new deliberate request.
     const fresh = await run({ ...spawnParams, prompt: "another thing", request_id: "restart-spawn-2" }, parent);
     expect(fresh.isError).toBeUndefined();
     expect((fresh.details as { taskId: string }).taskId).not.toBe(firstTaskId);
@@ -777,7 +707,6 @@ describe("request-id dedupe across a restart", () => {
     await settle(second.runner.turns[0], child);
     await second.manager.idle();
 
-    // Continue dedupe behaves the same across a restart.
     const continueParams = {
       action: "continue" as const,
       session_id: child,
@@ -808,7 +737,6 @@ describe("request-id dedupe across a restart", () => {
     await settle(third.runner.turns[0], child);
     await third.manager.idle();
 
-    // The same request id reused for another child session is still refused.
     const otherChild = unique("child");
     seedFinishedChild({ parent, child: otherChild });
     const mismatch = await run(
@@ -819,10 +747,6 @@ describe("request-id dedupe across a restart", () => {
     expect(textOf(mismatch)).toContain("different subagent session");
   });
 });
-
-// ---------------------------------------------------------------------------
-// Store migration
-// ---------------------------------------------------------------------------
 
 describe("store migration across restarts", () => {
   it("adds the newer columns idempotently and keeps legacy rows readable", () => {
@@ -855,7 +779,6 @@ describe("store migration across restarts", () => {
     const columns = () => (getSubagentDb().prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{ name: string }>)
       .map((column) => column.name);
 
-    // First open after the upgrade.
     expect(columns()).toEqual(expect.arrayContaining(["origin", "request_id", "config_snapshot"]));
     expect(row("parent-legacy-db", "legacy-task")).toMatchObject({
       status: "completed",
@@ -865,8 +788,6 @@ describe("store migration across restarts", () => {
       prompt: "old input",
     });
 
-    // Reconciliation keeps terminal rows; a second "restart" re-runs the
-    // migration without losing data or adding a duplicate column.
     bootstrap();
     simulateRestart();
     const reopened = getSubagentDb();

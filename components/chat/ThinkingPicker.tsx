@@ -3,41 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 
-/** All thinking-intensity levels, in display order. The literal union
- *  here is also the source of the `ThinkingLevel` type aliases used by
- *  ChatInput's source-of-truth state and the `THINKING_LEVEL_COLOR` /
- *  `THINKING_BORDER_COLOR` keys. */
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = typeof THINKING_LEVELS[number];
 
-/** Solid (opaque) palette — same hues as the input border gradient,
- *  used to paint the per-level indicator inside the picker so each
- *  option is visually tied to the color the input border adopts when
- *  picked. Exported so ChatInput can colour the streaming badge the
- *  same way. */
 export const THINKING_LEVEL_COLOR: Record<ThinkingLevel, string> = {
-  off: "#94a3b8",      // slate-400
-  minimal: "#38bdf8",  // sky-400
-  low: "#3b82f6",      // blue-500
-  medium: "#8b5cf6",   // violet-500
-  high: "#f97316",     // orange-500
-  xhigh: "#ef4444",    // red-500
-  max: "#b91c1c",      // red-700
+  off: "#94a3b8",
+  minimal: "#38bdf8",
+  low: "#3b82f6",
+  medium: "#8b5cf6",
+  high: "#f97316",
+  xhigh: "#ef4444",
+  max: "#b91c1c",
 };
 
-/** Minimum gap between two wheel-driven cycles. Wheel events fire in
- *  bursts (one scroll tick can dispatch a dozen events); without a
- *  throttle a single flick would catapult the user from `off` to
- *  `max`. 150 ms is enough to see the colour/label transition between
- *  steps without feeling sluggish on a deliberate scroll. */
 const WHEEL_THROTTLE_MS = 150;
 
-/**
- * The thinking level's icon, shared by the toolbar button and the More menu's
- * collapsed entry so a level that moved into the menu still looks like the
- * level it sets. Colour is inherited (`currentColor`) — the level colour is
- * what encodes the tier when the label is gone.
- */
 export function ThinkingIcon({ size = 15 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -48,16 +28,6 @@ export function ThinkingIcon({ size = 15 }: { size?: number }) {
   );
 }
 
-/**
- * The level a click / wheel tick moves to: one step through the levels the
- * current model actually supports, wrapping around. `idx === -1` covers the
- * transient state right after switching to a model that does not support the
- * previous pick — fall through to the first available level so the control
- * still reflects something real.
- *
- * Exported because the narrow-toolbar layout folds the picker into the More
- * menu, where the entry has to cycle the same way the button does.
- */
 export function nextThinkingLevel(
   current: ThinkingLevel,
   available: readonly ThinkingLevel[],
@@ -70,29 +40,12 @@ export function nextThinkingLevel(
   return next === current ? null : next;
 }
 
-/**
- * The levels the current model actually supports, in display order. One
- * definition shared by the picker button and the More menu entry, so the two
- * cannot drift apart on which levels are reachable.
- */
 export function availableThinkingLevelsOf(
   available: readonly string[] | null | undefined,
 ): ThinkingLevel[] {
   return THINKING_LEVELS.filter((lvl) => (available ? available.includes(lvl) : true));
 }
 
-/**
- * Thinking-level cycling button. Click or scroll-wheel cycles through
- * the levels the current model actually supports, looping seamlessly.
- * Replaces the previous click-to-open popover design — that surface
- *  was redundant with the colour gradient the input border already
- *  wears, and required two interactions for what is fundamentally a
- *  one-knob setting.
- *
- * The picker is hidden entirely while the agent is streaming (the
- * parent renders a read-only badge instead) — the spec is that the
- * level can't be changed mid-turn.
- */
 export function ThinkingPicker({
   thinkingLevel,
   onThinkingLevelChange,
@@ -104,8 +57,6 @@ export function ThinkingPicker({
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
-  /** False = icon only. Used by the narrow-toolbar layout; the level colour
-   *  still encodes the tier and the tooltip/aria-label still name it. */
   labelVisible?: boolean;
 }) {
   const { t } = useI18n();
@@ -116,10 +67,6 @@ export function ThinkingPicker({
     ? mappedVal
     : currentLevel;
 
-  // Levels the current model actually supports — the cycle is confined
-  // to these so the button's visible label never disagrees with the
-  // level the backend ends up on after `pickClosestAvailableThinkingLevel`
-  // (lib/shared/thinking-level-utils.ts).
   const availableLevels = useMemo<readonly ThinkingLevel[]>(
     () => availableThinkingLevelsOf(availableThinkingLevels),
     [availableThinkingLevels],
@@ -130,10 +77,6 @@ export function ThinkingPicker({
     if (next) onThinkingLevelChange(next);
   };
 
-  // Wheel throttle — see WHEEL_THROTTLE_MS for the rationale. We
-  // `stopPropagation` so the wheel tick doesn't bubble up to a parent
-  // scroll container (e.g. the message list); we deliberately do NOT
-  // `preventDefault` because nothing in the toolbar actually scrolls.
   const wheelLockRef = useRef(false);
   const handleWheel = (e: React.WheelEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -144,10 +87,6 @@ export function ThinkingPicker({
     window.setTimeout(() => { wheelLockRef.current = false; }, WHEEL_THROTTLE_MS);
   };
 
-  // Bump `animKey` whenever the displayed label actually changes so the
-  // label span remounts and its fade-in animation re-runs. Keeping
-  // the effect purely prop-driven means there is no internal
-  // "optimistic" state to reconcile if the parent rejects the cycle.
   const [animKey, setAnimKey] = useState(0);
   const lastDisplayRef = useRef(currentDisplay);
   useEffect(() => {

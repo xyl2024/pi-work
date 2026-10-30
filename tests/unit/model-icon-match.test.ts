@@ -8,14 +8,6 @@ import {
   resolveModelIconId,
 } from "@/lib/shared/model-icon-match";
 
-/**
- * Model icon auto-match (lib/shared/model-icon-match.ts) and the three-layer
- * resolution in resolveModelIconId, driven as plain data — no DOM, no fetch,
- * no React / icon-library import. Expected icon ids are the icon library's
- * provider ids, written as literals from the spec; `isKnownIcon` below is a
- * literal stand-in for the client's icon-library membership check.
- */
-
 const KNOWN_ICONS = new Set([
   "anthropic",
   "openai",
@@ -110,7 +102,6 @@ describe("icon preference", () => {
       [`github-copilot:gpt-5`]: "anthropic",
     };
     expect(isProviderIconPreferred(preferences, "github-copilot", "claude-sonnet-4")).toBe(true);
-    // Unknown values fall back to "no deviation".
     expect(isProviderIconPreferred(preferences, "github-copilot", "gpt-5")).toBe(false);
     expect(isProviderIconPreferred(preferences, "github-copilot", "gemini-2.5-pro")).toBe(false);
   });
@@ -131,20 +122,16 @@ describe("icon preference", () => {
   it("offers a toggle only when the match exists and differs from the provider icon", () => {
     expect(canToggleModelIcon("claude-sonnet-4", "github-copilot")).toBe(true);
     expect(canToggleModelIcon("claude-sonnet-4", undefined)).toBe(true);
-    // Same icon on both sides → nothing to toggle.
     expect(canToggleModelIcon("gpt-4o", "openai")).toBe(false);
     expect(canToggleModelIcon("GPT-5", "openai")).toBe(false);
-    // No auto match (or no model, i.e. a provider-only row) → no toggle.
     expect(canToggleModelIcon("llama-3.1", "groq")).toBe(false);
     expect(canToggleModelIcon(undefined, "openai")).toBe(false);
     expect(canToggleModelIcon(null, "openai")).toBe(false);
   });
 
   it("offers no toggle when an explicit model-level icon already wins", () => {
-    // Layer 1 outranks both preference states, so switching changes nothing.
     expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", "deepseek")).toBe(false);
     expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", "github-copilot")).toBe(false);
-    // Without an explicit icon the same row stays toggleable.
     expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", undefined)).toBe(true);
   });
 });
@@ -175,11 +162,9 @@ describe("resolveModelIconId", () => {
         "github-copilot:claude-sonnet-4-5": "deepseek",
       }),
     ).toBe("deepseek");
-    // Bare model id entries still act as a model-level fallback.
     expect(resolve("github-copilot", "claude-sonnet-4-5", { "claude-sonnet-4-5": "mistral" })).toBe(
       "mistral",
     );
-    // A provider-level entry is layer 3 — it must not outrank the auto match.
     expect(resolve("my-gateway", "claude-sonnet-4-5", { "my-gateway": "xai" })).toBe("anthropic");
     expect(
       resolve("my-gateway", "claude-sonnet-4-5", {
@@ -204,7 +189,6 @@ describe("resolveModelIconId", () => {
     expect(
       resolve("github-copilot", modelId, undefined, { [`github-copilot:${modelId}`]: "anthropic" }),
     ).toBe("anthropic");
-    // Another model's preference does not leak over.
     expect(
       resolve("github-copilot", modelId, undefined, { "github-copilot:gpt-5": "provider" }),
     ).toBe("anthropic");

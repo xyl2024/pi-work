@@ -17,23 +17,12 @@ interface Props {
   lang: string;
 }
 
-/**
- * Shared syntax-highlighted code block with language label and copy button.
- * The header bar is hidden by default — the language label + copy button
- * appear as a floating overlay when the block is hovered. Used by MessageView,
- * FileViewer (markdown preview) so the viewer renders code blocks
- * the same way as the chat.
- */
 export function CodeBlock({ code, lang }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [copied, flashCopied] = useTransientFlag();
   const [hovered, setHovered] = useState(false);
 
-  // Floating overlay is fully invisible: no background / border / shadow —
-  // the label and copy button read as plain text floating over the code.
-  // Colors are theme-aware so the text stays legible against either the
-  // dark or light SyntaxHighlighter palette.
   const buttonColor = isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.78)";
   const labelColor = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.45)";
 
@@ -43,8 +32,6 @@ export function CodeBlock({ code, lang }: Props) {
         flashCopied();
       })
       .catch(() => {
-        // Silent — UI just doesn't flip to "Copied". Surface a console hint
-        // so debugging is possible without a visible failure.
         console.warn("clipboard write failed");
       });
   };
@@ -57,16 +44,9 @@ export function CodeBlock({ code, lang }: Props) {
         position: "relative",
         marginTop: 8,
         marginBottom: 12,
-        /* `.markdown-body` clips horizontal overflow, so leave room on the
-           right for the shadow's overhang instead of relying on it. */
         marginRight: 10,
       }}
     >
-      {/**
-       * Shadow layer: a blurred block offset toward bottom-right and tucked
-       * behind the opaque code surface (which has bg + border), so only the
-       * right and bottom edges cast a shadow — the top/left stay clean.
-       */}
       <div
         aria-hidden
         style={{
@@ -102,9 +82,6 @@ export function CodeBlock({ code, lang }: Props) {
           border: "none",
           background: "var(--bg)",
           overflowX: "auto",
-          // Keep fenced Markdown source intact. `.markdown-body` uses
-          // `word-break: break-word` for prose, but it must not leak into
-          // code blocks or table pipes/dashes can wrap one token per line.
           whiteSpace: "pre",
           wordBreak: "normal",
           overflowWrap: "normal",
@@ -158,8 +135,6 @@ export function CodeBlock({ code, lang }: Props) {
               alignItems: "center",
               background: "none",
               border: "none",
-              // Copied flips the icon to a green checkmark so the success
-              // state is recognizable without reintroducing any text.
               color: copied ? "#22c55e" : buttonColor,
               cursor: "pointer",
               padding: 2,

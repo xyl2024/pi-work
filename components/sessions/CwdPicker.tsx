@@ -18,17 +18,9 @@ interface CwdPickerProps {
   disabled?: boolean;
   maxWidth?: number;
   fill?: boolean;
-  /** Flip to true to open the picker programmatically (e.g. command palette);
-   *  call onOpenSignalHandled() once consumed. */
   openSignal?: boolean;
   onOpenSignalHandled?: () => void;
-  /** Render only the modal (no trigger button) — for purely programmatic use. */
   hideTrigger?: boolean;
-  /**
-   * Render the trigger as its cwd icon only, with no name. The label is
-   * the first thing the bottom toolbar gives up when the chat column gets
-   * narrow; the full path moves into the tooltip so nothing is lost.
-   */
   iconOnly?: boolean;
   dropdownDirection?: "up" | "down";
 }
@@ -53,8 +45,6 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
     initCwdAliases();
   }, []);
 
-  // Programmatic open (command palette): consume the signal once so the
-  // next identical signal (open → close without picking) still works.
   useEffect(() => {
     if (openSignal) {
       if (!disabled) setOpen(true);
@@ -73,15 +63,10 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
       const response = await fetch("/api/default-cwd", { method: "POST" });
       const data = await response.json() as { cwd?: string };
       if (data.cwd) handlePick(data.cwd);
-    } catch { /* keep the modal open so the user can retry */ }
+    } catch {}
   }, [handlePick]);
 
-  // Show the user-set alias when present; fall back to the basename.
   const buttonLabel = cwd ? (cwdAlias ?? basenameOf(cwd)) : t("Select project...");
-  // Hovering an aliased cwd reveals its absolute path; unaliased cwds keep
-  // the generic action hint. An icon-only trigger always reveals the path —
-  // the icon is all that is left on screen, so the hover must not be thinner
-  // than the full-label variant it replaced.
   const buttonTitle = cwd ? (cwdAlias ? cwd : t("Change project")) : t("Pick a project");
   const triggerTooltip = iconOnly && cwd ? cwd : buttonTitle;
 
@@ -137,10 +122,6 @@ function CwdPickerModal({ open, cwd, cwds, aliasMap, onCwdChange, onDefaultCwd, 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Number of cards per grid row at the active index — derived from the
-  // DOM (cards sharing the same offsetTop) so it stays correct across
-  // resizes, filtering and group boundaries (same trick as
-  // ModelPickerModal).
   const columnCount = useCallback((index: number): number => {
     const el = rowRefs.current[index];
     const grid = el?.parentElement;
@@ -155,7 +136,6 @@ function CwdPickerModal({ open, cwd, cwds, aliasMap, onCwdChange, onDefaultCwd, 
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    // Match against the alias (when set) in addition to basename + path.
     return q
       ? cwds.filter((item) => `${aliasMap?.[item] ?? ""} ${basenameOf(item)} ${item}`.toLowerCase().includes(q))
       : cwds;
@@ -183,8 +163,6 @@ function CwdPickerModal({ open, cwd, cwds, aliasMap, onCwdChange, onDefaultCwd, 
       if (event.key === "ArrowDown" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowLeft") {
         event.preventDefault();
         setActiveIndex((index) => {
-          // ← / → move one card; ↑ / ↓ move a full grid row (column count
-          // read from the rendered grid so it adapts to the panel width).
           if (event.key === "ArrowLeft") return (index - 1 + filtered.length) % filtered.length;
           if (event.key === "ArrowRight") return (index + 1) % filtered.length;
           const step = (event.key === "ArrowDown" ? 1 : -1) * columnCount(index);

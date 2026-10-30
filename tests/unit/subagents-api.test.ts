@@ -3,13 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/**
- * The /api/subagents profile handlers, driven directly (no HTTP server): list
- * the seeded built-ins, create / update / delete a profile, and reject invalid
- * input with a 400. The store is pointed at a temp database via
- * `PI_WORK_SUBAGENTS_DB` so nothing touches real user data.
- */
-
 let dir: string;
 let GET: typeof import("@/app/api/subagents/route")["GET"];
 let POST: typeof import("@/app/api/subagents/route")["POST"];
@@ -75,14 +68,12 @@ describe("/api/subagents handlers", () => {
     expect(createdBody.profile.name).toBe("api_agent");
     expect(createdBody.profile.builtin).toBe(false);
 
-    // Duplicate name → 409.
     expect((await POST(jsonRequest("POST", validProfile))).status).toBe(409);
 
     const updated = await PUT(jsonRequest("PUT", { ...validProfile, description: "Changed." }));
     expect(updated.status).toBe(200);
     expect((await updated.json() as { profile: { description: string } }).profile.description).toBe("Changed.");
 
-    // Unknown name on update → 404.
     expect((await PUT(jsonRequest("PUT", { ...validProfile, name: "nope" }))).status).toBe(404);
 
     expect((await DELETE(jsonRequest("DELETE", undefined, "?name=api_agent"))).status).toBe(200);

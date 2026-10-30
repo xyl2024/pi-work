@@ -1,14 +1,9 @@
-// Best-effort clipboard write. Tries the async Clipboard API first (may
-// reject in insecure / unfocused contexts — e.g. HTTP localhost with the
-// window blurred) and falls through to the legacy execCommand path. Rejects
-// only if both paths fail.
 export async function copyText(text: string): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
       return;
     } catch {
-      // Fall through to the execCommand fallback below.
     }
   }
   if (typeof document === "undefined" || !document.body) {
@@ -27,8 +22,6 @@ export async function copyText(text: string): Promise<void> {
     selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
   ta.select();
   ta.setSelectionRange(0, text.length);
-  // execCommand is deprecated but still the only reliable fallback for
-  // non-secure / non-focused contexts where the Clipboard API rejects.
   let ok = false;
   try {
     ok = document.execCommand("copy");

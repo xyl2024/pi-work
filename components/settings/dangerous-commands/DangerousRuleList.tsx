@@ -1,21 +1,5 @@
 "use client";
 
-/**
- * The two rule lists on Settings → Agent → Dangerous commands: one read-only
- * (the platform's built-in floor) and one editable (the user's own rules).
- *
- * The row deliberately lives beside the page rather than inside
- * `components/settings/sections/`: its edit affordance is the row itself (not a
- * bordered form control), and the move / delete actions reuse the shared
- * buttons with dense list sizing. Keeping it beside the page also keeps the
- * section file focused on state and save wiring.
- *
- * A user row is a button: clicking it opens the prefilled editor. Move and
- * delete sit beside it instead of inside it, so the whole row stays one target
- * without nesting buttons. The built-in list passes no `actions`, so it renders
- * the same content without pretending to be editable.
- */
-
 import type { ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { DangerousPatternRule } from "@/lib/shared/config-types";
@@ -28,7 +12,6 @@ const ROW_STYLE = {
   padding: "7px 10px",
 } as const;
 
-/** What the user's rows offer beyond reading: edit, move, delete. */
 interface RuleRowActions {
   onEdit: () => void;
   onMoveUp: () => void;
@@ -38,11 +21,6 @@ interface RuleRowActions {
   canMoveDown: boolean;
 }
 
-/**
- * One compact action button. The skin (border, background, disabled state)
- * stays in `controls.tsx`; only the dense list's size is overridden here, so
- * these rows cannot drift from the rest of settings.
- */
 function RowAction({
   label,
   onClick,
@@ -77,15 +55,6 @@ function RowAction({
   );
 }
 
-/**
- * One rule: the name the confirmation dialog shows, the pattern as written
- * (monospace, truncated — a long regex must not widen the modal) and whether it
- * ignores case. Shared by the user's list and the built-in list so the two
- * cannot describe a rule differently.
- *
- * `error` is the draft blocker for this row: the rule that stops Save is marked
- * in place, with the compiler's reason underneath.
- */
 export function RuleRow({
   rule,
   first,
@@ -220,7 +189,6 @@ export function RuleRow({
   );
 }
 
-/** The bordered list wrapper both rule lists use. */
 export function RuleList({ children }: { children: ReactNode }) {
   return (
     <div

@@ -35,15 +35,6 @@ import { setSubagentParentResolverForTests, subagentTool } from "@/lib/server/su
 import { buildAskUserQuestionsTool } from "@/lib/server/ask-user-questions-tool";
 import type { SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
 
-/**
- * Issue 06: a user typing into a known subagent child session is the same kind
- * of work as the parent agent delegating to it, so it enters the same task
- * manager — one unfinished task per child, the global queue, request dedupe and
- * the parent's stop-all. The only seams are the entry points the product uses:
- * the manual-submit module, the real `/api/agent/[id]` request handler and the
- * `ask_user_questions` tool gate. Nothing here asserts private containers.
- */
-
 let dir: string;
 
 function resetGlobals(): void {
@@ -91,7 +82,6 @@ function uniqueId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${seq}`;
 }
 
-/** Persist one finished task: the child session's creation, config frozen. */
 function seedChildSession(input: {
   parent: string;
   child?: string;
@@ -149,7 +139,6 @@ function unfinished(parentSessionId: string, childSessionId: string): SubagentTa
   );
 }
 
-/** Drive one scripted turn to a cancelled end, the way the turn seam confirms. */
 async function settle(
   turn: ScriptedTurn | undefined,
   childSessionId: string,
@@ -157,10 +146,6 @@ async function settle(
 ): Promise<void> {
   await turn?.settle({ realSessionId: childSessionId, ...result });
 }
-
-// ============================================================================
-// The task-manager entry
-// ============================================================================
 
 describe("manual follow-up enters task management", () => {
   it("tracks a user's input as its own manual task in the same child session", async () => {
@@ -187,8 +172,6 @@ describe("manual follow-up enters task management", () => {
     expect(row(parent, submitted.taskId).status).toBe("running");
     expect(manager.liveStatus(parent, submitted.taskId)).toBe("running");
 
-    // The child stays a subagent: same session, configuration frozen at
-    // creation instead of today's profile or the parent's settings.
     expect(runner.turns[0].spec.session).toEqual({ kind: "reuse", sessionId: child });
     expect(runner.turns[0].spec.source).toBe("subagent");
     expect(runner.turns[0].spec.model).toEqual(snapshot.model);
@@ -219,7 +202,6 @@ describe("manual follow-up enters task management", () => {
     expect(history[0].taskId).toBe(submitted.taskId);
     expect(history[0].origin).toBe("manual");
     expect(history[1].origin).toBe("tool");
-    // The seeded task keeps its own input and result untouched.
     expect(history[1].prompt).toBe("first input");
     expect(history[1].result).toBe("seeded result");
 
@@ -242,9 +224,6 @@ describe("manual follow-up enters task management", () => {
     const { runner, manager } = setup();
     const parent = uniqueId("parent");
     const { child } = seedChildSession({ parent });
-    // The title is the snapshot of the submission moment: the parent's name at
-    // the time the user sent the input is frozen into the message, so a later
-    // rename of the parent never rewrites what an existing message shows.
     writeSessionName(parent, "Title at submission");
 
     submitSubagentManualPrompt({ childSessionId: child, message: "Follow up on the diff." });
@@ -293,8 +272,6 @@ describe("manual follow-up enters task management", () => {
     const { runner, manager } = setup();
     const { parent, child } = seedChildSession({ parent: uniqueId("parent") });
 
-    // Both entries reach the same synchronous busy check: whichever runs first
-    // owns the child, the other is refused — never two overlapping turns.
     const delegated = manager.continue({
       parentSessionId: parent,
       childSessionId: child,
@@ -325,8 +302,6 @@ describe("manual follow-up enters task management", () => {
 
     expect(retried.taskId).toBe(first.taskId);
     expect(retried.deduped).toBe(true);
-    // A retry never starts a second turn: only the seeded task plus the one the
-    // request created exist for this child.
     expect(listSubagentTasksForChildSession(parent, child)).toHaveLength(2);
 
     const retriedAgain = submitSubagentManualPrompt({ childSessionId: child, message: "go", requestId });
@@ -335,8 +310,6 @@ describe("manual follow-up enters task management", () => {
     await runner.turns[0].acquire();
     await settle(runner.turns[0], child);
     await manager.idle();
-    // A different session cannot be steered through a request id that belongs
-    // to this one.
     const sibling = seedChildSession({ parent });
     expect(() => submitSubagentManualPrompt({ childSessionId: sibling.child, message: "go", requestId }))
       .toThrow(/already used for a different subagent session/);
@@ -386,7 +359,6 @@ describe("manual follow-up enters task management", () => {
     await manager.idle();
     expect(row(parent, submitted.taskId).status).toBe("cancelled");
 
-    // An idle child session has nothing left to stop.
     expect(stopSubagentTaskForChildSession(child)).toBeNull();
   });
 
@@ -400,14 +372,10 @@ describe("manual follow-up enters task management", () => {
   it("adopts a live child wrapper and opens nothing it does not own", async () => {
     setup();
     const { parent, child } = seedChildSession({ parent: uniqueId("parent") });
-    // Reading a child session must reuse the live wrapper (the one the task
-    // manager is driving), not build a second session for the same id.
     const live = { isAlive: () => true } as never;
     registry().set(child, live);
     try {
       expect(await openSubagentChildSession(child)).toBe(live);
-      // Not a child session, and a child whose session file is gone: nothing to
-      // open, so the caller follows its ordinary path.
       expect(await openSubagentChildSession(parent)).toBeNull();
       expect(await openSubagentChildSession(uniqueId("nothing"))).toBeNull();
     } finally {
@@ -432,10 +400,6 @@ describe("manual follow-up enters task management", () => {
     expect(listSubagentTasksForChildSession(parent, child)).toHaveLength(1);
   });
 });
-
-// ============================================================================
-// The generic user-input entry
-// ============================================================================
 
 describe("/api/agent/[id] entry contract", () => {
   type RouteModule = typeof import("@/app/api/agent/[id]/route");
@@ -527,8 +491,6 @@ describe("/api/agent/[id] entry contract", () => {
     setup();
     const { parent, child } = seedChildSession({ parent: uniqueId("parent") });
 
-    // Nothing is running: the abort is not a task stop, so the command follows
-    // the ordinary session path (which cannot find this fake session file).
     const response = await post(child, { type: "abort" });
     expect(response.status).toBe(404);
     expect(row(parent, `subagent:seed-${child}`).status).toBe("completed");
@@ -537,19 +499,11 @@ describe("/api/agent/[id] entry contract", () => {
   it("leaves ordinary sessions on the normal path", async () => {
     setup();
     const { parent } = seedChildSession({ parent: uniqueId("parent") });
-    // A parent session is not a child: a prompt there must never be turned into
-    // a subagent task. It falls through to the normal path, which cannot find
-    // the session file here — an error response proves the manual branch was not
-    // taken (no task row was created).
     const response = await post(parent, { type: "prompt", message: "hello" });
     expect(response.status).toBe(404);
     expect(listSubagentTasksForChildSession(parent, parent)).toHaveLength(0);
   });
 });
-
-// ============================================================================
-// Interaction gates
-// ============================================================================
 
 describe("subagent interaction gates", () => {
   it("fails ask_user_questions immediately in a subagent session", async () => {

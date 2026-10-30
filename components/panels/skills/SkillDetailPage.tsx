@@ -15,20 +15,6 @@ import { toggleSkillInvocation, useSkillsStore } from "@/lib/client/skills-store
 import { SkillFileRow } from "./SkillFileRow";
 import { SkillsBackButton } from "./SkillsBackButton";
 
-/**
- * One skill's detail page in the panel: the full SKILL.md body (frontmatter
- * stripped) plus the attached-file manifest, grouped by directory and expanded
- * inline.
- *
- * The body is fetched fresh on every mount and deliberately *not* cached in
- * the module store — the file on disk may have changed while the panel was
- * closed, and the page stack is the only thing that has to survive a tab
- * switch. Only the expanded file previews are cached, and only for the life of
- * this mount, so re-expanding a row never re-requests.
- *
- * The enable/disable toggle writes through the shared store, so the grid card
- * behind this page reflects the same state.
- */
 export function SkillDetailPage({ filePath }: { filePath: string }) {
   const { t } = useI18n();
   const { skills, toggleBusy } = useSkillsStore();

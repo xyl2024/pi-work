@@ -11,9 +11,7 @@ interface Props {
   delayDuration?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Keep the content interactive until the user clicks outside it. */
   interactive?: boolean;
-  /** Override the default 280px content max-width for wider content. */
   maxWidth?: number;
 }
 
@@ -33,9 +31,6 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
 
   return (
     <TooltipPrimitive.Provider delayDuration={delayDuration}>
-      {/* Decorative tooltips close on trigger leave and do not capture the mouse.
-          Interactive tooltips opt into hoverable content and close on outside
-          pointer-down instead. */}
       <TooltipPrimitive.Root
         open={effectiveOpen}
         onOpenChange={handleOpenChange}
@@ -53,7 +48,7 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
             data-interactive-tooltip={interactive ? "true" : undefined}
             style={{
               zIndex: 9999,
-              pointerEvents: interactive ? "auto" : "none", // the wrapper is disabled in globals.css for decorative tooltips
+              pointerEvents: interactive ? "auto" : "none",
               maxWidth: maxWidthProp ?? 280,
               padding: "4px 10px",
               background: "var(--bg-panel)",

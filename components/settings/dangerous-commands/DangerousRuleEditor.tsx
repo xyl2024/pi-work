@@ -1,23 +1,5 @@
 "use client";
 
-/**
- * DangerousRuleEditor — edit one dangerous-command rule in the page's draft.
- *
- * A portal modal, deliberately the same shape as the subagent editor: a rule
- * carries a name, a regex, a case-sensitivity flag and its own inline error, so
- * editing it inside the list would collide with the list's own controls (move /
- * delete).
- *
- * Nothing is written here. The editor only hands a complete rule back to the
- * page, which keeps it in the draft until the page-level Save writes the whole
- * list. That is why the footer says "Add rule" / "Save", not "Save settings".
- *
- * `initial` switches the same form between "new" and "edit": when present the
- * fields start prefilled and the caller replaces that row; when absent a new
- * row is appended. The component is mounted per opening, so `useState` can seed
- * from `initial` without an effect.
- */
-
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
@@ -36,18 +18,10 @@ export function DangerousRuleEditor({
   onClose,
   onSubmit,
 }: {
-  /** The rule being edited; absent when creating a new one. */
   initial?: DangerousPatternRule;
-  /** The platform's built-in rule names, which a user rule may not reuse. */
   builtinNames?: readonly string[];
-  /**
-   * The other rows of the page's draft and their positions. Passed in because
-   * the editor owns one row, not the list: a duplicate is caught here — by name
-   * and by position — instead of only after the row has been appended.
-   */
   takenRules?: readonly { name: string; index: number }[];
   onClose: () => void;
-  /** Hand the complete rule to the page's draft (append or replace). */
   onSubmit: (rule: DangerousPatternRule) => void;
 }) {
   const { t } = useI18n();
@@ -55,8 +29,6 @@ export function DangerousRuleEditor({
   const [name, setName] = useState(initial?.name ?? "");
   const [pattern, setPattern] = useState(initial?.pattern ?? "");
   const [ignoreCase, setIgnoreCase] = useState(initial?.ignoreCase === true);
-  // Do not shout "name is required" at an empty form the user just opened;
-  // after the first keystroke the inline error is what they need.
   const [touched, setTouched] = useState(false);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
 
@@ -70,8 +42,6 @@ export function DangerousRuleEditor({
   });
   useBodyScrollLock(isVisible);
 
-  // The same gate the page's Save button uses, run on this one row. The timeout
-  // is deliberately left out: this form does not own that field.
   const problem = dangerousRulesDraftProblem(
     { rules: [{ uid: "new", name, pattern, ignoreCase }] },
     { builtinNames, takenRules },

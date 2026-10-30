@@ -11,12 +11,6 @@ import { encodeEmojiValue, emojiOf } from "@/lib/shared/cwd-icon";
 
 type Tab = "icons" | "emoji";
 
-/**
- * Modal icon picker for a cwd's custom icon. Two tabs: lucide icons and a
- * curated emoji set, each searchable, plus a "default folder" option to clear
- * the override. `current` is the storage value — a lucide name, an `emoji:…`
- * value, or null.
- */
 export function CwdIconPicker({
   open,
   title,
@@ -39,8 +33,6 @@ export function CwdIconPicker({
     setPortalEl(document.body);
   }, []);
 
-  // On open: start on whichever tab owns the current value (emoji value →
-  // emoji tab), clear the search box.
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -56,7 +48,6 @@ export function CwdIconPicker({
   }, [q]);
 
   const filteredEmoji = useMemo(() => {
-    // Dedupe by emoji character (labelled synonyms can repeat the same glyph).
     const seen = new Set<string>();
     const out: typeof CWD_EMOJI_OPTIONS = [];
     for (const o of CWD_EMOJI_OPTIONS) {
@@ -112,7 +103,6 @@ export function CwdIconPicker({
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div style={{ padding: "14px 16px 10px", display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", flex: 1 }}>
             {title}
@@ -136,7 +126,6 @@ export function CwdIconPicker({
           </button>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", gap: 2, padding: "0 16px 10px" }}>
           {(
             [
@@ -166,7 +155,6 @@ export function CwdIconPicker({
           ))}
         </div>
 
-        {/* Search */}
         <div style={{ padding: "0 16px 10px" }}>
           <div style={{ position: "relative" }}>
             <svg
@@ -196,9 +184,7 @@ export function CwdIconPicker({
           </div>
         </div>
 
-        {/* Default option + grid */}
         <div data-scroll-inset style={{ overflowY: "auto", padding: "0 12px 14px" }}>
-          {/* Clear / default folder */}
           <button
             onClick={() => onSelect(null)}
             style={{
@@ -222,7 +208,6 @@ export function CwdIconPicker({
             </div>
           )}
 
-          {/* Grid */}
           {tab === "icons" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(40px, 1fr))", gap: 4, marginTop: 8 }}>
               {filteredIcons.map((name) => {

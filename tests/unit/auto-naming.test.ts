@@ -7,7 +7,6 @@ import {
   type AutoNameStartInput,
 } from "@/lib/shared/auto-naming";
 
-/** Baseline: a settled session with a first user message and no name yet. */
 const base: AutoNameStartInput = {
   mode: "manual",
   sessionId: "01a01ffa-023",
@@ -19,7 +18,6 @@ const base: AutoNameStartInput = {
 
 const start = (overrides: Partial<AutoNameStartInput> = {}) => decideAutoNameStart({ ...base, ...overrides });
 
-/** The reason a start decision abandoned, or "proceed". */
 function startOutcome(input: Partial<AutoNameStartInput> = {}): string {
   const decision = start(input);
   return decision.kind === "proceed" ? "proceed" : decision.reason;
@@ -67,7 +65,6 @@ describe("decideAutoNameStart: the name-already-set check is auto-only", () => {
     expect(startOutcome({ mode: "auto", currentSessionName: "   " })).toBe("proceed");
   });
 
-  // Race rule 1: a rename inside the 1s window before the LLM call wins.
   it("abandons the silent auto run when the user renamed inside the window (race rule 1)", () => {
     expect(startOutcome({ mode: "auto", currentSessionName: "Renamed by hand" })).toBe("name-already-set");
   });
@@ -131,7 +128,6 @@ describe("decideAutoNameApply", () => {
       .toEqual({ kind: "apply", name: "Fresh name" });
   });
 
-  // Race rule 2: a rename during the LLM call wins — silent skip.
   it("abandons the silent auto write when a name appeared during the LLM call (race rule 2)", () => {
     expect(decideAutoNameApply({ mode: "auto", suggestedName: "Fresh name", currentSessionName: "Renamed by hand" }))
       .toEqual({ kind: "abandon", reason: "name-already-set" });

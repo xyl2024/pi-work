@@ -1,10 +1,3 @@
-/**
- * POST /api/scheduled-tasks/[id]/run — manually fire a task right now.
- *
- * Records a new `running` row, kicks the runner, returns the run id. The
- * client can poll /api/scheduled-tasks/runs/[runId] for status, or just
- * refresh the task's runs list.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { getTask, recordRunStart, SchedulerNotFoundError } from "@/lib/server/scheduler/store";
@@ -22,7 +15,6 @@ export async function POST(
     const task = getTask(id);
     if (!task) throw new SchedulerNotFoundError(id);
     const run = recordRunStart(task.id);
-    // Fire-and-forget — runner updates the run row on completion.
     void runTask(task, run.id);
     log.info("task triggered manually", { id, runId: run.id, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ runId: run.id });

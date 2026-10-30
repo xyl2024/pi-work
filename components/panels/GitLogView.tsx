@@ -14,20 +14,14 @@ import { DatePicker } from "../ui/DatePicker";
 import { GIT_STATUS_COLOR, GIT_STATUS_LABEL } from "./GitDiffView";
 
 interface Props {
-  /** Session cwd (always a validated repo — GitPanel gates before this). */
   cwd: string;
-  /** Branch whose history to show; null = current HEAD. Owned by GitPanel. */
   branch: string | null;
-  /** Bumped by GitPanel's refresh button; resets the list to page 1. */
   refreshToken: number;
-  /** Only show commit details while the right panel is expanded. */
   showDetail: boolean;
-  /** Expands the host panel when a commit is selected. */
   onCommitSelected?: () => void;
 }
 
 const PAGE_SIZE = 30;
-/** Stop infinite-scroll loading past this many commits (per branch). */
 const MAX_COMMITS = 500;
 
 function formatDate(iso: string): string {
@@ -35,9 +29,6 @@ function formatDate(iso: string): string {
   return Number.isNaN(ts) ? iso : relativeTime(ts, "");
 }
 
-/** Convert a unix-ms day to `YYYY-MM-DD` (local time) for git's
- *  `--since/--until`. The DatePicker operates at day granularity, and
- *  omitting any time component makes git treat the range end as inclusive. */
 function toISODay(ts: number): string {
   const d = new Date(ts);
   const y = d.getFullYear();
@@ -53,12 +44,6 @@ function statusBadge(status: string): { label: string; color: string } {
   };
 }
 
-/**
- * Commit history view: branch-aware commit list (infinite scroll) on the
- * left, selected commit's details (message + author + file stats) and
- * per-file diff on the right. All state is local; GitPanel drives branch
- * selection and refresh via props.
- */
 export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSelected }: Props) {
   const { t } = useI18n();
 
@@ -78,9 +63,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
   const [fileDiffLoading, setFileDiffLoading] = useState(false);
   const [fileDiffError, setFileDiffError] = useState<string | null>(null);
 
-  // Date-range filter (e.g. "show commits from May to June"). Each is the
-  // selected day as unix-ms (DatePicker granularity) or null = unfiltered.
-  // Changing either resets the list back to page 1.
   const [sinceTs, setSinceTs] = useState<number | null>(null);
   const [untilTs, setUntilTs] = useState<number | null>(null);
   const dateFilterDirty = sinceTs !== null || untilTs !== null;
@@ -115,8 +97,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     }
   }, [fetchPage]);
 
-  // Reset everything + load page 1 when cwd / branch / refresh / date
-  // filter changes.
   useEffect(() => {
     setCommits([]);
     setHasMore(true);
@@ -129,7 +109,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     void loadFirstPage();
   }, [cwd, branch, refreshToken, sinceTs, untilTs, loadFirstPage]);
 
-  // Infinite scroll: append the next page when the list nears the bottom.
   const loadMore = useCallback(async () => {
     if (!hasMore || listLoading || commits.length === 0) return;
     if (commits.length >= MAX_COMMITS) {
@@ -153,7 +132,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) void loadMore();
   }, [loadMore]);
 
-  // Load commit detail when a commit is selected.
   useEffect(() => {
     if (!selected) {
       setDetail(null);
@@ -232,7 +210,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     };
   }, [isResizing]);
 
-  // Load the file diff (inside the selected commit) when a file is picked.
   useEffect(() => {
     if (!selected || !selectedFile) {
       setFileDiffText(null);
@@ -276,7 +253,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
 
   return (
     <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-      {/* Commit list */}
       <div
         onScroll={handleScroll}
         style={{
@@ -285,7 +261,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
           background: "transparent",
         }}
       >
-        {/* Date-range filter bar (sticky so it stays visible while scrolling) */}
         <div style={{
           position: "sticky", top: 0, zIndex: 2,
           display: "flex", alignItems: "center", gap: 6,
@@ -383,7 +358,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
         )}
       </div>
 
-      {/* Detail + diff */}
       {showDetail && <div ref={detailColumnRef} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
         {!selected ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
@@ -391,11 +365,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
           </div>
         ) : (
           <>
-            {/* Detail
-              By default (before the user drags the handle) the section is
-              content-sized, but capped at half the pane — otherwise a commit
-              with many files would push the diff view out of the visible
-              area. Larger lists scroll inside the capped section. */}
             <div style={{
               flex: detailHeight === null ? "0 0 auto" : `0 0 ${detailHeight}px`,
               minHeight: 100,
@@ -487,7 +456,6 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
               )}
             </div>
 
-            {/* Resize handle + file diff for the selected commit file */}
             <div
               role="separator"
               aria-orientation="horizontal"

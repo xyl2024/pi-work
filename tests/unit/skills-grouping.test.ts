@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SKILL_GROUP_ORDER, groupSkills, skillGroup, type Skill } from "@/lib/shared/skills";
 
-/**
- * The grid's grouping rule (lib/shared/skills.ts). The panel root page calls
- * `groupSkills`, so this is the contract that keeps the buckets in a fixed
- * order.
- */
-
 function skill(name: string, sourceInfo: Skill["sourceInfo"] = {}): Skill {
   return {
     name,

@@ -1,28 +1,9 @@
-// Global authentication gateway (Next.js 16 "proxy" convention — formerly
-// middleware.ts).
-//
-// Every request passes through here:
-//   - page navigations            → redirect to /login when unauthenticated
-//   - /api/** calls               → 401 JSON when unauthenticated
-//   - /login and /api/auth/session/** (login/logout/status) → always pass
-//
-// Verification is pure cookie + HMAC (see lib/server/auth.ts), so no Node
-// APIs or shared session state are needed here. The signed token travels in a
-// single SameSite=Lax cookie: the app is loaded as a top-level page both in a
-// browser and in the Electron shell, so it is first-party in both.
-//
-// Desktop mode (PI_WORK_DESKTOP) has no login page: the shell signs the cookie
-// and injects it into the window before the app loads. There, /login is not a
-// route and an unauthenticated page visit is never redirected to it — that
-// redirect would loop with the one below. Every /api call is still 401
-// without a valid cookie.
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE_NAME, isAuthDisabled, verifySessionToken } from "@/lib/server/auth";
 import { isDesktopMode } from "@/lib/server/trust-boundary";
 
 const LOGIN_PATH = "/login";
 
-/** Paths served without an auth session. */
 function isPublicPath(pathname: string): boolean {
   if (pathname === LOGIN_PATH) return true;
   if (pathname.startsWith("/api/auth/session/")) return true;
@@ -46,40 +27,29 @@ export default function authProxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const desktop = isDesktopMode();
 
-  // Explicit trusted-network deployment: no cookie is needed, even if an old
-  // cookie is still present. Desktop mode can never take this bypass.
   if (isAuthDisabled()) {
     if (pathname === LOGIN_PATH) return NextResponse.redirect(new URL("/", req.url));
     return NextResponse.next();
   }
 
-  // Desktop mode has no login page. Bounce it before anything else so the
-  // login form is never rendered there, cookie or no cookie.
   if (desktop && pathname === LOGIN_PATH) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  // Fast path without touching crypto: no auth cookie at all can't be a
-  // session.
   if (!req.cookies.get(AUTH_COOKIE_NAME)) {
     if (isPublicPath(pathname)) return NextResponse.next();
     if (isApiPath(pathname)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-    // Desktop pages are served without a login redirect; the shell injects the
-    // cookie, and the app's own gate reports whatever the session really is.
     if (desktop) return NextResponse.next();
     return NextResponse.redirect(new URL(LOGIN_PATH, req.url));
   }
 
   if (tokenAccepted(req)) {
-    // Already signed in — the login page is pointless, bounce to the app.
     if (pathname === LOGIN_PATH) return NextResponse.redirect(new URL("/", req.url));
     return NextResponse.next();
   }
 
-  // Stale/invalid cookie: treat like no session, but make sure the page that
-  // renders /login clears the useless cookie first.
   if (isPublicPath(pathname)) {
     return clearSessionCookie(NextResponse.next());
   }
@@ -91,7 +61,5 @@ export default function authProxy(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next internals and the favicon; /login,
-  // /api/auth/session/* are let through inside the handler above.
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

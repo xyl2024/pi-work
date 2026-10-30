@@ -24,98 +24,49 @@ import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thi
 export type { SlashResource } from "@/lib/shared/slash-commands";
 export type { AttachedImage } from "./chat-input/types";
 
-// Re-exported so existing consumers (AttachmentList, useAgentSession types)
-// can keep importing the type from "./ChatInput" without churn.
 import type { AttachedImage } from "./chat-input/types";
 
 interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   isStreaming: boolean;
-  /** True while the session is mid-turn (including compaction). Same gate
-   *  as `isStreaming`, exposed separately so a parent can disable just the
-   *  submit affordance without forcing the rest of the input into a
-   *  streaming-only mode (e.g. compacting disables only the send button,
-   *  not the textarea or model selector). */
   sessionBusy?: boolean;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
-  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
-  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
   modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
-  /** The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High, partial
-   *  array ≡ Custom. Mutually consistent with the wire format of `set_tools`. */
   toolSelection?: ToolSelection;
-  /** Apply a new tool selection. For existing sessions this fires `set_tools`
-   *  against the agent; for new sessions it just updates local state and the
-   *  selection is serialised into the first prompt's `toolNames`. */
   onToolSelectionChange?: (selection: ToolSelection) => void;
-  /** Catalog of every tool pi would register for this session's cwd. Sorted
-   *  alphabetically. Empty until `onEnsureAvailableTools()` resolves. */
   availableTools?: ToolInfo[];
-  /** True while the catalog is being fetched. The Custom row renders a
-   *  spinner in its checklist area while this is true. */
   toolsLoading?: boolean;
-  /** Last catalog-fetch error message, surfaced inline in the checklist area
-   *  with a Retry button that re-invokes `onEnsureAvailableTools`. */
   toolsError?: string | null;
-  /** Lazy catalog fetcher. The Custom row calls this the first time it's
-   *  expanded per session if the catalog is empty. */
   onEnsureAvailableTools?: () => Promise<void>;
   thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
-  /** This session's permission mode (ADR-0021). `full_access` turns the input
-   *  container's border red — the only permanent reminder that the next
-   *  dangerous command will not ask. */
   permissionMode?: PermissionMode;
-  /** Flip between the two modes. Absent on screens that have no session yet
-   *  (a draft is always `confirm`), which also hides the toolbar button. */
   onPermissionModeToggle?: () => void;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   slashResources?: SlashResource[];
   slashResourceKey?: string;
   onSlashAction?: (action: string) => void;
-  /** Current cwd shown by the CwdPicker (the active session's cwd, or the
-   *  new-session pick while no session is selected). */
   cwd?: string | null;
-  /** Fired when the CwdPicker picks a different cwd (new-session mode, or
-   *  switching projects while a session is idle). */
   onCwdChange?: (cwd: string) => void;
   sessionId?: string | null;
-  /**
-   * Plain-text user messages from the active session, oldest first. Sourced
-   * from `useAgentSession.messages` (which reflects the backend .jsonl) so
-   * ArrowUp recall matches the real conversation history across refreshes
-   * and devices. Used by the input history navigation in handleKeyDown.
-   */
   userMessageHistory?: string[];
-  /** Publish the tab-local unsent draft state to the session workspace. */
   onDraftChange?: (draft: {
     dirty: boolean;
     text: string;
     imageCount: number;
     cursorPosition: number;
   }) => void;
-  /** Enter sends immediately (instead of the default Ctrl/Cmd+Enter). Used
-   *  by compact surfaces (e.g. the Ask User Questions card) that want
-   *  plain-Enter sending. */
   enterToSend?: boolean;
-  /** Renders only the bordered input box itself: no bottom toolbar, no
-   *  image attachments, no slash menu. */
   hideToolbar?: boolean;
-  /** Hard-disable the whole input (no session, not ready, ...). */
   disabled?: boolean;
-  /** Show the icon-only notification-channel picker in the bottom toolbar,
-   *  right of the tools picker. Set only while the new-session screen is
-   *  still empty — sessions with messages use the chat window's
- *  MoreActionsRow button instead. */
   showNotifyPicker?: boolean;
-  /** Channel id the first prompt's replies should be sent to (null = none). */
   notifyChannelId?: string | null;
   onNotifyChannelChange?: (channelId: string | null) => void;
 }
@@ -151,12 +102,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const { t } = useI18n();
   const { contextUsage, sessionStats, contextComposition } = useSessionUiState();
 
-  // ── Textarea + caret ──────────────────────────────────────────────────
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // ── Image attachments (file input ref + URL lifecycle owned by hook) ──
   const {
     attachedImages,
     fileInputRef,
@@ -166,7 +115,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     handlePaste,
   } = useImageAttachments();
 
-  // ── Slash-command menu state + keyboard handling ──────────────────────
   const {
     selectedSlashResource,
     slashMenuOpen,
@@ -210,7 +158,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     syncFileMentionMenuForEdit(nextValue, cursor);
   }, [cwd, setSlashMenuOpen, syncSlashMenuForEdit, syncFileMentionMenuForEdit]);
 
-  // ── Tools preset dropdown ─────────────────────────────────────────────
   const {
     toolDropdownOpen,
     customExpanded,
@@ -219,9 +166,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     toggleCustomExpanded,
   } = useToolsDropdown();
 
-  // ── Input history (ArrowUp/Down recall) ───────────────────────────────
-  // fillFromHistory needs textareaRef + setValue + setCursorPosition +
-  // clearImages, so we implement it here and pass it down as `navigateTo`.
   const fillFromHistory = useCallback(
     (text: string) => {
       setValue(text);
@@ -250,9 +194,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     textareaRef,
   });
 
-  // Keep the draft owned by this input/controller. The workspace only needs a
-  // small dirty snapshot for close confirmation; the actual text and images
-  // remain here so switching tabs never round-trips them through the server.
   useEffect(() => {
     onDraftChange?.({
       dirty: Boolean(value.trim() || attachedImages.length || selectedSlashResource),
@@ -262,7 +203,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     });
   }, [value, attachedImages.length, selectedSlashResource, cursorPosition, onDraftChange]);
 
-  // ── Build/send message ─────────────────────────────────────────────────
   const buildMessage = useCallback(
     (rawMessage: string) => {
       const msg = rawMessage.trim();
@@ -283,10 +223,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (!msg && !attachedImages.length) return;
     if (isStreaming) return;
     onSend(msg, attachedImages.length ? attachedImages : undefined);
-    // No need to record locally — `useAgentSession.handleSend` already
-    // pushes the message into its `messages` state, which feeds
-    // `userMessageHistory` on the next render. Reset the local index so
-    // the next ArrowUp starts a fresh recall.
     exitHistoryMode();
     setValue("");
     setCursorPosition(0);
@@ -298,7 +234,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
   }, [value, attachedImages, isStreaming, onSend, clearImages, buildMessage, exitHistoryMode, setSelectedSlashResource, setSlashMenuOpen]);
 
-  // ── Autoresize on every keystroke ─────────────────────────────────────
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -306,19 +241,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   }, []);
 
-  // ── Ctrl/Cmd+Enter sends (or plain Enter when `enterToSend`); bare
-  //    /new / /compact rides the same gate so the shortcut is consistent
-  //    across "send a message" and "fire a built-in slash action". Plain
-  //    Enter / Shift+Enter fall through to the browser default (newline),
-  //    which is what users want when typing multi-line drafts or in the
-  //    middle of an IME composition session. ─────────────────────────────
   const handleEnterAndBuiltin = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
       if (!(e.ctrlKey || e.metaKey) && !enterToSend) return false;
-      // Bare built-in slash actions (no trailing args) trigger the action
-      // directly, bypassing the skill selection that skill commands go
-      // through in selectSlashResource.
       const trimmed = value.trim();
       if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/model") {
         const action = trimmed.slice(1);
@@ -330,8 +256,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         return true;
       }
-      // While the agent is running there is nothing to send to — handleSend
-      // no-ops on isStreaming, so Enter just leaves the draft in place.
       e.preventDefault();
       handleSend();
       return true;
@@ -339,7 +263,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [value, onSlashAction, handleSend, setSelectedSlashResource, setSlashMenuOpen, enterToSend],
   );
 
-  // ── Shift+Backspace clears selected slash resource ─────────────────────
   const handleShiftBackspaceClear = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (!(selectedSlashResource && e.shiftKey && e.key === "Backspace")) return false;
@@ -350,19 +273,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [selectedSlashResource, setSelectedSlashResource],
   );
 
-  // ── Tab / Shift+Tab cycles the thinking level. Hijacked so the textarea
-  //    doesn't lose focus mid-conversation; the direction matches the
-  //    browser convention (Tab = forward) and mirrors ThinkingPicker's
-  //    wheel handler so both affordances agree on the next level. Falls
-  //    through to the browser default when the current model advertises
-  //    no thinking levels at all (idx === -1 + empty list) so the user can
-  //    still tab out of the input in that narrow window. ────────────────
   const handleThinkingTabKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (e.key !== "Tab" || e.nativeEvent.isComposing) return false;
       if (!onThinkingLevelChange) return false;
-      // Restrict the cycle to levels the active model actually supports —
-      // same rule as ThinkingPicker.availableLevels.
       const available = availableThinkingLevels ?? null;
       const list: readonly ThinkingLevelOption[] = THINKING_LEVEL_ORDER.filter(
         (lvl) => (available ? available.includes(lvl) : true),
@@ -380,7 +294,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [thinkingLevel, onThinkingLevelChange, availableThinkingLevels],
   );
 
-  // ── Escape closes the slash menu ──────────────────────────────────────
   const handleSlashEscape = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (!(slashMenuOpen && e.key === "Escape")) return false;
@@ -391,9 +304,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [slashMenuOpen, setSlashMenuOpen],
   );
 
-  // ── Master keydown handler: three smaller handlers chained in priority
-  //    order. Each returns `true` when it has consumed the event, so the
-  //    master handler early-returns without further work. ──────────────────────────────────────────────────
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleShiftBackspaceClear(e)) return;
@@ -407,7 +317,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [handleShiftBackspaceClear, handleThinkingTabKeyDown, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
   );
 
-  // ── Imperative handle for ChatWindow's chatInputRef ───────────────────
   useImperativeHandle(ref, () => ({
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
@@ -450,7 +359,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const ta = textareaRef.current;
       if (!ta) return;
       ta.focus();
-      // Place cursor at end of current text
       const end = ta.value.length;
       ta.setSelectionRange(end, end);
     },
@@ -466,7 +374,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         padding: "0 16px 8px",
       }}
     >
-      {/* Hidden file input */}
       {!hideToolbar && (
         <input
           ref={fileInputRef}
@@ -482,7 +389,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         />
       )}
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
-        {/* Retry banner */}
         {retryInfo && (
           <div style={{
             marginBottom: 8, padding: "5px 10px",
@@ -497,11 +403,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {t("Retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
-        {/* Image previews */}
         {!hideToolbar && <AttachmentList images={attachedImages} onRemove={removeImage} />}
 
-        {/* Main input — stays visible while the agent is streaming; the send
-            button turns into the red stop button so cancelling stays in reach. */}
         <CollapsiblePanel open={true}>
         <div
           style={{
@@ -509,8 +412,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: 8,
             alignItems: "center",
             background: "var(--bg)",
-            // Full access wins over the thinking-level colour: this border is
-            // the standing "the next dangerous command will not ask" signal.
             border: `1.5px solid ${permissionMode === "full_access" ? FULL_ACCESS_BORDER_COLOR : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
@@ -527,8 +428,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               const pos = e.target.selectionStart ?? e.target.value.length;
               setCursorPosition(pos);
               syncInputMenus(e.target.value, pos);
-              // E2: any user edit exits the history index so the next
-              // ArrowUp is treated as a fresh recall, not a continuation.
               if (isInHistoryMode) {
                 exitHistoryMode();
               }
@@ -539,20 +438,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onSelect={(e) => {
               const pos = e.currentTarget.selectionStart ?? value.length;
               setCursorPosition(pos);
-              // Typing a character also fires `select` (caret moved), so
-              // reuse the edit rule: only a caret right after `/` opens the
-              // menu; while open, it stays up for filtering as long as a
-              // slash token is still active at the caret. A bare tighten
-              // here (endsWith("/")) would kill filtering after the first
-              // typed character.
               syncInputMenus(e.currentTarget.value, pos);
             }}
             onFocus={(e) => {
               const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
               setCursorPosition(pos);
-              // Same rule as edits/caret moves: only a caret right after a
-              // `/` opens the menu; an open menu keeps filtering while a
-              // slash token is still active at the caret.
               syncInputMenus(e.currentTarget.value, pos);
             }}
             rows={1}

@@ -7,16 +7,10 @@ import {
   type ToolbarLayout,
 } from "@/lib/shared/toolbarLayout";
 
-// "Width → toolbar layout" is the one automatable seam of the narrow-toolbar
-// feature: everything else is JSX. These tests therefore assert the resolved
-// layout only — never `tier` alone, because the individual flags are what the
-// toolbar actually consumes.
-
 function layoutAt(width: number, prev: ToolbarLayout | null = null) {
   return resolveToolbarLayout(width, prev);
 }
 
-/** Feed widths through in order, threading each result in as `prev`. */
 function walk(widths: number[]): ToolbarLayout[] {
   const out: ToolbarLayout[] = [];
   let prev: ToolbarLayout | null = null;
@@ -146,20 +140,16 @@ describe("resolveToolbarLayout — tiers (sacrifice order)", () => {
   });
 
   it("never sacrifices the model name before the secondary labels are gone", () => {
-    // The product decision this table encodes: identity labels shrink last.
     for (const width of [680, 610, 525]) {
       expect(layoutAt(width).modelLabelWidth).toBe(220);
       expect(layoutAt(width).cwdLabelVisible).toBe(true);
     }
-    // …and only once they are icon-only does the cwd control leave the row.
     expect(layoutAt(262).collapsed).toEqual(["thinking", "tools"]);
   });
 });
 
 describe("resolveToolbarLayout — tier boundaries", () => {
   it.each([
-    // Both sides of every boundary: exact lower bound, one pixel above it and
-    // one pixel below it.
     [701, 0],
     [700, 0],
     [699, 1],
@@ -191,15 +181,12 @@ describe("resolveToolbarLayout — tier boundaries", () => {
 
 describe("resolveToolbarLayout — hysteresis", () => {
   it("does not flip back and forth while dragging on a boundary", () => {
-    // 700 → 690 tightens to tier 1; 710 would be tier 0 without hysteresis,
-    // but growing has to clear 700 + 24 first.
     const [seed, shrunk, grown, settled] = walk([700, 690, 710, 695]);
     expect(seed.tier).toBe(0);
     expect(shrunk.tier).toBe(1);
     expect(grown.tier).toBe(1);
     expect(settled.tier).toBe(1);
 
-    // Only past the buffer does it expand again.
     const wide = layoutAt(TOOLBAR_TIER_THRESHOLDS[0] + TOOLBAR_HYSTERESIS_PX, settled);
     expect(wide.tier).toBe(0);
     const justUnderBuffer = layoutAt(TOOLBAR_TIER_THRESHOLDS[0] + TOOLBAR_HYSTERESIS_PX - 1, settled);
@@ -213,18 +200,17 @@ describe("resolveToolbarLayout — hysteresis", () => {
   });
 
   it("only crosses boundaries whose own buffer is cleared", () => {
-    // Widening out of tier 6: every boundary needs its own +24.
     const narrow = layoutAt(380);
     expect(narrow.tier).toBe(6);
 
     const first = layoutAt(500, narrow);
-    expect(first.tier).toBe(4); // 430 + 24 = 454 ≤ 500, but 490 + 24 = 514 > 500
+    expect(first.tier).toBe(4);
 
     const again = layoutAt(500, first);
-    expect(again.tier).toBe(4); // stable: still short of the next boundary
+    expect(again.tier).toBe(4);
 
     const widened = layoutAt(570, again);
-    expect(widened.tier).toBe(3); // 490 cleared, 560 + 24 = 584 not
+    expect(widened.tier).toBe(3);
   });
 
   it("expands fully once every buffer is cleared", () => {
@@ -260,16 +246,12 @@ describe("resolveToolbarLayout — hard floors", () => {
   ];
 
   it("offers no way to hide the context ring or the upload button at any width", () => {
-    // The invariant is structural: the layout plan has no flag that could
-    // hide the ring or the upload button, so no width can produce one.
     for (const width of [1200, 700, 659, 489, 389, 219, 120, 0]) {
       expect(Object.keys(layoutAt(width)).sort()).toEqual(LAYOUT_KEYS);
     }
   });
 
   it("keeps the context ring in every tier (compact still shows the ring)", () => {
-    // `contextBarCompact` only drops the token readout — the ring stays in
-    // every tier, so the flag is the only thing that may vary.
     const widths = [800, 680, 610, 525, 460, 410, 347, 262, 150];
     const compactFlags = widths.map((w) => layoutAt(w).contextBarCompact);
     expect(compactFlags).toEqual([false, true, true, true, true, true, true, true, true]);

@@ -7,13 +7,6 @@ import {
 } from "@/lib/shared/mcp-close";
 import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 
-/**
- * The MCP panel's close guard + reopen policy (lib/shared/mcp-close.ts):
- * whether closing the tab may lose edits, which copy to show, and whether the
- * next open re-reads disk. Driven as plain data — no browser; the shell maps the
- * returned i18n keys through `t()`.
- */
-
 function openState(partial: Partial<McpOpenState>): McpOpenState {
   return { loading: false, dirty: false, hasSnapshot: false, ...partial };
 }

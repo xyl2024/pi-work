@@ -1,29 +1,5 @@
 "use client";
 
-/**
- * CwdSessionsModal — sidebar "View more sessions" modal.
- *
- * Opened from the "..." menu on each cwd group header in the multi-cwd
- * sidebar. Lets the user browse the full session list for that cwd:
- *
- *   - infinite-scroll (default 20 rows per fetch, same cursor-based
- *     pagination as the sidebar's normal /api/sessions route). The next
- *     page is requested automatically when the list scrolls within
- *     LOAD_MORE_THRESHOLD_PX of the bottom — no "Next page" button.
- *   - searchable by either session name OR user/assistant message content
- *     (the server's `q` parameter maps to searchSessionsPaged, which
- *     walks every JSONL in the cwd's workspace dir and returns the
- *     matching rows with matchCount / snippet / matchLocation)
- *
- * Click any row to switch to that session — the modal closes and the
- * sidebar updates the active selection through the same onSelectSession
- * contract the rest of the sidebar uses.
- *
- * Close: Esc, backdrop click, top-right × button, or picking a session.
- * Body scroll is locked while the modal is open so the page behind
- * doesn't scroll.
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
@@ -35,31 +11,20 @@ import type { SessionInfo, SessionSearchPagedResult } from "@/lib/shared/types";
 
 const PAGE_SIZE = 20;
 const DEBOUNCE_MS = 220;
-/** Trigger the next-page fetch when the bottom of the list is within
- *  this many pixels of the viewport. Matches GitLogView's threshold so
- *  the two infinite-scroll lists feel the same. */
 const LOAD_MORE_THRESHOLD_PX = 24;
 
 interface Props {
-  /** Absolute path of the cwd whose sessions to browse. */
   cwd: string;
   onClose: () => void;
   onSelectSession: (session: SessionInfo) => void;
 }
 
 interface PageState {
-  /** True only for the very first fetch of the current query — prevents
-   *  the empty state from flashing in while the request is in flight. */
   loading: boolean;
-  /** True while a follow-up page (infinite-scroll triggered) is in
-   *  flight. Lets the bottom-of-list sentinel show a spinner without
-   *  wiping out the rows we already have. */
   loadingMore: boolean;
   error: string | null;
   rows: SessionSearchPagedResult[];
-  /** Opaque cursor produced by /api/sessions for the next page. */
   nextCursor: string | null;
-  /** Total matches across all pages (only populated when a query is set). */
   total: number | null;
 }
 
@@ -72,12 +37,7 @@ const INITIAL_PAGE: PageState = {
   total: null,
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────
-
 function highlightSnippet(snippet: string): React.ReactNode[] {
-  // The server uses \u0000 (NUL) markers to delimit the matched substring
-  // — see buildSnippet() in lib/session-reader.ts. Anything between two
-  // NULs gets wrapped in <mark>.
   const parts: React.ReactNode[] = [];
   let remaining = snippet;
   let key = 0;
@@ -118,8 +78,6 @@ function basenameOf(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-// ── Component ─────────────────────────────────────────────────────────
-
 export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   const { t } = useI18n();
   const { requestClose, backdropStyle, panelStyle, isVisible } = useModalAnimation({
@@ -129,40 +87,25 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   });
 
   const [query, setQuery] = useState("");
-  // Stash the debounced query so the fetch effect always reads the
-  // settled value, not whatever the input was during a keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState<PageState>(INITIAL_PAGE);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  // Ref to the scrolling element so we can restore scrollTop after a
-  // query reset (we want the new result list to start at the top, not
-  // wherever the old list happened to leave the thumb).
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Debounce the input → debouncedQuery. The fetch effect reads
-  // debouncedQuery, so a fast typer doesn't fire one request per
-  // keystroke.
   useEffect(() => {
     const trimmed = query.trim();
     const id = setTimeout(() => setDebouncedQuery(trimmed), DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [query]);
 
-  // Focus the search input on open (matches the Cmd+K palette).
   useEffect(() => {
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Body scroll lock while the modal is open. The parent uses the
-  // conditional-mount pattern (renders <CwdSessionsModal> only while
-  // open), so the hook is active for the entire lifetime.
   useBodyScrollLock(true);
 
-  // Fetch a page. `cursor` is what we send on the wire. `mode`:
-  //   - "reset"    → first page of the current query; wipe rows.
-  //   - "append"   → infinite-scroll continuation; keep rows, append.
   const fetchPage = useCallback(
     async (cursor: string | null, mode: "reset" | "append") => {
       abortRef.current?.abort();
@@ -172,8 +115,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
       setPage((prev) => ({
         ...prev,
         loading: mode === "reset",
-        // Only flip the follow-up spinner on for "append" — on reset the
-        // primary loading: true is what we want users to see.
         loadingMore: mode === "append",
         error: null,
         rows: mode === "reset" ? [] : prev.rows,
@@ -211,9 +152,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
               total: data.total ?? null,
             };
           }
-          // Append — dedupe by id so an out-of-order retry doesn't
-          // produce duplicates if the user scrolled back near the
-          // boundary mid-fetch.
           const seen = new Set(prev.rows.map((r) => r.id));
           const incoming = data.sessions.filter((r) => !seen.has(r.id));
           return {
@@ -239,30 +177,19 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
     [cwd, debouncedQuery],
   );
 
-  // Re-fetch when the debounced query OR cwd changes. Snaps the list
-  // back to the top so the user always sees page 1 of their new query.
   useEffect(() => {
     void fetchPage(null, "reset");
-    // Reset the scroll container after the new rows render — requestAnimationFrame
-    // waits for the DOM to settle without us having to thread refs into the
-    // setPage callback.
     requestAnimationFrame(() => {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
     });
   }, [debouncedQuery, cwd, fetchPage]);
 
-  // Cleanup on unmount: abort any in-flight request.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
     };
   }, []);
 
-  // Infinite-scroll trigger: fetch the next page when the scroll
-  // container is within LOAD_MORE_THRESHOLD_PX of the bottom. The "is this
-  // close enough to the bottom" rule is shared with the sidebar list
-  // (`decideLoadMoreOnScroll`); the modal keeps its own 24px threshold and
-  // its 20-row page size.
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const shouldLoad = decideLoadMoreOnScroll({
@@ -282,20 +209,14 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   }, [page.nextCursor, page.loading, page.loadingMore, page.rows.length, fetchPage]);
 
   const handleRowClick = useCallback((row: SessionSearchPagedResult) => {
-    // Forward as SessionInfo — the parent (sidebar) only consumes the
-    // standard fields. matchCount/snippet/matchLocation are stripped
-    // before the call goes out.
     onSelectSession(row);
     onClose();
   }, [onSelectSession, onClose]);
 
   const handleRetry = useCallback(() => {
-    // Retry from the top of the current query — same as a fresh load.
     void fetchPage(null, "reset");
   }, [fetchPage]);
 
-  // Footer count label. Without a query, server doesn't return `total`
-  // — we just show "Showing N" (or "Showing N+" if there's more).
   const totalLabel = page.total === null
     ? (page.nextCursor ? `${page.rows.length}+` : `${page.rows.length}`)
     : `${page.rows.length} / ${page.total}`;
@@ -333,7 +254,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           overflow: "hidden",
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -396,7 +316,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           </button>
         </div>
 
-        {/* Search input */}
         <div
           style={{
             display: "flex",
@@ -471,9 +390,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           )}
         </div>
 
-        {/* Result list — infinite scroll: handleScroll requests the next
-            page when the bottom of this container comes within
-            LOAD_MORE_THRESHOLD_PX of the viewport. */}
         <div
           ref={scrollRef}
           onScroll={handleScroll}
@@ -530,9 +446,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
             />
           ))}
 
-          {/* Bottom sentinel: visible status of the infinite-scroll tail.
-              Has three states — mid-fetch, end-of-list, or "scroll for
-              more" hint when there are rows but more remain. */}
           {page.rows.length > 0 && page.loadingMore && (
             <div style={{ padding: "12px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
               {t("Loading...")}
@@ -545,7 +458,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           )}
         </div>
 
-        {/* Footer: count only — pagination is now driven by scroll. */}
         <div
           style={{
             display: "flex",
@@ -568,8 +480,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
     document.body,
   );
 }
-
-// ── Row ───────────────────────────────────────────────────────────────
 
 function SessionRow({
   row,
@@ -610,7 +520,6 @@ function SessionRow({
         transition: "background 0.1s, border-color 0.1s",
       }}
     >
-      {/* Line 1: name/firstMessage + meta */}
       <div
         style={{
           display: "flex",
@@ -662,7 +571,6 @@ function SessionRow({
         </span>
       </div>
 
-      {/* Line 2 (search mode): snippet with highlighted match */}
       {showMatch && row.snippet && (
         <div
           style={{
@@ -694,7 +602,6 @@ function SessionRow({
         </div>
       )}
 
-      {/* Line 2 (no search): first message preview */}
       {!showMatch && row.firstMessage && (
         <div
           style={{
@@ -710,7 +617,6 @@ function SessionRow({
         </div>
       )}
 
-      {/* Match count (search mode only) */}
       {showMatch && row.matchCount > 1 && (
         <div
           style={{

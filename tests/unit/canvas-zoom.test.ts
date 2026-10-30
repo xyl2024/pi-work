@@ -29,7 +29,6 @@ describe("clampCanvasScale", () => {
 
 describe("computeZoomAnchor / scrollForAnchor", () => {
   it("anchors the pointer position to the same canvas point", () => {
-    // Canvas point under the cursor at 1x, scrolled 100px down.
     const anchor = computeZoomAnchor({
       currentScale: 1,
       scroll: { left: 0, top: 100 },
@@ -38,7 +37,6 @@ describe("computeZoomAnchor / scrollForAnchor", () => {
     });
     expect(anchor).toEqual({ contentX: 50, contentY: 150, mx: 50, my: 50 });
 
-    // Zooming to 2x must keep that point 50px/50px from the viewport corner.
     expect(scrollForAnchor(anchor, 2)).toEqual({ left: 50, top: 250 });
   });
 
@@ -53,10 +51,8 @@ describe("computeZoomAnchor / scrollForAnchor", () => {
 
   it("derives from the pending anchor while scroll is still stale", () => {
     const pending = { contentX: 200, contentY: 300, mx: 100, my: 100 };
-    // A second wheel tick 10px to the right at the already-updated scale.
     const anchor = computeZoomAnchor({
       currentScale: 2,
-      // Stale: the browser has not applied `pending` yet.
       scroll: { left: 0, top: 0 },
       viewport: { width: 400, height: 300 },
       pointer: { x: 110, y: 100 },
@@ -75,7 +71,6 @@ describe("computeZoomAnchor / scrollForAnchor", () => {
 
 describe("fitCanvasScale", () => {
   it("fits the limiting axis and leaves the inset", () => {
-    // 2000x1000 canvas inside 1000x1000 viewport with 12px inset.
     expect(fitCanvasScale({ width: 2000, height: 1000 }, { width: 1000, height: 1000 })).toBeCloseTo(
       (1000 - 24) / 2000,
     );

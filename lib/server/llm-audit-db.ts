@@ -1,24 +1,3 @@
-/**
- * SQLite-backed storage for the LLM API call audit log (`provider_calls`).
- *
- * Mirrors the singleton pattern in `lib/token-audit-db.ts`: `better-sqlite3`
- * is imported only here, the handle is cached on `globalThis` so Next.js
- * dev-mode HMR doesn't reopen it on every reload. Separate file from
- * token-audit.db because rows here carry full request/response bodies (large,
- * WAL-heavy) and have a completely different lifecycle — an append-only
- * detail log, not an aggregate stats table.
- *
- * File location: the data root's `llm-audit.db` by default
- * (`~/.pi-work`, or `PI_WORK_DATA_DIR`), override with
- * `PI_WORK_LLM_AUDIT_DB` env var.
- *
- * Retention: rows older than 30 days are pruned opportunistically (see
- * `pruneProviderCalls`), because this log keeps a row plus request/response
- * bodies for every provider call and would otherwise grow without bound.
- * Override the window with `PI_WORK_LLM_AUDIT_RETENTION_DAYS` (0 = keep
- * everything).
- */
-
 import Database from "better-sqlite3";
 import { dirname } from "path";
 import { mkdirSync } from "fs";
@@ -72,33 +51,16 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_provider_calls_status   ON provider_calls(status);
 `;
 
-/**
- * Indexes on columns that older databases only get through `MIGRATIONS`, so
- * they must be created AFTER the backfill (a `CREATE INDEX` on a missing column
- * aborts the whole schema step).
- */
 const POST_MIGRATION_INDEXES: string[] = [
   "CREATE INDEX IF NOT EXISTS idx_provider_calls_call ON provider_calls(call_id)",
 ];
 
-/**
- * Backfill columns added after the initial schema for pre-existing DBs.
- * `call_id` links a captured request to the logical model call (and through it
- * to the assistant message); rows written before the column existed keep NULL
- * and are simply not downloadable.
- */
 const MIGRATIONS: string[] = [
   "ALTER TABLE provider_calls ADD COLUMN cwd TEXT",
   "ALTER TABLE provider_calls ADD COLUMN session_name TEXT",
   "ALTER TABLE provider_calls ADD COLUMN call_id TEXT",
 ];
 
-/**
- * Idempotent schema ensure: create table if missing and backfill columns that
- * were added after the initial release. Runs on EVERY call to getLlmAuditDb —
- * the handle is cached on `globalThis` (survives Next.js HMR), so a cached
- * pre-migration handle must not skip the backfill.
- */
 function ensureSchema(db: Database.Database): void {
   db.exec(SCHEMA);
   const existingCols = new Set(
@@ -125,8 +87,6 @@ function ensureSchema(db: Database.Database): void {
 
 export function getLlmAuditDb(): Database.Database {
   if (globalThis.__piLlmAuditDb) {
-    // Handle may predate the cwd/session_name columns (HMR across edits) —
-    // re-run the idempotent migration against the live handle.
     ensureSchema(globalThis.__piLlmAuditDb);
     return globalThis.__piLlmAuditDb;
   }
@@ -140,30 +100,17 @@ export function getLlmAuditDb(): Database.Database {
   ensureSchema(db);
 
   globalThis.__piLlmAuditDb = db;
-  // A server that was off for a while (or upgraded from a build without
-  // retention) may be sitting on months of rows; don't make the call that
-  // opened the DB wait for the cleanup.
   schedulePrune();
   log.info("llm-audit db opened", { dbPath });
   return db;
 }
 
-// ── Retention ─────────────────────────────────────────────────────────────
-
-/**
- * Days of history kept by default. A row here carries the full request and
- * (for failures) response body, so a busy install accumulates hundreds of MB;
- * 30 days is plenty to debug recent provider behavior.
- */
 const DEFAULT_RETENTION_DAYS = 30;
 
-/** Rows deleted per statement, so one prune never becomes a huge transaction. */
 const PRUNE_BATCH_ROWS = 500;
 
-/** Batches per prune run; a larger backlog drains over the following runs. */
 const PRUNE_MAX_BATCHES = 40;
 
-/** Minimum gap between two prune runs — writes happen on every LLM call. */
 const PRUNE_THROTTLE_MS = 5 * 60 * 1000;
 
 function retentionDays(): number {
@@ -174,11 +121,6 @@ function retentionDays(): number {
   return Math.floor(n);
 }
 
-/**
- * Delete rows older than the retention window. Returns the number of removed
- * rows. Deletes in bounded batches (oldest first, `ts` is indexed) so a large
- * backlog doesn't turn into one long write transaction.
- */
 export function pruneProviderCalls(now = Date.now()): number {
   const days = retentionDays();
   if (days <= 0) return 0;
@@ -198,10 +140,6 @@ export function pruneProviderCalls(now = Date.now()): number {
   return deleted;
 }
 
-/**
- * Fire-and-forget, throttled prune. Runs off the caller's turn (insert path
- * and DB open) so the request that triggered it never pays for the cleanup.
- */
 function schedulePrune(): void {
   const now = Date.now();
   if (now - (globalThis.__piLlmAuditLastPrune ?? 0) < PRUNE_THROTTLE_MS) return;
@@ -332,11 +270,6 @@ export function getProviderCall(id: number): ProviderCall | null {
   return row ? rowToCall(row) : null;
 }
 
-/**
- * Every captured request belonging to the given logical model calls, oldest
- * first (send order). Used by the chat's "download request body" action, which
- * resolves the call ids from the token-audit log first.
- */
 export function listProviderCallsByCallIds(callIds: readonly string[]): ProviderCall[] {
   if (callIds.length === 0) return [];
   const db = getLlmAuditDb();
@@ -347,7 +280,6 @@ export function listProviderCallsByCallIds(callIds: readonly string[]): Provider
   return rows.map(rowToCall);
 }
 
-/** Distinct model ids seen in the log (for the panel's model filter). */
 export function listAuditedModelIds(): string[] {
   const db = getLlmAuditDb();
   const rows = db
@@ -356,8 +288,6 @@ export function listAuditedModelIds(): string[] {
   return rows.map((r) => r.m);
 }
 
-/** Distinct session ids seen in the log, most recently active first, with
- *  the latest cwd / display name per session (no full session scan). */
 export function listAuditedSessionIds(): AuditedSession[] {
   const db = getLlmAuditDb();
   const rows = db
@@ -374,7 +304,6 @@ export function listAuditedSessionIds(): AuditedSession[] {
 export interface LlmAuditTotals {
   calls: number;
   errors: number;
-  /** Total body bytes stored for non-2xx responses. */
   errorBodyBytes: number;
 }
 
@@ -389,4 +318,3 @@ export function auditTotals(): LlmAuditTotals {
   ).b;
   return { calls, errors, errorBodyBytes: bytes };
 }
-

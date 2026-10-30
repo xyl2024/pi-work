@@ -11,12 +11,6 @@ import {
   type ChannelsPage,
 } from "@/lib/shared/channels-pages";
 
-/**
- * The channels panel's page stack (lib/shared/channels-pages.ts). Driven as
- * plain data — the store holds the current stack and the panel renders
- * `currentChannelsPage`. No React, no DOM, no server.
- */
-
 function detail(channelId: string): ChannelsPage {
   return { kind: "detail", channelId };
 }

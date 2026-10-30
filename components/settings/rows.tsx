@@ -3,7 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import { NumericField } from "@/components/ui/NumericField";
 
-/** Numeric file-preview limit with delayed validation and immediate-apply commit. */
 export function FileViewerLimitRow({
   label,
   min,
@@ -36,7 +35,6 @@ export function FileViewerLimitRow({
   );
 }
 
-/** Retry setting with optional empty value meaning “use SDK default”. */
 export function RetryNumberRow({
   label,
   min,

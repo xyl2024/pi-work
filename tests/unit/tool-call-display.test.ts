@@ -13,12 +13,6 @@ import type {
   ToolResultMessage,
 } from "@/lib/shared/types";
 
-// ── Fixtures ──
-//
-// These deliberately mirror the shapes the chat window reads off real
-// sessions: an assistant message carrying toolCall blocks, and an id →
-// toolResult map.
-
 function assistantWithCalls(
   calls: Array<{ id: string; toolName: string; input: Record<string, unknown> }>,
 ): AssistantMessage {
@@ -48,12 +42,9 @@ function textResult(
   };
 }
 
-/** A stand-in for the caller-owned `resolveReadPath`: absolute paths pass
- *  through, relative paths join the cwd, no cwd → unresolvable. */
 const resolvePath: ToolPathResolver = (raw, cwd) =>
   raw.startsWith("/") ? raw : cwd ? `${cwd}/${raw}` : null;
 
-/** Unified patch with one added and one deleted line. */
 const PATCH_ONE_ONE = ["@@ -1,2 +1,2 @@", "-old", "+new", " context"].join("\n");
 
 describe("classifyToolCall", () => {

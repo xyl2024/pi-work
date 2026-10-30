@@ -22,14 +22,6 @@ import {
   type SubagentTask,
 } from "@/lib/server/subagent-store";
 
-/**
- * Lifecycle tests for the subagent task manager, driven through its external
- * interface (`spawn` / `wait` / `stop`) with a scripted turn adapter standing in
- * for a real model request and a fake child session; persistence uses a temp
- * data root. Nothing here asserts private containers: only the returned
- * statuses, the persisted rows and whether a turn is still alive.
- */
-
 let dir: string;
 
 function resetStoreGlobals(): void {
@@ -81,7 +73,6 @@ function configFor(overrides: Partial<SubagentTaskConfigSnapshot> = {}): Subagen
   };
 }
 
-/** A scripted turn: one deferred per started turn, completed by the test. */
 function makeManager(
   overrides: Partial<SubagentTaskManagerDeps> & { runTurn: SubagentTaskManagerDeps["runTurn"] },
 ): SubagentTaskManager {
@@ -99,9 +90,6 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     const progress = manager.spawn({ parentSessionId: "parent-1", description: "explore", prompt: "look around", config: configFor() });
 
     expect(progress.taskId).toMatch(/^\d{4,}$/);
-    // A free slot admits it at once, so it is already `creating` when spawn
-    // returns; the id exists and is persisted either way (queueing is covered
-    // by the scheduling tests).
     expect(progress.status).toBe("creating");
     expect(progress.childSessionId).toBeNull();
 
@@ -113,11 +101,8 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     expect(snapshot.model).toEqual({ provider: "p", modelId: "m-profile" });
     expect(snapshot.thinkingLevel).toBe("low");
     expect(snapshot.timeoutMs).toBe(profile.timeoutMs);
-    // The subagent tool is never part of a child's tool set: recursion stays
-    // blocked even when the profile lists it.
     expect(snapshot.tools).toEqual(["read"]);
 
-    // Let the scripted turn finish so the slot is released.
     await new Promise((resolve) => setTimeout(resolve, 0));
     await runner.turns[0].settle();
     await manager.idle();
@@ -133,8 +118,6 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     const first = createSubagentTask(seed);
     const second = createSubagentTask(seed);
 
-    // A parent only delegates a handful of subagents, so a counter reads far
-    // better than a uuid in tool output and in copy-pasted task ids.
     expect(first.taskId).toBe("0001");
     expect(second.taskId).toBe("0002");
   });
@@ -148,7 +131,6 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     const task = manager.spawn({ parentSessionId: "parent-2", description: "long job", prompt: "work", config: configFor() });
     const waiting = manager.wait("parent-2", task.taskId);
 
-    // Let spawn's turn start and acquire its child session.
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runner.turns).toHaveLength(1);
@@ -163,8 +145,6 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     expect(observed.status).toBe("running");
     expect(getSubagentTask("parent-2", task.taskId)!.status).toBe("running");
 
-    // The wait expiring is observation only: the turn is still alive and its
-    // runtime limit was handed over in full at start.
     expect(runner.turns[0].spec.timeoutMs).toBe(profile.timeoutMs);
     expect(runner.turns[0].spec.confirmStop).toBe(true);
 
@@ -223,8 +203,6 @@ describe("scheduling", () => {
     expect(runner.turns.map((turn) => turn.spec.prompt)).toEqual(["job 0", "job 1", "job 2", "job 3"]);
     expect(getSubagentTask("parent-sched", tasks[4].taskId)!.status).toBe("queued");
 
-    // Freeing one slot admits the queued task, still with its full runtime
-    // limit — queue time never counts against it.
     await runner.turns[0].settle();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runner.turns).toHaveLength(5);
@@ -281,7 +259,6 @@ describe("stops and persistence", () => {
     manager.stop("parent-stop", task.taskId, "user stop");
     expect(getSubagentTask("parent-stop", task.taskId)!.status).toBe("stopping");
 
-    // The turn confirms the stop by settling as cancelled.
     await runner.turns[0].settle({ status: "cancelled", text: "", hasReply: false, error: "user stop", realSessionId: child.created[0] });
     await manager.idle();
     expect(getSubagentTask("parent-stop", task.taskId)!.status).toBe("cancelled");
@@ -325,7 +302,6 @@ describe("stops and persistence", () => {
     const row = getSubagentTask("parent-restart", stale.taskId) as SubagentTask;
     expect(row.status).toBe("interrupted");
     expect(row.error).toContain("restarted");
-    // No replay: the manager starts nothing for it.
     expect(runner.turns).toHaveLength(0);
   });
 });

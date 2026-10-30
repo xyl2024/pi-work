@@ -9,8 +9,6 @@ declare global {
   var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
 }
 
-// POST /api/default-cwd
-// Creates <data root>/workspace/pi-cwd-default if it doesn't exist and returns the path.
 export async function POST() {
   const startedAt = Date.now();
   try {

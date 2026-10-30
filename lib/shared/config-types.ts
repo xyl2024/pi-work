@@ -1,26 +1,13 @@
 import type { FileViewerConfig } from "./file-viewer-limits";
 import type { RightSideBarConfig } from "./right-bar";
 
-/** Browser-safe contract for ~/.pi-work/config.yaml. */
 export interface DangerousPatternRule {
   name: string;
-  /** JavaScript regex source, compiled as written. */
   pattern: string;
-  /**
-   * Match the pattern case-insensitively. The built-in PowerShell rules set
-   * this (PowerShell is a case-insensitive language); bash rules and user
-   * rules keep the historical case-sensitive behaviour unless they opt in.
-   */
   ignoreCase?: boolean;
 }
 
 export interface DangerousPatternsConfig {
-  /**
-   * The user's own rules, checked before the platform's built-in set. An empty
-   * list means "no user rules" — the built-ins in
-   * `lib/shared/dangerous-commands.ts` are still enforced, so the confirmation
-   * gate is never silently off.
-   */
   rules: DangerousPatternRule[];
   timeout_ms: number;
 }
@@ -29,52 +16,16 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
-
-/**
- * Hosts that must never be proxied: the app talks to itself (and to the
- * terminal WebSocket service) over these. Always merged into the effective
- * NO_PROXY list, so a user-supplied `no_proxy` can only add to it.
- */
 export const ALWAYS_BYPASS_HOSTS = ["localhost", "127.0.0.1", "::1"] as const;
 
-/**
- * Outbound network proxy (Settings → Network proxy). Applies to every `fetch`
- * the server process performs — provider calls, GitHub Trending, update
- * checks — so they share one exit. `no_proxy` is a comma-separated host /
- * host-suffix list on top of {@link ALWAYS_BYPASS_HOSTS}.
- */
 export interface NetworkProxyConfig {
   enabled: boolean;
-  /** Proxy URL, e.g. `http://127.0.0.1:7897`. Empty means nothing to apply. */
   url: string;
-  /** Extra comma-separated bypass entries appended to ALWAYS_BYPASS_HOSTS. */
   no_proxy: string;
 }
 
-/**
- * MCP (Model Context Protocol) switches. The servers themselves live in pi's
- * own `~/.pi/agent/mcp.json`, so they stay shared with the `pi` CLI and the
- * TUI's `/mcp` manager; this block only holds Pi Work's own policy on top.
- */
 export interface McpConfig {
-  /**
-   * Trust `<cwd>/.pi/mcp.json` from the workspace. Off by default: a project
-   * file can spawn arbitrary stdio commands, and a Pi Work session may be
-   * reachable from the LAN (or the Electron shell's loopback), so opening a
-   * folder must not be enough to run code. pi's CLI/SDK default the other way
-   * (project resources are trusted), which is why this is an explicit switch.
-   */
   project_servers: boolean;
-  /**
-   * How long the first prompt of a session waits for MCP servers that declare
-   * their tools to the model (`direct` exposure) and are still connecting, in
-   * milliseconds. pi's own default is 10000, which makes the first message look
-   * stuck while a slow stdio server boots; 0 disables the wait entirely (tools
-   * still appear once the server connects). Since pi 1.1.0 servers reached only
-   * through codemode or tool search connect in the background and are waited
-   * for when a script or a search needs them, so this bounds the startup wait
-   * for `direct` servers alone.
-   */
   startup_wait_ms: number;
 }
 
@@ -82,24 +33,16 @@ export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
   append_system: AppendSystemConfig;
-  /** Toggle for pi's built-in "Pi documentation" section in new sessions. */
   load_pi_docs: boolean;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
-  /** Per-cwd custom icon override: absolute cwd path → lucide icon name. */
   cwd_icons: Record<string, string>;
-  /** Per-cwd display alias: absolute cwd path → user-set alias (may be empty). */
   cwd_aliases: Record<string, string>;
-  /** Per-cwd Skill files excluded from the model prompt (resources are untouched). */
   disabled_skills: Record<string, string[]>;
   network_proxy: NetworkProxyConfig;
   mcp: McpConfig;
 }
 
-/**
- * Event keys the user can attach an UI sound to. The same set is enforced
- * server-side (lib/server/config.ts) and rendered in the SoundSettingsSection.
- */
 export const UI_SOUND_EVENT_IDS = [
   "toast_success",
   "toast_error",
@@ -115,11 +58,6 @@ export type UiSoundEventId = (typeof UI_SOUND_EVENT_IDS)[number];
 
 export type SoundId = string;
 
-/**
- * Per-event UI sound mappings. An empty / unknown id means "do not play".
- * `masterVolume` scales every event before it reaches the AudioContext master
- * gain. `enabled` is a global kill-switch that overrides every event choice.
- */
 export interface UiSoundsConfig {
   enabled: boolean;
   masterVolume: number;

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pendingChainCount, runSerial } from "@/lib/server/serial-chain";
 
-/** A promise whose settlement the test decides. */
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -12,7 +11,6 @@ function deferred<T = void>() {
   return { promise, resolve, reject };
 }
 
-/** Let queued microtasks and already-resolved promises run to their next step. */
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -152,8 +150,6 @@ describe("runSerial failure", () => {
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on("unhandledRejection", onUnhandled);
     try {
-      // Callers that only care about the queue (not this run's outcome) may
-      // drop the returned promise entirely.
       void runSerial("a", () => {
         throw new Error("boom");
       });
@@ -200,7 +196,6 @@ describe("runSerial chain release", () => {
     firstGate.resolve();
     await first;
     await flush();
-    // The drained first task must not drop the key the second one now owns.
     expect(pendingChainCount()).toBe(1);
 
     secondGate.resolve();

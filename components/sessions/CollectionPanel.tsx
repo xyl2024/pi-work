@@ -54,7 +54,6 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
 
   useEffect(() => { void reload(); }, [reload]);
 
-  // Preserve favorite insertion order; drop stale ids (deleted or unfavorited elsewhere).
   const rows = useMemo(
     () => favoriteIds
       .map((id) => allSessions.find((s) => s.id === id))
@@ -64,7 +63,6 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
-      {/* Header — title + count + refresh */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         padding: "8px 12px",
@@ -84,7 +82,6 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
         />
       </div>
 
-      {/* List */}
       <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
         {loading && rows.length === 0 && (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
@@ -163,7 +160,6 @@ function FavoriteRow({
         transition: "background 0.1s",
       }}
     >
-      {/* Star icon — filled accent */}
       <svg width="13" height="13" viewBox="0 0 24 24" fill="var(--accent)" stroke="none" style={{ flexShrink: 0 }}>
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
       </svg>

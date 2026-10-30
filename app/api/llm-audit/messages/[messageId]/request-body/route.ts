@@ -1,12 +1,3 @@
-/**
- * GET /api/llm-audit/messages/[messageId]/request-body?sessionId=…
- *
- * Downloads the JSON body of the provider request that produced one assistant
- * message, read from the LLM API audit log (see
- * `lib/server/llm-audit-message-body.ts`). `sessionId` is required because a
- * message id (`String(message.timestamp)`) is only unique within a session.
- */
-
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { getMessageRequestBody } from "@/lib/server/llm-audit-message-body";

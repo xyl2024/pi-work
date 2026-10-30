@@ -1,29 +1,3 @@
-/**
- * `ask_user_questions` — custom Pi tool that lets the agent ask the user
- * structured multiple-choice questions and block until they answer.
- *
- * Flow per call:
- *   1. Agent invokes the tool with `{ questions: [...] }` (1-5 questions,
- *      each with 2-4 options). Schema mirrors Anthropic's Claude Code
- *      `AskUserQuestion` plus one extension field (`required`) per question.
- *   2. If the session was started by the scheduler (no human available to
- *      answer), the tool short-circuits with an error result — better than
- *      hanging the scheduled run until `AGENT_END_TIMEOUT_MS`.
- *   3. Otherwise the tool calls the closure-bound `requestUserInput(toolCallId, questions)`
- *      (set per-session by `startRpcSession`). That bridge emits an
- *      `ask_user_questions_request` SSE event and returns a Promise resolving
- *      with the user's answers (or `{cancelled:true}`).
- *   4. The Promise rejects on AbortSignal or on wrapper destroy; the tool
- *      converts either into a structured error result so the agent sees a
- *      meaningful message instead of a hang.
- *   5. The tool assembles the standard `{content, details}` envelope for pi.
- *
- * IMPORTANT: This file imports `@earendil-works/pi-coding-agent`, which
- * transitively pulls in server-only Node modules. Client code that needs
- * the tool name or types must import from
- * `./ask-user-questions-tool-types` instead.
- */
-
 import { Type, type Static } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import {
@@ -76,9 +50,6 @@ const AskUserQuestionsParamsSchema = Type.Object({
         description: "Allow multiple selections. Default false.",
         default: false,
       }),
-      // Optional on purpose: many LLMs omit `required` (it's an extension
-      // beyond Claude Code's AskUserQuestion shape). Omitting it used to
-      // fail schema validation; now it falls back to required: true below.
       required: Type.Optional(
         Type.Boolean({
           description: "User must answer this question to submit. Default true when omitted.",
@@ -94,11 +65,6 @@ const AskUserQuestionsParamsSchema = Type.Object({
             description: `Short explanation shown beneath the label. Max ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars.`,
             maxLength: ASK_USER_QUESTIONS_DESCRIPTION_MAX,
           }),
-          // Optional on purpose: "every question names a recommendation" is
-          // enforced by validateAskUserQuestions, not by the schema — the
-          // schema cannot say "at least one item in this array carries this
-          // optional field". The error is a tool result the model can fix in
-          // the same turn.
           recommended: Type.Optional(
             Type.Object(
               {
@@ -129,8 +95,6 @@ const AskUserQuestionsParamsSchema = Type.Object({
 
 type AskUserQuestionsParamsType = Static<typeof AskUserQuestionsParamsSchema>;
 
-/** Function the wrapper exposes to the tool to register a pending question
- *  and wait for the user's answer. Bound by `startRpcSession` per session. */
 export type RequestUserInputFn = (
   toolCallId: string,
   questions: AskUserQuestion[],
@@ -150,11 +114,6 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
   }));
 }
 
-/**
- * Why a session without a human to answer refuses the question outright. Both
- * entries close the gate immediately instead of hanging the turn until
- * AGENT_END_TIMEOUT_MS.
- */
 const UNATTENDED_REFUSAL: Partial<Record<BuildToolOptions["source"], string>> = {
   scheduled:
     "ask_user_questions is unavailable in scheduled tasks (no user is available to answer). Provide the necessary context to the model directly instead.",
@@ -170,19 +129,9 @@ function errorEnvelope(message: string): { content: [{ type: "text"; text: strin
 }
 
 interface BuildToolOptions {
-  /** Closure-bound request bridge to the wrapper, set per-session by
-   *  `startRpcSession`. If undefined, the tool behaves as if the session
-   *  has no UI to route questions to (returns an error). */
   requestUserInput?: RequestUserInputFn;
-  /** Whether this session was started by the scheduler. Scheduled runs
-   *  short-circuit immediately because no human is available. */
   source: "user" | "scheduled" | "subagent";
 }
-
-// The system-prompt block (`ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK`) lives in
-// the shared, SDK-free types module and is re-exported above: the server
-// injects it via appendSystemPromptOverride when the tool is in the session's
-// tool set, and the Tool Market catalog shows the very same text.
 
 function makeTool({ requestUserInput, source }: BuildToolOptions) {
   return defineTool<typeof AskUserQuestionsParamsSchema, AskUserQuestionsDetails>({
@@ -193,18 +142,8 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",
-    // Guidelines moved to ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK — injected
-    // via appendSystemPromptOverride, gated on the tool being loaded.
     async execute(toolCallId, params, signal, _onUpdate, _ctx) { // eslint-disable-line @typescript-eslint/no-unused-vars -- intentionally unused SDK params
-      // `_onUpdate` and `_ctx` are part of the SDK execute() protocol
-      // signature but unused here (this tool blocks on user input
-      // rather than streaming partial updates, and pulls no model
-      // context from `ctx`). The leading underscore is the project's
-      // "intentionally unused" convention.
       if (!requestUserInput) {
-        // No bridge — the session was started without binding
-        // requestUserInput (defensive: should never happen in practice
-        // because startRpcSession always passes one for user sessions).
         log.warn("ask_user_questions called without requestUserInput binding", {
           toolCallId,
           source,
@@ -220,11 +159,6 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         return errorEnvelope(validationError);
       }
 
-      // Scheduled sessions and subagent sessions have no human attached to
-      // answer. Fail fast so the run completes (with an error message for the
-      // agent) instead of hanging until AGENT_END_TIMEOUT_MS. A subagent's user
-      // question is never routed to the parent session's UI: the spec keeps the
-      // confirmation/question surfaces apart.
       const unattended = UNATTENDED_REFUSAL[source];
       if (unattended) {
         log.info("ask_user_questions short-circuited for unattended session", {
@@ -236,10 +170,6 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
 
       const requestPromise = requestUserInput(toolCallId, questions);
 
-      // Honor the AbortSignal — if the agent is aborted (via `abort` command
-      // or a downstream cancel) while we're waiting for the user, reject
-      // the question so the tool returns promptly instead of hanging the
-      // whole turn.
       const abortPromise = signal
         ? new Promise<UserInputResolution>((_, reject) => {
             if (signal.aborted) {
@@ -265,9 +195,6 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         return errorEnvelope(`Question interrupted: ${message}`);
       }
 
-      // Both non-answered kinds (plain cancel and a cancel carrying a note)
-      // leave the questions unanswered; the resolution-to-result mapping owns
-      // the wording and the details they persist.
       if (resolution.kind !== "answered") {
         log.info(
           resolution.kind === "replied"
@@ -289,8 +216,6 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         answeredCount: answers.filter((a) => a.selectedLabels.length > 0).length,
       });
 
-      // Defensive: filter out any answers referencing out-of-range indices
-      // or unknown labels so a buggy / hostile client can't inject garbage.
       const sanitizedAnswers: AskUserQuestionAnswer[] = [];
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
@@ -305,11 +230,6 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         }
         const validLabels = new Set([
           ...q.options.map((o) => o.label),
-          // The frontend always appends a fixed free-text "Other" option
-          // to every question (regardless of what the agent authored), so
-          // that label is always a valid selection. Without this the
-          // sanitizer would strip it and the answer would come back as
-          // "(skipped)" even though the user typed a real custom answer.
           ASK_USER_QUESTIONS_OTHER_LABEL,
         ]);
         const validSelected = submitted.selectedLabels.filter((l) => validLabels.has(l));

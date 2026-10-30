@@ -1,20 +1,9 @@
-// AUTO-GENERATED from vscode-icons (MIT, https://github.com/vscode-icons/vscode-icons)
-// Source: supportedExtensions.ts + supportedFolders.ts + languages.ts (commit ab4407d)
-// DO NOT EDIT BY HAND. To regenerate, run /tmp/extract-icon-map.cjs
-//
-// Icons are loaded as <img> tags from /file-icons/file_type_<name>.svg and
-// /file-icons/folder_type_<name>.svg. Browsers cache them after first load.
-
 export interface IconCombo {
-  /** filename stem (lowercase, no extension) */
   filename: string;
-  /** allowed file extensions */
   exts: string[];
-  /** icon name (matches /file-icons/file_type_<icon>.svg) */
   icon: string;
 }
 
-/** file extension → icon name (e.g. tsx → reactts) */
 export const fileIconByExt: Record<string, string> = {
   ".kusto": "kusto",
   "3g2": "video",
@@ -968,7 +957,6 @@ export const fileIconByExt: Record<string, string> = {
   "🔥": "mojo",
 };
 
-/** exact filename → icon name (lowercase keys) */
 export const fileIconByName: Record<string, string> = {
   ".aikido": "aikido",
   ".all-contributorsrc": "allcontributors",
@@ -1658,7 +1646,6 @@ export const fileIconByName: Record<string, string> = {
   "zizmor.yml": "zizmor",
 };
 
-/** filename stem + allowed extensions → icon name */
 export const fileIconCombos: IconCombo[] = [
   {
     "filename": ".babelrc",
@@ -4429,7 +4416,6 @@ export const fileIconCombos: IconCombo[] = [
   }
 ];
 
-/** folder name → icon name (lowercase keys) */
 export const folderIconByName: Record<string, string> = {
   "@types": "typings",
   "__controller__": "controller",
@@ -4765,6 +4751,5 @@ export const folderIconByName: Record<string, string> = {
   "wwwroot": "www",
 };
 
-/** Default icon names (always present in /file-icons/) */
 export const defaultFolderIcon = 'default_folder';
 export const defaultFolderOpenIcon = 'default_folder_opened';

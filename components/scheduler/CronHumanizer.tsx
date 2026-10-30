@@ -1,11 +1,3 @@
-/**
- * Renders a cron expression alongside its natural-language description,
- * with a tooltip showing the next few trigger times. The natural language
- * is what the user actually scans in list rows; the raw cron is the
- * source of truth they can copy/edit. Showing both side-by-side means
- * the user never has to read cron to understand "what does this do?".
- */
-
 import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -14,11 +6,8 @@ import { cronHumanize, isOnceCron } from "./utils";
 
 interface Props {
   cron: string;
-  /** Max number of upcoming trigger times to preview in the tooltip. */
   previewCount?: number;
-  /** Render the raw cron in a monospace code chip. */
   showCode?: boolean;
-  /** IANA timezone used by the scheduler to interpret this cron. */
   timezone?: string;
 }
 
@@ -49,11 +38,8 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezo
   const human = useMemo(() => cronHumanize(cron, locale), [cron, locale]);
   const upcoming = useMemo(() => nextRuns(cron, previewCount, timezone), [cron, previewCount, timezone]);
   const isValid = upcoming.length > 0;
-  // 单次 cron 执行后 nextRun() 返回 null —— 不是无效，是已经过期/执行完毕
   const doneOnce = isOnceCron(cron) && !isValid;
 
-  // Live-update the human preview so "in 2h" stays accurate as time passes
-  // while the modal is open. Refresh every 30s; cheap.
   const [, force] = useState(0);
   useEffect(() => {
     const id = setInterval(() => force((n) => n + 1), 30_000);

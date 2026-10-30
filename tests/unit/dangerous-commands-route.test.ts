@@ -4,16 +4,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultDangerousRules, type DangerousRuleSetSnapshot } from "@/lib/shared/dangerous-commands";
 
-/**
- * The `/api/dangerous-commands` read contract, driven at the route level
- * against a temp `PI_WORK_DATA_DIR` (same shape as `config.test.ts`).
- *
- * A user rule that does not compile can only come from a hand-edited
- * `config.yaml` — the write route rejects it before it reaches disk — so this
- * is the one way to exercise the invalid-rule report without mutating the
- * shared isolated instance's config mid-run (`settings.test.ts` snapshots and
- * restores that file in parallel).
- */
 const root = mkdtempSync(join(tmpdir(), "pi-work-dangerous-rules-"));
 
 let GET: typeof import("@/app/api/dangerous-commands/route")["GET"];
@@ -28,8 +18,6 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  // The cache lives on globalThis across module evaluations; start each case
-  // from the file on disk.
   globalThis.__piWorkConfigCache = undefined;
 });
 
@@ -57,8 +45,6 @@ describe("GET /api/dangerous-commands", () => {
 
     const body = (await response.json()) as DangerousRuleSetSnapshot;
     expect(body.platform).toBe(process.platform);
-    // Exactly the built-in layer of the effective set — the same rules the
-    // gate matches, not a second copy.
     expect(body.builtins).toEqual([...defaultDangerousRules(process.platform)]);
     expect(body.invalidUserRules).toEqual([{ name: "broken", error: expect.any(String) }]);
   });
@@ -78,8 +64,6 @@ describe("GET /api/dangerous-commands", () => {
 
     const body = (await response.json()) as DangerousRuleSetSnapshot;
     expect(body.invalidUserRules).toEqual([]);
-    // User rules are not part of the built-in snapshot; they come with
-    // GET /api/settings.
     expect(body.builtins).toEqual([...defaultDangerousRules(process.platform)]);
   });
 });

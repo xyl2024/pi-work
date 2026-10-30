@@ -1,14 +1,3 @@
-/**
- * Interface tests for the MCP panel's API surface (`/api/mcp`):
- *
- *   GET  /api/mcp?cwd=<path>   both mcp.json files as the panel shows them
- *   PUT  /api/mcp              apply the panel's batch of changes
- *
- * Runs against the isolated instance (tests/global-setup.ts), so the global
- * file it touches is the isolated agent dir's, never the real `~/.pi/agent`.
- * The project file lives in a scratch directory under the default workspace
- * root and is removed afterwards.
- */
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";

@@ -42,8 +42,6 @@ export function QuestionCard({
         gap: 10,
       }}
     >
-      {/* Question text. The header chip is already shown on the tab above
-          (multi-question panels), so it's not repeated here. */}
       <div
         style={{
           fontSize: 14,
@@ -61,19 +59,12 @@ export function QuestionCard({
           gap: 6,
         }}
       >
-        {/* Always append a fixed free-text option at the end, regardless of
-            what options the agent authored (even if it also included an
-            "Other" label). It renders the localized word but keeps the
-            English semantic label so isOtherOptionLabel still matches. */}
         {[
           ...question.options,
           { label: ASK_USER_QUESTIONS_OTHER_LABEL, description: "" },
         ].map((opt, i) => {
           const checked = selectedSet.has(opt.label);
           const isOther = isOtherOptionLabel(opt.label);
-          // The label with any "(Recommended)" suffix stripped, plus whether
-          // this is the suggested option and why. A suffix-only
-          // recommendation lights the badge with no reason line.
           const resolved = resolveOptionRecommendation(opt);
           const inputId = `ask-opt-${question.header}-${i}`.replace(/\s+/g, "-");
           return (
@@ -91,10 +82,6 @@ export function QuestionCard({
                   onChange={(e) => onToggle(opt.label, e.target.checked)}
                   tabIndex={0}
                 />
-                {/* Drawn control: circle for radio, rounded square for
-                    checkbox; checked fills with accent and a stroke-drawn
-                    white check appears. All visual states (rest / hover /
-                    checked / press / focus) live in ASK_PANEL_STYLES. */}
                 <span
                   aria-hidden
                   className={`askq-marker ${isMulti ? "askq-checkbox" : "askq-radio"}`}
@@ -153,9 +140,6 @@ export function QuestionCard({
                       {opt.description}
                     </span>
                   )}
-                  {/* Why the agent suggests this option — a separate line
-                      under the description, smaller and accent-marked so it
-                      can't be read as part of the option's own description. */}
                   {resolved.recommended && resolved.reason && (
                     <span
                       style={{
@@ -175,18 +159,12 @@ export function QuestionCard({
                   )}
                 </span>
               </label>
-              {/* Free-text input appears when Other is selected. In single-
-                  select mode it replaces the radio behavior visually; in
-                  multi-select it sits alongside the checked checkbox. */}
               {isOther && otherSelected && (
                 <input
                   type="text"
                   value={otherText}
                   onChange={(e) => onOtherTextChange(e.target.value)}
                   placeholder={t("Type your own answer…")}
-                  // Don't autofocus — would steal focus from the chat input
-                  // and break the "user can still type in ChatInput"
-                  // decision. Click to focus instead.
                   style={{
                     marginLeft: 38,
                     padding: "6px 10px",

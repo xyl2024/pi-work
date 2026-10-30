@@ -1,17 +1,5 @@
-// Pure helpers for ToolSelection handling. Shared by client (preset pickers)
-// and server (rpc-manager) — must stay free of Node APIs (see lib/shared rules).
-
 import type { ToolSelection } from "./types";
 
-/**
- * Expand a list of tool name patterns into concrete tool names.
- *
- * Entries ending with `*` are treated as prefix patterns (e.g. `pi_work_*`
- * matches every tool whose name starts with `pi_work_`); other entries are
- * kept as-is (unknown names are filtered by the caller, mirroring pi's
- * `setActiveToolsByName` which silently ignores unknown names).
- * Duplicates are removed, first occurrence wins.
- */
 export function expandToolPatterns(patterns: readonly string[], allToolNames: readonly string[]): string[] {
   const out: string[] = [];
   for (const entry of patterns) {
@@ -28,56 +16,26 @@ export function expandToolPatterns(patterns: readonly string[], allToolNames: re
   return out;
 }
 
-/**
- * Tool families that the UI binds into a single switch: every member of a
- * family is toggled on/off together (one checklist row per family instead of
- * one row per tool). `pattern` is the `*`-suffixed prefix pattern stored in
- * a ToolSelection when the family is enabled; `prefix` matches member names.
- *
- * Rationale: a family's tools are only useful together (one shared index, one
- * shared append block in the system prompt), so partial enablement just
- * degrades behavior.
- */
 export interface ToolGroup {
   id: string;
   pattern: string;
   prefix: string;
 }
 
-/**
- * Bound families the pickers currently collapse. Empty today: the one entry
- * this registry carried (the `codegraph_*` family) left with the CodeGraph
- * toolset. The mechanism itself stays — register a family here by `prefix` and
- * it is folded into one checklist row and toggled as a group.
- */
 export const TOOL_GROUPS: readonly ToolGroup[] = [];
 
-/** The bound group a tool name belongs to, or undefined for a standalone tool. */
 export function toolGroupFor(name: string): ToolGroup | undefined {
   return TOOL_GROUPS.find((group) => name.startsWith(group.prefix));
 }
 
-/** One row of a tool checklist: a standalone tool or a collapsed bound group. */
 export interface ToolChecklistRow {
-  /** Stable React key: concrete tool name or the group's `*` pattern. */
   key: string;
-  /** What a toggle operates on: concrete tool name or the group pattern. */
   name: string;
-  /** The bound group this row collapses, or null for a standalone tool. */
   group: ToolGroup | null;
-  /** Number of member tools (0 for standalone rows). */
   memberCount: number;
-  /** Standalone tool description, or the group row's rendered description. */
   description: string | null;
 }
 
-/**
- * Collapse a tool catalog into checklist rows: members of each bound group
- * (TOOL_GROUPS) merge into a single row keyed by the group's `*` pattern, so
- * the family is shown — and toggled — as one switch instead of one checkbox
- * per tool. `groupDescription` renders the group row's description (receives
- * the member count, e.g. via i18n).
- */
 export function buildToolChecklistRows(
   tools: readonly { name: string; description?: string | null }[],
   groupDescription: (memberCount: number) => string,
@@ -103,12 +61,6 @@ export function buildToolChecklistRows(
   return rows;
 }
 
-/**
- * Whether a checklist row (standalone tool or bound group) is checked.
- * `selected` is the EXPANDED set of concrete names currently enabled. A group
- * row is checked when any member is enabled (covers the pattern-expansion
- * case and legacy partially-enabled selections alike).
- */
 export function isToolChecklistRowChecked(
   row: ToolChecklistRow,
   selected: ReadonlySet<string>,
@@ -120,15 +72,6 @@ export function isToolChecklistRowChecked(
   return selected.has(row.name);
 }
 
-/**
- * Compute the next raw selection after toggling one checklist row. `raw` is
- * the current selection with the "all" sentinel materialized to concrete
- * names; `*` patterns may be present. Standalone tools flip a single name
- * (replacing a covering pattern with its concrete members minus the toggled
- * name, so the rest of that family stays enabled); a bound-group toggle
- * rewrites the whole family via the group's `*` pattern, so the family is
- * always fully on or fully off.
- */
 export function toggleSelectionEntry(
   raw: readonly string[],
   name: string,
@@ -147,9 +90,6 @@ export function toggleSelectionEntry(
     return Array.from(next);
   }
   next.delete(name);
-  // The toggled name may be covered by a prefix pattern rather than listed
-  // directly: replace each covering pattern with its concrete members minus
-  // the toggled name.
   for (const entry of raw) {
     if (typeof entry !== "string" || !entry.endsWith("*")) continue;
     const prefix = entry.slice(0, -1);
@@ -162,37 +102,16 @@ export function toggleSelectionEntry(
   return Array.from(next);
 }
 
-/**
- * Whether pi declares a tool to the model. Mirrors pi's `_isDeclarable`:
- * `direct` and `model-only` land in the model's tool declarations, while
- * `codemode` / `deferred` tools are reached through the `codemode` or
- * `tool_search` tool and `hidden` tools are unreachable.
- *
- * This has to be applied to every "activate tools" path: pi's loadout drops
- * only `hidden`, so passing a `codemode`-exposure tool (e.g. one from an MCP
- * server left at its default exposure) into `setActiveToolsByName` *would*
- * declare it to the model, which is the opposite of what that exposure means.
- * An absent exposure means `direct` (pi's own default).
- */
 export function isDeclarableTool(tool: { exposure?: string }): boolean {
   return tool.exposure === undefined || tool.exposure === "direct" || tool.exposure === "model-only";
 }
 
-/**
- * The subset of a tool catalog pi may declare to the model, in catalog order.
- * The tools of an MCP server that are not declared stay callable from
- * `codemode` scripts, so dropping them here loses no capability.
- */
 export function declarableToolNames(
   tools: readonly { name: string; exposure?: string }[],
 ): string[] {
   return tools.filter(isDeclarableTool).map((tool) => tool.name);
 }
 
-/**
- * Expand a full ToolSelection ("all" passes through untouched; arrays get
- * their `*` patterns resolved against `allToolNames`).
- */
 export function expandToolSelection(selection: ToolSelection, allToolNames: readonly string[]): ToolSelection {
   if (selection === "all") return "all";
   return expandToolPatterns(selection, allToolNames);

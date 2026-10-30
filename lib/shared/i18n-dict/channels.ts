@@ -1,5 +1,3 @@
-/** i18n dictionary: Channels / 频道设置面板. */
-
 export const channels = {
   "Channels": "频道",
   "Manage messaging channels.": "管理微信等 IM 平台的消息频道",

@@ -1,8 +1,3 @@
-// Seam B：消息来源的读取回环。
-// 沙箱临时目录手写会话 JSONL（user message + 紧跟的 `pi_work_message_origin`
-// custom entry），断言 reader 把 entry 归属到树序最近的前一条 user message：
-// 无标记消息不带 origin；分支场景下 entry 随消息树脱落；非法数据按缺省处理。
-// 绝不触碰真实 ~/.pi 或 ~/.pi-work 数据（先例：session-read-path.test.ts）。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,7 +19,6 @@ function sandbox(): string {
   return root;
 }
 
-/** 首行会话文件头，与 pi 手写的形状一致。 */
 function headerLine(id: string): string {
   return JSON.stringify({
     type: "session",
@@ -105,7 +99,6 @@ describe("消息来源读取回环", () => {
     expect(ctx.messages).toHaveLength(2);
     const user = ctx.messages[0] as { origin?: unknown };
     expect(normalizeMessageOrigin(user.origin)).toEqual(CHANNEL_ORIGIN);
-    // 后续消息不带 origin。
     expect((ctx.messages[1] as { origin?: unknown }).origin).toBeUndefined();
   });
 
@@ -123,7 +116,6 @@ describe("消息来源读取回环", () => {
   });
 
   it("分支路径上没有 origin entry 时，entry 随消息树脱落", () => {
-    // e1 挂在 u1 之后的 a1 分支；u2→a2 是 u1 直系的另一条分支，路径不含 e1。
     const ctx = load([
       headerLine("s-1"),
       userEntry("u1", null, "第一句"),
@@ -150,10 +142,6 @@ describe("消息来源读取回环", () => {
   });
 
   it("entry 挂在被压缩掻掉的分支上时，读取结果不带 origin", () => {
-    // 真实压缩语义（pi appendCompaction + reader 的切点规则）：compaction
-    // entry 挂在当前叶后，firstKeptEntryId 指向被保留的第一条 entry；切点
-    // 之前的区域是已被摘要吞掉的部分，其间的 origin entry 随之脱落，后续
-    // 消息不会被错挂。
     const ctx = load([
       headerLine("s-1"),
       userEntry("u1", null, "被压缩的一句"),
@@ -183,8 +171,6 @@ describe("消息来源读取回环", () => {
   });
 
   it("别的 customType 不参与归属", () => {
-    // 别的 customType entry 真正写进 JSONL（挂在 u1 之后，携带同形状的
-    // origin 数据）：reader 只认 MESSAGE_ORIGIN_ENTRY_TYPE，它不得影响归属。
     const otherEntry = JSON.stringify({
       type: "custom",
       id: "e0",

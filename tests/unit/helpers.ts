@@ -1,21 +1,9 @@
-/**
- * Shared helpers for interface (unit-layer) tests.
- *
- * Tests run against the isolated instance booted in tests/global-setup.ts.
- * Data policy (see tests/README.md): every test creates its own uniquely
- * identified data and cleans it up — tests never depend on each other's
- * leftovers.
- */
 import { TEST_BASE_URL } from "../config";
 
 export type Json = Record<string, unknown>;
 
-// ── Auth ──────────────────────────────────────────────────────────
-// The web UI requires a session cookie (admin/admin by default). Login once
-// per process and reuse the Set-Cookie on every subsequent request.
 let authCookie: string | null = null;
 
-/** Login to the isolated instance (once) and return the auth cookie value. */
 export async function getAuthCookie(): Promise<string> {
   if (authCookie) return authCookie;
   const res = await fetch(`${TEST_BASE_URL}/api/auth/session/login`, {
@@ -33,7 +21,6 @@ export async function getAuthCookie(): Promise<string> {
   return authCookie;
 }
 
-/** RequestInit with the auth cookie attached; spread before custom headers. */
 export async function authedInit(init?: RequestInit): Promise<RequestInit> {
   return {
     ...init,
@@ -41,7 +28,6 @@ export async function authedInit(init?: RequestInit): Promise<RequestInit> {
   };
 }
 
-/** Fetch an API path, returning the parsed JSON body regardless of status. */
 export async function api(
   path: string,
   init?: RequestInit,
@@ -60,12 +46,10 @@ export async function api(
   return { status: res.status, body, res };
 }
 
-/** Unique per-run suffix so concurrent runs / reruns never collide. */
 export function uniqueId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** expect(status).toBe(200)-style helper with a readable failure message. */
 export function expectOk(status: number, body: Json): void {
   if (status !== 200) {
     throw new Error(`expected 200, got ${status}: ${JSON.stringify(body).slice(0, 300)}`);

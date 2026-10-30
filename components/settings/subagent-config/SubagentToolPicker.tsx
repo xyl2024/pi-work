@@ -1,13 +1,5 @@
 "use client";
 
-/**
- * SubagentToolPicker — chooses a profile's tool set from the live tool catalog.
- *
- * Mirrors the cwd tools picker (`components/sessions/CwdToolsPicker.tsx`): a
- * search box and a checkbox grid. Selections are stored as concrete tool names,
- * so patterns are expanded against the catalog before they are handed back.
- */
-
 import { useEffect, useMemo, useState } from "react";
 import { ToolCheckRow } from "@/components/ui/ToolPicker";
 import { Tooltip } from "@/components/ui/Tooltip";

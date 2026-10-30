@@ -12,28 +12,6 @@ import {
 } from "@/lib/shared/right-bar";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
-/**
- * Section 6: Right-side buttons.
- *
- * Two sub-controls share this section, all immediate-apply via the
- * shared `apply` prop:
- *
- * - Button list: one row per button carrying its glyph, its visibility
- *   toggle (Enable / Disable) and its up/down order buttons, plus Reset
- *   to defaults in the header. The list is split into the same groups the
- *   live column stacks — session-bound vs. other — ordered top to bottom
- *   per `session_bound_alignment`, so ↑/↓ never swaps across a group
- *   boundary (which would be invisible in the column).
- * - Session-bound button alignment (top / bottom / inline radio group)
- *
- * Visibility and order share one list on purpose: the toggle sits on the
- * row it belongs to, so "which buttons exist" and "in what order" are
- * never answered by two separate lists the user has to cross-read.
- *
- * The list always reflects the user's override if present, falling back
- * to the descriptor registry's default — same resolver logic that
- * RightBarColumn uses to render the actual buttons.
- */
 export function RightBarSection({
   config,
   apply,
@@ -43,11 +21,6 @@ export function RightBarSection({
 }) {
   const { t } = useI18n();
 
-  // Resolve the right-bar button order: user's override takes precedence,
-  // fall back to the descriptor registry's default. Filters out any id in
-  // cfg.order that's no longer a known button (a removed descriptor must
-  // not leave a dangling entry forever), then appends any new ids at the
-  // tail so the list stays canonical without forcing a settings write.
   const resolveRightBarOrder = useCallback((
     overrides: readonly RightBarButtonId[] | undefined,
   ): RightBarButtonId[] => {
@@ -86,8 +59,6 @@ export function RightBarSection({
     });
   };
 
-  // Swap one entry with its neighbour inside `list`. Returns false when
-  // the move would leave the list (the caller then skips the write).
   const swapAdjacent = (
     list: RightBarButtonId[],
     id: RightBarButtonId,
@@ -101,17 +72,6 @@ export function RightBarSection({
     return true;
   };
 
-  /**
-   * Move a button one step up/down.
-   *
-   * `group` says which list the row belongs to: `true` = session-bound,
-   * `false` = global, `null` = the flat legacy ("inline") list. Moving is
-   * always confined to that list — the column never interleaves the two
-   * groups in top/bottom alignment, so a cross-group swap would be a
-   * no-op on screen. The persisted `order` is rebuilt as
-   * `[top group, bottom group]` for the current alignment; the column
-   * re-filters per group anyway, so only within-group order matters.
-   */
   const handleRightBarMove = (
     id: RightBarButtonId,
     direction: "up" | "down",
@@ -145,12 +105,6 @@ export function RightBarSection({
     });
   };
 
-  // Drop `cfg.order` entirely → resolver falls back to the descriptor
-  // default. We persist by omitting the field on the PUT payload, which
-  // happens automatically because we don't include `order` in the new
-  // right_side_bar (we `delete` only when reset is invoked, but a
-  // plain omit works the same way as `JSON.stringify` doesn't emit
-  // undefined keys — see below for the explicit delete).
   const handleRightBarResetOrder = () => {
     void apply((prev) => {
       const nextRightSideBar: RightSideBarConfig = { ...prev.right_side_bar };
@@ -159,15 +113,13 @@ export function RightBarSection({
     });
   };
 
-  // Read the current alignment from config; falls back to "bottom" when
-  // the field is missing (matches the on-disk default + parser fallback).
   const currentAlignment: SessionBoundAlignment =
     resolveSessionBoundAlignment(config.right_side_bar.session_bound_alignment);
 
   const handleRightBarAlignmentChange = (next: SessionBoundAlignment) => {
     void apply((prev) => {
       if (resolveSessionBoundAlignment(prev.right_side_bar.session_bound_alignment) === next) {
-        return prev; // no-op (avoid spurious PUT)
+        return prev;
       }
       const nextRightSideBar: RightSideBarConfig = {
         ...prev.right_side_bar,
@@ -177,13 +129,6 @@ export function RightBarSection({
     });
   };
 
-  // ── order groups ────────────────────────────────────────────────
-  // The live column partitions the configurable buttons into a
-  // session-bound group and a global group, then stacks them per
-  // `session_bound_alignment`. The order list mirrors that partition —
-  // otherwise an ↑/↓ inside one group would swap ids across the group
-  // boundary and visibly do nothing in the column. "inline" is the
-  // legacy single-list mode, so it keeps one flat list here too.
   const isSessionBoundId = (id: RightBarButtonId) =>
     RIGHT_BAR_DESCRIPTOR_BY_ID.get(id)?.sessionBound === true;
   const sessionBoundIds = currentRightBarOrder.filter(isSessionBoundId);
@@ -219,9 +164,6 @@ export function RightBarSection({
         </div>
         {orderGroups.map((group, groupIdx) => (
           <div key={group.key} style={{ marginTop: groupIdx === 0 ? 0 : 14 }}>
-            {/* Group caption: which buttons these are, and where the
-                group sits in the column. Groups render in column order
-                (top group first), matching what the column shows. */}
             <div
               style={{
                 display: "flex",
@@ -270,8 +212,6 @@ export function RightBarSection({
                     <span style={{ minWidth: 20, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 12, textAlign: "right" }}>
                       {idx + 1}
                     </span>
-                    {/* Same glyph the button column renders, so the row is
-                        recognisable without reading the label. */}
                     <span
                       aria-hidden="true"
                       style={{
@@ -318,14 +258,6 @@ export function RightBarSection({
         ))}
       </div>
 
-      {/* Session-bound button vertical alignment — new axis on top of
-          the existing `order` field. Three radio options; the order list
-          above re-groups itself the moment this changes so the user sees
-          the resulting stacking order directly. Within each group the
-          user's `order` still applies (filtered to the group). Defaults
-          to "bottom" on disk; the resolver in RightBarColumn mirrors
-          this fallback so the column is never misaligned before the
-          settings fetch resolves. */}
       <div style={{ marginTop: 20, paddingTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>

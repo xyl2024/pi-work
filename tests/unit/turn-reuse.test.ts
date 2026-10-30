@@ -2,15 +2,6 @@ import { describe, expect, it } from "vitest";
 import { acquireReusedSession, type ReusedSessionSource } from "@/lib/server/turn/reuse";
 import type { AcquiredTurnSession, TurnSession } from "@/lib/server/turn";
 
-/**
- * The reuse branch of turn session acquisition.
- *
- * The resolver is pure of runtime dependencies — the live registry, the disk
- * lookup, the cwd read and the reopen are all injected — so the three cases the
- * ticket names are asserted with fakes: still running, process gone but file on
- * disk, and no file at all.
- */
-
 class FakeTurnSession implements TurnSession {
   constructor(readonly sessionId: string) {}
   onEvent(): () => void {
@@ -72,7 +63,6 @@ describe("acquireReusedSession — continue the session the caller named", () =>
     expect(acquired.session).toBe(live);
     expect(acquired.sessionId).toBe("s-1");
     expect(acquired.realSessionId).toBe("s-1");
-    // "不新建": no disk lookup, no reopen.
     expect(recorded.fileLookups).toEqual([]);
     expect(recorded.reopens).toEqual([]);
   });
@@ -102,7 +92,6 @@ describe("acquireReusedSession — continue the session the caller named", () =>
     const { source, recorded } = makeSource();
 
     await expect(acquireReusedSession("ghost", source)).rejects.toThrow("Session not found: ghost");
-    // The error must not have been papered over by opening a fresh session.
     expect(recorded.reopens).toEqual([]);
     expect(recorded.cwdReads).toEqual([]);
   });

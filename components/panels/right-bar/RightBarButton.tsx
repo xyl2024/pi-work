@@ -3,26 +3,12 @@
 import type { ReactNode } from "react";
 import { Tooltip } from "@/components/ui/Tooltip";
 
-// Shared visual shell for every 36×36 button in the right column. Pulls the
-// hover-color flip, active highlight, disabled treatment, and tooltip wrapper
-// out of AppShell so that adding a new toggle-button is purely a descriptor
-// change.
-//
-// Variants:
-//   - Default: single SVG icon, hover → var(--text), active → var(--accent).
-//   - withBadge: pass `badge` to render a small absolute-positioned node in
-//     the top-right corner. The parent is `position:
-//     relative` so the badge anchors to the button.
-
 interface RightBarButtonProps {
-  /** Tooltip + aria-label. Keep it short (one or two words). */
   label: string;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
-  /** Default icon. */
   icon?: ReactNode;
-  /** Top-right corner badge. Absolute-positioned inside the button. */
   badge?: ReactNode;
 }
 

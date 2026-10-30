@@ -1,33 +1,5 @@
 "use client";
 
-/**
- * Module-scoped store for in-flight `ask_user_questions` requests.
- *
- * Each pending question lives here, keyed by `sessionId` (not toolCallId)
- * because at most one question can be pending per session at any time — the
- * agent's tool call blocks until the user answers, so a second invocation
- * only happens after the first resolves.
- *
- * Why a module-scoped store instead of component-local state:
- * - The sticky panel lives in ChatWindow (above ChatInput), but the sidebar
- *   dot indicator needs to read the same state from SessionSidebar. A
- *   module store avoids lifting state into AppShell or using a Context that
- *   would have to thread through every component that cares.
- * - SSE event handlers run inside useAgentSession; module state is the
- *   simplest way to bridge "server event in ChatWindow" → "panel that also
- *   lives in ChatWindow" without re-triggering useEffect chains.
- * - Like the other stores (sessionUiStore), state survives ChatWindow
- *   remounts on session switch.
- *
- * Reconnect handling: when the SSE stream reconnects, the server re-emits
- * every pending request (see app/api/agent/[id]/events/route.ts). The
- * frontend's SSE handler calls `setPending(...)` for each one; if the
- * sessionId already has a pending entry, the new request is treated as a
- * reconnect of the same question (same toolCallId) and the store entry is
- * preserved. If the toolCallId differs (which can happen if pi reassigned
- * the call after a retry), the new request wins.
- */
-
 import { useCallback, useSyncExternalStore } from "react";
 import type {
   AskUserQuestion,
@@ -37,12 +9,9 @@ import type {
 import { isContentEqual } from "@/lib/client/shallowEqual";
 
 export interface PendingAskUserQuestions {
-  /** Owning session id — required for sidebar dot lookups (the Map is
-   *  keyed by sessionId, but consumers that iterate values need this). */
   sessionId: string;
   toolCallId: string;
   questions: AskUserQuestion[];
-  /** Epoch ms when the request was emitted (server-supplied). */
   ts: number;
 }
 
@@ -77,14 +46,11 @@ function getServerSnapshot(): State {
 
 const EMPTY: State = new Map();
 
-/** All pending entries as a plain array snapshot. */
 export function useAllPendingAskUserQuestions(): readonly PendingAskUserQuestions[] {
   const s = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   return Array.from(s.values());
 }
 
-/** The pending entry for one session, or null. Re-renders when the entry
- *  for this sessionId changes (added, removed, or content-equal replaced). */
 export function usePendingAskUserQuestions(
   sessionId: string | null,
 ): PendingAskUserQuestions | null {
@@ -93,18 +59,12 @@ export function usePendingAskUserQuestions(
   return s.get(sessionId) ?? null;
 }
 
-/** Synchronous read of a session's pending entry (no subscription). Used by
- *  the panel's cleanup path to check whether a stale entry is still the one
- *  it submitted before clearing it. */
 export function getPendingAskUserQuestions(
   sessionId: string,
 ): PendingAskUserQuestions | null {
   return state.get(sessionId) ?? null;
 }
 
-/** Server SSE handler → store. Idempotent on the (sessionId, toolCallId) pair:
- *  if the same pair comes through again (SSE reconnect re-emit), we keep
- *  the existing entry to avoid disturbing the panel mid-answer. */
 export function setPendingAskUserQuestions(
   sessionId: string,
   entry: Omit<PendingAskUserQuestions, "sessionId">,
@@ -117,16 +77,13 @@ export function setPendingAskUserQuestions(
     isContentEqual(cur.questions, fullEntry.questions) &&
     cur.ts === fullEntry.ts
   ) {
-    return; // no-op
+    return;
   }
   const next = new Map(state);
   next.set(sessionId, fullEntry);
   setState(next);
 }
 
-/** Remove a session's pending entry. Called after the user submits/cancels
- *  (the wrapper's promise resolves, which removes the entry server-side —
- *  this call keeps the client store in sync). */
 export function clearPendingAskUserQuestions(sessionId: string): void {
   if (!state.has(sessionId)) return;
   const next = new Map(state);
@@ -134,24 +91,11 @@ export function clearPendingAskUserQuestions(sessionId: string): void {
   setState(next);
 }
 
-/** Pure helper: build the cancel wire shape. An empty or whitespace-only
- *  note is a plain cancel — the server treats it that way anyway, but keeping
- *  the empty key off the wire keeps the two paths identical. */
 export function buildAskUserQuestionsCancel(message?: string): AskUserQuestionsCancel {
   const note = (message ?? "").trim();
   return note.length > 0 ? { cancelled: true, message: note } : { cancelled: true };
 }
 
-/** Imperative submit hook used by the panel — wraps the fetch. Returns true
- *  on a 2xx response, throws otherwise.
- *
- *  The client store is NOT cleared here on success: the panel wants to show a
- *  brief "Answers sent" confirmation before the sticky panel closes, so it
- *  schedules the clear itself (via clearPendingAskUserQuestions). We DO clear
- *  on a non-2xx HTTP response — a failed POST to a dead session means the
- *  wrapper is gone and the entry is stale; keeping the panel up would be
- *  worse. A network-level throw leaves the entry in place so the user can
- *  retry. */
 export function useAskUserQuestionsSubmit(): (
   sessionId: string,
   toolCallId: string,
@@ -169,8 +113,6 @@ export function useAskUserQuestionsSubmit(): (
         }),
       });
       if (!res.ok) {
-        // Stale: the wrapper is gone (e.g. server restart). The panel is
-        // pointless now — drop it so the sidebar dot doesn't linger.
         clearPendingAskUserQuestions(sessionId);
         const body = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}${body ? `: ${body}` : ""}`);

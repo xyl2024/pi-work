@@ -1,12 +1,3 @@
-/**
- * GET /api/llm-audit/calls?limit=N&offset=N&sessionId=...&status=ok|error&modelId=...&source=...&from=...&to=...
- *
- * Returns `{ rows, total }` from `provider_calls`. Rows exclude the heavy
- * bodies by default? — no: rows carry request/response bodies, the panel
- * renders truncated previews and fetches the full record via /[id] only when
- * expanded. Kept simple: list returns full rows, detail route exists for
- * expand-on-demand (avoids shipping everything twice over the wire).
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listProviderCalls } from "@/lib/server/llm-audit-db";

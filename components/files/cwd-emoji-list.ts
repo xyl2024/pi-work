@@ -1,16 +1,9 @@
-/**
- * Curated emoji choices for per-cwd custom icons, with a short English
- * keyword label used for search. Pickers render these in a grid; labels are
- * matched case-insensitively against the search query. The picker dedupes by
- * emoji character, so repeated glyphs here only show once.
- */
 export interface CwdEmojiOption {
   emoji: string;
   label: string;
 }
 
 export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
-  // ── Folders / files / storage ─────────────────────────────────────
   { emoji: "📁", label: "folder directory" },
   { emoji: "📂", label: "folder open directory" },
   { emoji: "🗂️", label: "card index file manager" },
@@ -45,7 +38,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🗜️", label: "clamp compress" },
   { emoji: "🧰", label: "toolbox tools" },
   { emoji: "🧲", label: "magnet attract" },
-  // ── Code / dev / terminal / git ───────────────────────────────────
   { emoji: "💻", label: "laptop code computer" },
   { emoji: "🖥️", label: "desktop monitor computer" },
   { emoji: "🖨️", label: "printer" },
@@ -67,7 +59,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🦠", label: "microbe virus" },
   { emoji: "🧾", label: "receipt invoice" },
   { emoji: "🗃️", label: "codebase archive" },
-  // Git / repo / CI
   { emoji: "🦑", label: "squid git" },
   { emoji: "🐙", label: "octopus github octocat" },
   { emoji: "🌿", label: "herb branch" },
@@ -86,7 +77,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🏗️", label: "construction building build" },
   { emoji: "🚀", label: "rocket launch deploy release" },
   { emoji: "📡", label: "satellite antenna signal deploy" },
-  // ── Languages / frameworks / runtime ──────────────────────────────
   { emoji: "🐍", label: "snake python" },
   { emoji: "🦀", label: "crab rust" },
   { emoji: "☕", label: "hot beverage coffee java" },
@@ -109,7 +99,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🟧", label: "orange square html rust" },
   { emoji: "🟪", label: "purple square" },
   { emoji: "🌶️", label: "hot pepper spicy" },
-  // ── Data / database / infra / cloud ───────────────────────────────
   { emoji: "🗄️", label: "database server" },
   { emoji: "🛢️", label: "oil drum database" },
   { emoji: "🧃", label: "juice data" },
@@ -144,7 +133,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "⏲️", label: "timer clock" },
   { emoji: "🧭", label: "compass navigation discovery" },
   { emoji: "🧯", label: "fire extinguisher infra" },
-  // ── Security / auth / compliance ──────────────────────────────────
   { emoji: "🔒", label: "lock secure" },
   { emoji: "🔓", label: "unlock" },
   { emoji: "🔐", label: "closed lock key auth" },
@@ -161,7 +149,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🔏", label: "locked with pen sign" },
   { emoji: "🔐", label: "security key" },
   { emoji: "🆔", label: "id identity" },
-  // ── Business / finance / commerce ─────────────────────────────────
   { emoji: "💼", label: "briefcase business" },
   { emoji: "🎒", label: "backpack" },
   { emoji: "🏦", label: "bank finance" },
@@ -187,7 +174,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "👨‍💼", label: "businessman" },
   { emoji: "🤝", label: "handshake partner deal" },
   { emoji: "📉", label: "loss" },
-  // ── Planning / project / status ───────────────────────────────────
   { emoji: "📅", label: "calendar schedule" },
   { emoji: "📆", label: "tear off calendar" },
   { emoji: "🗓️", label: "calendar plan" },
@@ -218,7 +204,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🐇", label: "rabbit fast" },
   { emoji: "🐎", label: "horse fast" },
   { emoji: "📊", label: "dashboard" },
-  // ── Communication / people ────────────────────────────────────────
   { emoji: "💬", label: "speech balloon chat" },
   { emoji: "💭", label: "thought balloon" },
   { emoji: "🗨️", label: "left speech balloon" },
@@ -250,7 +235,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "👍", label: "thumbs up like approve" },
   { emoji: "👎", label: "thumbs down unlike" },
   { emoji: "🙏", label: "folded hands thanks" },
-  // ── Design / creative / media ─────────────────────────────────────
   { emoji: "🎨", label: "artist palette design ui" },
   { emoji: "🖌️", label: "paintbrush design" },
   { emoji: "🖍️", label: "crayon" },
@@ -288,7 +272,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "💡", label: "light bulb idea" },
   { emoji: "🔦", label: "flashlight" },
   { emoji: "🔥", label: "hot" },
-  // ── Science / math / engineering ──────────────────────────────────
   { emoji: "🔬", label: "microscope science" },
   { emoji: "🧬", label: "dna biology genome" },
   { emoji: "⚗️", label: "alembic chemistry" },
@@ -308,7 +291,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🧮", label: "abacus" },
   { emoji: "📐", label: "geometry" },
   { emoji: "⚙️", label: "mechanical" },
-  // ── Nature / environment / places ─────────────────────────────────
   { emoji: "🌱", label: "seedling growth greenfield" },
   { emoji: "🌳", label: "deciduous tree" },
   { emoji: "🌴", label: "palm tree" },
@@ -339,7 +321,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🌍", label: "earth" },
   { emoji: "🧊", label: "ice cube" },
   { emoji: "🌶️", label: "hot pepper" },
-  // ── Places / buildings / transport ────────────────────────────────
   { emoji: "🏠", label: "house home" },
   { emoji: "🏡", label: "house with garden" },
   { emoji: "🏢", label: "office building corporate" },
@@ -372,7 +353,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🚁", label: "helicopter" },
   { emoji: "🛩️", label: "small airplane" },
   { emoji: "🚉", label: "station" },
-  // ── Status / activity / misc ──────────────────────────────────────
   { emoji: "❓", label: "question help" },
   { emoji: "❗", label: "exclamation important" },
   { emoji: "💥", label: "collision crash" },
@@ -411,7 +391,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🧭", label: "navigate compass" },
   { emoji: "🗿", label: "moai statue" },
   { emoji: "⚗️", label: "beaker" },
-  // ── Animals ───────────────────────────────────────────────────────
   { emoji: "🐻", label: "bear" },
   { emoji: "🐼", label: "panda" },
   { emoji: "🦊", label: "fox" },
@@ -505,7 +484,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🪳", label: "cockroach" },
   { emoji: "🦟", label: "mosquito" },
   { emoji: "🦠", label: "microbe" },
-  // ── Food & drink ──────────────────────────────────────────────────
   { emoji: "🍎", label: "apple" },
   { emoji: "🍏", label: "green apple" },
   { emoji: "🍊", label: "orange citrus" },
@@ -561,7 +539,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🍸", label: "cocktail glass" },
   { emoji: "🥤", label: "cup with straw" },
   { emoji: "🧊", label: "ice cube" },
-  // ── Symbols / shapes / status ─────────────────────────────────────
   { emoji: "🔴", label: "red circle status" },
   { emoji: "🟠", label: "orange circle" },
   { emoji: "🟡", label: "yellow circle" },
@@ -599,7 +576,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🅱️", label: "b" },
   { emoji: "Ⓜ️", label: "m" },
   { emoji: "™️", label: "tm trademark" },
-  // ── Professions / roles / people ──────────────────────────────────
   { emoji: "👩‍🔬", label: "woman scientist" },
   { emoji: "👨‍🔬", label: "man scientist" },
   { emoji: "🧑‍🔬", label: "scientist researcher" },
@@ -636,7 +612,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🧜", label: "mermaid" },
   { emoji: "🤴", label: "prince" },
   { emoji: "👸", label: "princess" },
-  // ── Electronics / gadgets / hardware ──────────────────────────────
   { emoji: "⌚", label: "watch wearable" },
   { emoji: "📟", label: "pager" },
   { emoji: "📠", label: "fax machine" },
@@ -658,7 +633,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🤳", label: "selfie" },
   { emoji: "🗜️", label: "compression" },
   { emoji: "⚗️", label: "distillation" },
-  // ── Clothing / accessories ────────────────────────────────────────
   { emoji: "👕", label: "t shirt" },
   { emoji: "👖", label: "jeans" },
   { emoji: "🧥", label: "coat" },
@@ -673,7 +647,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "👓", label: "glasses" },
   { emoji: "🕶️", label: "sunglasses" },
   { emoji: "🥽", label: "goggles" },
-  // ── Music / media / instruments ───────────────────────────────────
   { emoji: "🎧", label: "headphone" },
   { emoji: "🎸", label: "guitar" },
   { emoji: "🎹", label: "musical keyboard" },
@@ -682,7 +655,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🎷", label: "saxophone" },
   { emoji: "🥁", label: "drum" },
   { emoji: "🎤", label: "microphone" },
-  // ── Activities / hobbies / sports ─────────────────────────────────
   { emoji: "🏃", label: "running" },
   { emoji: "🧗", label: "climbing" },
   { emoji: "🏊", label: "swimming" },
@@ -701,7 +673,6 @@ export const CWD_EMOJI_OPTIONS: CwdEmojiOption[] = [
   { emoji: "🏓", label: "ping pong" },
   { emoji: "🏸", label: "badminton" },
   { emoji: "🥋", label: "martial arts" },
-  // ── Objects / home / misc ─────────────────────────────────────────
   { emoji: "🛎️", label: "bellhop" },
   { emoji: "🪞", label: "mirror" },
   { emoji: "🪟", label: "window" },

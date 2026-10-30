@@ -3,15 +3,6 @@
 import { useI18n } from "@/hooks/useI18n";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 
-/**
- * Upward-anchored list of slash commands that match the current query.
- * Pure presentational — keyboard navigation (↑↓ switch, ←→ page, Enter
- * to pick) is handled inside the parent's `handleKeyDown` so this
- * component only renders the visible page.
- *
- * `onMouseDown` (not `onClick`) is used to swallow the mouse press that
- * would otherwise blur the textarea before the selection runs.
- */
 export function SlashCommandMenu({
   items,
   activeIndex,

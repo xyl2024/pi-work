@@ -2,16 +2,6 @@ import { describe, expect, it } from "vitest";
 import { EMPTY_REPLY_FALLBACK, toInboundReply } from "@/lib/server/wechat/inbound-reply";
 import type { TurnResult } from "@/lib/server/turn";
 
-/**
- * The wechat channel's mapping from a turn result to the reply it sends back.
- *
- * Pure — no session, no SQLite — so this channel's reply policy is asserted
- * directly: an empty reply counts as a *success* answered with the fallback
- * line (wechat's documented current behaviour, unlike the scheduler and the
- * board), a timeout keeps the channel's own wording, and every other failure
- * carries the turn module's error text.
- */
-
 function result(overrides: Partial<TurnResult> = {}): TurnResult {
   return {
     status: "completed",

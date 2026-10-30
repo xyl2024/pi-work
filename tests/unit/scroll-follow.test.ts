@@ -18,12 +18,10 @@ import {
   type ScrollMetrics,
 } from "@/lib/shared/scroll-follow";
 
-/** A scrollport 600px tall holding 5000px of content, scrolled to `scrollTop`. */
 function metrics(scrollTop: number, scrollHeight = 5000, clientHeight = 600): ScrollMetrics {
   return { scrollHeight, scrollTop, clientHeight };
 }
 
-/** ...with the given distance left below the viewport. */
 function metricsWithDistanceFromBottom(distance: number): ScrollMetrics {
   return metrics(5000 - 600 - distance);
 }
@@ -79,9 +77,6 @@ describe("decideScrollFollowOnWheel", () => {
   });
 
   it("changes nothing on a downward wheel", () => {
-    // Scrolling down while still above the bottom must not resume following —
-    // only reaching the bottom (a scroll event) does — and it must not flip
-    // the affordance either.
     expect(decideScrollFollowOnWheel(120)).toEqual(NO_FOLLOW_CHANGE);
     expect(decideScrollFollowOnWheel(0)).toEqual(NO_FOLLOW_CHANGE);
   });
@@ -144,8 +139,6 @@ describe("decideScrollFollowOnGrowth", () => {
   });
 
   it("judges the growth against the distance from before it happened", () => {
-    // 60px of viewport growth plus 30px already past the threshold is still
-    // inside the 90px distance the chat had before the growth.
     const decision = decideScrollFollowOnGrowth(false, {
       heightDelta: 60,
       metrics: metricsWithDistanceFromBottom(90),
@@ -205,8 +198,6 @@ describe("decideScrollFollowOnBottom", () => {
 
 describe("decideScrollFollowOnTop", () => {
   it("asks for a smooth scroll to the top and decides nothing else", () => {
-    // The top flag is reported by the scroll events the smooth scroll emits,
-    // so the button only greys out once the view actually gets there.
     expect(decideScrollFollowOnTop()).toEqual({ follow: {}, command: "toTopSmooth" });
   });
 });
@@ -246,8 +237,6 @@ describe("decideEntryScroll", () => {
   });
 
   it("moves nothing on later growth", () => {
-    // Streaming is followed by the nested live viewport, not by the page-level
-    // scrollport, so a new message must not move the outer scroll position.
     expect(
       decideEntryScroll({ messageCount: 9, pendingScrollToUser: false, initialScrollDone: true }),
     ).toEqual({ command: "none", pendingScrollToUser: false, initialScrollDone: true });

@@ -2,24 +2,19 @@ import { createLogger } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const UPSTREAM_URL = "https://open.er-api.com/v6/latest/USD";
 const FETCH_TIMEOUT_MS = 10_000;
 
 const log = createLogger("api/exchange-rate");
 
 interface CacheEntry {
-  /** CNY per 1 USD. */
   rate: number;
-  /** Epoch ms when the rate was last successfully fetched upstream. */
   fetchedAt: number;
 }
 
-// Survive Next.js hot reloads: stash the cache on globalThis rather than the
-// module scope (which gets a fresh copy on every dev recompile).
 interface ExchangeRateState {
   entry: CacheEntry | null;
-  /** Single in-flight refresh promise shared across concurrent GETs. */
   inflight: Promise<CacheEntry | null> | null;
 }
 const globalCache = globalThis as unknown as { __piWorkExchangeRate?: ExchangeRateState };
@@ -31,13 +26,6 @@ function getState(): ExchangeRateState {
   return globalCache.__piWorkExchangeRate;
 }
 
-/**
- * Fetches a fresh rate from the upstream API. On any failure (HTTP error,
- * malformed payload, network/timeout), falls back to the last known cached
- * entry. Returns `null` only when there is no cache to fall back to AND the
- * upstream is unreachable — the route then responds with 503 so the client
- * can show the original USD value instead.
- */
 async function fetchRate(): Promise<CacheEntry | null> {
   const state = getState();
   if (state.inflight) return state.inflight;
@@ -98,8 +86,6 @@ export async function GET() {
   return Response.json({
     rate: refreshed.rate,
     fetchedAt: refreshed.fetchedAt,
-    // Stale when the upstream refresh failed and we fell back to a previous
-    // entry that is already past its TTL.
     stale: now - refreshed.fetchedAt >= CACHE_TTL_MS,
   });
 }

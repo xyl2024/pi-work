@@ -1,12 +1,3 @@
-/**
- * Data shapes shared by the models-config panel view and the pure draft model in
- * `models-config-draft.ts`.
- *
- * These live in `lib/shared` so the pure draft logic can depend on them
- * without reaching into a component directory. No runtime value is exported
- * here — types only.
- */
-
 export interface OAuthProvider {
   id: string;
   name: string;
@@ -44,7 +35,6 @@ export interface ModelEntry {
   maxTokens?: number;
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown[] };
   compat?: Record<string, unknown>;
-  /** Provider id whose icon this model should display (chosen in the UI). */
   icon?: string;
 }
 
@@ -56,7 +46,6 @@ export interface ProviderEntry {
   compat?: Record<string, unknown>;
   models?: ModelEntry[];
   modelOverrides?: Record<string, unknown>;
-  /** Provider id whose icon this provider's models should display by default (chosen in the UI). */
   icon?: string;
 }
 

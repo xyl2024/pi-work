@@ -1,7 +1,4 @@
-// ChatWindow / ChatInput / message rendering / tool-call stats / slash commands.
-
 export const chat = {
-  // Top-level chrome
   "Branches": "会话分支",
   "Conversation Tree": "对话树",
   "Open conversation tree": "打开对话树",
@@ -25,7 +22,6 @@ export const chat = {
   "Outputting...": "正在输出中",
   "Retrying": "正在重试",
 
-  // Input bar
   "Send": "发送",
   "Stop": "停止",
   "Upload image": "上传图片",
@@ -33,7 +29,6 @@ export const chat = {
   "↑↓ switch, Enter to pick": "↑↓切换，回车确认",
   "Files": "文件",
   "Retry": "重试",
-  // /model slash command modal
   "Switch model": "切换模型",
   "Search models...": "搜索模型...",
   "Current model": "当前模型",
@@ -58,7 +53,6 @@ export const chat = {
   "No tools, chat only": "无工具，纯聊天",
   "All available tools": "全部可用工具",
 
-  // Tools picker
   "Choose tools": "选择工具",
   "Search tools...": "搜索工具...",
   "Arrow keys select · Enter confirm · Esc close": "方向键选择 · Enter 确认 · Esc 关闭",
@@ -80,7 +74,6 @@ export const chat = {
 
   "Close": "关闭",
   "Open": "打开",
-  // Tabs / new session
   "New": "新建",
   "New session": "新会话",
   "New session in this project": "在此项目中新建会话",
@@ -96,12 +89,10 @@ export const chat = {
   "Change project": "切换项目",
   "Pick a project": "选择项目",
 
-  // File panel
   "No file open": "未打开文件",
   "Hide file panel": "隐藏文件面板",
   "Show file panel": "显示文件面板",
 
-  // Sidebar
   "Sessions": "会话",
   "Commands": "命令",
   "Type a command...": "输入命令...",
@@ -124,7 +115,6 @@ export const chat = {
   "Empty session": "空会话",
   "This session has no branches (you can click `Start new branch` on any user message to start a new session branch)": "当前会话没有分支（可在任意用户消息处点击“开启新分支”开启新的会话分支）",
 
-  // File explorer context menu
   "New file": "新建文件",
   "New folder": "新建文件夹",
   "Upload": "上传",
@@ -158,7 +148,6 @@ export const chat = {
   "Failed to load audio": "音频加载失败",
   "Failed to load video": "视频加载失败",
 
-  // Message actions
   "Save & replace": "保存并替换",
   "Save failed": "保存失败",
   "Copy message": "复制消息",
@@ -173,7 +162,6 @@ export const chat = {
   "copy": "复制",
   "copied": "已复制",
 
-  // Agent plan + tool call rendering
   "Agent Plan": "任务计划",
   "In progress": "进行中",
   "Pending": "待处理",
@@ -197,38 +185,23 @@ export const chat = {
   "No output": "无输出",
   "No messages yet": "暂无消息",
 
-  // Chat activity wording shared with the process details / file chips
   "Tool": "工具",
   "Overview": "概览",
   "Show all files": "显示全部文件",
   "Files read or changed this turn:": "本轮已读/已处理文件：",
   "Lines changed this turn": "本轮文件变更行数",
 
-  // Activity / context panel
   "Context": "上下文",
-  // Context ring tooltip warnings — absolute-size tiers (125k / 250k tokens)
   "You are leaving the model's Smart Zone — hallucinations become possible.":
     "你正在脱离大模型的 Smart Zone，模型可能出现幻觉",
   "Context is nearly full — the model will hallucinate badly. Compact the session or start a new one.":
     "上下文太满了，大模型将出现较大的幻觉，建议压缩或开启新的会话",
-  // Context composition (ADR-0005): the context ring tooltip shows one `≈`
-  // line per top-level bucket, and the click-opened panel expands them. The
-  // total is provider-exact, these are local estimates — the `≈` prefix is
-  // added by the component. 「预估」 is the word the dictionary already uses for
-  // a local estimate (`Estimated tokens while streaming`), so the panel does
-  // not coin a second synonym.
   "Context composition": "上下文构成",
   "System prompt": "系统提示",
   "System tool definitions": "系统工具定义",
-  // "Skills" is already defined above (技能) and is reused as the bucket label.
   "Messages": "消息",
-  // System-prompt rows. `Pi base prompt` is the prompt's own prose plus the
-  // `Available tools` / `Guidelines` sections; those two keep the Context
-  // panel's anchor names so both surfaces say the same word.
   "Pi base prompt": "Pi 基础提示",
   "Current working directory": "当前工作目录",
-  // Message rows. `user-text` is "user-side", not "typed by the user": pi folds
-  // bash executions and custom messages into it, and the label has to say so.
   "User-side text (incl. bash, custom)": "用户侧文本（含 bash、自定义消息）",
   "Assistant text": "Assistant 正文",
   "Tool call arguments": "工具调用参数",
@@ -237,10 +210,6 @@ export const chat = {
   "Branch summary": "分支摘要",
   "The total comes from the model and is exact; the categories are local estimates.":
     "总量来自模型返回，精确；各分类为本地预估。",
-  // Top tool results, hung under the messages bucket (#38). Each row names the
-  // tool and its target through the same preview the transcript's tool-call
-  // block uses; a result without a toolCallId stays listed but cannot be
-  // clicked, and says so on hover.
   "Top tool results": "最大的工具结果",
   "Jump to the message that issued this call": "跳转到发起该工具调用的消息",
   "This tool result cannot be located in the conversation": "此工具结果无法定位到对话中的消息",
@@ -256,7 +225,6 @@ export const chat = {
   "Append": "追加",
   "AGENTS.md": "AGENTS.md",
 
-  // Auto-name / compact
   "Auto-name": "自动命名",
   "Auto-name session": "自动命名会话",
   "Auto-name session?": "自动命名会话？",
@@ -278,7 +246,6 @@ export const chat = {
   "Estimated tokens while streaming": "预估 token 数（流式接收中）",
   "Model call failed": "模型调用失败",
 
-  // Folder picker
   "Select folder": "选择文件夹",
   "Select folder...": "选择文件夹...",
   "Show hidden files": "显示隐藏文件",
@@ -290,15 +257,12 @@ export const chat = {
   "Not a folder": "不是文件夹",
   "Failed to load folder": "加载文件夹失败",
 
-  // Turn process fold: the summary row's expand-by-page controls. The page
-  // size is a constant (`PROCESS_FOLD_PAGE`), so only the count is in the copy.
   "{n} messages": "{n} 条消息",
   "{n} / {total} messages": "{n} / {total} 条消息",
   "Expand last {n}": "展开最后 {n} 条",
   "Expand next {n}": "再展开 {n} 条",
   "Expand remaining {n}": "展开剩余 {n} 条",
 
-  // 消息来源（Message origin）：悬停完整说明。键即映射产物里的 hover.key。
   "Message from channel {channel}": "来自频道 {channel}",
   "Message from scheduled task {task}": "来自定时任务 {task}",
   "Message from session {session}": "来自会话 {session}",

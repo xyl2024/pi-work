@@ -4,19 +4,9 @@ import type {
   SubagentTaskTimers,
 } from "@/lib/server/subagent-tasks";
 
-/**
- * Shared scripted runtime for the subagent lifecycle tests.
- *
- * A turn is a deferred the test settles by hand, so no test ever waits on a
- * model; the child session is a structural fake; the timer stub records wait
- * deadlines and only fires when the test says so. Keeping one copy means the
- * task, wait and cancel suites exercise the same seams instead of drifting.
- */
-
 export interface ScriptedTurn {
   spec: RunTurnSpec;
   settle(result?: Partial<TurnResult>): Promise<void>;
-  /** Simulate the child session being acquired (runs the factory). */
   acquire(): Promise<void>;
   result: Promise<TurnResult>;
 }

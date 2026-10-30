@@ -13,13 +13,6 @@ import {
 } from "@/lib/shared/mcp-draft";
 import { canonicalMcpJson, mcpUncoveredFields, pruneMcpDefaults, type McpPanelData } from "@/lib/shared/mcp-panel";
 
-/**
- * The MCP panel's draft model (lib/shared/mcp-draft.ts): server state arrives,
- * the user edits, and the save request must contain exactly the difference —
- * nothing more (a save that rewrites untouched entries is a save that can lose
- * someone else's edit) and nothing less.
- */
-
 function panelData(entries: McpPanelData["entries"], files?: Partial<McpPanelData["files"][number]>[]): McpPanelData {
   return {
     files: [
@@ -97,7 +90,6 @@ describe("mcp-draft: entries", () => {
     expect(isDraftDirty(marked, data)).toBe(true);
     expect(mcpPendingChanges(marked, data)).toEqual([{ scope: "global", operations: [{ op: "remove", name: "docs" }] }]);
 
-    // Undo restores the clean baseline.
     const undone = { ...draft, entries: draft.entries.map((entry) => ({ ...entry, deleted: false })) };
     expect(mcpPendingChanges(undone, data)).toEqual([]);
   });
@@ -124,7 +116,6 @@ describe("mcp-draft: entries", () => {
     const draft = draftFromPanelData(data);
 
     expect(draft.entries[0].config).toBeNull();
-    // Nobody touched it, so it cannot block anything: it is never sent.
     expect(mcpDraftProblem(draft)).toBeNull();
 
     const half = draft.entries.map((entry) => withEntryRawJson(entry, '{ "command": '));
@@ -169,7 +160,6 @@ describe("mcp-draft: problems", () => {
     const data = panelData([{ ...docsEntry, rawJson: JSON.stringify({ timeout: 5 }) }]);
     const draft = draftFromPanelData(data);
 
-    // An entry pi already skips, untouched, is left alone instead of blocking.
     expect(mcpDraftProblem(draft)).toBeNull();
 
     const edited = draft.entries.map((entry) => withEntryConfig(entry, { timeout: 5, exposure: "direct" }));
@@ -196,7 +186,6 @@ describe("mcp-draft: override entries", () => {
       entry.scope === "project" ? withEntryConfig(entry, { enabled: true }) : entry,
     );
     expect(mcpDraftProblem({ ...draft, entries: reEnabled })).toBeNull();
-    // The minimal shape survives the write: `enabled: true` is not pruned to `{}`.
     expect(mcpPendingChanges({ ...draft, entries: reEnabled }, data)).toEqual([
       { scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: true } }] },
     ]);

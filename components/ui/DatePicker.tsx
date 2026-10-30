@@ -10,21 +10,13 @@ import {
 } from "@/components/ui/popover";
 
 interface DatePickerProps {
-  /** Selected day as a unix-ms timestamp. The time component is ignored — the
-   *  picker always operates at day granularity. `null`/`undefined` = cleared. */
   value: number | null | undefined;
   onChange: (ts: number | null) => void;
-  /** Text shown on the trigger when nothing is selected. */
   placeholder?: string;
-  /** Earliest selectable day (inclusive). */
   min?: number;
-  /** Latest selectable day (inclusive). */
   max?: number;
-  /** Override the locale used for weekday/month names. Defaults to the app locale. */
   locale?: Locale;
-  /** Which side of the trigger the popover anchors to. */
   align?: "start" | "end";
-  /** Render a custom trigger. Receives helpers to wire up the open state + ref. */
   renderTrigger?: (p: {
     open: boolean;
     ref: React.Ref<HTMLButtonElement>;
@@ -32,20 +24,11 @@ interface DatePickerProps {
     formatted: string;
     hasValue: boolean;
   }) => React.ReactNode;
-  /** Style overrides merged into the default trigger button. Ignored when
-   *  `renderTrigger` is provided. */
   triggerStyle?: React.CSSProperties;
-  /** Accessible label for the default trigger. */
   ariaLabel?: string;
-  /** Show a small "×" inside the trigger to clear the value. Default: true. */
   clearable?: boolean;
-  /** Controlled open state. When provided, the picker does not manage its own
-   *  open/close state and `onOpenChange` is required. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Trigger visual sizing. `compact` matches the default (small, row-friendly)
-   *  style; `regular` produces a full-size form input suitable for standalone
-   *  forms (e.g. the scheduler task dialog). Default: `"compact"`. */
   size?: "compact" | "regular";
 }
 
@@ -105,9 +88,6 @@ export function DatePicker({
   const selectedDay = value != null ? startOfDay(value) : null;
   const { open, setOpen } = useControllableOpen(openProp, onOpenChange);
 
-  // The month being viewed in the popover. Resets to the selected day (or
-  // today) every time the popover opens, so users always land on a relevant
-  // month.
   const [viewYear, setViewYear] = useState(() => {
     const v = selectedDay ?? startOfDay(Date.now());
     return new Date(v).getFullYear();
@@ -116,8 +96,6 @@ export function DatePicker({
     const v = selectedDay ?? startOfDay(Date.now());
     return new Date(v).getMonth();
   });
-  // Snapshot of "today" so the "today" highlight stays stable across renders
-  // (avoids the react-hooks/purity rule against Date.now() during render).
   const [today, setToday] = useState(() => startOfDay(Date.now()));
 
   useEffect(() => {
@@ -132,9 +110,6 @@ export function DatePicker({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  // Close on outside click / Escape (Escape also restores focus to the
-  // trigger). Both behaviours were previously inlined; they now live in
-  // the shared dismissable-layer hook.
   useDismissableLayer({
     enabled: open,
     containerRef,
@@ -163,7 +138,7 @@ export function DatePicker({
 
   const monthLength = getMonthLength(viewYear, viewMonth);
   const firstOfMonth = new Date(viewYear, viewMonth, 1);
-  const startWeekday = firstOfMonth.getDay(); // 0 = Sun
+  const startWeekday = firstOfMonth.getDay();
   const cells: Array<{ day: number; ts: number } | null> = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
   for (let d = 1; d <= monthLength; d++) {
@@ -248,7 +223,6 @@ export function DatePicker({
           fontFamily: "inherit",
         }}
       >
-        {/* Header: prev / month-year / next */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
           <button type="button" onClick={goPrevMonth} aria-label={t("Previous month")} style={navBtnStyle}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -265,7 +239,6 @@ export function DatePicker({
           </button>
         </div>
 
-        {/* Weekday header */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 2 }}>
           {WEEKDAY_SHORT[loc].map((w) => (
             <div key={w} style={{ textAlign: "center", fontSize: 10, color: "var(--text-dim)", padding: "2px 0", fontWeight: 500 }}>
@@ -274,7 +247,6 @@ export function DatePicker({
           ))}
         </div>
 
-        {/* Day grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
           {cells.map((cell, i) => {
             if (!cell) return <div key={i} />;
@@ -319,7 +291,6 @@ export function DatePicker({
           })}
         </div>
 
-        {/* Footer: clear / today */}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
           <button
             type="button"

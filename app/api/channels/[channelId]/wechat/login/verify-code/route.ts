@@ -1,11 +1,3 @@
-/**
- * POST /api/channels/:channelId/wechat/login/verify-code
- *   body: { sessionKey, code }
- *
- *   Queues the user-entered pairing code on the login session. The next
- *   GET poll passes it to get_qrcode_status. The session must belong to
- *   the channel in the route parameter.
- */
 import { NextResponse } from "next/server";
 import { getSession, updateSession } from "@/lib/server/wechat/login-sessions";
 import { getChannel } from "@/lib/server/channels";

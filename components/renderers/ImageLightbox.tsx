@@ -9,9 +9,6 @@ export interface ImageItem {
   src: string;
 }
 
-// Extract every image reference from a markdown document. Pass an optional
-// resolveSrc to rewrite raw src values (e.g. relative paths → /api/files/...);
-// otherwise src is used as-is.
 export function extractImageGallery(
   content: string,
   resolveSrc: (raw: string) => string = (s) => s,
@@ -25,10 +22,6 @@ export function extractImageGallery(
   return out;
 }
 
-// Custom <img> for ReactMarkdown. Calls onImageClick with the resolved src.
-// maxWidth caps the rendered width relative to the container; defaults to
-// filling it (100%). Pass a smaller value (e.g. "50%") to shrink inline
-// previews in dense layouts.
 export function MarkdownImage({ src, alt, resolveSrc, onImageClick, maxWidth = "100%" }: {
   src?: string | Blob;
   alt?: string;
@@ -78,9 +71,6 @@ export function MarkdownImage({ src, alt, resolveSrc, onImageClick, maxWidth = "
   );
 }
 
-// Full-screen image lightbox. Click an image in the markdown preview to open
-// it; arrow keys / on-screen arrows navigate the gallery; +/-/wheel zoom; drag
-// to pan when zoomed; Esc or click backdrop to close.
 export function ImageLightbox({ images, index, onClose, onIndexChange }: {
   images: ImageItem[];
   index: number;
@@ -101,7 +91,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
   const canPrev = hasMultiple;
   const canNext = hasMultiple;
 
-  // Reset zoom/pan and error state when navigating to a different image
   useEffect(() => {
     setScale(1);
     setTx(0);
@@ -109,7 +98,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
     setLoadError(false);
   }, [index]);
 
-  // Lock body scroll while the lightbox is open
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -118,7 +106,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
     };
   }, []);
 
-  // Keyboard shortcuts
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
@@ -151,7 +138,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [index, images.length, canPrev, canNext, onClose, onIndexChange]);
 
-  // Non-passive wheel listener so we can preventDefault page scroll while zooming
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -164,8 +150,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
     return () => el.removeEventListener("wheel", handler);
   }, []);
 
-  // Window-level mousemove/mouseup so drag continues even when the cursor
-  // leaves the image
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
@@ -252,7 +236,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
         ✕
       </button>
 
-      {/* Image area — click on backdrop closes */}
       <div
         ref={containerRef}
         onClick={(e) => {
@@ -290,7 +273,6 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
         )}
       </div>
 
-      {/* Bottom toolbar */}
       <div
         style={{
           display: "flex",

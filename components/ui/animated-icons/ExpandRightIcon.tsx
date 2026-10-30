@@ -1,7 +1,3 @@
-// Expand-panel glyph (Maximize2). Hovering slides the two corner brackets
-// apart/in to suggest "maximize the panel". Fills the ExpandRightIcon role in
-// the column (the "expand" affordance when the panel is not expanded).
-
 "use client";
 
 import type { Transition } from "motion/react";
@@ -87,4 +83,3 @@ export const ExpandRightIcon = forwardRef<
 });
 
 ExpandRightIcon.displayName = "ExpandRightIcon";
-

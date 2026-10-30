@@ -1,31 +1,4 @@
 #!/usr/bin/env node
-/**
- * Isolated dev server for Pi Work.
- *
- * Runs `next dev` against a *separate* data root and a *separate* pi agent
- * dir, so the dev instance never races the production instance that shares
- * this checkout:
- *
- *   - background loops (scheduler / channel workers) get their own
- *     state instead of duplicating production runs;
- *   - SQLite files, config.yaml, channel credentials, sidecars, profile,
- *     logs and the WeChat monitor lock all land in the dev data root;
- *   - auth.json / models.json / sessions / APPEND_SYSTEM.md live in the
- *     dev agent dir.
- *
- * Per-DB overrides (PI_WORK_*_DB) still beat PI_WORK_DATA_DIR when both
- * are set, so a single file can be redirected independently.
- *
- * Usage:
- *   pnpm run dev:isolated
- *   node scripts/dev-isolated.mjs [--port 30143] [--term-port 30144]
- *       [--data-dir ~/.pi-work-dev] [--agent-dir ~/.pi-dev/agent]
- *       [--base-url http://localhost:30143]
- *
- * First boot of a fresh agent dir has no auth/models — log in / pick a
- * model in the UI. To seed it from the default instance:
- *   cp -r ~/.pi/agent ~/.pi-dev/agent
- */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -33,7 +6,6 @@ import os from "node:os";
 
 const require = createRequire(import.meta.url);
 
-// ── CLI args ────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 function arg(name, fallback) {
   const prefix = `--${name}=`;
@@ -56,7 +28,6 @@ const dataDir = expandTilde(arg("data-dir", "~/.pi-work-dev"));
 const agentDir = expandTilde(arg("agent-dir", "~/.pi-dev/agent"));
 const baseUrl = arg("base-url", `http://localhost:${port}`);
 
-// ── Resolve next's CLI entry (same trick as bin/pi-work.js) ─────────────
 let nextBin;
 try {
   nextBin = require.resolve("next/dist/bin/next", { paths: [process.cwd()] });
@@ -65,16 +36,12 @@ try {
   nextBin = path.join(path.dirname(nextPkg), "dist", "bin", "next");
 }
 
-// ── Environment ─────────────────────────────────────────────────────────
 const env = {
   ...process.env,
   PI_WORK_DATA_DIR: dataDir,
   PI_CODING_AGENT_DIR: agentDir,
   PI_WORK_TERMINAL_PORT: String(termPort),
   PI_WORK_PUBLIC_BASE_URL: baseUrl,
-  // Build into our own dist dir: a production server may be serving from
-  // this checkout's .next/ — dev must never write into it (next.config.ts
-  // honors NEXT_DIST_DIR).
   NEXT_DIST_DIR: ".next-isolated",
 };
 

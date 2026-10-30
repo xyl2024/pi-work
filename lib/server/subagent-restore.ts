@@ -1,20 +1,3 @@
-/**
- * Child-session configuration across a cold start.
- *
- * A child session's creation-time settings live in the task row that created it
- * (`config_snapshot`), never in today's profile: editing or deleting a profile
- * must not reconfigure a child that already exists. This module is the one
- * place that turns a snapshot back into `StartRpcSessionOptions`, and the one
- * place that decides what to do for a legacy child that predates snapshots.
- *
- * Legacy recovery is deliberately narrow. Only facts the persisted session can
- * prove are reused — the tool selection mirrored to the session-tools sidecar,
- * the model and thinking level recorded in the session file, and the working
- * directory in its header. Everything else (the original prompt, runtime limit)
- * is replaced by a conservative default, and when the restricted tool set or
- * the model cannot be recovered the child is refused with an explicit error
- * instead of being reopened with today's (possibly wider) defaults.
- */
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
@@ -29,16 +12,10 @@ import { readSessionToolSelection } from "./session-tools-config";
 import { getSubagentSessionConfigSnapshot } from "./subagent-store";
 import { resolveSessionPath } from "./sessions/reader";
 
-/**
- * Neutral instruction used when a legacy child's original prompt was never
- * recorded. It keeps the child in its old role (a continued subagent) without
- * granting anything; the tool set and model still come from persisted facts.
- */
 export const LEGACY_SUBAGENT_SYSTEM_PROMPT =
   "You are continuing a subagent session started earlier. Its original creation-time instructions are not available;"
   + " follow the current task input and stay within your assigned tool set.";
 
-/** A child session that cannot be reopened or continued without widening it. */
 export class SubagentConfigRestoreError extends Error {
   constructor(message: string) {
     super(message);
@@ -48,17 +25,10 @@ export class SubagentConfigRestoreError extends Error {
 
 export interface RestoredSubagentConfig {
   config: SubagentTaskConfigSnapshot;
-  /** `snapshot`: the exact creation-time config. `recovered`: best-effort legacy. */
   source: "snapshot" | "recovered";
-  /** What could not be restored verbatim (empty for a full snapshot). */
   notes: string[];
 }
 
-/**
- * The tool set a child may ever run with: the subagent tool is removed whatever
- * the stored config says, so a renamed or stale entry can never re-enable
- * recursive delegation.
- */
 export function restrictSubagentTools(tools: readonly string[]): string[] {
   return tools.filter(
     (tool) => tool !== SUBAGENT_TOOL_NAME && tool !== LEGACY_SPAWN_SUBAGENT_TOOL_NAME,
@@ -70,11 +40,6 @@ function isThinkingLevel(value: unknown): value is SubagentThinkingLevel {
     && (SUBAGENT_THINKING_LEVELS as readonly string[]).includes(value);
 }
 
-/**
- * Parse a stored snapshot, returning null when it is absent or not usable.
- * Unusable snapshots are treated as legacy rows: recovery only uses facts the
- * child session itself records, so a corrupt blob cannot widen anything either.
- */
 export function parseSubagentConfigSnapshot(
   json: string | null | undefined,
 ): SubagentTaskConfigSnapshot | null {
@@ -112,14 +77,6 @@ export function parseSubagentConfigSnapshot(
   };
 }
 
-/**
- * The tool selection of a legacy child session, or an explicit refusal.
- *
- * The selection is the capability boundary: without it the child would have to
- * fall back to today's cwd default or "all", which is exactly the silent
- * widening this rule exists to prevent. Synchronous, so `continue` can refuse a
- * hopeless recovery before it creates a task row.
- */
 export function legacySubagentToolsOrThrow(childSessionId: string): string[] {
   const selection = readSessionToolSelection(childSessionId);
   if (selection === null) {
@@ -142,7 +99,6 @@ async function recoverLegacyConfig(input: {
   childSessionId: string;
   subagentName: string;
 }): Promise<RestoredSubagentConfig> {
-  // Capability boundary first: it needs no file system scan.
   const tools = legacySubagentToolsOrThrow(input.childSessionId);
 
   const sessionFile = await resolveSessionPath(input.childSessionId);
@@ -194,16 +150,9 @@ async function recoverLegacyConfig(input: {
   };
 }
 
-/**
- * Resolve the configuration a child session must run with: its creation-time
- * snapshot, or — for a legacy child — only the restricted facts its own
- * persisted files prove. Throws `SubagentConfigRestoreError` when even those
- * are unavailable.
- */
 export async function resolveSubagentChildConfig(input: {
   parentSessionId: string;
   childSessionId: string;
-  /** Recorded subagent name of the session (its task rows carry it). */
   subagentName: string;
 }): Promise<RestoredSubagentConfig> {
   const snapshot = parseSubagentConfigSnapshot(
@@ -216,7 +165,6 @@ export async function resolveSubagentChildConfig(input: {
   });
 }
 
-/** Same as `resolveSubagentChildConfig`, but null instead of an error. */
 export async function tryResolveSubagentChildConfig(input: {
   parentSessionId: string;
   childSessionId: string;
@@ -230,12 +178,6 @@ export async function tryResolveSubagentChildConfig(input: {
   }
 }
 
-/**
- * How a child session is started: the frozen snapshot supplies model, thinking
- * level, tool set and system prompt, so neither a continued turn nor a cold
- * start can be reconfigured by editing the profile or by the session's own cwd
- * defaults. The subagent tool is stripped again here for every caller.
- */
 export function subagentChildSessionStartOptions(
   config: SubagentTaskConfigSnapshot,
   parentSessionId: string,

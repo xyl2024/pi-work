@@ -1,10 +1,3 @@
-// Pi Work 统一图标入口。
-//
-// 基础图标：./primitives
-// 动画图标：./animated
-// 领域图标：./domains
-// 填充图标：./filled
-// 名称注册表：./registry
 export * from "./primitives";
 export * from "./animated";
 export * from "./domains";

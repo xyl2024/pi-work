@@ -11,23 +11,12 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
-/**
- * Acceptance boundary for issue 04: the two real direct-call entry points
- * (translate route, auto-name route) drive the shared audited ModelRuntime.
- * The SDK is scripted at the provider stream, while the AgentSession, the
- * metrics wrapper, a real temporary SQLite database and the real per-call
- * route handler all run for real. No provider, key or user directory is
- * touched, so this file runs with `PI_WORK_TEST_SKIP_INSTANCE=1`.
- */
-
 const mocks = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@earendil-works/pi-coding-agent")>();
   return {
     ...actual,
-    // Keep the real SDK (createAgentSession, SessionManager, ...) and only
-    // replace the provider catalog/runtime with the scripted one.
     ModelRuntime: { create: mocks.create },
   };
 });
@@ -72,8 +61,6 @@ beforeEach(() => {
   delete (globalThis as { __piLlmAuditModelRuntime?: ModelRuntime }).__piLlmAuditModelRuntime;
   mocks.create.mockReset();
   clock.now = 0;
-  // The metrics wrapper's default clock is `performance.now`; pinning it makes
-  // the sample deterministic while the real AgentSession still runs.
   nowSpy = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
 });
 
@@ -90,8 +77,6 @@ afterAll(() => {
   else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
   rmSync(dir, { recursive: true, force: true });
 });
-
-// ── scripted provider ─────────────────────────────────────────────────────
 
 const MODEL = {
   provider: "test-provider",
@@ -147,9 +132,6 @@ function scriptedStream(
   text = `${SAMPLE.firstText}${SAMPLE.secondText}`,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream();
-  // The metrics wrapper already captured this call's start before invoking
-  // streamSimple; restarting the fake monotonic clock here makes the sample
-  // deterministic (start = 0).
   clock.now = 0;
   const firstPartial = textMessage(SAMPLE.firstText);
   const lastPartial = textMessage(text);
@@ -191,7 +173,6 @@ function scriptedRuntime(): ModelRuntime {
   return runtime as unknown as ModelRuntime;
 }
 
-/** A call that emits one delta, then waits for the caller's abort signal. */
 function abortAwareRuntime(): ModelRuntime {
   const runtime = scriptedRuntime() as unknown as {
     stream: () => AssistantMessageEventStream;
@@ -222,7 +203,6 @@ function abortAwareRuntime(): ModelRuntime {
   return runtime as unknown as ModelRuntime;
 }
 
-/** A call that never produces output and only ends when the caller aborts. */
 function neverOutputRuntime(): ModelRuntime {
   const runtime = scriptedRuntime() as unknown as {
     streamSimple: (model: unknown, context: unknown, options?: { signal?: AbortSignal }) => AssistantMessageEventStream;
@@ -281,8 +261,6 @@ function expectSampleMetrics(row: TokenCallBody): void {
   expect(row.endToEndTps).toBeCloseTo(120 / 7, 10);
 }
 
-// ── translation ───────────────────────────────────────────────────────────
-
 describe("translate direct calls", () => {
   it("streams the original output in order and records one translation call", async () => {
     mocks.create.mockResolvedValue(scriptedRuntime());
@@ -323,16 +301,11 @@ describe("translate direct calls", () => {
     });
     expectSampleMetrics(rows[0]);
 
-    // A direct call has no persisted session, but it is not hidden from
-    // unfiltered queries and never appears under another session's filter.
     expect((await queryCalls("range=all&sessionId=s1")).total).toBe(0);
 
-    // Performance facts must not leak into the existing billing summary.
     expect(summarize("all", "none").totals.calls).toBe(0);
   });
 });
-
-// ── auto-name ─────────────────────────────────────────────────────────────
 
 describe("auto-name direct calls", () => {
   it("keeps the one-shot result behaviour and records one auto-name call", async () => {
@@ -376,8 +349,6 @@ describe("auto-name direct calls", () => {
   });
 });
 
-// ── isolation and connection-test exclusion ───────────────────────────────
-
 describe("direct-call boundaries", () => {
   it("keeps the no-disk session free of tools, extensions and project context", async () => {
     mocks.create.mockResolvedValue(scriptedRuntime());
@@ -393,7 +364,6 @@ describe("direct-call boundaries", () => {
     } finally {
       session.dispose();
     }
-    // Setting up a session is not a model call.
     expect((await queryCalls()).total).toBe(0);
   });
 
@@ -427,7 +397,6 @@ describe("direct-call boundaries", () => {
           if (body.includes('"delta"')) controller.abort();
         }
       } catch {
-        // The route closes the SSE stream on abort; a cancelled reader is expected.
       }
     })();
     await vi.waitFor(() => expect(controller.signal.aborted).toBe(true), { timeout: 2_000 });
@@ -481,7 +450,6 @@ describe("direct-call boundaries", () => {
     const result = await testModelConnection(MODEL.provider, MODEL.id, new AbortController().signal);
     expect(result.ok).toBe(true);
 
-    // The diagnostic runtime is deliberately not the audited business runtime.
     expect((await queryCalls()).total).toBe(0);
   });
 });

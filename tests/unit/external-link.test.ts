@@ -3,7 +3,6 @@ import { opensNewContext, resolveNewTabUrl } from "@/lib/shared/external-link";
 
 const BASE = "http://localhost:30141/";
 
-/** A plain left-click on an anchor with this href / target / download flag. */
 function resolve(overrides: Partial<Parameters<typeof resolveNewTabUrl>[0]> = {}) {
   return resolveNewTabUrl({ href: "https://example.com/docs", baseUrl: BASE, ...overrides });
 }

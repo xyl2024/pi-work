@@ -13,23 +13,17 @@ import { ICONS } from "@/components/ui/icons";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 
 const CWD_KEY = "pi-terminal-cwd";
-/** localStorage key persisting the terminal tab bar across page refreshes. */
 const STATE_KEY = "pi-terminal-tabs-state";
 
-/** Generate a stable session id shared by the client and the terminal server. */
 function newSessionId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export interface TerminalPanelProps {
-  /** cwd used when creating a new terminal (active session cwd, fallback chain). */
   defaultCwd: string;
-  /** whether the bottom panel is visible. */
   open: boolean;
-  /** collapse the panel — terminals keep running (their WS stays open). */
   onClosePanel: () => void;
-  /** toggle occupying the whole center column above the terminal. */
   fullscreen: boolean;
   onToggleFullscreen: () => void;
 }
@@ -37,15 +31,8 @@ export interface TerminalPanelProps {
 interface TabInfo {
   id: number;
   cwd: string;
-  /** user-chosen display name; falls back to cwd when unset/empty. */
   title?: string;
-  /**
-   * Stable pane keys, left → right. Length 1 = single terminal; length 2 =
-   * split view (`panes[0]` is always the original shell). Keys are identity,
-   * not index, so closing one pane never remounts the survivor's pty.
-   */
   panes: string[];
-  /** pane key → server-side terminal session id; enables re-attach after refresh. */
   sessionIds: Record<string, string>;
 }
 
@@ -63,12 +50,9 @@ function loadPersistedState(): PersistedTerminalState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedTerminalState;
     if (!Array.isArray(parsed.tabs) || typeof parsed.nextId !== "number") return null;
-    // Drop any tab whose panes carry no session ids (corrupt / very old data).
     const tabs = parsed.tabs.filter(
       (tab) => tab && typeof tab.id === "number" && typeof tab.cwd === "string" && Array.isArray(tab.panes) && tab.panes.length > 0,
     );
-    // Ensure every pane has a session id — a missing one would otherwise get a
-    // fresh id on each render instead of a stable identity.
     for (const tab of tabs) {
       tab.sessionIds = { ...tab.sessionIds };
       for (const pane of tab.panes) {
@@ -81,7 +65,6 @@ function loadPersistedState(): PersistedTerminalState | null {
   }
 }
 
-/** Minimum width of either split pane, in px (clamps divider dragging). */
 const MIN_PANE_WIDTH = 120;
 
 function terminalBasename(cwd: string): string {
@@ -112,13 +95,6 @@ const smallButtonStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
-/**
- * One xterm + one WebSocket + one server-side pty. Owns its full lifecycle:
- * fetch the WS info → connect → send `start` with the fixed cwd and a stable
- * `sessionId`. The server keeps the pty (and its scrollback) alive across
- * disconnects, so reconnecting with the same `sessionId` re-attaches the
- * existing shell and replays its output; a missing session just spawns fresh.
- */
 function TerminalInstance({
   cwd,
   active,
@@ -129,25 +105,17 @@ function TerminalInstance({
 }: {
   cwd: string;
   active: boolean;
-  /** In split view only the focused pane owns keyboard focus. */
   focused?: boolean;
-  /** Stable session id — the same one survives page refreshes. */
   sessionId: string;
-  /** Identity of this pane within its tab; used for kill registration. */
   paneKey: string;
-  /** pane key → server-kill sender, so closing a tab can kill its sessions. */
   killRegistry: React.MutableRefObject<Map<string, () => void>>;
 }) {
   const { t } = useI18n();
   const toast = useToast();
-  // `t` changes identity on locale switch — keep a ref so the WS effect
-  // (which tears down the pty on re-run) never re-runs for a cosmetic change.
   const tRef = useRef(t);
   useEffect(() => {
     tRef.current = t;
   }, [t]);
-  // Same pattern as tRef: the WS effect must not re-run (and tear down the
-  // pty) when focus moves between split panes.
   const focusedRef = useRef(focused);
   useEffect(() => {
     focusedRef.current = focused;
@@ -162,7 +130,6 @@ function TerminalInstance({
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  // Fetch the WS endpoint info once per (mount, retry).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/terminal")
@@ -183,7 +150,6 @@ function TerminalInstance({
     };
   }, [retryKey]);
 
-  // xterm + WebSocket live only while wsUrl is set.
   useEffect(() => {
     if (!wsUrl) return;
     const container = containerRef.current;
@@ -204,12 +170,6 @@ function TerminalInstance({
     const fit = new FitAddon();
     term.loadAddon(fit);
 
-    // URL recognition: links are underlined + pointer-cursor on hover.
-    // Ctrl/Cmd+left-click opens the link; a plain click does nothing
-    // (VS Code-style). The handler fires on mouseup only when press and
-    // release both land on the same link, so drag-selection across a URL
-    // never triggers it. Note: with "noopener" window.open always returns
-    // null, so the return value can't be used to detect popup blocking.
     const webLinks = new WebLinksAddon((event, uri) => {
       if (event.ctrlKey || event.metaKey) {
         window.open(uri, "_blank", "noopener");
@@ -217,8 +177,6 @@ function TerminalInstance({
     });
     term.loadAddon(webLinks);
     term.open(container);
-    // Match common terminal emulators: Ctrl+Shift+C copies the active selection
-    // rather than sending the control sequence to the shell.
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey || event.code !== "KeyC") {
         return true;
@@ -238,38 +196,26 @@ function TerminalInstance({
     try {
       fit.fit();
     } catch {
-      // container hidden mid-transition — resize will catch up on open
     }
     termRef.current = term;
     fitRef.current = fit;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
-    // Capture the map once — the ref object is stable, but exhaustive-deps
-    // prefers using the captured value in the cleanup below.
     const registry = killRegistry.current;
-    // Refs are stable, but capture the map once so the cleanup below doesn't
-    // touch `current` after re-renders (exhaustive-deps).
 
-    // Suppress onerror/onclose after intentional teardown (unmount,
-    // disconnect) — otherwise cleanup's ws.close() would flip the instance
-    // into the error state.
     let settled = false;
 
     ws.onopen = () => {
       if (settled) return;
-      // Re-attaching with a known sessionId restores the live shell (with
-      // scrollback replay); an unknown id just spawns a fresh one.
       ws.send(JSON.stringify({ type: "start", cwd, sessionId }));
       ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       setPhase("ready");
     };
-    // Register the kill sender so the parent can terminate this pane's shell
-    // when the tab/pane is closed (a plain ws close leaves the session alive).
     registry.set(paneKey, () => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "kill", sessionId }));
     });
-     
+
     ws.onmessage = (ev) => {
       let msg: { type?: string; data?: string; code?: number; message?: string };
       try {
@@ -307,9 +253,6 @@ function TerminalInstance({
       }
     });
 
-    // Right-click copy/paste. With selection → copy to clipboard; without →
-    // paste from clipboard straight into the pty (same path as keyboard
-    // input). xterm 6 does not bind the system clipboard on its own.
     const sendClipboardText = (text: string) => {
       if (!text) return;
       const liveWs = wsRef.current;
@@ -334,9 +277,6 @@ function TerminalInstance({
         return;
       }
 
-      // Reading programmatically is prohibited by browsers on HTTP LAN origins.
-      // A user-initiated paste event still exposes clipboardData, so Ctrl/Cmd+V
-      // remains available below even when the async Clipboard API is not.
       if (!navigator.clipboard?.readText) {
         toast.show({ kind: "error", message: tRef.current("Use Ctrl + Shift + V to paste") });
         return;
@@ -359,7 +299,6 @@ function TerminalInstance({
       try {
         fit.fit();
       } catch {
-        // ignore
       }
     });
     ro.observe(container);
@@ -375,7 +314,6 @@ function TerminalInstance({
       try {
         ws.close();
       } catch {
-        // ignore
       }
       wsRef.current = null;
       termRef.current = null;
@@ -384,15 +322,11 @@ function TerminalInstance({
     };
   }, [wsUrl, cwd, toast, sessionId, paneKey, killRegistry]);
 
-  // When the tab becomes visible again (switch back, panel reopen), re-fit —
-  // display:none / zero-height containers leave xterm with stale dimensions.
-  // Focus is handled separately: in split view only the focused pane wins.
   useEffect(() => {
     if (!active) return;
     try {
       fitRef.current?.fit();
     } catch {
-      // ignore
     }
   }, [active]);
 
@@ -412,7 +346,6 @@ function TerminalInstance({
       if (term) ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       ws.send(JSON.stringify({ type: "start", cwd, sessionId }));
     } catch {
-      // ignore
     }
   }, [cwd, sessionId]);
 
@@ -458,15 +391,9 @@ function TerminalInstance({
   );
 }
 
-/**
- * VS Code-style bottom terminal: a tab bar of independent terminals, each
- * backed by its own WebSocket + pty. Inactive tabs stay mounted so their
- * processes keep running while hidden.
- */
 export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onToggleFullscreen }: TerminalPanelProps) {
   const { t } = useI18n();
   const cm = useContextMenu();
-  // Lazy one-time restore from localStorage (don't re-read every render).
   const initialRef = useRef<PersistedTerminalState | null | undefined>(undefined);
   if (initialRef.current === undefined) initialRef.current = loadPersistedState();
   const initial = initialRef.current;
@@ -474,15 +401,10 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
   const [activeId, setActiveId] = useState<number | null>(() => initial?.activeId ?? null);
   const nextIdRef = useRef(initial?.nextId ?? 1);
   const openedRef = useRef((initial?.tabs.length ?? 0) > 0);
-  /** pane key → kill sender registered by each TerminalInstance. */
   const killRegistryRef = useRef<Map<string, () => void>>(new Map());
-  /** Split ratio (left pane width fraction) per tab id; absent → 50/50. */
   const [splitRatio, setSplitRatio] = useState<Record<number, number>>(() => initial?.splitRatio ?? {});
-  /** Which split pane has keyboard focus, per tab id; absent → the original (left) pane. */
   const [focusedPane, setFocusedPane] = useState<Record<number, string>>(() => initial?.focusedPane ?? {});
 
-  // Persist the tab bar so a page refresh restores the same terminals
-  // (each re-attaches to its live server-side session by sessionId).
   useEffect(() => {
     try {
       const state: PersistedTerminalState = {
@@ -494,7 +416,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
       };
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch {
-      // ignore quota/serialization errors
     }
   }, [tabs, activeId, splitRatio, focusedPane]);
 
@@ -504,13 +425,11 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
     try {
       localStorage.setItem(CWD_KEY, cwd);
     } catch {
-      // ignore
     }
     setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd), panes: [paneKey], sessionIds: { [paneKey]: newSessionId() } }]);
     setActiveId(id);
   }, []);
 
-  // First time the panel opens, auto-create the first terminal (VS Code behavior).
   useEffect(() => {
     if (open && !openedRef.current) {
       openedRef.current = true;
@@ -521,21 +440,15 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
   const closeTerminal = useCallback((id: number) => {
     setTabs((prev) => {
       const tab = prev.find((t) => t.id === id);
-      // Kill the shell server-side before dropping the tab — a bare WS close
-      // leaves the session alive by design (for refresh re-attach).
       if (tab) for (const pane of tab.panes) killRegistryRef.current.get(pane)?.();
       return prev.filter((tab) => tab.id !== id);
     });
   }, []);
 
-  // ── Split view (right-click a tab → “Split tab”) ──────────────────
-
-  /** Split a single-pane tab: spawns a fresh shell (same cwd) on the right. */
   const splitTerminal = useCallback((tabId: number) => {
     setTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== tabId || tab.panes.length !== 1) return tab;
-        // Tab ids never repeat, so `${id}-b` is a stable unique pane key.
         const paneKey = `${tabId}-b`;
         return { ...tab, panes: [tab.panes[0], paneKey], sessionIds: { ...tab.sessionIds, [paneKey]: newSessionId() } };
       }),
@@ -544,12 +457,11 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
       if (prev[tabId] === undefined) return prev;
       const next = { ...prev };
       delete next[tabId];
-      return next; // fresh split starts at 50/50 again
+      return next;
     });
     setFocusedPane((prev) => ({ ...prev, [tabId]: `${tabId}-b` }));
   }, []);
 
-  /** Close one pane of a split tab; the survivor keeps its pty and goes full-width. */
   const closePane = useCallback((tabId: number, paneKey: string) => {
     killRegistryRef.current.get(paneKey)?.();
     setTabs((prev) =>
@@ -568,7 +480,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
     });
   }, []);
 
-  /** Drag the split divider; clamps both panes to MIN_PANE_WIDTH px. */
   const startSplitDrag = useCallback(
     (tabId: number, startRatio: number, e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -596,7 +507,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
     [],
   );
 
-  // ── Tab rename (double-click a tab) ─────────────────────────────────
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
 
@@ -622,8 +532,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
     setEditingValue("");
   }, []);
 
-  // Keep activeId valid; when the last tab closes, reset the opened flag so
-  // the next panel open creates a fresh terminal.
   useEffect(() => {
     if (tabs.length === 0) {
       openedRef.current = false;
@@ -654,7 +562,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
-      {/* Tab bar */}
       <div
         style={{
           display: "flex",
@@ -702,7 +609,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
                         {
                           key: "unsplit",
                           label: t("Unsplit tab"),
-                          // “Unsplit” always keeps the original (left) shell.
                           onSelect: () => closePane(tab.id, tab.panes[1]),
                         },
                       ];
@@ -867,8 +773,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
       </div>
       </div>
 
-      {/* Terminal bodies — inactive tabs stay mounted so their processes keep running.
-          A split tab renders its two panes left/right with a draggable divider. */}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {tabs.map((tab) => {
           const active = tab.id === activeId;
@@ -967,8 +871,6 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
 }
 
 function TerminalTabIcon() {
-  // Terminal window + `>_` shell prompt — same glyph family as the reference
-  // icon (rounded window frame, greater-than prompt, cursor underline).
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2.5" y="3.5" width="19" height="17" rx="2.5" />

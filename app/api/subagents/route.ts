@@ -15,9 +15,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/subagents");
 
-// /api/subagents — the user-defined subagent profiles `spawn_subagent` can
-// launch. GET lists them; POST/PUT/DELETE manage one profile keyed by name.
-
 export async function GET() {
   try {
     return NextResponse.json(

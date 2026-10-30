@@ -21,16 +21,6 @@ import {
 } from "@/lib/client/models-config-store";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
 
-/**
- * One model's detail page. Full width, with a back control that returns to the
- * provider page it was opened from, and the shared `ModelFields` for everything
- * a model entry edits.
- *
- * The raw-JSON text lives in the panel store, so an unparsable edit survives a
- * tab switch and blocks the fixed save bar instead of being quietly dropped.
- * Deleting the model only edits the draft — the delete reaches disk when the
- * save bar is pressed.
- */
 export function ModelsConfigModelPage({ providerName, index }: { providerName: string; index: number }) {
   const { t } = useI18n();
   const toast = useToast();

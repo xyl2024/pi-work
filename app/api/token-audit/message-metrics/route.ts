@@ -1,14 +1,3 @@
-/**
- * GET /api/token-audit/message-metrics?sessionId=...
- *
- * Returns `{ metrics: MessageCallMetrics[] }` — the TTFT / generation-window
- * facts of every logical model call recorded for one session, keyed by the
- * assistant message id (`String(message.timestamp)`) the chat footer joins on.
- *
- * The chat footer fetches this once per session (and again after a turn ends),
- * so the whole session is returned instead of a page: one query beats one
- * request per rendered message.
- */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { listMessageCallMetrics } from "@/lib/server/token-audit-store";

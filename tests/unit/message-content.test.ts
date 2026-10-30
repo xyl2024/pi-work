@@ -14,13 +14,6 @@ import type {
   UserMessage,
 } from "@/lib/shared/types";
 
-// ── Fixtures ──
-//
-// Shapes mirror what the chat message view and the conversation-tree card
-// read off a real session: user content is a string or a text/image block
-// array, assistant content is a block array, toolResult content is a
-// text/image block array.
-
 const image = (data: string): ImageContent => ({
   type: "image",
   source: { type: "base64", media_type: "image/png", data },

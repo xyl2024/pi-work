@@ -1,24 +1,3 @@
-/**
- * Executes one scheduled task as a background pi session.
- *
- * The run itself (open a session → apply model/thinking/tools → deliver the
- * prompt → wait until the turn has *really* finished → clean up) goes through
- * the turn module (`lib/server/turn`); this file is the scheduler's adapter: it
- * owns the run vocabulary, the notification and the per-task queue, and nothing
- * else. `agent_settled` is the terminal event, so a task
- * that pi is still retrying (or compaction-retrying, or continuation-running)
- * stays `running` instead of being recorded as finished mid-flight.
- *
- * The scheduler really does wait for the real terminal event — there is no
- * 5-minute blanket timeout. The only cap is the task's `maxLifetimeMs` (or the
- * global default), passed to the turn module as this caller's deadline: a
- * safety net that force-destroys the wrapper if the agent truly never reports
- * back.
- *
- * Concurrency: a per-task FIFO chain (`runSerial`) prevents the same task from
- * running twice in parallel; different tasks run independently.
- */
-
 import { existsSync } from "fs";
 import { runTurnRpcSession, type RunTurnRpcSpec } from "@/lib/server/rpc-manager";
 import type { MessageOrigin } from "@/lib/shared/message-origin";
@@ -30,17 +9,8 @@ import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/runner");
 
-/**
- * Global fallback for the per-task max lifetime. The scheduler really does
- * wait for the real terminal event — the previous 5-min blanket timeout was
- * killing legitimate long-running tasks mid-flight. This default is just
- * a safety net for a stuck agent that never reports back; pick it big
- * enough that no real task should hit it, but small enough that a runaway
- * agent can't pin a slot forever.
- */
 const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
-/** Fire task notifications (best-effort, never blocks the run). */
 function dispatchNotifications(
   task: ScheduledTask,
   outcome: "success" | "error" | "timeout",
@@ -85,9 +55,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
     maxLifetimeSource: task.maxLifetimeMs !== null ? "task" : "default",
   });
 
-  // The real pi session id is only known once the session exists; record it on
-  // the run row as soon as that happens (the turn module announces it before
-  // any setup command), so the runs tab can link the session mid-run.
   let sessionId: string | null = null;
 
   try {
@@ -97,16 +64,10 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       ...(task.provider && task.modelId
         ? { model: { provider: task.provider, modelId: task.modelId } }
         : {}),
-      // The store only validates that this is a string; keep the pass-through.
       ...(task.thinkingLevel
         ? { thinkingLevel: task.thinkingLevel as RunTurnRpcSpec["thinkingLevel"] }
         : {}),
-      // The scheduler always states an explicit selection: the task's own
-      // subset, or "all" when it has none. Never "unspecified".
       toolNames: task.toolNames ?? "all",
-      // 消息来源（ADR-0023）：任务触发的 prompt 标记为定时任务来源。id 与名称
-      // 都取自发送时刻的任务记录（快照）：之后改名/删除只影响新消息，历史消息
-      // 保留发送时的名称。prompt 文本本身逐字节不变。
       origin: {
         kind: "scheduled-task",
         taskId: task.id,
@@ -138,9 +99,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       dispatchNotifications(task, end.notification.outcome, end.notification.text, end.notification.detail, runId);
     }
   } catch (err) {
-    // Acquiring the session or preparing it failed before the turn ever
-    // started: the run module has no terminal state for that, so the
-    // scheduler records it as the failure it is — same shape as a failed turn.
     const errorStr = err instanceof Error ? err.message : String(err);
     const end = toRunEnd({ status: "failed", text: "", hasReply: false, error: errorStr }, task.name);
     const durationMs = Date.now() - startedAt;

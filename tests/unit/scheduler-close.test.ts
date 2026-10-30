@@ -7,13 +7,6 @@ import {
 } from "@/lib/shared/scheduler-close";
 import { EMPTY_SCHEDULER_FORM, newSchedulerForm } from "@/lib/shared/scheduler-form";
 
-/**
- * The scheduler panel's close guard (lib/shared/scheduler-close.ts). One
- * question: would closing the panel tab abandon an unsaved task form? Driven as
- * plain data — the shell is the only caller and maps the returned i18n keys
- * through `t()`. Running tasks never guard: they keep running on the server.
- */
-
 describe("selectSchedulerCloseConfirm", () => {
   it("lets the tab close silently when the form is clean", () => {
     expect(selectSchedulerCloseConfirm({ dirty: false })).toBeNull();
@@ -56,7 +49,6 @@ describe("isSchedulerFormDirty", () => {
   it("compares list fields by content", () => {
     const baseline = newSchedulerForm("/repo");
     expect(isSchedulerFormDirty({ ...baseline, toolSelection: ["Read"] }, baseline)).toBe(true);
-    // Same content, different array identity: still clean.
     expect(
       isSchedulerFormDirty(
         { ...baseline, toolSelection: ["Read", "Bash"] },

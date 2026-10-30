@@ -1,15 +1,5 @@
-/**
- * Shared inline-style primitives for the scheduler UI.
- *
- * Centralising these avoids the magic-number drift the scheduler view's
- * sub-components had (different sub-components hard-coding the same
- * `padding: 6px 10px` slightly differently). Every component here uses `var(--*)`
- * so theming works without per-component overrides.
- */
-
 import type { CSSProperties } from "react";
 
-// ── Inputs / fields ──────────────────────────────────────────────
 export const inputStyle: CSSProperties = {
   width: "100%",
   fontSize: 12,
@@ -57,7 +47,6 @@ export const fieldErrorStyle: CSSProperties = {
   marginTop: 4,
 };
 
-// ── Buttons ──────────────────────────────────────────────────────
 export const btnPrimary: CSSProperties = {
   background: "var(--accent)",
   color: "#fff",
@@ -82,7 +71,6 @@ export const btnGhost: CSSProperties = {
   fontFamily: "inherit",
 };
 
-// ── Misc ─────────────────────────────────────────────────────────
 export const tabBarStyle: CSSProperties = {
   display: "flex",
   gap: 4,

@@ -4,7 +4,6 @@ import type { ModelConnectionTestResult } from "@/lib/shared/model-connection-te
 const PROMPT = "Reply with exactly: OK";
 const LIMIT = 256_000;
 
-// Redact before returning anything to the browser (including upstream errors).
 export function redactConnectionDiagnostics(value: unknown, secrets: string[] = []): string {
   const json = JSON.stringify(value, (key, item: unknown) => {
     if (/authorization|cookie|api[-_]?key|(?:^|[-_])(?:token|key|credential)$|access[-_]?token|refresh[-_]?token|secret|password|signature/i.test(key)) {
@@ -40,8 +39,6 @@ export async function testModelConnection(
   let ok = false;
   let error: string | undefined;
   try {
-    // Use the saved configuration and normal SDK auth/compatibility resolution.
-    // Never create an AgentSession, load tools/extensions, or persist a conversation.
     const runtime = await ModelRuntime.create({ signal });
     const model = runtime.getModel(provider, modelId);
     if (!model) throw new Error("Model not found in saved configuration");
@@ -77,7 +74,6 @@ export async function testModelConnection(
         } else truncated = true;
       },
     });
-    // Observe normalized events too: not every adapter exposes raw events.
     for await (const event of stream) {
       if (event.type === "text_delta" || event.type === "thinking_delta") {
         firstEventMs ??= Math.round(performance.now() - start);

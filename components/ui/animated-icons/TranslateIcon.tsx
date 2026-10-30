@@ -1,7 +1,3 @@
-// Translate-panel glyph (Languages). Hovering strokes the 「language」lines in
-// sequentially (staggered) — uses two control sets: svg-level stagger + per-path
-// draw.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -108,4 +104,3 @@ export const TranslateIcon = forwardRef<TranslateIconHandle, TranslateIconProps>
 );
 
 TranslateIcon.displayName = "TranslateIcon";
-

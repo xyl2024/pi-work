@@ -8,20 +8,6 @@ import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import type { Skill } from "@/lib/shared/skills";
 
-/**
- * One skill rendered as a card in the panel's root grid.
- *
- * Card anatomy (matching the reference design):
- *   ┌───────────────────────────────────┐
- *   │ (A)  skill-name            [toggle]│
- *   │ description clamped to 2 lines     │
- *   └───────────────────────────────────┘
- *
- * The whole card is clickable and opens the skill detail page; the toggle
- * stops propagation (see ToggleSwitch) so it can be flipped in place. The
- * panel's root grid imports this same card.
- */
-
 const CLAMP_STYLE: CSSProperties = {
   display: "-webkit-box",
   WebkitLineClamp: 2,

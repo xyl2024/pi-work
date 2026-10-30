@@ -4,16 +4,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DangerousCommandVerdict } from "@/lib/shared/dangerous-commands";
 
-/**
- * The `/api/dangerous-commands/test` contract: "if I ran this command, what
- * happens?" answered in three ways — hard-blocked by self-protection, matched
- * by a rule in force (with its layer), or no match.
- *
- * Driven at the route level against a temp `PI_WORK_DATA_DIR`, like
- * `dangerous-commands-route.test.ts`: the user-rule cases need a rule in
- * `config.yaml`, and that file belongs to the shared isolated instance other
- * tests snapshot and restore.
- */
 const root = mkdtempSync(join(tmpdir(), "pi-work-dangerous-test-"));
 
 let POST: typeof import("@/app/api/dangerous-commands/test/route")["POST"];
@@ -28,8 +18,6 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  // The cache lives on globalThis across module evaluations; start each case
-  // from the file on disk.
   globalThis.__piWorkConfigCache = undefined;
 });
 
@@ -38,7 +26,6 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-/** Replace the user's rule list, leaving the rest of the config intact. */
 function setUserRules(rules: { name: string; pattern: string; ignoreCase?: boolean }[]): void {
   const base = readConfig();
   writeConfig({
@@ -66,8 +53,6 @@ describe("POST /api/dangerous-commands/test", () => {
 
     expect(status).toBe(200);
     expect(body.kind).toBe("self_protected");
-    // The reason travels with the verdict — the page has to say *why* this one
-    // cannot be configured, not just that it is different.
     expect((body as { reason: string }).reason).toEqual(expect.any(String));
     expect((body as { reason: string }).reason.length).toBeGreaterThan(0);
   });
@@ -100,8 +85,6 @@ describe("POST /api/dangerous-commands/test", () => {
   });
 
   it("lets self-protection win when a rule matches the same command", async () => {
-    // A user rule written for the same string: the hard block still wins, so
-    // the page never promises a confirmation the gate would not ask for.
     setUserRules([{ name: "kill anything", pattern: "pkill" }]);
 
     const { status, body } = await testCommand("pkill node");
@@ -114,8 +97,6 @@ describe("POST /api/dangerous-commands/test", () => {
   it("treats an empty command as no match without touching the rule set", async () => {
     setUserRules([{ name: "everything", pattern: "" }]);
 
-    // An empty pattern compiles and matches every command, so an empty command
-    // is answered as "nothing to match" rather than by running the matcher.
     const { status, body } = await testCommand("   ");
 
     expect(status).toBe(200);

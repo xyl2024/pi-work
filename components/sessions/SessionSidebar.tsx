@@ -38,9 +38,6 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
-  // cwd of the active chat context (selected session or in-flight new
-  // session). The sidebar no longer renders an editable picker — this is
-  // only consumed by FileExplorer + the top "+" button (canNew check).
   selectedCwd?: string | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   explorerRefreshKey?: number;
@@ -54,8 +51,6 @@ interface Props {
   profileRefreshKey?: number;
 }
 
-// One cwd header (22px icon + 12px padding), six session rows,
-// five session gaps, expanded-body top padding and list padding.
 const SESSIONS_CONTENT_HEIGHT_PX = 1 * 34 + 6 * SESSION_ROW_HEIGHT_PX + 5 * 6 + 4 + 12;
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
@@ -177,13 +172,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       document.removeEventListener("visibilitychange", update);
     };
   }, []);
-  // Cwd whose paged-search modal is currently open. Null when no modal
-  // is showing. The "View more sessions" affordance on each cwd group
-  // header sets this; the modal closes by setting it back to null.
   const [cwdSessionsModalCwd, setCwdSessionsModalCwd] = useState<string | null>(null);
 
-  // Multi-cwd view: workspaces list (top-level, cwd-keyed) + per-cwd
-  // session loaders (lazy, paged 3 at a time).
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [nextWorkspaceCursor, setNextWorkspaceCursor] = useState<string | null>(null);
   const [hasMoreWorkspaces, setHasMoreWorkspaces] = useState(false);
@@ -191,35 +181,17 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [loadingMoreWorkspaces, setLoadingMoreWorkspaces] = useState(false);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [perCwdSessions, setPerCwdSessions] = useState<Record<string, CwdSessionsState>>({});
-  // Accordion state: at most one cwd group is open. It follows the active
-  // cwd (the one the current session belongs to); every other cwd stays
-  // folded so the sidebar does not turn into a wall of session rows.
   const [expandedCwd, setExpandedCwd] = useState<string | null>(null);
-  // The project the current chat context points at. `selectedCwd` already
-  // folds in the in-flight new-session cwd, so this covers "no session
-  // picked yet" too.
   const activeCwd = selectedSession?.cwd ?? selectedCwdProp ?? null;
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  // Ref to the Sessions section's scroll container (owned by SidebarSection).
-  // The list pages in on its scroll events. `sessionsScrollEl` mirrors it in
-  // state so the scroll/chain effects re-run when the container remounts
-  // (collapsing the section unmounts it; reopening mounts a new node).
   const sessionsScrollRef = useRef<HTMLDivElement | null>(null);
   const [sessionsScrollEl, setSessionsScrollEl] = useState<HTMLDivElement | null>(null);
   const attachSessionsScroll = useCallback((el: HTMLDivElement | null) => {
     sessionsScrollRef.current = el;
     setSessionsScrollEl(el);
   }, []);
-  // Once the list cannot scroll and a few pages have been chained in, the
-  // manual "load more projects" fallback appears. Reset by a user scroll or
-  // click.
   const [showFallbackLoadMore, setShowFallbackLoadMore] = useState(false);
   const chainLoadCountRef = useRef(0);
-  // Current workspace / per-cwd depth, read by the refresh path so a refresh
-  // keeps the loading depth instead of snapping back to page one. Kept in
-  // refs because refreshAll must stay referentially stable for the
-  // refreshKey effect (reading live state in a callback would re-fire it on
-  // every render).
   const workspacesRef = useRef<Workspace[]>([]);
   const perCwdSessionsRef = useRef<Record<string, CwdSessionsState>>({});
   const workspaceFetchInFlightRef = useRef(false);
@@ -228,30 +200,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
-  // Number of expanded folders in the explorer (reported by FileExplorer).
-  // 0 → the "collapse all" button has nothing to do and is greyed out.
   const [explorerExpandedCount, setExplorerExpandedCount] = useState(0);
-  // One-shot ✓ confirmation after a collapse-all click (same REFRESH→CHECK
-  // pattern as the refresh button), so the fold-back is visibly acknowledged.
   const [explorerCollapseDone, setExplorerCollapseDone] = useState(false);
   const explorerCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceAbortRef = useRef<AbortController | null>(null);
 
   const triggerExplorerRefresh = useCallback(() => {
     setExplorerKey((k) => k + 1);
-    // Also poke the git status store so any new/modified file surfaces
-    // its badge immediately rather than waiting up to 3s for the next
-    // scheduled poll. No-op when the active cwd isn't being tracked
-    // (e.g. user switched away, or cwd is not a git repo).
     if (selectedCwdProp) notifyMutated(selectedCwdProp);
   }, [selectedCwdProp]);
 
-  // Collapse every expanded folder in the explorer. FileExplorer watches
-  // `explorerCollapseKey` and clears its `expandedPaths` set when this
-  // bumps. Bumping (rather than resetting to 0) means clicking twice in
-  // a row still fires — without it the second click would be a no-op.
-  // The ✓ flash gives the instantaneous fold-back a visible confirmation;
-  // the button then greys out via the expanded-count report.
   const triggerCollapseAll = useCallback(() => {
     setExplorerCollapseKey((k) => k + 1);
     setExplorerCollapseDone(true);
@@ -259,8 +217,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     explorerCollapseTimerRef.current = setTimeout(() => setExplorerCollapseDone(false), 700);
   }, []);
 
-  // Keep the refresh path's depth snapshots in sync with state. Declared
-  // before the refresh effects so a refresh sees the latest depth.
   useEffect(() => {
     workspacesRef.current = workspaces;
   }, [workspaces]);
@@ -268,18 +224,11 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     perCwdSessionsRef.current = perCwdSessions;
   }, [perCwdSessions]);
 
-  // Follow the active cwd: switching session / project opens that group and
-  // folds whatever was open before. Runs only when the active cwd changes,
-  // so a manual fold of the active group is not undone.
   useEffect(() => {
     if (!activeCwd) return;
     setExpandedCwd((prev) => (prev === activeCwd ? prev : activeCwd));
   }, [activeCwd]);
 
-  // Fetch one page of workspaces. Pass `mode: "reset"` to start over
-  // (cursor=null, replace list), `mode: "append"` to extend. Aborts any
-  // in-flight request so the previous page's response can't land after a
-  // refresh.
   const fetchWorkspaces = useCallback(async (
     cursor: string | null,
     mode: "reset" | "append",
@@ -288,9 +237,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     workspaceAbortRef.current?.abort();
     const controller = new AbortController();
     workspaceAbortRef.current = controller;
-    // Synchronous guard shared by the scroll and chain-load paths: a second
-    // append cannot start while this request is still in flight (state flips
-    // only after the next render).
     workspaceFetchInFlightRef.current = true;
     if (mode === "reset") setLoadingWorkspaces(true);
     else setLoadingMoreWorkspaces(true);
@@ -298,7 +244,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     try {
       const params = new URLSearchParams();
       params.set("limit", String(limitOverride ?? WORKSPACE_PAGE_SIZE));
-      // Cache the complete today subset alongside a normal workspace page.
       if (mode === "reset") appendSessionDateRange(params, today, "today");
       if (cursor) params.set("cursor", cursor);
       const res = await fetch(`/api/workspaces?${params.toString()}`, { signal: controller.signal });
@@ -313,10 +258,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       }
       setNextWorkspaceCursor(data.nextCursor);
       setHasMoreWorkspaces(data.nextCursor !== null);
-      // The ✓ flash is fired by the RefreshIconButton itself when the user
-      // clicks it — see the Sessions section header. We deliberately don't
-      // toggle a "done" state here because the ✓ should reflect user
-      // intent (button click), not the completion of the network round-trip.
     } catch (e) {
       if (controller.signal.aborted) return;
       const msg = e instanceof Error ? e.message : String(e);
@@ -335,9 +276,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     }
   }, [toast, today]);
 
-  // Per-cwd session loader. Used both for the lazy first-page fetch
-  // (mode: "reset") and the "Load more" button (mode: "append"). Merges
-  // into the existing accumulator entry for the cwd.
   const fetchCwdSessions = useCallback(async (
     cwd: string,
     cursor: string | null,
@@ -361,10 +299,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         ...prev,
         [cwd]: {
           ...base,
-          // Silent refresh: keep the current rows on reset (data still
-          // shows while the request is in flight, no flash of the
-          // "Loading sessions..." placeholder). The list is only replaced
-          // once the fresh page arrives below.
           sessions: base.sessions,
           loading: mode === "reset",
           loadingMore: mode === "append",
@@ -432,10 +366,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     };
   }, []);
 
-  // Synchronize historical-session selection with the sidebar: reveal the
-  // target cwd, refresh its first page, and bring the active group into view.
-  // MultiCwdList injects the selected session when it falls outside that
-  // first page (the same rule as a click), so this effect never prepends.
   useEffect(() => {
     const cwd = selectedSession?.cwd;
     if (!cwd) return;
@@ -449,11 +379,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     return () => cancelAnimationFrame(frame);
   }, [selectedSession?.id, selectedSession?.cwd, fetchCwdSessions]);
 
-  // Refresh handler — reload workspaces + every loaded cwd's sessions while
-  // keeping the depth the user has scrolled to. `refreshLimit` sizes each
-  // request to what is already on screen (never less than one page), and the
-  // returned cursor lets paging continue from that depth. Because the row
-  // count does not change, `scrollTop` is left alone.
   const refreshAll = useCallback(() => {
     const workspaceDepth = workspacesRef.current.length;
     void fetchWorkspaces(null, "reset", refreshLimit(WORKSPACE_PAGE_SIZE, workspaceDepth));
@@ -470,8 +395,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         const next: Record<string, CwdSessionsState> = {};
         for (const [cwd, state] of Object.entries(prev)) {
           if (state.sessions.length > 0 || state.loading) {
-            // Silent refresh: keep rows, just rewind the cursor; the fresh
-            // page replaces the rows once it arrives.
             next[cwd] = { ...state, cursor: null, hasMore: false };
             changed = true;
           } else {
@@ -491,26 +414,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     }
   }, [fetchWorkspaces, fetchCwdSessions]);
 
-  // Back-compat alias used by inline rename/delete handlers that pre-date
-  // the multi-cwd view: "the sidebar should reflect the new state" still
-  // means "go back to page 1 and show a green check".
   const loadSessions = useCallback(() => {
     refreshAll();
   }, [refreshAll]);
 
-  // refreshKey is bumped on session creation / rename / deletion / agent end.
-  // Reload workspaces AND each loaded cwd's session page so renames and new
-  // sessions show up in the sidebar immediately — fetchWorkspaces alone only
-  // refreshes workspace-level metadata, not the per-cwd session rows (whose
-  // name/modified come from /api/sessions?cwd=).
   useEffect(() => {
     refreshAll();
   }, [refreshKey, refreshAll]);
 
-  // Auto-load: the one open cwd group needs its first session page fetched.
-  // Tracking via a ref avoids re-firing on every perCwdSessions tick — the
-  // effect only does real work the first time a cwd appears or it becomes
-  // the expanded group.
   useEffect(() => {
     for (const ws of workspaces) {
       if (initializedCwdsRef.current.has(ws.cwd)) continue;
@@ -522,8 +433,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     }
   }, [workspaces, expandedCwd, perCwdSessions, fetchCwdSessions]);
 
-  // Merge the shared running-session snapshot into the visible rows. The
-  // singleton store owns the only /api/sessions/running poller.
   useEffect(() => {
     if (runningById.size === 0) return;
     setPerCwdSessions((prev) => {
@@ -555,10 +464,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   const restoredRef = useRef(false);
 
-  // Auto-restore session from URL on first load.
-  // In paged mode the initial-session restore is best-effort: if the target
-  // session is on a page we haven't fetched yet, fetch it via the lite info
-  // endpoint and merge into the perCwdSessions list before resolving.
   useEffect(() => {
     if (loadingWorkspaces) return;
 
@@ -569,21 +474,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           const res = await fetch(`/api/sessions/${encodeURIComponent(initialSessionId)}/info`);
           if (res.ok) {
             const data = (await res.json()) as { session: SessionInfo };
-            // Hand the full row to the selection; MultiCwdList injects it into
-            // its cwd group when it falls outside the loaded page — the same
-            // rule as clicking a session, so the landing spot matches.
             onSelectSession(data.session, true);
             return;
           }
-        } catch { /* fall through */ }
+        } catch {}
         onInitialRestoreDone?.();
       })();
     }
   }, [loadingWorkspaces, initialSessionId, onSelectSession, onInitialRestoreDone]);
 
-  // Keep the active cwd at the top. Historical-session jumps can target a
-  // cwd outside the currently loaded workspace page, so synthesize its row
-  // from the selected session until pagination reaches the real aggregate.
   const activeWorkspace = useMemo(() => (selectedCwdProp
     ? workspaces.find((workspace) => workspace.cwd === selectedCwdProp)
       ?? (selectedSession?.cwd === selectedCwdProp
@@ -604,7 +503,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     [activeWorkspace, workspaces],
   );
 
-  // The normal paged list stays intact while today uses a complete snapshot.
   const todayView = useMemo(() => {
     const groups: Record<string, CwdSessionsState> = {};
     const byCwd = new Map<string, Workspace>();
@@ -644,16 +542,11 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   }, [todaySessions, today, runningById, selectedCwdProp]);
 
   const toggleExpandCwd = useCallback((cwd: string) => {
-    // Accordion: opening a group folds the previously open one. Clicking the
-    // open group folds it back, so the sidebar can be reduced to plain
-    // project headers.
     setExpandedCwd((prev) => (prev === cwd ? null : cwd));
   }, []);
 
   const handleToggleExpand = useCallback((cwd: string) => {
     toggleExpandCwd(cwd);
-    // Session loading is handled by the auto-load useEffect above, which
-    // fires whenever expandedCwd changes. No need to trigger here.
   }, [toggleExpandCwd]);
 
   const loadMoreCwdSessions = useCallback((cwd: string) => {
@@ -666,11 +559,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     setCwdSessionsModalCwd(cwd);
   }, []);
 
-  // ── Sessions infinite scroll ────────────────────────────────────────────
-  // The real scroll container lives inside SidebarSection (`scrollRef`); the
-  // list itself is a plain content div. A scroll near the bottom asks for the
-  // next workspace page. `workspaceFetchInFlightRef` is the synchronous
-  // guard so a fast scroll cannot stack two requests for the same cursor.
   const readSessionsMetrics = useCallback(() => {
     const el = sessionsScrollRef.current;
     if (!el) return null;
@@ -683,8 +571,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     void fetchWorkspaces(nextWorkspaceCursor, "append");
   }, [hasMoreWorkspaces, nextWorkspaceCursor, fetchWorkspaces]);
 
-  // Switching views can resize the list and emit a synthetic scroll.
-  // Resume scroll paging only after the user interacts with the list.
   const pagingInteractionRef = useRef(true);
   useEffect(() => {
     const el = sessionsScrollEl;
@@ -692,8 +578,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     const onInteract = () => { pagingInteractionRef.current = true; };
     const onScroll = () => {
       if (!pagingInteractionRef.current) return;
-      // The user is scrolling, so the container can scroll: the chain-load
-      // fallback is not needed and its counter resets.
       chainLoadCountRef.current = 0;
       if (decideLoadMoreOnScroll({
         metrics: readSessionsMetrics(),
@@ -724,19 +608,11 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     readSessionsMetrics,
   ]);
 
-  // Chain-load: a page that does not fill the container (typically every cwd
-  // collapsed) leaves nothing to scroll, so the scroll path can never fire.
-  // After each settled page, measure once the layout has landed and pull the
-  // next one — up to CHAIN_LOAD_LIMIT. Past the cap the manual fallback row
-  // appears instead. Skipped entirely while the section is collapsed (no
-  // layout, and no paging in the background).
   const evaluateChainLoad = useCallback(() => {
     const metrics = readSessionsMetrics();
     if (decideChainLoad({
       metrics,
       hasMore: hasMoreWorkspaces,
-      // The same synchronous in-flight guard the scroll path uses: neither
-      // path may issue a second request for a cursor already on the wire.
       loading: workspaceFetchInFlightRef.current,
       chainCount: chainLoadCountRef.current,
     })) {
@@ -764,21 +640,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     loadingMoreWorkspaces,
     orderedWorkspaces.length,
     hasMoreWorkspaces,
-    // Collapsing every group can make the list unscrollable without a fetch;
-    // re-measure then too so the fallback still surfaces.
     expandedCwd,
     evaluateChainLoad,
   ]);
 
   const handleFallbackLoadMore = useCallback(() => {
-    // A manual click resets the chain counter, so the fallback can chain
-    // again if the freshly appended page still does not fill the container.
     chainLoadCountRef.current = 0;
     loadMoreWorkspaces();
   }, [loadMoreWorkspaces]);
 
-  // Refresh both the workspace metadata (lastUsed may shift) and the
-  // current cwd's session page (name may change) after a rename.
   const handleSessionRenamed = useCallback((sessionId: string, name: string) => {
     setPerCwdSessions((prev) => {
       let changed = false;
@@ -796,19 +666,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       return changed ? next : prev;
     });
     onSessionRenamed?.(sessionId, name);
-    // Refresh keeps the loaded depth (and the scroll position).
     refreshAll();
   }, [onSessionRenamed, refreshAll]);
 
   const handleSessionDeleted = useCallback((sessionId: string) => {
     onSessionDeleted?.(sessionId);
-    // Refresh keeps the loaded depth (and the scroll position).
     refreshAll();
   }, [onSessionDeleted, refreshAll]);
 
   return (
     <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Header */}
       <div
         style={{
           padding: "12px 10px 10px",
@@ -826,7 +693,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                 <Tooltip content={t("New session")}>
                   <button
                     onClick={() => {
-                      // Always create in the default cwd (~/.pi-work/workspace/pi-cwd-default).
                       void fetch("/api/default-cwd", { method: "POST" })
                         .then((res) => (res.ok ? res.json() : null))
                         .then((data: { cwd?: string } | null) => {
@@ -903,7 +769,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         </div>
         </div>
 
-      {/* Reserve two cwd headers and six session rows; Explorer fills the rest. */}
       <SidebarSection
         title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
@@ -973,9 +838,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       />
       </SidebarSection>
 
-      {/* File Explorer section — collapsible via the shared SidebarSection
-          (flex-grow height animation). Future sidebar sections with the same
-          collapse/expand behavior should reuse SidebarSection. */}
       {selectedCwdProp && (
         <SidebarSection
           title={t("Explorer")}
@@ -1044,4 +906,3 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     </div>
   );
 }
-

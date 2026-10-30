@@ -27,7 +27,6 @@ export function ToolsPickerModal({
   onToggleTool: (selection: ToolSelection) => void;
   onRetryEnsureTools?: () => Promise<void>;
   onClose: () => void;
-  /** Legacy props accepted while callers migrate from the dropdown API. */
   customExpanded?: boolean;
   panelRef?: Ref<HTMLDivElement>;
   onToggleCustomExpanded?: () => void;

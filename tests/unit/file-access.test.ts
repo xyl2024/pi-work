@@ -3,17 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-/**
- * The public contract of `lib/server/file-access.ts` — specifically that the
- * cache work (shared in-flight scan, longer TTL, invalidation) does not change
- * the authorisation answer. Driven at the module level against a temp data /
- * agent root, so the real `~/.pi-work` and `~/.pi` are never touched.
- *
- * Deliberately does NOT assert how many scans happen (tests/README.md forbids
- * asserting internal call counts) — only that the same path gets the same
- * answer, and that invalidation still takes effect.
- */
-
 const root = mkdtempSync(join(tmpdir(), "pi-work-file-access-"));
 const agentDir = join(root, "agent");
 const workspace = join(root, "workspace");

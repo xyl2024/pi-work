@@ -7,17 +7,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { SUN, MOON } from "@/lib/client/icon-paths";
 
-// ---------------------------------------------------------------------------
-// Pi Work sign-in — minimal.
-//
-// A single quiet column centred in the viewport: brand mark, two fields, one
-// button. No illustration, no decoration; the theme CSS variables do the
-// theming and the whitespace does the hierarchy.
-//
-// Contract unchanged: POST /api/auth/session/login, then a full navigation to
-// "/" so every provider/store re-initializes behind the fresh cookie.
-// ---------------------------------------------------------------------------
-
 interface StatusResponse {
   authenticated?: boolean;
   usingDefaultCredentials?: boolean;
@@ -36,8 +25,6 @@ export function LoginForm() {
   const usernameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // The status endpoint reports whether the built-in admin/admin pair is
-    // active, so a fresh deployment can show a hint.
     let cancelled = false;
     fetch("/api/auth/session/status")
       .then((res) => (res.ok ? (res.json() as Promise<StatusResponse>) : null))
@@ -51,14 +38,10 @@ export function LoginForm() {
   }, []);
 
   useEffect(() => {
-    // autoFocus is desktop-only: on touch devices it would pop the keyboard
-    // before the user has oriented themselves.
     const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     if (finePointer) usernameRef.current?.focus();
   }, []);
 
-  // Same theme flip as ProfileBlock: pass the button's coords so the global
-  // startViewTransition clip-path radiates from the click.
   const handleToggleTheme = (e: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setPreset(isDark ? "light" : "dark", {
@@ -84,7 +67,6 @@ export function LoginForm() {
     })
       .then(async (res) => {
         if (res.ok) {
-          // Full navigation so every store re-initializes behind the cookie.
           window.location.replace("/");
           return;
         }

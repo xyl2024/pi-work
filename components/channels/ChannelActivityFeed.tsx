@@ -6,7 +6,6 @@ import type { ChannelActivity } from "@/lib/shared/channels/types";
 
 const ACTIVITY_LIMIT = 50;
 
-/** Dot color per event kind so the feed reads at a glance. */
 const KIND_COLOR: Record<ChannelActivity["kind"], string> = {
   message_received: "var(--text-muted)",
   session_started: "var(--accent)",
@@ -55,7 +54,6 @@ export function ChannelActivityFeed({ channelId }: { channelId: string }) {
       const data = (await res.json()) as { activity?: ChannelActivity[] };
       if (data.activity) setEvents(data.activity);
     } catch {
-      // transient — the interval retries
     }
   }, [channelId]);
 

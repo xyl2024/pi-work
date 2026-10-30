@@ -19,7 +19,6 @@ import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
 const COLLAPSED_USER_MSG_HEIGHT = 240;
 
-// 用户消息正文的统一样式（技能消息的附加文字与普通消息共用）。
 const USER_TEXT_STYLE = {
   fontSize: 14,
   lineHeight: 1.6,
@@ -28,7 +27,6 @@ const USER_TEXT_STYLE = {
   wordBreak: "break-word",
 } as const;
 
-// 图标名 → 组件：渲染层的唯一映射点，与 MESSAGE_ORIGIN_ICONS 对齐。
 const ORIGIN_ICON_COMPONENTS = {
   MessageCircle,
   CalendarClock,
@@ -52,9 +50,6 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   const [avatarOk, setAvatarOk] = useState(true);
   const [avatarCacheKey] = useState(() => `${Date.now()}`);
   const [expanded, setExpanded] = useState(false);
-  // 技能调用消息：`/skill:<name>` 被服务端展开成 `<skill …>` 块后才落进
-  // JSONL。气泡里默认只显示技能 pill（点按展开正文），正文之下再显示用户
-  // 的附加文字；copy / 分支导航仍使用完整 content，发给 LLM 的内容不受影响。
   const [skillExpanded, setSkillExpanded] = useState(false);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const isOpen = expanded || !!isFocused;
@@ -75,7 +70,6 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   }, []);
 
   const content = extractMessageText(message);
-  // 技能展开块判别：命中则气泡只渲染 pill + 用户附加文字（见渲染处）。
   const skillBlock = parseSkillBlock(content);
   const imageBlocks: ImageContent[] = extractMessageImages(message);
   const imageGallery: ImageItem[] = imageBlocks.map((image) => {
@@ -421,19 +415,9 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   );
 }
 
-/**
- * Memoized so historical user messages don't re-render on every
- * streaming token — they're stable once the user submits.
- */
 export const UserMessageView = memo(UserMessageViewInner);
 UserMessageView.displayName = "UserMessageView";
 
-/**
- * 技能调用 pill：[扳手图标 + 技能名 + 展开箭头]，默认收起，点按才
- * 展开 SKILL.md 正文。配色与用户气泡同调（蓝色 accent + 半透明蓝色胶囊，
- * 与 GitLogView 的蓝色 chip 同一做法），深浅两套主题下都能浮在
- * --user-bg 上；悬停加深背景。
- */
 function SkillInvocationPill({ name, expanded, onToggle }: {
   name: string;
   expanded: boolean;

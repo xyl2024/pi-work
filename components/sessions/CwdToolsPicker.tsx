@@ -21,18 +21,6 @@ import {
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
 
-/**
- * Modal to configure the *default* tool set a cwd starts new sessions with
- * (persisted per-cwd via `/api/cwd-tools`). Its chrome mirrors the chat
- * tools picker (ToolsPickerModal) / model & project pickers: portal +
- * modal animation, a search box, and a live checkbox grid for the custom
- * selection.
- *
- * Unlike the in-session tools picker this is a *setting*, so the selection
- * is staged locally and only persisted on Save. The change takes effect
- * on sessions started afterwards (the server reads the cwd default at
- * session start).
- */
 export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: boolean; onClose: () => void }) {
   const { t } = useI18n();
   const { requestClose, backdropStyle, panelStyle, isVisible, phase } = useModalAnimation({
@@ -54,7 +42,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
 
   useEffect(() => { setPortalEl(document.body); }, []);
 
-  // Fetch the current default selection + the tool catalog for this cwd.
   useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -79,8 +66,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
       : rows;
   }, [query, rows]);
 
-  // The raw selection we operate on: explicit names/patterns, or (for
-  // "all") the full catalog expanded to concrete names.
   const raw = useMemo<string[]>(
     () => selection === "all" ? [...allNames] : Array.isArray(selection) ? [...selection] : [],
     [selection, allNames],
@@ -90,9 +75,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     return new Set(expandToolPatterns(Array.isArray(selection) ? selection : [], allNames));
   }, [selection, allNames]);
 
-  // Fresh modal per open: clear search, reset the active row and focus the
-  // input. Since this modal is conditionally mounted (open === true while
-  // alive) the open edge effectively happens once on mount.
   useEffect(() => {
     if (!open) return;
     setQuery("");
@@ -101,14 +83,11 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  // The search box is inside the `!loading` branch, so it does not exist
-  // during the mount focus pass above — refocus once the catalog is loaded.
   useEffect(() => {
     if (loading || !isVisible) return;
     inputRef.current?.focus();
   }, [loading, isVisible]);
 
-  // Reset navigation when the list filters change so Enter stays in range.
   useEffect(() => {
     setActiveIndex((i) => Math.min(i, Math.max(0, filteredRows.length - 1)));
   }, [filteredRows.length]);
@@ -124,7 +103,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     setSelection(expanded.length === allNames.length && allNames.length > 0 ? "all" : next);
   }, [phase, raw, allNames]);
 
-  // Document-level keyboard: ↑↓/←→ move, Enter confirm, Esc close.
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
@@ -166,14 +144,12 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={t("Default tools for this project")} style={backdropStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
       <div style={{ ...panelStyle, width: "min(760px, calc(100vw - 32px))", maxHeight: "min(680px, calc(100vh - 64px))", display: "flex", flexDirection: "column", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", overflow: "hidden" }} onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 2px", flexShrink: 0 }}>
           <span style={{ flex: 1, color: "var(--text)", fontSize: 13, fontWeight: 600 }}>{t("Default tools for this project")}</span>
           <button type="button" onClick={requestClose} aria-label={t("Close")} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 6, color: "var(--text-dim)", cursor: "pointer" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></svg>
           </button>
         </div>
-        {/* Project path caption */}
         <div style={{ padding: "0 14px 10px", flexShrink: 0 }}>
           <div title={cwd} style={{ color: "var(--text-muted)", fontSize: 11, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cwd}</div>
         </div>
@@ -182,7 +158,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
           <div style={{ padding: "40px 20px", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}><InlineSpinner /> {t("Loading...")}</div>
         ) : (
           <>
-            {/* Search */}
             <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
                 <span style={{ color: "var(--text-dim)", fontSize: 12 }}>⌕</span>
@@ -190,7 +165,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
               </div>
             </div>
 
-            {/* Custom checklist */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 6px", flexShrink: 0 }}>
               <span style={{ color: "var(--text)", fontSize: 12, fontWeight: 600 }}>{t("Custom selection")}</span>
               <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{selectedSet.size}/{tools.length}</span>
@@ -221,7 +195,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
           </>
         )}
 
-        {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("Arrow keys select · Enter confirm · Esc close")}</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

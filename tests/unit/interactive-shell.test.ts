@@ -3,10 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveInteractiveShell, shellDisplayName } from "@/lib/shared/interactive-shell";
 
-/** PATH probe that finds nothing. */
 const nothingOnPath = () => null;
 
-/** PATH probe that finds exactly the listed executables, at a fake install path. */
 function onPath(...commands: string[]): (command: string) => string | null {
   const found = new Set(commands);
   return (command) => (found.has(command) ? `C:\\fake\\${command}` : null);
@@ -100,16 +98,6 @@ describe("shellDisplayName", () => {
   });
 });
 
-/**
- * The acceptance criterion this file cannot express as a function call is
- * "one implementation, read by both the terminal panel and the status bar".
- * Both consumers live in server modules that cannot be imported here without
- * dragging in SQLite and the pi SDK, so the rule is pinned at the source level
- * instead (the same source-level approach as the shared-module pins elsewhere in
- * this suite): each of them must
- * delegate the decision to the shared module, and neither may keep a local
- * copy of the Windows fallback.
- */
 describe("interactive shell decision has one implementation", () => {
   const consumers = ["app/api/status-bar/route.ts", "lib/server/terminal/server.ts"];
 

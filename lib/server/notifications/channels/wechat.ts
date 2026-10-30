@@ -1,16 +1,3 @@
-/**
- * WeChat notification channel (scheduled-task outbound).
- *
- * Delivers a task notification as a WeChat message via the iLink bot CGI
- * (`api.sendTextMessage`) using the credentials of a concrete channel
- * (`channelId`). Every task notification must pick a specific channel —
- * there is no global single-account fallback any more.
- *
- * Failure handling:
- *   - channel missing / not `connected` → throw (the scheduler records why);
- *   - token expired (401 upstream) → mark only this channel `expired` and
- *     throw.
- */
 import { api } from "@/lib/server/wechat";
 import { getChannel, updateChannel } from "@/lib/server/channels";
 import { loadChannelAccount } from "@/lib/server/channels/credentials";
@@ -51,9 +38,6 @@ const wechatChannel: NotificationChannel = {
       throw new Error(msg);
     }
 
-    // Success notifications pass a short preview in `text` and the full
-    // reply in `detail`. When the preview is the beginning of the detail,
-    // sending both produces the same reply twice in WeChat.
     const body = payload.detail && payload.text && payload.detail.startsWith(payload.text)
       ? payload.detail
       : [payload.text, payload.detail ? `\n${payload.detail.slice(0, 500)}` : ""].join("\n");

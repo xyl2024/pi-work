@@ -19,47 +19,27 @@ import {
 
 interface Props {
   composition: ContextComposition;
-  /** Model context window, for the `total / window` header readout. */
   contextWindow: number;
-  /** The ring's total, used for the header while the composition itself has no
-   *  anchor yet (the estimate landed before the next provider usage did). The
-   *  rows then show local counts without percentages rather than inventing a
-   *  share. */
   fallbackTotalTokens: number | null;
-  /** Space the popover may occupy above the ring. Measured by the trigger so the
-   *  panel is never clipped by the chat window on short viewports. */
   maxHeight: number | null;
-  /** Jump the chat to the message that issued a tool call. Routed through the
-   *  same module-level `toolCallId → scroll` bridge the tool-call stats panel
-   *  uses (the input bar and the scroll container are separate subtrees), and
-   *  the chat flashes the landed message for two seconds. */
   onJumpToToolCall?: (toolCallId: string) => void;
 }
 
-/** The fields a row needs to render — a bucket and a `ContextCompositionRow`
- *  both satisfy it, so the list renders top level and children with one
- *  component. */
 type RowData = Pick<ContextCompositionRow, "id" | "localTokens" | "tokens" | "percent" | "children">;
 
-/** A stacked-bar segment: one bucket (top level) or one of its rows (sub level). */
 interface Segment {
   id: string;
   label: string;
   color: string;
-  /** 0–1 alpha, used to tint a bucket's rows apart from each other. */
   opacity: number;
   value: number;
 }
 
-/** One row renders as `≈ 12.3K  6.2%` — the `≈` is the whole point of the
- *  panel (ADR-0005): the total is provider-exact, this is a local estimate, and
- *  the two must never look like the same kind of number. */
 function formatRowTokens(row: { tokens: number | null; localTokens: number }): string {
   return formatEstimatedTokens(row.tokens ?? row.localTokens);
 }
 
 function StackedBar({ segments, height, weight }: { segments: Segment[]; height: number; weight: number }) {
-  // Nothing counted yet: an empty track, never a zero-width sliver soup.
   if (weight <= 0) {
     return (
       <div
@@ -92,8 +72,6 @@ function StackedBar({ segments, height, weight }: { segments: Segment[]; height:
   );
 }
 
-/** One row of the hierarchical list. A row with children renders as a button
- *  that toggles the next level; a leaf row is plain text. */
 function CompositionRow({
   row,
   label,
@@ -201,9 +179,6 @@ function CompositionRow({
   );
 }
 
-/** A row's second level: its rows, plus a slim stacked bar so the expanded
- *  bucket still reads as one whole. Recursive, so the base-prompt row can offer
- *  a third level (its own prose + `Available tools` + `Guidelines`). */
 function ChildRows({
   rows,
   color,
@@ -214,7 +189,6 @@ function ChildRows({
   rows: ContextCompositionRow[];
   color: string;
   depth: number;
-  /** Keys of the rows whose own children are open. */
   expandedKeys: Record<string, boolean>;
   toggleKey: (key: string) => void;
 }) {
@@ -222,7 +196,6 @@ function ChildRows({
   const weight = rows.reduce((sum, row) => sum + (row.tokens ?? row.localTokens), 0);
   return (
     <div style={{ margin: "2px 0 4px" }}>
-      {/* Align the sub-bar with the swatches of the rows it summarizes. */}
       <div style={{ paddingLeft: 4 + depth * 14 + 15 }}>
         <StackedBar
           segments={rows.map((row, index) => ({
@@ -246,9 +219,6 @@ function ChildRows({
             row={row}
             label={contextRowLabel(row.id, t)}
             color={color}
-            // Rows of one bucket share its hue and are separated by alpha, so
-            // the sub-bar and the swatches stay legible without seven more
-            // colors per bucket.
             opacity={Math.max(0.35, 1 - index * 0.12)}
             depth={depth}
             expanded={expanded}
@@ -270,36 +240,16 @@ function ChildRows({
   );
 }
 
-/** Depth-1 indent, so the list lines up with the messages bucket's own rows
- *  (`CompositionRow` writes the same `4 + depth * 14`). */
 const MESSAGE_ROW_INDENT = 4 + 14;
 
-/**
- * The biggest tool results, hung under the messages bucket (#38).
- *
- * Each row names the tool and its target through `getToolPreview` — the same
- * parameter summary the tool-call block in the transcript renders, so the list
- * never grows a second opinion about what a `grep` or a `read` is looking at —
- * followed by the result's own size.
- *
- * Clicking a row jumps to the **assistant message that issued the call**: a
- * tool result has no visible row in the transcript, so the message that asked
- * for it is the only thing to land on. A result with no `toolCallId` is still
- * listed (its size is information) but is not a button and is dimmed, because
- * there is nowhere to jump.
- */
 function TopToolResults({
   results,
   onJump,
 }: {
-  // Optional because a composition cached before this feature landed (or an
-  // in-flight SSE replay of one) simply has no list yet — that must render as
-  // "no list", not throw.
   results?: ContextToolResultEntry[];
   onJump?: (toolCallId: string) => void;
 }) {
   const { t } = useI18n();
-  // No results: no list and no title — an empty section would just be noise.
   if (!results || results.length === 0) return null;
 
   const rowStyle: CSSProperties = {
@@ -397,21 +347,6 @@ function TopToolResults({
   );
 }
 
-/**
- * The click-opened "what is this context made of" panel (ADR-0005).
- *
- * Two levels by default — the four buckets, each expandable into its sources —
- * plus a third level under the base-prompt row so the prompt's tool list and
- * guidelines can keep the Context panel's anchor names. Everything it prints is
- * derived from the shared composition: the total is the provider's number and
- * carries no decoration, every classified number carries `≈`, and the footer
- * says why.
- *
- * Positioning is the trigger's job: this component renders into a
- * `position: relative` wrapper next to the ring and pops upward, so it is never
- * clipped by the chat scroll container (the input bar lives outside it) and
- * needs no portal.
- */
 export function ContextCompositionPopover({ composition, contextWindow, fallbackTotalTokens, maxHeight, onJumpToToolCall }: Props) {
   const { t } = useI18n();
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
@@ -470,9 +405,6 @@ export function ContextCompositionPopover({ composition, contextWindow, fallback
 
       <div style={{ marginTop: 6 }}>
         {buckets.map(({ bucket, color, rows }) => {
-          // Expandable when there is more than one source to separate — or when
-          // the single row is itself split (a custom prompt can be only the tool
-          // list + guidelines, with no prose leaf of its own).
           const expandable = rows.length > 1 || rows.some((row) => row.children.length > 0);
           const expanded = expandable && !!expandedKeys[bucket.id];
           return (

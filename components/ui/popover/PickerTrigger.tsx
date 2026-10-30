@@ -4,41 +4,20 @@ import { forwardRef, type CSSProperties, type MouseEvent, type ReactNode } from 
 import { useI18n } from "@/hooks/useI18n";
 
 export interface PickerTriggerProps {
-  /** Whether the popover is open. Forwarded to `aria-expanded`. */
   open: boolean;
-  /** Toggle handler wired to the trigger button. */
   onClick: () => void;
-  /** Icon shown on the leading edge (e.g. calendar / clock). */
   icon: ReactNode;
-  /** Text shown in the trigger. `null`/`undefined` renders `placeholder`. */
   label?: ReactNode;
-  /** Placeholder shown when `label` is empty. */
   placeholder?: ReactNode;
-  /** Whether to show the inline "×" clear button. Default: `true`. */
   clearable?: boolean;
-  /** Whether the picker currently has a value. Controls whether the clear
-   *  button is shown. */
   hasValue: boolean;
-  /** Clears the value without toggling the popover. */
   onClear: () => void;
-  /** Accessible label for the default trigger. */
   ariaLabel?: string;
-  /** Visual sizing. `compact` matches the small inline default; `regular`
-   *  matches the form-input style used in dialogs. Default: `"compact"`. */
   size?: "compact" | "regular";
-  /** Style overrides merged into the default trigger button. */
   style?: CSSProperties;
-  /** Whether to use the monospace stack for the label (used by TimePicker). */
   monoLabel?: boolean;
 }
 
-/**
- * The default trigger button shared by DatePicker / TimePicker. Renders a
- * compact or regular-sized bordered button with a leading icon, a label
- * slot, and an optional inline "×" that clears the value without opening
- * the popover. Consumers who need a custom trigger should ignore this
- * component and use `renderTrigger` instead.
- */
 export const PickerTrigger = forwardRef<HTMLButtonElement, PickerTriggerProps>(function PickerTrigger(
   {
     open,
@@ -59,8 +38,6 @@ export const PickerTrigger = forwardRef<HTMLButtonElement, PickerTriggerProps>(f
   const { t } = useI18n();
   const showLabel = label != null && label !== "";
   const clearHandler = (e: MouseEvent<HTMLSpanElement>) => {
-    // preventDefault avoids losing the button's focus / selection when the
-    // mousedown lands on the inner span.
     e.preventDefault();
     e.stopPropagation();
     onClear();

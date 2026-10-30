@@ -35,7 +35,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
   const outlineBtnRef = useRef<HTMLButtonElement>(null);
   const numPagesRef = useRef(0);
 
-  // SSE watch — same pattern as ImageViewer/AudioViewer
   useEffect(() => {
     setBust(0);
     setSize(null);
@@ -61,7 +60,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
       try {
         const d = JSON.parse((e as MessageEvent).data) as { size?: number };
         if (typeof d.size === "number") setSize(d.size);
-      } catch { /* ignore */ }
+      } catch {}
       setBust((b) => b + 1);
     });
     es.addEventListener("error", () => setWatching(false));
@@ -73,7 +72,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
     };
   }, [filePath]);
 
-  // Track container width for fit-to-width
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -87,7 +85,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
     return () => ro.disconnect();
   }, []);
 
-  // Keyboard shortcuts: ← → for page navigation
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
@@ -105,7 +102,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Click outside outline dropdown to close
   useEffect(() => {
     if (!showOutline) return;
     function onClick(e: MouseEvent) {
@@ -113,7 +109,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
         setShowOutline(false);
       }
     }
-    // Delay so the toggle click doesn't immediately close
     const id = setTimeout(() => document.addEventListener("click", onClick), 0);
     return () => {
       clearTimeout(id);
@@ -148,7 +143,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
             const idx: number = await doc.getPageIndex(item.dest[0]);
             pageNumber = idx + 1;
           }
-        } catch { /* skip unresolvable dest */ }
+        } catch {}
       }
       if (pageNumber > 0) {
         result.push({ title: item.title, pageNumber, depth });
@@ -170,7 +165,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
       if (rawOutline && rawOutline.length > 0) {
         flattenOutline(rawOutline, doc, 0).then(setOutline);
       }
-    }).catch(() => { /* PDF has no outline or failed to load */ });
+    }).catch(() => {});
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -206,7 +201,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
     setManualScale(1);
   }
 
-  // Compute display percentage and effective scale
   const displayPercent = fitWidth && pageNaturalWidth > 0 && containerWidth > 0
     ? Math.round(containerWidth * 0.9 / pageNaturalWidth * 100)
     : Math.round(manualScale * 100);
@@ -230,7 +224,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Toolbar */}
       <div
         style={{
           display: "flex",
@@ -246,7 +239,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
       >
         {formatSizeStr && <span>{formatSizeStr}</span>}
 
-        {/* Page navigation */}
         <button
           onClick={() => changePage(-1)}
           disabled={pageNumber <= 1}
@@ -283,7 +275,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
           ›
         </button>
 
-        {/* Zoom controls */}
         <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px" }} />
         <button
           onClick={() => changeScale(-0.25)}
@@ -312,7 +303,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
           +
         </button>
 
-        {/* Outline button */}
         {outline.length > 0 && (
           <span style={{ position: "relative" }}>
             <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", display: "inline-block" }} />
@@ -368,7 +358,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
           </span>
         )}
 
-        {/* Watch indicator */}
         <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px" }} />
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
           <span style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}>
@@ -387,7 +376,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
         </Tooltip>
       </div>
 
-      {/* PDF content area */}
       <div
         ref={containerRef}
         style={{
@@ -416,7 +404,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
               </div>
             }
           >
-            {/* Preload previous page (hidden) */}
             {numPages > 0 && pageNumber > 1 && (
               <div style={{ display: "none" }}>
                 <Page
@@ -425,7 +412,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
                 />
               </div>
             )}
-            {/* Current page */}
             <Page
               key={`${src}-p${pageNumber}`}
               pageNumber={pageNumber}
@@ -433,7 +419,6 @@ export function PdfViewer({ filePath }: FileViewerProps) {
               onRenderError={() => setError(t("Failed to render PDF page"))}
               scale={effectiveScale}
             />
-            {/* Preload next page (hidden) */}
             {numPages > 0 && pageNumber < numPages && (
               <div style={{ display: "none" }}>
                 <Page

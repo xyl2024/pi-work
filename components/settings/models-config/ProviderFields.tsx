@@ -6,10 +6,6 @@ import { API_OPTIONS } from "./constants";
 import type { ProviderEntry } from "./types";
 import { Field, TextInput, SecretTextInput, Select, IconField } from "./form-fields";
 
-/**
- * The editable provider fields — name, icon, Base URL, API Key
- * and API protocol. Used by the panel's provider page.
- */
 export function ProviderFields({
   name,
   provider,

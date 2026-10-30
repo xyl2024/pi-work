@@ -1,5 +1,3 @@
-// Terminal glyph. The bottom line blinks (repeat:∞) while hovering.
-
 "use client";
 
 import type { Variants } from "motion/react";
@@ -78,4 +76,3 @@ export const TerminalIcon = forwardRef<TerminalIconHandle, TerminalIconProps>(
 );
 
 TerminalIcon.displayName = "TerminalIcon";
-

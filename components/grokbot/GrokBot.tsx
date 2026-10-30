@@ -1,19 +1,5 @@
 "use client";
 
-/**
- * GrokBot — animated SVG face companion, vendored from
- * https://github.com/zhulin025/LaoA-GrokBot (MIT License, Copyright (c) 2026 老A玩AI).
- *
- * Renders the bot's body (user-selectable shape + color), two eye outlines
- * (25 morphable expressions), optional body parts and accessories, and drives
- * all animation imperatively: a requestAnimationFrame loop interpolates the
- * eye rings with a spring, blinks on a per-state cadence, and follows the
- * pointer inside the stage. Playback state lives in refs (never triggers
- * React re-renders); the user's *configuration* (expression / state / color /
- * shape / parts / accessories) lives in the module store `lib/grokbot-store`
- * so the sidebar stage and the lab modal stay in sync.
- */
-
 import {
   forwardRef,
   useCallback,
@@ -35,34 +21,19 @@ import { useGrokbotConfig, setGrokbotConfig } from "@/lib/client/grokbot-store";
 import type { SubagentBotAppearance } from "@/lib/shared/subagent";
 
 export interface GrokBotHandle {
-  /** Pick an expression by index (0..24). Persists to the shared store. */
   setExpression(index: number): void;
-  /** Enter a named state (see GROKBOT_STATE_NAMES). Persists to the store. */
   setState(stateKey: string): void;
-  /** Play a one-shot jello action: bounce | shake | peek | pinch | squish | wave. */
   playQuickAction(action: string): void;
-  /** Force a blink on the next frame. */
   triggerBlink(): void;
 }
 
 export interface GrokBotProps {
-  /** CSS width of the svg (height follows the 229:229 viewBox). */
   size?: number;
-  /** Follow the pointer inside the stage + blink on click. Default true. */
   interactive?: boolean;
-  /** Extra class for the stage wrapper. */
   className?: string;
-  /**
-   * Controlled appearance. When set, the component renders this instead of the
-   * shared GrokBot store — used to preview a subagent profile's bot without
-   * touching the user's own companion.
-   */
   appearance?: SubagentBotAppearance;
-  /** Receives appearance patches while `appearance` is controlled. */
   onAppearanceChange?: (patch: Partial<SubagentBotAppearance>) => void;
 }
-
-// ── Animation constants (from LaoA-GrokBot app.js) ───────────────────────
 
 const EYE_CX = 114.2705;
 const EYE_R = 105;
@@ -116,7 +87,6 @@ const centroid = (ring: readonly GrokPoint[]): [number, number] => {
 const ringPath = (ring: readonly GrokPoint[]): string =>
   "M" + ring.map((p) => `${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join("L") + "Z";
 
-// Body-part / accessory path data (from index.html + enhancements.js).
 const PART_PATHS: Record<string, ReactNode> = {
   antenna: (
     <>
@@ -182,9 +152,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
   { size = "100%", interactive = true, className, appearance, onAppearanceChange },
   ref,
 ) {
-  // Controlled (subagent editor / live panel) or store-backed (the user's own
-  // companion). `useGrokbotConfig` is still called unconditionally so the hook
-  // order and the store's lazy timers are unaffected by which mode is active.
   const storeConfig = useGrokbotConfig();
   const controlled = appearance !== undefined;
   const config: SubagentBotAppearance = appearance ?? storeConfig;
@@ -200,7 +167,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
   const clipPathRef = useRef<SVGPathElement>(null);
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
 
-  // Playback state (refs — never render-affecting).
   const anim = useRef({
     expression: 0,
     current: GROKBOT_EXPRESSIONS[0] as GrokExpression,
@@ -220,22 +186,17 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
   const rafRef = useRef(0);
   const appliedRef = useRef<{ expression: number; stateKey: string } | null>(null);
 
-  // ── Store → instance ──────────────────────────────────────────────────
-
-  // Apply expression changes from the store (user picks, autoPlay, cadence).
   useEffect(() => {
     if (appliedRef.current?.expression === config.expression) return;
     appliedRef.current = { ...(appliedRef.current ?? { expression: -1, stateKey: "" }), expression: config.expression };
     const a = anim.current;
-    a.current = a.target; // freeze interpolation at the current position
+    a.current = a.target;
     a.target = GROKBOT_EXPRESSIONS[config.expression] ?? GROKBOT_EXPRESSIONS[0];
     a.expression = config.expression;
     a.morph = 0;
     a.velocity = 0;
   }, [config.expression]);
 
-  // Apply state changes from the store: pick an expression from the state's
-  // pool, play the state's motion class.
   const lastStateKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (lastStateKeyRef.current === config.stateKey) return;
@@ -246,10 +207,8 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     const current = appliedRef.current?.expression ?? 0;
     const next = pool.find((i) => i !== current) ?? pool[0];
     if (next !== current) {
-      // Route through the expression effect so both stay consistent.
       update({ expression: next });
     }
-    // Motion class.
     const t = timers.current;
     if (t.stateMotion) clearTimeout(t.stateMotion);
     svg.classList.remove(...ALL_BOT_CLASSES);
@@ -261,13 +220,10 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
       svg.classList.remove(cls);
       stageRef.current?.classList.remove("grokbot-guides");
     }, 1100);
-    // Blink cadence restarts for the new state.
     scheduleBlink();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.stateKey]);
 
-  // Body color follows `var(--accent)` via CSS; only shape / parts / accessories
-  // are plain DOM updates.
   useEffect(() => {
     const shape = GROKBOT_SHAPES.find((s) => s.id === config.shapeId);
     if (shape) {
@@ -286,8 +242,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
       }
     }
   }, [config.shapeId, config.parts, config.accessories]);
-
-  // ── Animation loop ────────────────────────────────────────────────────
 
   function blinkScale(now: number): number {
     const a = anim.current;
@@ -334,14 +288,12 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     const frame = (now: number) => {
       const dt = Math.min((now - a.last) / 1000, 0.1);
       a.last = now;
-      // Spring toward morph = 1.
       a.velocity += (-14 * a.velocity - 49 * (a.morph - 1)) * dt;
       a.morph += a.velocity * dt;
       if (!Number.isFinite(a.morph)) {
         a.morph = 1;
         a.velocity = 0;
       }
-      // Interpolated rings at the current morph position.
       const shown = a.current.map((ring, e) =>
         ring.map((p, i) => {
           const t = a.target[e][i];
@@ -380,8 +332,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Pointer interaction ───────────────────────────────────────────────
-
   const handlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!interactive) return;
     const box = stageRef.current?.getBoundingClientRect();
@@ -401,8 +351,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     anim.current.blinkStart = performance.now();
   };
 
-  // ── Imperative API ────────────────────────────────────────────────────
-
   useImperativeHandle(ref, () => ({
     setExpression(index: number) {
       update({ expression: index });
@@ -417,7 +365,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
       if (t.quick) clearTimeout(t.quick);
       svg.classList.remove(...ALL_BOT_CLASSES);
       stageRef.current?.classList.remove("grokbot-guides");
-      // Restart CSS animation by forcing a reflow.
       void svg.getBoundingClientRect();
       const cls = `grokbot-quick-${action}`;
       svg.classList.add(cls);
@@ -465,25 +412,20 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
           </clipPath>
         </defs>
         <ellipse className="grokbot-orbit" cx="114" cy="115" rx="107" ry="38" />
-        {/* Back accessories (cape) */}
         <g className="grokbot-accessory grokbot-back-accessory" data-accessory="cape">
           <path d="M25 79Q-2 119 13 210Q65 192 90 168Z" />
           <path d="M204 79Q231 119 216 210Q164 192 139 168Z" />
         </g>
-        {/* Body parts */}
         {(["antenna", "tail", "hands", "feet"] as const).map((part) => (
           <g key={part} className="grokbot-body-part" data-part={part}>
             {PART_PATHS[part]}
           </g>
         ))}
-        {/* Body */}
         <path ref={bodyPathRef} className="grokbot-body" d={shapePath} />
-        {/* Eyes */}
         <g className="grokbot-eyes" clipPath={`url(#grokbot-head-clip-${uid})`}>
           <path ref={eye0Ref} className="grokbot-eye" />
           <path ref={eye1Ref} className="grokbot-eye" />
         </g>
-        {/* Front accessories */}
         {(["straw-hat", "glasses", "bowtie"] as const).map((acc) => (
           <g key={acc} className="grokbot-accessory grokbot-front-accessory" data-accessory={acc}>
             {ACCESSORY_FRONT[acc]}

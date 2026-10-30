@@ -1,26 +1,3 @@
-/**
- * CronBuilder — 引导式 cron 编辑器：三种可视化模式 + 高级模式折叠。
- *
- * 模式（顶部 tab 切换）：
- *   - 每天    时间选择器                  → 5 段 cron（分 时 日 月 周，日月周为通配）
- *   - 每周    星期多选（至少一天）+ 时间    → 5 段 cron，周段为选中天列表
- *   - 每 N 小时  小时数 + 星期多选          → 5 段 cron（分=0，时=步进 N，周=选中天）
- *   - 单次    日期 + 时间（一次性）         → 7 段 cron：秒 分 时 日 月 周 年
- *   - 高级    直接输入 cron 表达式 + 预设
- *
- * 单次用 7 段 cron（秒 分 时 日 月 周 年）表达：年份过去后 croner 的
- * `nextRun()` 返回 null，调度 loop 会把 `next_run_at` 置空、任务自然停止，
- * 后端零改动。不能用 ISO 字符串 —— croner 的 once 模式无状态，执行后
- * `nextRun()` 仍返回同一时刻，会导致单次任务无限重跑。
- *
- * 存量 cron 打开时会反向解析成对应模式；解析不了（含 `* * * * *` 等
- * 每分钟表达）落入高级模式。高级模式下 5 段编辑器直接以 `value` 为准。
- *
- * `value` 是 cron 字符串（5 段或 7 段）。`onChange(cron, valid)` 在用户
- * 完成一次编辑后触发；invalid（语法错误、没选星期、单次时间已过）时
- * 由调用方决定是否阻止保存。
- */
-
 import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { useI18n, type Locale } from "@/hooks/useI18n";
@@ -29,8 +6,6 @@ import { TimePicker, type TimeValue } from "@/components/ui/TimePicker";
 import { inputStyle } from "./styles";
 import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
 import { NumberStepper } from "@/components/ui/NumberStepper";
-
-// ── Constants ───────────────────────────────────────────────────
 
 const WEEKDAY_LABELS: Record<Locale, string[]> = {
   zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
@@ -55,20 +30,14 @@ function parseHHMM(v: string): TimeValue | null {
 const isInt = (s: string) => /^\d{1,2}$/.test(s);
 const pad = (n: number) => String(n).padStart(2, "0");
 
-// ── Schedule state（四种可视化模式共用的表单状态）────────────────
-
 export type CronMode = "daily" | "weekly" | "interval" | "once" | "advanced";
 
 export interface ScheduleState {
   mode: CronMode;
-  /** daily / weekly 的触发时间（24h）。 */
   h: number;
   m: number;
-  /** weekly / interval 的星期选择，cron 值（周一=1 … 周日=0）。 */
   days: number[];
-  /** interval：每 N 小时。 */
   hours: number;
-  /** once：日期（YYYY-MM-DD）+ 时间（HH:MM）。 */
   date: string;
   time: string;
 }
@@ -78,19 +47,17 @@ function defaultState(): ScheduleState {
     mode: "daily",
     h: 9,
     m: 0,
-    days: [1, 2, 3, 4, 5], // 默认工作日
+    days: [1, 2, 3, 4, 5],
     hours: 2,
     date: "",
     time: "09:00",
   };
 }
 
-/** 把任意 cron 反向解析成 ScheduleState；解析不了的落入 advanced。 */
 export function parseCronToState(cron: string): ScheduleState {
   const parts = cron.trim().split(/\s+/);
   const base = defaultState();
 
-  // 单次：7 段 `0 M H D MON * YYYY`
   if (parts.length === 7 && parts[0] === "0" && parts[5] === "*" && /^\d{4}$/.test(parts[6])) {
     const [y, mon, d, h, m] = [Number(parts[6]), Number(parts[4]), Number(parts[3]), Number(parts[2]), Number(parts[1])];
     if (Number.isInteger(y) && Number.isInteger(mon) && Number.isInteger(d) && Number.isInteger(h) && Number.isInteger(m)
@@ -99,21 +66,17 @@ export function parseCronToState(cron: string): ScheduleState {
     }
   }
 
-  // 5 段
   if (parts.length === 5) {
     const [min, hour, dom, mon, dow] = parts;
-    // 每天：M H * * *
     if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "*") {
       return { ...base, mode: "daily", h: Number(hour), m: Number(min) };
     }
-    // 每 N 小时：0 */N * * <dow>
     if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*") {
       const n = Number(hour.slice(2));
       if (Number.isInteger(n) && n > 0) {
         return { ...base, mode: "interval", hours: n, days: parseDowList(dow) };
       }
     }
-    // 每周：M H * * <dow>
     if (isInt(min) && isInt(hour) && dom === "*" && mon === "*") {
       const days = parseDowList(dow);
       if (days.length > 0) {
@@ -125,7 +88,6 @@ export function parseCronToState(cron: string): ScheduleState {
   return { ...base, mode: "advanced" };
 }
 
-/** 把当前模式 + 表单字段合成 cron 字符串。 */
 export function stateToCron(state: ScheduleState): string {
   switch (state.mode) {
     case "daily":
@@ -140,11 +102,10 @@ export function stateToCron(state: ScheduleState): string {
       return `0 ${mi} ${h} ${d} ${mon} * ${y}`;
     }
     case "advanced":
-      return ""; // unreachable — advanced 模式由 5 段编辑器直接驱动
+      return "";
   }
 }
 
-/** days 全选 7 天时写 `*`，否则逗号连接（按 cron 值排序）。 */
 function dowStr(days: number[]): string {
   if (days.length === 0) return "*";
   if (days.length === 7) return "*";
@@ -154,7 +115,6 @@ function dowStr(days: number[]): string {
 const timeInRange = (h: number, m: number) =>
   Number.isInteger(h) && h >= 0 && h <= 23 && Number.isInteger(m) && m >= 0 && m <= 59;
 
-/** 当前模式下的编辑是否产出可用的 cron。`now` 用于单次模式的过期判断。 */
 export function stateValid(state: ScheduleState, now: number): boolean {
   switch (state.mode) {
     case "daily":
@@ -169,11 +129,9 @@ export function stateValid(state: ScheduleState, now: number): boolean {
       return Number.isFinite(ts) && ts > now;
     }
     case "advanced":
-      return false; // advanced 模式不经过这里
+      return false;
   }
 }
-
-// ── 高级模式：直接编辑 cron 表达式 ───────────────────────────────
 
 const PRESETS: { id: string; cron: string; label: string }[] = [
   { id: "every-minute",    cron: "* * * * *",   label: "Every minute" },
@@ -185,7 +143,6 @@ const PRESETS: { id: string; cron: string; label: string }[] = [
   { id: "weekdays-9am",    cron: "0 9 * * 1-5", label: "Weekdays at 09:00" },
   { id: "monday-8am",      cron: "0 8 * * 1",   label: "Monday at 08:00" },
 ];
-
 
 function TimeField({ value, onChange, label }: { value: TimeValue | null; onChange: (v: TimeValue) => void; label: string }) {
   return (
@@ -243,8 +200,6 @@ function DayChips({ days, onChange, invalid }: { days: number[]; onChange: (d: n
   );
 }
 
-// ── 主组件 ───────────────────────────────────────────────────────
-
 interface CronBuilderProps {
   value: string;
   onChange: (cron: string, valid: boolean) => void;
@@ -254,7 +209,6 @@ interface CronBuilderProps {
 export function CronBuilder({ value, onChange, showPreview = true }: CronBuilderProps) {
   const { t, locale } = useI18n();
   const [state, setState] = useState<ScheduleState>(() => parseCronToState(value));
-  // 单次模式的过期判断需要当前时间；每 30s 刷新一次即可（与 CronHumanizer 一致）
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 30_000);
@@ -266,10 +220,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     onChange(stateToCron(next), stateValid(next, nowMs));
   };
 
-  /** 切换模式：保留已编辑字段，用当前 value 预填目标模式的表单。 */
   const switchMode = (mode: CronMode) => {
     if (mode === "advanced") {
-      // 高级模式由 5 段编辑器接管，value 原样保留
       setState((prev) => ({ ...prev, mode }));
       return;
     }
@@ -277,10 +229,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     const next: ScheduleState = {
       ...defaultState(),
       mode,
-      // 保留当前编辑的字段，便于来回切换不丢数据
       ...(state.mode !== "advanced" ? { h: state.h, m: state.m, days: state.days, hours: state.hours, date: state.date, time: state.time } : {}),
     };
-    // 当前 value 恰好属于目标模式时，以 value 为准预填
     if (mode === "daily" && parsed.mode === "daily") { next.h = parsed.h; next.m = parsed.m; }
     if (mode === "weekly" && parsed.mode === "weekly") { next.h = parsed.h; next.m = parsed.m; next.days = parsed.days; }
     if (mode === "interval" && parsed.mode === "interval") { next.hours = parsed.hours; next.days = parsed.days; }
@@ -289,7 +239,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     onChange(stateToCron(next), stateValid(next, nowMs));
   };
 
-  // 高级模式：直接编辑 cron 字符串
   const advancedValid = useMemo(() => {
     try { new Cron(value); return true; } catch { return false; }
   }, [value]);
@@ -300,7 +249,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     onChange(cron, valid);
   };
 
-  // 统一预览区数据
   const cronValid = state.mode === "advanced" ? advancedValid : stateValid(state, nowMs);
   const upcoming = useMemo(() => {
     try {
@@ -319,7 +267,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     }
   }, [value]);
 
-  // 模式内警告（阻止保存的具体原因）
   const inlineWarning = (() => {
     if (state.mode === "advanced") return null;
     if (state.mode === "daily" || state.mode === "weekly") {
@@ -350,7 +297,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* 模式切换 */}
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
         {modeTabs.map((tab) => (
           <button
@@ -375,7 +321,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
         ))}
       </div>
 
-      {/* 模式表单 */}
       {state.mode === "daily" && (
         <TimeField
           label={t("Time")}
@@ -490,7 +435,6 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
         </div>
       )}
 
-      {/* 统一预览区 */}
       <div
         style={{
           fontSize: 11,

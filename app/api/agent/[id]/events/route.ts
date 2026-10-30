@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/agent/[id]/events");
 
-// GET /api/agent/[id]/events - SSE stream of agent events
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -18,13 +17,9 @@ export async function GET(
   const startedAt = Date.now();
   log.info("agent event stream requested", { id });
 
-  // Fast path: already-running session
   let session = getRpcSession(id);
   if (!session || !session.isAlive()) {
     try {
-      // Watching a child session must not rebuild it as an ordinary session: it
-      // reopens with the configuration frozen when it was created and keeps its
-      // subagent identity (no subagent tool, fast-failing interaction gates).
       const childSession = await openSubagentChildSession(id);
       if (childSession) {
         session = childSession;
@@ -52,7 +47,6 @@ export async function GET(
         controller.enqueue(new TextEncoder().encode(text));
       };
 
-      // Send initial connected event
       const connected: SessionEvent = { type: "connected", sessionId: id };
       encode(connected);
 
@@ -60,48 +54,30 @@ export async function GET(
         encode(event);
       });
 
-      // Push the current tree immediately so a freshly-opened event stream
-      // (e.g. right after /api/agent/new created the session) renders the
-      // conversation tree without waiting for the next message_end. Must run
-      // AFTER the onEvent subscription above — emitTreeUpdate only reaches
-      // listeners that are already registered.
       try {
         session.emitTreeUpdate();
       } catch {
-        // best-effort — tree emission failures must not break the stream
       }
 
-      // Replay every gate still waiting — a permission confirmation as well as
-      // a question — so a page refresh mid-gate brings the surface back rather
-      // than silently dropping it (ADR-0008). The gate module decides what a
-      // reconnecting client is told; this route just encodes it. Same ordering
-      // rule as the tree push above: subscription must already be live. Both
-      // client surfaces are idempotent by tool call id, so a replay never
-      // rings or stacks twice.
       try {
         for (const event of session.snapshotPendingGates()) encode(event);
       } catch {
-        // best-effort
       }
 
-      // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(":\n\n"));
         } catch {
-          // controller already closed
         }
       }, 30_000);
 
-      // Cleanup when client disconnects
       const cleanup = () => {
         clearInterval(heartbeat);
         unsubscribe();
-        try { controller.close(); } catch { /* already closed */ }
+        try { controller.close(); } catch {}
         log.info("agent event stream closed", { id, durationMs: elapsedMs(startedAt) });
       };
 
-      // Detect client disconnect via abort signal
       req.signal?.addEventListener("abort", cleanup);
     },
   });

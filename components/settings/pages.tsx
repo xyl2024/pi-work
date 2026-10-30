@@ -18,26 +18,16 @@ import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
 import { AboutSection } from "./sections/AboutSection";
 
-/** Everything the modal hands to the one page it is currently rendering. */
 export interface SettingsPageContext {
   config: PiWorkConfig;
   apply: SettingsApply;
   reportDirty: DirtyReporter;
-  /** Per-modal cache for pages that load their own data on mount. */
   pageCache: SettingsPageDataCache;
   onProfileSaved?: () => void;
 }
 
 export type SettingsPageRenderer = (context: SettingsPageContext) => ReactNode;
 
-/**
- * Registry section id → the page rendered for it.
- *
- * `Record<SettingsSectionId, …>` is deliberate: adding a section to the
- * registry without a page (or leaving a page behind after a section is
- * removed) fails `tsc --noEmit` instead of shipping a blank page. The registry
- * test re-asserts that the key set equals the registry id set.
- */
 export const SETTINGS_PAGES = {
   profile: ({ onProfileSaved, reportDirty }) => (
     <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />

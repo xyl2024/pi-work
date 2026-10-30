@@ -7,25 +7,12 @@ import {
   type SettingsSectionId,
 } from "./registry";
 
-/**
- * Page shell for one settings section.
- *
- * The settings modal renders exactly one of these at a time. The shell owns
- * the parts every page shares — the page title (from the registry, so the
- * sidebar and the page can never disagree about its name), an optional
- * description, and the content column's padding. The title scrolls with the
- * page; only the modal header is sticky.
- *
- * Sections render their content directly (no per-section wrapper): this shell
- * is the only wrapper, applied by the modal's page map.
- */
 export function SettingsSection({
   id,
   description,
   children,
 }: {
   id: SettingsSectionId;
-  /** Optional line under the page title. */
   description?: ReactNode;
   children: ReactNode;
 }) {

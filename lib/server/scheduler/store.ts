@@ -1,15 +1,3 @@
-/**
- * CRUD on top of the scheduler DB.
- *
- * Validation helpers + typed error class +
- * pure CRUD functions. All validation happens before any DB write so the
- * route layer can blindly trust input shape.
- *
- * `next_run_at` is computed via croner whenever a task is loaded or its
- * cron/cwd/enabled state changes. Storing it lets the scheduling loop
- * find the soonest trigger with a single index scan.
- */
-
 import { Cron } from "croner";
 import { migrateToolName } from "../../shared/subagent";
 import { existsSync } from "fs";
@@ -25,9 +13,6 @@ const MAX_PROMPT_LENGTH = 50_000;
 const MAX_CRON_LENGTH = 100;
 const DEFAULT_RUNS_LIMIT = 50;
 
-/** Bounds for the per-task max lifetime. 1s floor so a typo doesn't kill
- *  the run instantly; 24h ceiling keeps a buggy cron from hogging a slot
- *  forever. `null` (or absent) ⇒ use the runner's global default. */
 const MIN_MAX_LIFETIME_MS = 1_000;
 const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
@@ -44,14 +29,8 @@ export interface ScheduledTask {
   modelId: string | null;
   thinkingLevel: string | null;
   toolNames: string[] | null;
-  /** Hard cap on how long a single run may take before the runner force-
-   *  destroys the wrapper. `null` ⇒ use the runner's global default. The
-   *  scheduler otherwise waits for the real `agent_end` — there's no
-   *  5-minute blanket timeout (long tasks deserve the real result). */
   maxLifetimeMs: number | null;
-  /** IANA timezone used to interpret this task's cron expression. */
   timezone: string;
-  /** Notification config (channels + which outcomes trigger). null = off. */
   notification: TaskNotification | null;
   createdAt: number;
   updatedAt: number;
@@ -106,11 +85,8 @@ export interface UpdateTaskInput {
 function validateNotification(raw: unknown): TaskNotification | null {
   if (raw === null || raw === undefined) return null;
   try {
-    // sanitizeNotification returns null for empty input; treat as no-notification.
     return sanitizeNotification(raw);
   } catch (err) {
-    // Channel validation failures (e.g. a wechat channelId that is missing
-    // or stale) surface as a 400 to the caller rather than a 500.
     const message = err instanceof Error ? err.message : String(err);
     throw new SchedulerValidationError("notification", message);
   }
@@ -200,10 +176,7 @@ function validateToolNames(raw: unknown): string[] | null {
   throw new SchedulerValidationError("toolNames", "toolNames must be an array or null");
 }
 
-/** Validate and canonicalize an IANA timezone name. */
 function validateTimezone(raw: unknown): string {
-  // UTC is a safe deterministic fallback for non-browser callers and legacy
-  // records. Browser requests always supply an IANA zone explicitly.
   if (raw === undefined || raw === null || raw === "") return "UTC";
   if (typeof raw !== "string") throw new SchedulerValidationError("timezone", "timezone must be a string");
   const value = raw.trim();
@@ -214,8 +187,6 @@ function validateTimezone(raw: unknown): string {
   }
 }
 
-/** null/undefined ⇒ leave as null (use runner default). 0/negative/fractional
- *  ⇒ validation error. Above the 24h ceiling ⇒ validation error. */
 function validateMaxLifetimeMs(raw: unknown): number | null {
   if (raw === null || raw === undefined || raw === "") return null;
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -239,7 +210,6 @@ function validateMaxLifetimeMs(raw: unknown): number | null {
   return raw;
 }
 
-/** Compute next_run_at for an enabled task; null if disabled or cron invalid. */
 function computeNextRun(cron: string, enabled: boolean, timezone: string): number | null {
   if (!enabled) return null;
   try {
@@ -283,8 +253,6 @@ function parseToolNames(raw: string | null): string[] | null {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    // Stored selections predate the subagent tool rename; migrate on load so a
-    // scheduled task keeps the tool it was configured with.
     return parsed
       .filter((name): name is string => typeof name === "string")
       .map(migrateToolName);
@@ -304,8 +272,6 @@ function parseNotification(raw: string | null): TaskNotification | null {
 }
 
 function rowToTask(row: Row): ScheduledTask {
-  // If next_run_at is stale (e.g. process was down across a trigger time),
-  // recompute it. Cheap Cron.nextRun() — runs only on list, not on every read.
   const enabled = row.enabled === 1;
   const timezone = row.timezone ?? "UTC";
   let nextRunAt = row.next_run_at;
@@ -343,11 +309,6 @@ const TASK_WITH_LAST_RUN_QUERY = `
   FROM scheduled_tasks t
 `;
 
-/**
- * Assign a browser timezone to pre-timezone records and recompute their next
- * trigger. This one-time compatibility repair prevents a UTC server from
- * interpreting an existing user's "09:00" task as 09:00 UTC.
- */
 export function adoptLegacyTaskTimezone(timezoneRaw: string | null): boolean {
   if (!timezoneRaw) return false;
   let timezone: string;
@@ -583,7 +544,6 @@ export function recordRunEnd(runId: string, input: RecordRunEndInput): TaskRun {
     )
     .run(now, input.status, input.replyText ?? null, input.error ?? null, input.sessionId ?? null, durationMs, runId);
 
-  // Update last_run_at + last_run summary on the parent task
   getSchedulerDb()
     .prepare("UPDATE scheduled_tasks SET last_run_at = ? WHERE id = ?")
     .run(now, existing.taskId);

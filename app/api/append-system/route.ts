@@ -13,7 +13,6 @@ function getAppendSystemPath(): string {
   return join(getAgentDir(), "APPEND_SYSTEM.md");
 }
 
-// GET /api/append-system — read ~/.pi/agent/APPEND_SYSTEM.md
 export async function GET() {
   const startedAt = Date.now();
   const path = getAppendSystemPath();
@@ -31,7 +30,6 @@ export async function GET() {
   }
 }
 
-// PUT /api/append-system — write ~/.pi/agent/APPEND_SYSTEM.md
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   const path = getAppendSystemPath();
@@ -41,7 +39,6 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "content must be a string" }, { status: 400 });
     }
     const content = body.content;
-    // Always end with a newline so subsequent appends (e.g. `cat >>`) stay clean.
     const normalized = content.endsWith("\n") ? content : `${content}\n`;
     await writeFile(path, normalized, "utf8");
     log.info("append system written", { path, bytes: normalized.length, durationMs: elapsedMs(startedAt) });

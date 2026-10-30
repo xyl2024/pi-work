@@ -6,15 +6,6 @@ import { recordCall, recordModelCall, summarizeSessions } from "@/lib/server/tok
 import { createSubagentTask, listDescendantSubagentSessionIds } from "@/lib/server/subagent-store";
 import type { ModelCallInsert, TokenCallInsert } from "@/lib/shared/token-audit-types";
 
-/**
- * The bottom status bar's session rollup: billing rows supply tokens and cost,
- * model-call rows supply the TTFT/TPS facts, and subagent sessions spawned by
- * the conversation are part of its numbers.
- *
- * Process-internal (temporary SQLite, no HTTP instance): run with
- * `PI_WORK_TEST_SKIP_INSTANCE=1`.
- */
-
 let root: string;
 let dbCounter = 0;
 
@@ -101,7 +92,6 @@ function metric(overrides: Partial<ModelCallInsert> = {}): ModelCallInsert {
   };
 }
 
-/** One recorded subagent task linking `childSessionId` under `parentSessionId`. */
 function spawnSubagentSession(parentSessionId: string, childSessionId: string): void {
   createSubagentTask({
     parentSessionId,
@@ -139,8 +129,6 @@ describe("summarizeSessions", () => {
     expect(summary.cacheReadTokens).toBe(600);
     expect(summary.cacheWriteTokens).toBe(40);
     expect(summary.totalTokens).toBe(200 + 100 + 600 + 40);
-    // What the status bar labels "In" already covers both cache kinds, so
-    // In + Out is the total — no token is counted twice or dropped.
     expect(summary.inputTokensWithCache).toBe(200 + 600 + 40);
     expect(summary.totalTokens).toBe(summary.inputTokensWithCache + summary.outputTokens);
     expect(summary.costTotal).toBeCloseTo(0.007, 10);
@@ -150,8 +138,6 @@ describe("summarizeSessions", () => {
     recordCall(billing({ inputTokens: 100, cacheReadTokens: 900 }));
     recordCall(billing({ inputTokens: 900, cacheReadTokens: 100 }));
 
-    // Weighted: 1000 / (1000 + 1000). A per-call mean would be 50% too —
-    // this asserts the aggregate formula the audit panel uses.
     expect(summarizeSessions(["session-a"]).cacheHitRate).toBeCloseTo(0.5, 10);
   });
 
@@ -166,7 +152,6 @@ describe("summarizeSessions", () => {
 
     const summary = summarizeSessions(["session-a"]);
     expect(summary.avgTtftMs).toBe(600);
-    // Σoutput / Σwindow = 150 tok / 3 s, not the 62.5 tok/s per-call mean.
     expect(summary.avgGenerationTps).toBeCloseTo(50, 10);
   });
 
@@ -181,7 +166,6 @@ describe("summarizeSessions", () => {
 
   it("ignores generation windows too short to measure", () => {
     recordModelCall(metric({ generationDurationMs: 1_000, outputTokens: 100 }));
-    // Non-streamed/burst delivery: full usage reported, window nearly empty.
     recordModelCall(metric({ generationDurationMs: 50, outputTokens: 300 }));
 
     expect(summarizeSessions(["session-a"]).avgGenerationTps).toBeCloseTo(100, 10);
@@ -247,7 +231,6 @@ describe("summarizeSessions", () => {
     ]);
     expect(subtree.totalTokens).toBe(3 * (100 + 50 + 300 + 20));
     expect(subtree.costTotal).toBeCloseTo(3 * 0.0035, 10);
-    // Weighted across both sessions: 800 tok / 4 s.
     expect(subtree.avgGenerationTps).toBeCloseTo(200, 10);
   });
 

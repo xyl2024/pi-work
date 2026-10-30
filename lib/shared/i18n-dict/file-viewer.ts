@@ -1,9 +1,4 @@
-// File viewer — inline search, word-wrap, line numbers, audio player.
-// The inline search is reused for any TextViewer/MarkdownViewer render.
-// "Wrap", "Fit", "Source / Diff / Code / Preview / Raw" live in common.ts.
-
 export const fileViewer = {
-  // Inline search
   "Search file": "在文件中搜索",
   "Search file...": "搜索文件内容…",
   "Match case": "区分大小写",
@@ -32,7 +27,6 @@ export const fileViewer = {
   "Payload duration": "耗时",
   "Payload provider": "服务商",
 
-  // Audio player (vinyl-disc aesthetic, 0.5x–2x speed)
   "Play": "播放",
   "Pause": "暂停",
   "Mute": "静音",
@@ -45,13 +39,11 @@ export const fileViewer = {
   "Step back": "上一条",
   "Step forward": "下一条",
 
-  // Markdown export / share
   "Export as PNG": "导出为 PNG 图片",
   "Share this message card": "分享此消息卡片",
   "Message card exported": "消息卡片已导出",
   "Failed to export image": "导出图片失败",
 
-  // MonacoViewer (replaces the old text viewer / DiffView / VirtualizedCodeLines)
   "Edit file": "编辑文件",
   "Read-only": "只读",
   "Editing": "编辑中",

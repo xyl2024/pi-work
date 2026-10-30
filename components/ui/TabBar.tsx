@@ -20,18 +20,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Convert vertical wheel (deltaY) into horizontal scroll, matching the
-  // VSCode tab-bar behavior. We also fold deltaX in so that macOS trackpad
-  // horizontal gestures (which arrive as plain deltaX) keep working.
-  //
-  // deltaMode notes:
-  //   - 0 = pixels (most browsers / trackpad)
-  //   - 1 = lines (Firefox mouse wheel) — convert to a ~16px-per-line estimate
-  //   - 2 = pages  — treat as one screenful
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
-    // Only intercept when there's actually horizontal overflow to scroll into.
     if (el.scrollWidth <= el.clientWidth) return;
 
     const lineHeight = 16;
@@ -43,8 +34,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
     };
     const dx = normalize(e.deltaX);
     const dy = normalize(e.deltaY);
-    // deltaY drives horizontal scroll (vertical wheel → horizontal).
-    // deltaX is added on top so trackpad horizontal gestures still work.
     const next = el.scrollLeft + dy + dx;
     if (next === el.scrollLeft) return;
     e.preventDefault();
@@ -69,15 +58,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
     >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
-          // Panel tabs resolve their i18n key on every render, so an open tab
-          // follows a locale switch instead of freezing the language it was
-          // opened in; file tabs keep the name captured at open time.
           const displayLabel = tab.kind === "file" ? tab.label ?? "" : t(tab.labelKey);
           const tooltipContent =
             tab.kind === "file" ? tab.params.path : displayLabel;
-          // Panel glyphs come from the right-bar presentation registry, so
-          // the tab strip and the button column can never drift apart. The
-          // file preview is not a panel view: it keeps its per-file icon.
           const icon =
             tab.kind === "file"
               ? getFileIcon(tab.label ?? "", 13)

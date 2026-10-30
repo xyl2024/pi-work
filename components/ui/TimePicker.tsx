@@ -10,31 +10,20 @@ import {
 } from "@/components/ui/popover";
 
 export interface TimeValue {
-  /** Hour in 24h clock (0–23). */
   h: number;
-  /** Minute (0–59). */
   m: number;
 }
 
 interface TimePickerProps {
-  /** Selected time. `null`/`undefined` = cleared. */
   value: TimeValue | null | undefined;
   onChange: (v: TimeValue | null) => void;
-  /** Text shown on the trigger when nothing is selected. */
   placeholder?: string;
-  /** Display format. Default: `"24h"`. */
   format?: "24h" | "12h";
-  /** Minute step used in the minute column. Default: `1` (every minute). */
   minuteStep?: 1 | 5 | 10 | 15 | 30;
-  /** Earliest selectable time (24h, inclusive). */
   min?: TimeValue;
-  /** Latest selectable time (24h, inclusive). */
   max?: TimeValue;
-  /** Override the locale used for AM/PM labels. Defaults to the app locale. */
   locale?: Locale;
-  /** Which side of the trigger the popover anchors to. */
   align?: "start" | "end";
-  /** Render a custom trigger. Receives helpers to wire up the open state + ref. */
   renderTrigger?: (p: {
     open: boolean;
     ref: React.Ref<HTMLButtonElement>;
@@ -42,20 +31,11 @@ interface TimePickerProps {
     formatted: string;
     hasValue: boolean;
   }) => React.ReactNode;
-  /** Style overrides merged into the default trigger button. Ignored when
-   *  `renderTrigger` is provided. */
   triggerStyle?: React.CSSProperties;
-  /** Accessible label for the default trigger. */
   ariaLabel?: string;
-  /** Show a small "×" inside the trigger to clear the value. Default: true. */
   clearable?: boolean;
-  /** Controlled open state. When provided, the picker does not manage its own
-   *  open/close state and `onOpenChange` is required. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Trigger visual sizing. `compact` matches the small DatePicker default;
-   *  `regular` produces a full-size form input suitable for standalone forms
-   *  (e.g. the scheduler task dialog). Default: `"regular"`. */
   size?: "compact" | "regular";
 }
 
@@ -71,12 +51,10 @@ function toMinutes(t: TimeValue): number {
   return t.h * 60 + t.m;
 }
 
-/** Convert a 24h hour to a 12h display hour (1-12). */
 function to12Hour(h: number): number {
   return h % 12 === 0 ? 12 : h % 12;
 }
 
-/** Convert a 12h display hour + AM/PM back to 24h. */
 function from12Hour(h12: number, isPm: boolean): number {
   if (h12 === 12) return isPm ? 12 : 0;
   return isPm ? h12 + 12 : h12;
@@ -89,7 +67,6 @@ function isDisabled(value: TimeValue, min?: TimeValue, max?: TimeValue): boolean
   return false;
 }
 
-/** Format a 24h time for display. `locale` only affects AM/PM wording. */
 function formatTime(t: TimeValue, format: "24h" | "12h", locale: Locale): string {
   if (format === "24h") return `${pad(t.h)}:${pad(t.m)}`;
   const isAm = t.h < 12;
@@ -100,13 +77,10 @@ function formatTime(t: TimeValue, format: "24h" | "12h", locale: Locale): string
   return `${pad(h12)}:${pad(t.m)} ${suffix}`;
 }
 
-// ── Visual constants ────────────────────────────────────────────
-// Each list item is 36px tall; we show 5 items per column (2 above the
-// highlighted middle row + 2 below) so the column is always a fixed height.
 const ITEM_HEIGHT = 36;
 const VISIBLE_ITEMS = 5;
-const COLUMN_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS; // 180
-const MIDDLE_TOP = Math.floor(VISIBLE_ITEMS / 2) * ITEM_HEIGHT; // top of the highlighted middle row
+const COLUMN_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+const MIDDLE_TOP = Math.floor(VISIBLE_ITEMS / 2) * ITEM_HEIGHT;
 
 export function TimePicker({
   value,
@@ -142,8 +116,6 @@ export function TimePicker({
     onDismiss: () => setOpen(false),
   });
 
-  // Source-of-truth indices, normalized from `value` so the two columns
-  // stay in sync with the controlled value. 0-based.
   const hours24 = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
   const minutesArr = useMemo(() => {
     const out: number[] = [];
@@ -151,7 +123,6 @@ export function TimePicker({
     return out;
   }, [minuteStep]);
 
-  // 12h display hour list: 1..12 (idx 0 = 12).
   const hours12 = useMemo(() => Array.from({ length: 12 }, (_, i) => i + 1), []);
 
   const current = value ?? null;
@@ -162,8 +133,6 @@ export function TimePicker({
   const minIdx = current ? Math.min(minutesArr.length - 1, Math.round(current.m / minuteStep)) : -1;
   const isPm = current ? current.h >= 12 : false;
 
-  // Commit a new hour/minute selection WITHOUT closing the popover — let the
-  // user adjust both freely before clicking outside to confirm.
   const commitHour = (idx: number) => {
     const h12 = hourList[idx];
     const h24 = format === "12h" ? from12Hour(h12, isPm) : h12;
@@ -194,7 +163,6 @@ export function TimePicker({
   const handleNow = () => {
     const d = new Date();
     onChange({ h: d.getHours(), m: d.getMinutes() });
-    // Keep open so the user can fine-tune; clicking outside closes.
   };
 
   const triggerClick = () => setOpen((v) => !v);
@@ -224,7 +192,6 @@ export function TimePicker({
     />
   );
 
-  // Splits the value into `displayH` / `displayM` strings for the hero area.
   const heroHH = current ? pad(format === "12h" ? to12Hour(current.h) : current.h) : "--";
   const heroMM = current ? pad(current.m) : "--";
 
@@ -258,7 +225,6 @@ export function TimePicker({
           overflow: "hidden",
         }}
       >
-        {/* Hero: large HH:MM with optional AM/PM segment. */}
         <div
           style={{
             padding: "20px 18px 16px",
@@ -319,7 +285,6 @@ export function TimePicker({
           )}
         </div>
 
-        {/* Column header */}
         <div
           style={{
             display: "flex",
@@ -335,7 +300,6 @@ export function TimePicker({
           <div style={{ flex: 1, textAlign: "center" }}>{t("Minute")}</div>
         </div>
 
-        {/* Wheel columns */}
         <div
           style={{
             display: "flex",
@@ -356,8 +320,6 @@ export function TimePicker({
               return isDisabled(probe, min, max);
             }}
             initialFocus
-            // opened flag ensures the scroll-into-view runs every time
-            // the popover opens, even if the hour hasn't changed.
             opened={open}
           />
           <ColumnWheel
@@ -374,7 +336,6 @@ export function TimePicker({
           />
         </div>
 
-        {/* Footer: now / clear */}
         <div
           style={{
             display: "flex",
@@ -417,8 +378,6 @@ const footerBtnStyle: React.CSSProperties = {
   transition: "background 0.1s",
 };
 
-// ── Subcomponents ─────────────────────────────────────────────────
-
 interface ColumnWheelProps {
   items: number[];
   selectedIndex: number;
@@ -443,16 +402,9 @@ function ColumnWheel({
   const listRef = useRef<HTMLDivElement | null>(null);
   const innerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-  // Track the last index the wheel committed via scroll-snap so we don't
-  // re-commit on every render after `onCommit` updates `selectedIndex`.
   const lastSnapIdxRef = useRef<number>(-1);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Scroll the selected item into the middle slot whenever the picker opens
-  // or the selection changes externally (keyboard, click, AM/PM toggle,
-  // "Now"). When the change comes from a wheel-snap commit the scrollTop is
-  // already in place, so we skip re-snap to avoid yanking the list while the
-  // user is still scrolling.
   useLayoutEffect(() => {
     if (!opened) return;
     const inner = innerRef.current;
@@ -466,13 +418,9 @@ function ColumnWheel({
     lastSnapIdxRef.current = target;
   }, [opened, selectedIndex, items.length]);
 
-  // Wheel-to-select: after the user finishes scrolling, snap the list to the
-  // nearest item and commit that item automatically — matching the iOS /
-  // Material wheel-picker expectation that the centred row IS the selection.
   const handleScrollEnd = useCallback(() => {
     const inner = innerRef.current;
     if (!inner) return;
-    // Snap to the nearest item boundary.
     const target = Math.round(inner.scrollTop / ITEM_HEIGHT);
     const clamped = Math.max(0, Math.min(items.length - 1, target));
     if (inner.scrollTop !== clamped * ITEM_HEIGHT) {
@@ -484,7 +432,6 @@ function ColumnWheel({
   }, [items.length, isItemDisabled, onCommit]);
 
   const handleScroll = useCallback(() => {
-    // Debounce: treat ~120ms of no-scroll as "the wheel has stopped".
     if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
     scrollEndTimerRef.current = setTimeout(handleScrollEnd, 120);
   }, [handleScrollEnd]);
@@ -495,16 +442,12 @@ function ColumnWheel({
     };
   }, []);
 
-  // Auto-focus on open so keyboard ↑↓ works immediately.
   useEffect(() => {
     if (opened && initialFocus) {
       listRef.current?.focus({ preventScroll: true });
     }
   }, [opened, initialFocus]);
 
-  // Keyboard navigation: arrow keys commit immediately so behavior matches
-  // mouse click (selection applies; popover stays open until the user clicks
-  // outside or presses Escape).
   const handleKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const baseIdx = selectedIndex >= 0 ? selectedIndex : 0;
     let next: number | null = null;
@@ -524,7 +467,6 @@ function ColumnWheel({
     }
   };
 
-  // Click = commit + keep open (so the user can adjust the other column).
   const handleClick = (idx: number) => {
     if (isItemDisabled?.(idx)) return;
     onCommit(idx);
@@ -539,9 +481,6 @@ function ColumnWheel({
       onKeyDown={handleKey}
       onMouseLeave={() => setHoveredIdx(null)}
       onWheel={(e) => {
-        // Don't cancel the native scroll — that would freeze the wheel
-        // inside this list. Just stop bubbling so a wheel over the picker
-        // doesn't also scroll the page behind it.
         e.stopPropagation();
       }}
       className="timepicker-wheel"
@@ -550,14 +489,10 @@ function ColumnWheel({
         height: COLUMN_HEIGHT,
         position: "relative",
         borderRadius: 8,
-        // Lift the wheel background a hair above the popover panel so the
-        // column still has a perceptible edge, but not enough to read as a
-        // distinct "card" — keeps the picker visually flat.
         background: "color-mix(in srgb, var(--bg-panel) 78%, var(--bg) 22%)",
         border: "1px solid var(--border)",
       }}
     >
-      {/* Highlighted middle band: marks where the "active" row sits. */}
       <div
         aria-hidden
         style={{
@@ -571,8 +506,6 @@ function ColumnWheel({
           zIndex: 0,
         }}
       />
-      {/* Scrollable list, with the top/bottom fade so off-axis items feel
-          visually "deeper" than the highlighted middle row. */}
       <div
         ref={innerRef}
         data-scroll-inset
@@ -584,10 +517,7 @@ function ColumnWheel({
           overflowY: "auto",
           paddingTop: MIDDLE_TOP,
           paddingBottom: MIDDLE_TOP,
-          // Keep the wheel scroll contained — when the list hits the top or
-          // bottom the wheel shouldn't bleed through and scroll the page.
           overscrollBehavior: "contain",
-          // Top + bottom fade so off-axis items recede into the background.
           maskImage:
             "linear-gradient(to bottom, transparent 0, #000 28%, #000 72%, transparent 100%)",
           WebkitMaskImage:

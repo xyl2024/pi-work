@@ -20,8 +20,6 @@ export function PermissionDialog({ request, onDecide }: Props) {
     setPortalEl(document.body);
   }, []);
 
-  // Esc = deny (safe default), Enter = allow once (single key permits the immediate call).
-  // 'Allow similar this session' is intentionally mouse-only to avoid accidental over-grant.
   useEffect(() => {
     if (!portalEl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -49,7 +47,6 @@ export function PermissionDialog({ request, onDecide }: Props) {
       role="dialog"
       aria-modal="true"
       onMouseDown={(e) => {
-        // Backdrop click denies (safe default).
         if (e.target === e.currentTarget) onDecide("deny");
       }}
       style={{

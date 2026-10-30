@@ -1,16 +1,3 @@
-// Smoke test for the server-side context normaliser in btw-chat.ts.
-// Verifies the field-name renaming that fixes the
-// "tool result's tool id ... not found" 400 from the LLM API: our
-// shared-types `ToolCallContent` uses `{ toolCallId, toolName, input }`,
-// but the pi SDK (and its downstream LLM provider serializer) reads
-// `{ id, name, arguments }` off the same content block. Without the
-// rename, the tool_use block arrives at the LLM with no id and any
-// following toolResult can't be matched.
-//
-// We import the helper indirectly by re-implementing the same shape and
-// asserting against a minimal mock of the SDK-side reads — keeps the
-// test free of the SDK's internal AgentSession types.
-
 import assert from "node:assert/strict";
 
 console.log("btw normalize smoke tests:");
@@ -28,7 +15,6 @@ function test(name: string, fn: () => void) {
   }
 }
 
-// ── Helpers (kept in sync with lib/server/btw-chat.ts) ──────────────────
 function renameToolCallBlock(block: unknown): unknown {
   if (!block || typeof block !== "object") return block;
   const b = block as Record<string, unknown>;

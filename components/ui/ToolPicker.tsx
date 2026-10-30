@@ -1,39 +1,12 @@
 "use client";
 
-/**
- * Shared presentational pieces for the two tool pickers
- * (`ToolsPickerModal` for the active session, `CwdToolsPicker` for a
- * project's default tool set). Keeping the visuals in one place guarantees
- * the chat picker and the settings picker stay pixel-consistent.
- *
- * The structural class (`tool-picker__row`) lives in `app/globals.css` so
- * `:hover`, `:active`, and the `[data-*]` driven selected / focused fills can
- * transition smoothly; this file only supplies the inline layout metrics, the
- * hand-drawn checkbox glyph, and the correct data attributes.
- *
- * Each component forwards a ref and spreads its remaining DOM props so it can
- * be used as the asChild trigger of a Radix `Tooltip`.
- */
-
 import { forwardRef } from "react";
 import type { CSSProperties, LabelHTMLAttributes } from "react";
 
-/* ── Color helpers (kept readable without a design-token lookup table) ── */
 const accentTint = (strength: number) => `color-mix(in srgb, var(--accent) ${strength}%, transparent)`;
 
-/* ---------------------------------------------------------------------- *
- * Custom checkbox — a hand-drawn, fully theme-consistent square that
- * replaces the browser-native `accentColor` checkbox. The real input stays
- * in the DOM (visually hidden) for a11y / keyboard reachability, while the
- * visual box above it carries the checked state.
- * ---------------------------------------------------------------------- */
 export function ToolCheckbox({ checked }: { checked: boolean }) {
   return (
-    /* A drawn marker styled like the ask-user-questions control: at rest a
-       faint rounded-square ring; once checked the ring fades out entirely
-       and only an accent, stroke-drawn ✓ remains (it visually "replaces"
-       the empty box). The transparent border is kept so the outer size is
-       stable and the row doesn't shift when toggled. */
     <span
       aria-hidden="true"
       className="tool-picker__box"
@@ -71,16 +44,10 @@ export function ToolCheckbox({ checked }: { checked: boolean }) {
   );
 }
 
-/* ---------------------------------------------------------------------- *
- * One tool in the custom-selection checklist.
- * ---------------------------------------------------------------------- */
 export interface ToolCheckRowProps {
-  /** Canonical tool name shown in mono. */
   name: string;
   checked: boolean;
-  /** Keyboard navigation target (arrow-keys / Enter). */
   focused?: boolean;
-  /** When the row is a bound family of tools, number of member tools. */
   memberCount?: number;
   onChange: (checked: boolean) => void;
 }
@@ -169,4 +136,3 @@ export const ToolCheckRow = forwardRef<HTMLLabelElement, ToolCheckRowProps & Row
     );
   },
 );
-

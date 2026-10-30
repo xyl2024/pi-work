@@ -4,24 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 
-/**
- * The `…` button and its upward menu, surfaced in the bottom-right of
- * the chat input. It exists ONLY as the overflow home for controls the
- * bottom toolbar folded away when the chat column got too narrow to
- * hold them (callers pass them as fully-formed `collapsedItems`). When
- * nothing is passed — the wide-layout default — the whole component
- * returns `null` and no "more" button is rendered at all.
- *
- * The session actions (Replay / Export / Auto-name / Compact /
- * Notification channel) that used to share this menu now live in
- * ChatWindow's bottom launcher row (MoreActionsRow).
- *
- * The menu opens only on click of the trigger (no hover, no tooltip);
- * it toggles off on a second click of the trigger, on a click outside
- * the container, or on selecting an item.
- */
-
-/** An affordance the bottom toolbar folded into this menu to avoid overflow. */
 export interface CollapsedMenuEntry {
   key: string;
   label: string;
@@ -30,10 +12,6 @@ export interface CollapsedMenuEntry {
 }
 
 export interface MoreMenuProps {
-  /**
-   * Controls the toolbar could not fit, in the order they should be listed.
-   * Empty/omitted renders nothing (no button, no menu).
-   */
   collapsedItems?: CollapsedMenuEntry[];
 }
 
@@ -45,9 +23,6 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
   const collapsedEntries = collapsedItems ?? [];
   const hasCollapsed = collapsedEntries.length > 0;
 
-  // Click outside the trigger + menu closes the menu. Listener is only
-  // attached while the menu is open so we don't pay the global cost
-  // when the popover is closed.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -58,8 +33,6 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // The toolbar can win its controls back while the menu is open (the window
-  // got wider). The menu then has nothing left to show, so close it.
   useEffect(() => {
     if (open && !hasCollapsed) setOpen(false);
   }, [open, hasCollapsed]);
@@ -141,7 +114,6 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
   );
 }
 
-/** One clickable row of the menu. */
 function MenuRow({ icon, label, onClick }: {
   icon: React.ReactNode;
   label: string;

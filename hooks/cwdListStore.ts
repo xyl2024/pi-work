@@ -3,18 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { WorkspacesResponse } from "@/lib/shared/types";
 
-/**
- * App-wide cwd list, following the same module-scoped
- * `useSyncExternalStore` pattern as sessionUiStore.
- *
- * The full list is fetched exactly once per page load (see `initCwdList`)
- * so the CwdPicker dropdown is populated before it is ever opened and
- * never refetches on open or on ChatWindow remounts. AppShell also reads
- * the first entry to pre-pick the most recently used cwd on first entry.
- */
-
 interface CwdListState {
-  /** Recently used cwds, most recent first. null = not fetched yet. */
   cwds: string[] | null;
 }
 
@@ -48,11 +37,6 @@ export function useCwdList(): CwdListState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-/**
- * Fetch the recent cwd list once per page load. Idempotent — safe to call
- * from AppShell on mount and from CwdPicker on mount; only the first call
- * hits the network.
- */
 export function initCwdList() {
   if (fetching || fetched) return;
   fetching = true;
@@ -63,7 +47,6 @@ export function initCwdList() {
       fetched = true;
     })
     .catch(() => {
-      // best-effort; `fetched` stays false so a later init call can retry
     })
     .finally(() => {
       fetching = false;

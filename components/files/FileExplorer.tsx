@@ -15,9 +15,6 @@ import { createEntry, duplicateEntry, moveEntry, pickFiles, uploadFilesToDir, ty
 import { copyText as copyToClipboard } from "@/lib/client/clipboard";
 import type { GitDiffFile, GitFileStatus } from "@/lib/shared/git-diff-types";
 
-/** Drag-and-drop MIME used to move entries between folders. A custom type
- *  (rather than `text/plain`) lets us ignore OS file drops and other
- *  unrelated drags during dragover. */
 const DRAG_MIME = "application/x-pi-file-path";
 
 interface FileEntry {
@@ -43,12 +40,7 @@ interface Props {
   onAtMention?: (filePath: string) => void;
   onFileMutated?: () => void;
   onFileDeleted?: (filePath: string) => void;
-  /** Bump to collapse every expanded folder. Initial value (or undefined)
-   *  is ignored — only subsequent increments trigger a collapse. */
   collapseKey?: number;
-  /** Reports the current number of expanded folders. The parent uses this
-   *  to disable its "collapse all" button while the tree is already fully
-   *  folded (nothing left to collapse). */
   onExpandedCountChange?: (count: number) => void;
 }
 
@@ -67,8 +59,6 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
   }));
 }
 
-/** Trigger a browser download for a file or directory. Directories are
- *  zipped server-side (see the `type=download` branch of the files GET). */
 function triggerDownload(fullPath: string, filename: string) {
   const a = document.createElement("a");
   a.href = `/api/files/${encodeFilePathForApi(fullPath)}?type=download`;
@@ -79,28 +69,12 @@ function triggerDownload(fullPath: string, filename: string) {
   a.remove();
 }
 
-// ── Git status helpers ─────────────────────────────────────────────────────
-
-/** Stable empty array used as the fallback when the store has no entry for
- *  the current cwd yet. Module-scoped so the reference is identical across
- *  renders — critical for keeping the `useMemo` deps stable. */
 const EMPTY_GIT_FILES: GitDiffFile[] = [];
 
-/** Stable empty aggregate map (no status means "no badge"); same rationale
- *  as EMPTY_GIT_FILES. */
 const EMPTY_GIT_AGGREGATE: Map<string, GitFileStatus> = new Map();
 
-/** Stable empty file-by-path map; same rationale as EMPTY_GIT_FILES. */
 const EMPTY_GIT_FILES_BY_PATH: Map<string, GitDiffFile> = new Map();
 
-/** Tooltip status line for a single file. Matches the format we agreed on
- *  in the design grill — status letter + parenthetical stage hint + stats.
- *  Examples:
- *    "M (worktree + staged) · +12 -3"
- *    "A (staged) · +45"
- *    "Untracked · +5"
- *  Returns undefined when the file has no git status (caller falls back to
- *  the default full-path tooltip). */
 function fileTooltip(file: GitDiffFile, t: (k: string) => string): string {
   const stats = file.status === "??"
     ? (file.additions > 0 ? ` · +${file.additions}` : "")
@@ -112,9 +86,6 @@ function fileTooltip(file: GitDiffFile, t: (k: string) => string): string {
   return stage ? `${head} (${stage})${stats}` : `${head}${stats}`;
 }
 
-/** Tooltip status line for a folder. Just calls statusHead — defined as
- *  a separate function for symmetry with fileTooltip; could grow a file
- *  count later if the worst-status header turns out to be insufficient. */
 function folderTooltip(status: GitFileStatus, t: (k: string) => string): string {
   return statusHead(status, t);
 }
@@ -163,15 +134,7 @@ function TreeNode({
   refreshKey?: number;
   onFileMutated?: () => void;
   onFileDeleted?: (filePath: string) => void;
-  /** Map of cwd-relative file path → GitDiffFile. Built once at the
-   *  FileExplorer level from the store snapshot. Children of every
-   *  TreeNode in the recursive chain read from the same reference, so
-   *  per-node lookup is O(1) and there's no recomputation as the user
-   *  expands/collapses subtrees. */
   gitFilesByPath: Map<string, GitDiffFile>;
-  /** Map of cwd-relative directory path → worst recursive status. Pre-
-   *  computed once per fetch via `aggregateFolderStatuses`. The empty
-   *  string key corresponds to cwd itself. */
   gitAggregate: Map<string, GitFileStatus>;
 }) {
   const { t } = useI18n();
@@ -187,17 +150,12 @@ function TreeNode({
   const [renameValue, setRenameValue] = useState(node.name);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [flashHighlight, setFlashHighlight] = useState(false);
-  // Inline "new file / new folder" input shown as the first child of a
-  // directory when triggered from its context menu.
   const [creating, setCreating] = useState<ExplorerCreateKind | null>(null);
   const [createName, setCreateName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  // Resolve this node's git status. File lookups hit `gitFilesByPath`
-  // (O(1)); folder lookups hit `gitAggregate` (O(1)). Either can be
-  // missing if the file/dir isn't part of any change set.
   const relPath = getRelativeFilePath(node.fullPath, cwd);
   const gitFile = !node.isDir ? gitFilesByPath.get(relPath) : undefined;
   const gitStatus: GitFileStatus | undefined = node.isDir
@@ -219,13 +177,11 @@ function TreeNode({
       setChildren(entries);
       setLoaded(true);
     } catch {
-      // ignore
     } finally {
       setLoading(false);
     }
   }, [loaded, node.fullPath]);
 
-  // Re-fetch children when refreshKey changes and the directory is already open/loaded
   useEffect(() => {
     if (open && loaded) {
       loadChildren(true);
@@ -244,12 +200,10 @@ function TreeNode({
     }
   }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded, renaming]);
 
-  // ---- context menu ----
   const copyText = useCallback(async (text: string) => {
     try {
       await copyToClipboard(text);
     } catch {
-      // Both the Clipboard API and the execCommand fallback failed.
     }
     toast.show({ kind: "success", message: t("Copied") });
   }, [toast, t]);
@@ -282,7 +236,6 @@ function TreeNode({
     }
   }, [node, confirm, t, toast, onFileDeleted, onFileMutated]);
 
-  // ---- new file / folder / upload (directory context menu) ----
   const startCreate = useCallback((kind: ExplorerCreateKind) => {
     onToggleExpanded(node.fullPath, true);
     if (!loaded) void loadChildren();
@@ -345,7 +298,6 @@ function TreeNode({
     }
   }, [uploading, node.fullPath, toast, t, loadChildren, onFileMutated]);
 
-  // Duplicate a file next to itself (files only).
   const onDuplicate = useCallback(async () => {
     const res = await duplicateEntry(node.fullPath);
     if (!res.ok) {
@@ -356,7 +308,6 @@ function TreeNode({
     onFileMutated?.();
   }, [node.fullPath, toast, t, onFileMutated]);
 
-  // Drop a dragged entry onto this directory row to move it here.
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
@@ -365,12 +316,10 @@ function TreeNode({
     if (!source) return;
     const destDir = node.fullPath;
     if (source === destDir) return;
-    // Refuse moving a directory into itself / its own subtree.
     if (destDir.startsWith(source + "/")) {
       toast.show({ kind: "error", message: t("Cannot move a folder into itself") });
       return;
     }
-    // Already directly inside this directory — nothing to do.
     if (source.slice(0, source.lastIndexOf("/")) === destDir) return;
     const res = await moveEntry(source, destDir);
     if (!res.ok) {
@@ -412,7 +361,6 @@ function TreeNode({
     cm.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget as HTMLElement });
   }, [node, cwd, t, copyText, onOpenFile, onDelete, cm, startCreate, handleUpload, onDuplicate]);
 
-  // ---- rename submit ----
   const submitRename = useCallback(async () => {
     const v = validateFileName(renameValue);
     if (!v.ok) {
@@ -424,7 +372,6 @@ function TreeNode({
       setRenameError(null);
       return;
     }
-    // Optimistic duplicate check against loaded siblings (best-effort; backend is authoritative)
     if (children.some((c) => c.name === v.name)) {
       setRenameError(t("Name already exists"));
       return;
@@ -462,8 +409,6 @@ function TreeNode({
           e.dataTransfer.effectAllowed = "move";
         }}
         onDragOver={(e) => {
-          // Only internal drags count; stop bubbling so file rows don't
-          // trigger the root (move-to-cwd) drop zone underneath.
           if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
           e.stopPropagation();
           if (!node.isDir) return;
@@ -537,13 +482,10 @@ function TreeNode({
                 }
               }}
               onBlur={() => {
-                // If user hasn't submitted and value matches, cancel silently.
                 if (renameValue === node.name) {
                   setRenaming(false);
                   setRenameError(null);
                 }
-                // Otherwise leave the input open with error if any; the user
-                // can press Enter or click back into it.
               }}
               onClick={(e) => e.stopPropagation()}
               style={{
@@ -715,7 +657,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
   const [rootDragOver, setRootDragOver] = useState(false);
   const prevCwdRef = useRef<string | null>(null);
 
-  // Drop on empty space → move the dragged entry to the cwd root.
   const handleRootDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setRootDragOver(false);
@@ -731,12 +672,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     onFileMutated?.();
   }, [cwd, toast, t, onFileMutated]);
 
-  // External "collapse all" trigger: a parent bumps `collapseKey` to ask us
-  // to clear every expanded folder. We intentionally do NOT re-fetch — the
-  // data is already loaded, the user just wants the tree folded back to its
-  // roots. Initial value (or undefined) is ignored; only subsequent bumps
-  // fire. A dedicated ref tracks the last seen value so the first effect run
-  // (initial mount) is a no-op.
   const prevCollapseKeyRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (collapseKey === undefined) return;
@@ -746,11 +681,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     prevCollapseKeyRef.current = collapseKey;
   }, [collapseKey]);
 
-  // Subscribe to the git status store. Re-renders when entriesByCwd /
-  // generationByCwd change for *any* cwd; the useMemo below filters to
-  // the active cwd so we only recompute on real changes. `gitFiles` is
-  // always a fresh array reference on every fetch (NextResponse.json
-  // round-trips through JSON), so the useMemo dep alone is enough.
   const gitStore = useGitStatusStore();
   const gitEntry = gitStore.entriesByCwd.get(cwd);
   const gitFiles: GitDiffFile[] = gitEntry?.files ?? EMPTY_GIT_FILES;
@@ -775,10 +705,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     });
   }, []);
 
-  // Polling lifecycle. Mount → start tracking cwd; unmount or cwd
-  // change → stop. The store keeps entries cached across session
-  // switches, so re-entering a previously-seen cwd paints badges
-  // immediately on the next render.
   useEffect(() => {
     startTracking(cwd);
     return () => stopTracking();
@@ -788,7 +714,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     const cwdChanged = prevCwdRef.current !== cwd;
     prevCwdRef.current = cwd;
 
-    // Reset expanded state only when cwd changes, not on refreshKey bumps
     if (cwdChanged) {
       setExpandedPaths(new Set());
     }
@@ -801,10 +726,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
       .finally(() => setLoading(false));
   }, [cwd, refreshKey]);
 
-  // Report how many folders are expanded so the parent can disable its
-  // "collapse all" button while this is 0 (nothing to fold back). Fires on
-  // every expandedPaths change — manual toggles, cwd switches, and the
-  // external collapseKey bump all flow through this one effect.
   useEffect(() => {
     onExpandedCountChange?.(expandedPaths.size);
   }, [expandedPaths, onExpandedCountChange]);

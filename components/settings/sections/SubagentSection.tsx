@@ -10,7 +10,6 @@ import { SubagentEditor } from "../subagent-config/SubagentEditor";
 import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 import { useSettingsPageData } from "../use-page-data";
 
-/** One read of the profile list; the modal's page-data cache keeps it for the modal's lifetime. */
 async function loadSubagentProfiles(): Promise<SubagentProfile[]> {
   const response = await fetch("/api/subagents", { cache: "no-store" });
   const data = await response.json().catch(() => ({})) as { profiles?: SubagentProfile[]; error?: string };
@@ -18,16 +17,6 @@ async function loadSubagentProfiles(): Promise<SubagentProfile[]> {
   return data.profiles ?? [];
 }
 
-/**
- * Subagents settings section — the CRUD list for the profiles the `subagent` tool
- * can launch. Edits commit immediately through `/api/subagents` (like an avatar
- * upload), so this section does not participate in the settings modal's staged
- * save; it keeps its own list and reloads after a write.
- *
- * The list is cached per modal, so switching away and back does not re-request
- * it. A write (create / edit / delete) reloads anyway, which refreshes both the
- * page cache and the list on screen — the cache never hides a newer edit.
- */
 export function SubagentSection({ pageCache }: { pageCache: SettingsPageDataCache }) {
   const { t } = useI18n();
   const { data, loading, error, reload } = useSettingsPageData(
@@ -40,8 +29,6 @@ export function SubagentSection({ pageCache }: { pageCache: SettingsPageDataCach
 
   const handleSaved = useCallback(async () => {
     setEditing(null);
-    // Re-read instead of reusing the cached list: the editor just wrote a
-    // profile, and the fresh response updates both the cache and this list.
     await reload();
     await refreshSubagentProfiles();
   }, [reload]);

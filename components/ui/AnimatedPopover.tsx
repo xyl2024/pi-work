@@ -4,21 +4,9 @@ import { useEffect, useState } from "react";
 import type { CSSProperties, MouseEventHandler, ReactNode, Ref } from "react";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 
-/**
- * Popover wrapper with the ReadFileChips animation language: the panel stays
- * mounted (measured while invisible) so opening and closing both animate —
- * height transitions 0 ↔ measured content, opacity fades, and content that
- * exceeds `maxHeight` becomes scrollable once the height transition settles.
- *
- * `style` carries the panel's positioning (absolute/fixed anchoring) and
- * visual chrome (background, border, radius, shadow, zIndex, widths…). The
- * animation-owned properties (height, opacity, overflow, pointerEvents,
- * transition) are applied by this component and cannot be overridden.
- */
 export function AnimatedPopover({ open, style, maxHeight, role, panelRef, onMouseEnter, onMouseLeave, children }: {
   open: boolean;
   style?: CSSProperties;
-  /** Optional cap for the animated height (e.g. space above the trigger). */
   maxHeight?: number;
   role?: string;
   panelRef?: Ref<HTMLDivElement>;
@@ -38,7 +26,6 @@ export function AnimatedPopover({ open, style, maxHeight, role, panelRef, onMous
       return;
     }
     if (contentHeight !== null && maxHeight !== undefined && contentHeight > maxHeight) {
-      // Match the height transition duration, then make the list scrollable.
       const id = window.setTimeout(() => setScrolled(true), 260);
       return () => window.clearTimeout(id);
     }

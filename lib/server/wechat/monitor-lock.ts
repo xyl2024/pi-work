@@ -1,27 +1,3 @@
-/**
- * Single-instance lock for the WeChat inbound monitor.
- *
- * Why this exists: pi-work may be started more than once on the same
- * machine — e.g. `next start` on port 14514 and `next dev` on port
- * 30141 both run from this checkout. Without a lock, each process
- * boots its own copy of the monitor + its own 30-second rescan timer,
- * so the inbound poller is duplicated and the rescan logs drown out
- * every other log channel.
- *
- * The lock is a small JSON file at <data root>/wechat-monitor.lock. The
- * holder writes its PID + a renewedAt timestamp every 30 seconds.
- * Newcomers read the file and ask (a) is the holder's PID alive, (b)
- * is the renewedAt fresh. If either check fails, the lock is stale
- * and we steal it. The steal path uses `openSync(path, "wx")` —
- * atomic O_EXCL create — so it never overwrites an active lock
- * belonging to another holder. (We do call `unlinkSync` first when
- * stealing a known-stale lock; that path is the only place a pre-
- * existing user-data file is removed, and the file is one we wrote
- * ourselves, not user content.)
- *
- * What this does NOT do: it does not lock the rest of pi-work, only
- * the wechat monitor + its rescan timer.
- */
 import {
   closeSync,
   existsSync,
@@ -101,12 +77,6 @@ function claimLock(): boolean {
 
   const existing = readLock();
   if (!existing) {
-    // Lock file exists but is empty / corrupt (e.g. the previous process
-    // was SIGKILLed between truncating and writing a renewal record).
-    // There is no valid holder to respect, so reclaim by overwriting it.
-    // We deliberately overwrite rather than unlink: another process may
-    // be mid-renew (`openSync("w")` then `writeSync`), and unlinking the
-    // inode out from under it would silently lose the lock for everyone.
     log.warn("wechat monitor lock corrupt/empty, reclaiming", { pid: process.pid });
     try {
       const fd = openSync(LOCK_PATH, "w", 0o600);
@@ -129,7 +99,7 @@ function claimLock(): boolean {
     if (after && pidAlive(after.pid) && Date.now() - after.renewedAt < STALE_RENEW_MS) {
       return false;
     }
-    try { unlinkSync(LOCK_PATH); } catch { /* fall through */ }
+    try { unlinkSync(LOCK_PATH); } catch {}
   }
 
   try {

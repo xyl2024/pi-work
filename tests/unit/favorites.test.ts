@@ -1,10 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { api, uniqueId } from "./helpers";
 
-/**
- * /api/favorites is a whole-array string list (PUT replaces everything).
- * Policy: snapshot the original value, write test data, verify, restore.
- */
 let original: string[] | undefined;
 
 async function snapshot(): Promise<void> {

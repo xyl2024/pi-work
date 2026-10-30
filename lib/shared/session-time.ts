@@ -1,16 +1,7 @@
-/** Epoch ms of local midnight for a calendar day. */
 function startOfLocalDayMs(now: Date): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
-/**
- * How many whole local calendar days back `modified` sits, relative to
- * `now`: 0 = today, 1 = yesterday, … `null` when the timestamp is
- * unparseable.
- *
- * Calendar days (not 24h windows) so a session touched at 00:05 reads as
- * "today". Future timestamps (clock skew) clamp to 0.
- */
 export function sessionDayDiff(modified: string, now: Date): number | null {
   const t = Date.parse(modified);
   if (!Number.isFinite(t)) return null;
@@ -19,12 +10,6 @@ export function sessionDayDiff(modified: string, now: Date): number | null {
   return days < 0 ? 0 : days;
 }
 
-/**
- * Sidebar hover label for a session's last activity. Sessions modified
- * within an hour get a minute label; within 24 hours get an hourly label;
- * the last few calendar days get a daily label, and older ones a `MM.DD` date.
- * The caller translates labels.
- */
 export type SessionTimeLabel =
   | { kind: "just-now" }
   | { kind: "minutes"; minutes: number }
@@ -32,7 +17,6 @@ export type SessionTimeLabel =
   | { kind: "relative"; days: number }
   | { kind: "date"; text: string };
 
-/** Beyond this many calendar days back the label switches to a date. */
 export const SESSION_RELATIVE_DAY_MAX = 3;
 
 export function sessionTimeLabel(modified: string, now: Date): SessionTimeLabel | null {

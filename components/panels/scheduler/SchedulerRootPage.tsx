@@ -17,15 +17,6 @@ import {
 import type { ScheduledTask, TaskRunStatus } from "@/lib/shared/scheduler";
 import { AlertIcon, ClockIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
-/**
- * The scheduler panel's root page: every task, with search, filters, a
- * running-tasks banner and the create entry. Full width — the two-column modal
- * split is gone, so a row navigates to the task's detail page instead of
- * filling a right pane.
- *
- * All list state (search word, filter, the list itself) lives in the module
- * store, so a tab switch never resets it. The page is otherwise a pure view.
- */
 export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
   const { t } = useI18n();
   const { tasks, loaded, loadError, filter, query, selectedTaskId } = useSchedulerStore();
@@ -35,7 +26,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
   const filtered = useMemo(() => filterTasks(tasks, filter, query), [tasks, filter, query]);
   const runningCount = tasks.filter((task) => task.lastRunStatus === "running").length;
 
-  // Keep the opened task visible when the panel reopens on the list.
   useEffect(() => {
     if (!selectedTaskId || !listRef.current) return;
     const row = listRef.current.querySelector(`[data-task-row="${selectedTaskId}"]`) as HTMLElement | null;
@@ -44,7 +34,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Header: count + create */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("Scheduled tasks")}</span>
         <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
@@ -75,7 +64,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
         </button>
       </div>
 
-      {/* Search */}
       <div style={{ padding: "0 14px 8px", flexShrink: 0 }}>
         <div style={{ position: "relative" }}>
           <SearchIcon
@@ -110,7 +98,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
         </div>
       </div>
 
-      {/* Filter pills */}
       <div style={{ padding: "0 14px 8px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.id;
@@ -142,7 +129,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
         })}
       </div>
 
-      {/* Running banner */}
       {runningCount > 0 && (
         <div
           style={{
@@ -167,7 +153,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
         </div>
       )}
 
-      {/* List */}
       <div ref={listRef} data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {!loaded && !loadError && <EmptyHint text={t("Loading...")} />}
         {loadError && <EmptyHint text={t("Failed to load: {error}", { error: loadError })} variant="error" />}

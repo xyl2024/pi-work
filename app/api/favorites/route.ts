@@ -6,7 +6,6 @@ import { dataPath } from "@/lib/server/data-dir";
 const log = createLogger("api/favorites");
 const FAVORITES_FILE = dataPath("favorites.json");
 
-// GET /api/favorites
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -19,7 +18,6 @@ export async function GET() {
   }
 }
 
-// PUT /api/favorites
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {

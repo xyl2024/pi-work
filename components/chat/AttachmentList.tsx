@@ -3,12 +3,6 @@
 import { SmartImage } from "../ui/SmartImage";
 import type { AttachedImage } from "./ChatInput";
 
-/**
- * Horizontal strip of image thumbnails above the chat textarea. Each tile
- * has a tiny close button that revokes the object URL via `onRemove`.
- * Renders nothing when the list is empty so the caller can drop it in
- * unconditionally.
- */
 export function AttachmentList({ images, onRemove }: {
   images: AttachedImage[];
   onRemove: (index: number) => void;

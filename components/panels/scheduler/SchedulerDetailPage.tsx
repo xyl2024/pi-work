@@ -31,17 +31,6 @@ interface ChannelMeta {
   [channelId: string]: { name: string; status: string };
 }
 
-/**
- * The scheduler panel's detail page: one task across four horizontal blocks
- * (overview / runs / prompt / config). Full width, with a back control to the
- * list and the live actions (toggle, edit, run now, delete) in the header.
- *
- * The run history is owned here, not in the module store: it is volatile data
- * that is re-read while a run is in flight, so caching it would only add a
- * second, possibly stale copy. The page also reports whether the runs block is
- * on screen, which is what lets the store's background poll run at its fast
- * tier (see `lib/shared/scheduler-cadence.ts`).
- */
 export function SchedulerDetailPage({
   taskId,
   onOpenSession,
@@ -72,7 +61,6 @@ export function SchedulerDetailPage({
     }
   }, [taskId, toast, t]);
 
-  // Reset per-task state and read the run history whenever the page changes task.
   useEffect(() => {
     setBlock("overview");
     setRuns([]);
@@ -80,15 +68,11 @@ export function SchedulerDetailPage({
     void loadRuns();
   }, [taskId, loadRuns]);
 
-  // Tell the store when the fast poll tier applies.
   useEffect(() => {
     setSchedulerRunsVisible(block === "runs");
     return () => setSchedulerRunsVisible(false);
   }, [block]);
 
-  // Re-read the runs while one is in flight on screen, and pause the loop
-  // while the browser tab is in the background (the store's own poll does the
-  // same; both are covered by the spec's "hidden ⇒ paused" rule).
   useEffect(() => {
     if (block !== "runs") return;
     if (!runs.some((run) => run.status === "running")) return;
@@ -117,7 +101,6 @@ export function SchedulerDetailPage({
     };
   }, [block, runs, loadRuns]);
 
-  // Channel metadata for the read-only notification rows.
   useEffect(() => {
     let alive = true;
     void fetchWechatChannels().then((channels) => {
@@ -155,7 +138,7 @@ export function SchedulerDetailPage({
   const handleTrigger = async () => {
     try {
       const triggered = await triggerSchedulerTaskNow(task.id);
-      if (!triggered) return; // a trigger was already in flight — nothing was sent
+      if (!triggered) return;
       toast.show({ kind: "success", message: t("Task triggered") });
       void loadRuns();
     } catch (e) {
@@ -181,7 +164,6 @@ export function SchedulerDetailPage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* Header */}
       <div style={{ padding: "10px 14px 8px", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <SchedulerBackButton />
@@ -238,7 +220,6 @@ export function SchedulerDetailPage({
         </div>
       </div>
 
-      {/* Blocks bar — four segments that wrap instead of squeezing. */}
       <div style={{ ...tabBarStyle, flexWrap: "wrap" }}>
         {(
           [
@@ -254,7 +235,6 @@ export function SchedulerDetailPage({
         ))}
       </div>
 
-      {/* Block body */}
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 14px" }}>
         {block === "overview" && (
           <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} modelIcons={meta?.modelIcons} modelIconPreferences={meta?.modelIconPreferences} />

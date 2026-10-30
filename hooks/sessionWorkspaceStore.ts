@@ -1,25 +1,21 @@
 import type { SessionInfo } from "@/lib/shared/types";
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 
-/** A session tab is either a persisted session or the single client-only draft. */
 export type SessionTabKind = "session" | "draft";
 export type SessionTabStatus = "idle" | "running" | "completed" | "error";
 
 export interface SessionTab {
-  /** Stable client identity. A draft keeps this id when it upgrades. */
   tabId: string;
   kind: SessionTabKind;
   sessionId: string | null;
   session: SessionInfo | null;
   cwd: string | null;
-  /** True when the tab has unsent text, images, or a selected slash command. */
   dirty: boolean;
   status: SessionTabStatus;
   createdAt: number;
 }
 
 export interface SessionWorkspaceState {
-  /** Tab ids in opening order. */
   tabOrder: string[];
   tabs: Record<string, SessionTab>;
   activeTabId: string | null;
@@ -110,12 +106,6 @@ function findSessionTab(state: SessionWorkspaceState, sessionId: string): Sessio
     .find((tab) => tab?.kind === "session" && tab.sessionId === sessionId);
 }
 
-/**
- * Pure workspace reducer. It deliberately owns no React state and can be
- * exercised independently of the UI. In particular, close selection follows
- * the product rule: right neighbour, then left neighbour, then an existing
- * draft or a new draft when the workspace would otherwise be empty.
- */
 export function sessionWorkspaceReducer(
   state: SessionWorkspaceState,
   action: SessionWorkspaceAction,
@@ -168,9 +158,6 @@ export function sessionWorkspaceReducer(
           cwd: action.session.cwd || existing.cwd,
           status: action.session.running && existing.status === "idle" ? "running" : existing.status,
         };
-        // Only sync data by default. A background session finishing, failing,
-        // or reporting its info must never yank the user to its tab; callers
-        // that represent a real user action opt in via `activate`.
         if (action.activate !== false) next.activeTabId = existing.tabId;
         return next;
       }
@@ -196,8 +183,6 @@ export function sessionWorkspaceReducer(
       if (!tab || tab.kind !== "draft") return state;
       const duplicate = findSessionTab(state, action.session.id);
       if (duplicate && duplicate.tabId !== action.tabId) {
-        // This is defensive (a new server id should be unique), but prevents
-        // a duplicate formal tab if two responses race in the client.
         const next = sessionWorkspaceReducer(state, { type: "close", tabId: action.tabId });
         return { ...next, activeTabId: duplicate.tabId };
       }
@@ -266,7 +251,6 @@ export function sessionWorkspaceReducer(
       delete next.tabs[action.tabId];
 
       if (!wasActive) {
-        // Keep the current active tab untouched when closing a background tab.
         return next;
       }
 
@@ -284,8 +268,6 @@ export function sessionWorkspaceReducer(
         return next;
       }
 
-      // A workspace should never strand the user on an empty page. Reuse the
-      // closed session's cwd for the replacement draft when possible.
       const draft = createDraftTab(undefined, tab.cwd);
       next.tabOrder.push(draft.tabId);
       next.tabs[draft.tabId] = draft;
@@ -303,19 +285,12 @@ export function getSessionTab(state: SessionWorkspaceState, sessionId: string): 
   return findSessionTab(state, sessionId) ?? null;
 }
 
-/** Sidebar and session-tab title rule kept in one place (lib/shared/session-title.ts). */
 export function getSessionTabTitle(session: SessionInfo): string {
   return sessionDisplayTitle(session);
 }
 
-/** Product name used as the browser tab title suffix and as the no-session fallback. */
 export const APP_TITLE = "Pi Work";
 
-/**
- * Browser tab title for the active tab: the active session's name, suffixed
- * with the app name so parallel windows stay identifiable, or the plain app
- * name when the tab is a draft / the workspace is empty.
- */
 export function getDocumentTitleForTab(tab: SessionTab | null | undefined): string {
   if (!tab || tab.kind !== "session" || !tab.session) return APP_TITLE;
   return `${getSessionTabTitle(tab.session)} · ${APP_TITLE}`;

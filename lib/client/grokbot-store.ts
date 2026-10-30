@@ -11,33 +11,8 @@ import {
   GROKBOT_DEFAULT_SHAPE_ID,
 } from "@/lib/client/grokbot-data";
 
-/**
- * Module-scoped store for the GrokBot companion in the left sidebar.
- *
- * The sidebar stage and the GrokBot Lab modal each mount their own animated
- * `<GrokBot/>` instance; this store is the single source of truth for the
- * *user's* configuration (expression, state, color, shape, parts,
- * accessories) so both instances stay in sync. Animation playback (morph,
- * blink, gaze, quick actions) is per-instance and does not live here.
- *
- * Two module-level timers drive state transitions so they never duplicate:
- *  - autoPlay  — "tour mode", cycles through all 39 states every 2.2s.
- *  - cadence   — inside a state, swaps the expression at the state's own
- *                pace (GROKBOT_EXPR_CADENCE) so the bot feels alive.
- * Only one timer of each kind exists, regardless of how many GrokBot
- * instances are mounted.
- *
- * Persisted to localStorage under `pi-work.grokbot.config`.
- */
-
 export interface GrokbotConfig extends SubagentBotAppearance {
-  /**
-   * Body color is always the active theme accent (see `var(--accent)` on
-   * `.grokbot-stage` in globals.css). The field is kept only so old
-   * `localStorage` payloads don't trip `isConfig`; new writes ignore it.
-   */
   colorId?: string;
-  /** Auto-tour through every state. */
   autoPlay: boolean;
 }
 
@@ -63,7 +38,6 @@ function isConfig(v: unknown): v is GrokbotConfig {
   if (typeof c.shapeId !== "string") return false;
   if (!Array.isArray(c.parts) || !Array.isArray(c.accessories)) return false;
   if (typeof c.autoPlay !== "boolean") return false;
-  // colorId is tolerated for legacy payloads but not validated.
   return (
     c.expression >= 0 &&
     c.expression < GROKBOT_EXPRESSIONS.length &&
@@ -95,11 +69,8 @@ function persist() {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
-    // ignore (private mode / quota)
   }
 }
-
-// ── Module-level timers ──────────────────────────────────────────────────
 
 const ALL_STATES = Object.values(GROKBOT_GROUPS).flat();
 let autoPlayTimer: ReturnType<typeof setInterval> | null = null;
@@ -153,11 +124,7 @@ function syncAutoPlayTimer() {
   }
 }
 
-// ── Public API ───────────────────────────────────────────────────────────
-
 export function setGrokbotConfig(patch: Partial<GrokbotConfig>): void {
-  // colorId is no longer user-controllable — strip any stale patch so old
-  // callers (`setGrokbotConfig({ colorId: "..." })`) can't reintroduce it.
   const { colorId: _colorId, ...rest } = patch;
   void _colorId;
   const next = { ...state, ...rest };
@@ -177,8 +144,6 @@ export function setGrokbotConfig(patch: Partial<GrokbotConfig>): void {
   emit();
 }
 
-/** Randomize shape / state / expression / parts. Body color is fixed to the
- *  active theme accent and is intentionally not touched. */
 export function randomizeGrokbot(): void {
   const states = ALL_STATES;
   const shape = GROKBOT_SHAPES[Math.floor(Math.random() * GROKBOT_SHAPES.length)];
@@ -194,8 +159,6 @@ export function randomizeGrokbot(): void {
 
 function subscribeGrokbot(cb: () => void): () => void {
   listeners.add(cb);
-  // Lazy module timer bootstrap: when the first consumer subscribes (i.e. a
-  // GrokBot is actually mounted), start the state's cadence if needed.
   scheduleCadence();
   syncAutoPlayTimer();
   return () => {

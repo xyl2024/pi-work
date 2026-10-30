@@ -30,18 +30,6 @@ import { deleteSession } from "@/lib/server/sessions/mutations";
 import { cacheSessionPath } from "@/lib/server/sessions/reader";
 import type { AgentSessionLike } from "@/lib/server/pi-types";
 
-/**
- * `subagent` action `cancel` plus the two session-level stops: the parent
- * session's own stop command and parent-session deletion.
- *
- * Driven through the tool's external interface (and, for the session-level
- * entries, through `AgentSessionWrapper.send({type:"abort"})` and
- * `deleteSession`) with a scripted turn adapter, a fake child session and a
- * temp data root. The assertions are only about what the parent reads and
- * whether a turn is still alive: a stop request is never reported as a
- * confirmed stop until the turn says so.
- */
-
 let dir: string;
 
 function resetGlobals(): void {
@@ -105,11 +93,6 @@ function textOf(result: { content: Array<{ type: string; text?: string }> }): st
   return result.content.map((item) => (item.type === "text" ? item.text ?? "" : "")).join("\n");
 }
 
-// ---------------------------------------------------------------------------
-// Scripted turn + child session + timer seams (shared with the task/wait
-// lifecycle suites so all three drive the same runtime shape)
-// ---------------------------------------------------------------------------
-
 function setup(parentSessionId: string) {
   const runner = createScriptedRunner();
   const timers = createFakeTimers();
@@ -124,7 +107,6 @@ function setup(parentSessionId: string) {
   return { runner, timers, child, manager, parentSessionId };
 }
 
-/** Create a task through `spawn` with `wait_ms: 0`; returns its stable id. */
 async function spawnTask(parentSessionId: string, description = "long job"): Promise<string> {
   const spawned = await run(
     {
@@ -142,7 +124,6 @@ async function spawnTask(parentSessionId: string, description = "long job"): Pro
   return details.taskId;
 }
 
-/** Settle a turn as a user stop, the way the real turn module confirms it. */
 async function settleCancelled(turn: ScriptedTurn | undefined, realSessionId: string | undefined, reason: string) {
   await turn?.settle({
     status: "cancelled",
@@ -158,8 +139,6 @@ function row(parentSessionId: string, taskId: string): SubagentTask {
   if (!task) throw new Error(`missing task row ${taskId}`);
   return task;
 }
-
-// ============================================================================
 
 describe("subagent tool — cancel action", () => {
   it("reports a running task as stopping and cancelled only after the turn confirms", async () => {
@@ -178,7 +157,6 @@ describe("subagent tool — cancel action", () => {
     expect(textOf(cancelled)).toContain("is stopping");
     expect(textOf(cancelled)).toContain("confirm");
     expect(textOf(cancelled)).toContain(`action="wait", task_id="${taskId}"`);
-    // The request did not release the slot: the stop is not confirmed yet.
     expect(manager.liveStatus("parent-cancel", taskId)).toBe("stopping");
     expect(row("parent-cancel", taskId).status).toBe("stopping");
     expect(row("parent-cancel", taskId).finishedAt).toBeNull();
@@ -188,7 +166,6 @@ describe("subagent tool — cancel action", () => {
     expect(row("parent-cancel", taskId).status).toBe("cancelled");
     expect(manager.liveStatus("parent-cancel", taskId)).toBeNull();
 
-    // A repeated cancel is safe and does not rewrite the terminal row.
     const again = await run({ action: "cancel", task_id: taskId }, "parent-cancel");
     expect(again.details).toMatchObject({ status: "cancelled", requested: false });
     expect(textOf(again)).toContain("already cancelled");
@@ -196,7 +173,6 @@ describe("subagent tool — cancel action", () => {
 
   it("cancels a queued task without ever starting its turn", async () => {
     const { runner, timers, manager } = setup("parent-queue-cancel");
-    // Four slots + one queued task.
     const ids: string[] = [];
     for (let i = 0; i < 5; i += 1) ids.push(await spawnTask("parent-queue-cancel", `job ${i}`));
     expect(runner.turns).toHaveLength(4);
@@ -206,12 +182,10 @@ describe("subagent tool — cancel action", () => {
     expect(cancelled.details).toMatchObject({ status: "cancelled", requested: true });
     expect(textOf(cancelled)).toContain("before it started");
 
-    // Freeing a slot must not admit the cancelled task.
     await runner.turns[0].settle({ text: "first done" });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runner.turns).toHaveLength(4);
     expect(row("parent-queue-cancel", ids[4]).status).toBe("cancelled");
-    // Cancel never created a wait deadline of its own.
     expect(timers.scheduled).toHaveLength(0);
 
     for (const turn of runner.turns.slice(1)) await turn.settle();
@@ -227,13 +201,11 @@ describe("subagent tool — cancel action", () => {
     await run({ action: "cancel", task_id: ids[0] }, "parent-slot-hold");
     expect(row("parent-slot-hold", ids[0]).status).toBe("stopping");
 
-    // A requested stop is not a released slot: the fifth task still queues.
     const queuedId = await spawnTask("parent-slot-hold", "next job");
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(row("parent-slot-hold", queuedId).status).toBe("queued");
     expect(runner.turns).toHaveLength(4);
 
-    // Only the confirmed stop frees the slot and admits the queued task.
     await settleCancelled(runner.turns[0], undefined, "Subagent cancelled");
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(row("parent-slot-hold", ids[0]).status).toBe("cancelled");
@@ -271,8 +243,6 @@ describe("subagent tool — cancel action", () => {
     await run({ action: "cancel", task_id: taskId }, "parent-cancel-race");
     expect(row("parent-cancel-race", taskId).status).toBe("stopping");
 
-    // The child finished with a real reply before the stop was confirmed: the
-    // landed result wins, and the row must not be downgraded to cancelled.
     await runner.turns[0].settle({ text: "finished anyway" });
     await manager.idle();
     expect(row("parent-cancel-race", taskId).status).toBe("completed");
@@ -301,7 +271,6 @@ describe("subagent tool — cancel action", () => {
     expect(foreign.isError).toBe(true);
     expect(textOf(foreign)).toContain("does not accept session_id");
 
-    // None of the rejected calls stopped the task.
     expect(manager.liveStatus("parent-owner", taskId)).toBe("running");
     await settleCancelled(runner.turns[0], undefined, "Subagent cancelled");
     await manager.idle();
@@ -319,12 +288,9 @@ describe("parent session stop", () => {
     expect(stopped.stopped).toBe(5);
     expect(stopped.stopping).toBe(true);
     expect(manager.isStopping("parent-stop-all")).toBe(true);
-    // Queued task is cancelled at once; running ones are held in `stopping`
-    // and still own their slots.
     for (const taskId of ids.slice(0, 4)) expect(row("parent-stop-all", taskId).status).toBe("stopping");
     expect(row("parent-stop-all", ids[4]).status).toBe("cancelled");
 
-    // A new spawn during the stop is refused, not queued behind it.
     const refused = await run(
       {
         action: "spawn",
@@ -339,7 +305,6 @@ describe("parent session stop", () => {
     expect(textOf(refused)).toContain("stopping all subagent tasks");
     expect(runner.turns).toHaveLength(4);
 
-    // Confirm the four running stops.
     for (let i = 0; i < 4; i += 1) {
       await settleCancelled(runner.turns[i], child.created[i], SUBAGENT_PARENT_STOPPED);
     }
@@ -347,7 +312,6 @@ describe("parent session stop", () => {
     for (const taskId of ids) expect(row("parent-stop-all", taskId).status).toBe("cancelled");
     expect(manager.isStopping("parent-stop-all")).toBe(false);
 
-    // The window is over: explicit delegation works again.
     const allowed = await run(
       {
         action: "spawn",
@@ -372,8 +336,6 @@ describe("parent session stop", () => {
     await runner.turns[0].acquire();
     await runner.turns[1].acquire();
 
-    // An ordinary end of the parent's own turn is not a stop: the child keeps
-    // running and stays managed.
     expect(manager.liveStatus("parent-scope", mine)).toBe("running");
 
     stopAllSubagentTasksForParent("parent-scope", SUBAGENT_PARENT_STOPPED);
@@ -449,7 +411,6 @@ describe("parent session deletion", () => {
     await runner.turns[0].acquire();
     await runner.turns[1].acquire();
 
-    // A real session file, cached so deletion resolves it without a full scan.
     const filePath = join(dir, "parent-delete.jsonl");
     writeFileSync(filePath, `${JSON.stringify({ type: "session", id: "parent-delete", cwd: "/tmp/work" })}\n`, "utf8");
     cacheSessionPath("parent-delete", filePath);
@@ -463,7 +424,6 @@ describe("parent session deletion", () => {
     await runner.turns[1].settle({ text: "other answer" });
     await manager.idle();
     expect(row("parent-delete", mine).status).toBe("cancelled");
-    // The other parent's task finished normally; deletion never reached it.
     expect(row("parent-kept", other).status).toBe("completed");
   });
 });

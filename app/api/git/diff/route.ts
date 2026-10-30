@@ -8,20 +8,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/git/diff");
 
-// GET /api/git/diff?cwd=<path>&file=<rel-or-abs-path>&staged=<0|1>&base=head
-// Returns the unified diff for one file. `base=head` diffs the worktree
-// against HEAD (staged + unstaged combined) instead of the index.
-// `commit=<sha>` switches to that commit's own file change: parents are
-// resolved server-side (root commits diff against the empty tree) via
-// getFileDiffAtCommit — `staged`/`base` are ignored in this mode. Used by
-// the GitPanel's Log view when a file inside a commit is selected.
-//
-// `cwd` is supplied by the client (always a session cwd that was already
-// validated at session creation) so we deliberately skip ensurePathAllowed
-// here — that check would force a `listAllSessions()` scan on every call.
-// `file` is relative to the repo root, or an absolute path inside the repo
-// (FileViewer sends absolute paths; git itself refuses paths outside the
-// repo, so `..` traversal is harmless).
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const cwd = searchParams.get("cwd");
@@ -42,7 +28,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ diff: null, truncated: false }, { status: 200 });
   }
 
-  // Accept absolute paths (FileViewer) and repo-root-relative paths (panel).
   const relFile = path.isAbsolute(file) ? path.relative(repoRoot, file) : file;
 
   const { diff, truncated } = commit

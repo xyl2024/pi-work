@@ -20,15 +20,6 @@ import { ModelsConfigFillModelPage } from "./models-config/ModelsConfigFillModel
 import { ModelsConfigCatalogPage } from "./models-config/ModelsConfigCatalogPage";
 import { ModelsConfigSaveBar } from "./models-config/ModelsConfigSaveBar";
 
-/**
- * The 模型配置 panel view body.
- *
- * The panel card only mounts the active tab's body, so this component is
- * stateless: the draft, the page stack and the save status all live in
- * `lib/client/models-config-store.ts`. Here it only wires the first-open load,
- * dispatches the current page to a full-width view, and turns Escape into
- * "up one level" — falling back to the panel tab's close rule from the list.
- */
 export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
   const { t } = useI18n();
   const { loaded, loadError, pages } = useModelsConfigStore();
@@ -46,19 +37,11 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
     page.kind === "fillModel" ||
     page.kind === "catalog";
 
-  // Each page is a full-width view, so entering or leaving a scrolling one
-  // starts at the top instead of inheriting the previous page's offset. The
-  // full-height pages scroll inside themselves and are left alone.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [page]);
 
-  // Escape means "up one level"; only the provider list lets it fall through to
-  // the tab's close rule. Focus is kept inside the panel while it is the active
-  // surface, so a palette / dialog that has taken focus keeps its own Escape.
   useEffect(() => {
-    // Renaming a provider also updates `page`. Keep an active field focused
-    // instead of moving focus back to the panel after every keystroke.
     if (containerRef.current?.contains(document.activeElement)) return;
     containerRef.current?.focus({ preventScroll: true });
   }, [page]);

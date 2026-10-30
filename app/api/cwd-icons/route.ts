@@ -7,13 +7,6 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/cwd-icons");
 
-/**
- * Per-cwd custom icon mapping (cwd path → lucide icon name or `emoji:…`),
- * stored in ~/.pi-work/config.yaml under `cwd_icons`. Reads and writes bypass
- * the full SettingsModal flow because these are set per-project from the
- * sidebar, not from the settings modal.
- */
-
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -37,8 +30,6 @@ export async function POST(req: Request) {
     const config = readConfig();
     const next: Record<string, string> = { ...config.cwd_icons };
 
-    // icon === null clears the override; otherwise must be a known lucide
-    // name or a valid emoji value (`emoji:…`).
     if (body.icon === null || body.icon === undefined) {
       delete next[body.cwd];
     } else {

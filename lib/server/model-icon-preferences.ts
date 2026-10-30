@@ -1,16 +1,3 @@
-/**
- * 图标偏好 (model icon preferences) store: a tiny JSON map under the Pi Work
- * data root (`PI_WORK_DATA_DIR` respected via dataPath()).
- *
- * Only real deviations are stored — `provider:modelId` → `"provider"` means
- * "show the provider icon instead of the auto match". Switching back to the
- * auto match deletes the entry; there are no positive "auto" entries. When the
- * map becomes empty the file is removed, so a user without preferences carries
- * no file at all.
- *
- * Reads are total: a missing/corrupt file, or non-object/array/unknown values,
- * degrade to "no deviations" (see normalizeModelIconPreferences).
- */
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { dataPath } from "./data-dir";
 import {
@@ -44,7 +31,6 @@ function writeModelIconPreferences(preferences: ModelIconPreferences): void {
     try {
       unlinkSync(path);
     } catch {
-      /* already absent */
     }
     return;
   }
@@ -53,10 +39,6 @@ function writeModelIconPreferences(preferences: ModelIconPreferences): void {
   renameSync(temp, path);
 }
 
-/**
- * Apply one deviation and return the whole updated map. `"provider"` stores the
- * entry, `"auto"` deletes it. Validation is the caller's job (route → 400).
- */
 export function setModelIconPreference(
   provider: string,
   modelId: string,

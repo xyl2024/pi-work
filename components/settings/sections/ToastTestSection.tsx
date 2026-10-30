@@ -1,25 +1,5 @@
 "use client";
 
-/**
- * Settings → Toast Test
- *
- * Live-preview panel for the bottom-right toast notifications. Lets the
- * user see what each kind looks like with various inputs (description,
- * action button, custom duration, no-icon variant) without firing any
- * backend request. The four default "Show" buttons below the kind
- * selector each demonstrate one real-world-style copy so the user can
- * judge visual weight against common patterns.
- *
- * Differences vs. the developer test panels that hit a backend endpoint:
- *  • Purely client-side: no `fetch`, no `/api/...` test endpoint. Toasts
- *    render immediately, so there's no "Last sent" log row.
- *  • The `Stack` button fires 5 toasts in a row to preview the viewport
- *    cap + z-stacking behavior.
- *  • The `Custom message` / `Custom duration` inputs are wired directly
- *    to the corresponding kind button so the user can experiment without
- *    editing code.
- */
-
 import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast, type ToastKind } from "@/components/ui/Toast";
@@ -128,9 +108,6 @@ export function ToastTestSection() {
   const fireStack = useCallback(() => {
     const presets: ToastKind[] = ["success", "info", "warning", "error", "info"];
     presets.forEach((k, idx) => {
-      // Stagger the dispatches with small delays so the entries don't all
-      // collapse onto the same render frame (which would skip the per-card
-      // slide-in animation entirely).
       window.setTimeout(() => {
         toast.show({
           kind: k,
@@ -143,7 +120,6 @@ export function ToastTestSection() {
 
   return (
     <>
-      {/* ── Kind selector ─────────────────────────────────────────── */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>
         {t("Kind")}
       </div>
@@ -164,7 +140,6 @@ export function ToastTestSection() {
         />
       </div>
 
-      {/* ── Custom message ────────────────────────────────────────── */}
       <FieldLabel>{t("Custom message")}</FieldLabel>
       <TextInput
         value={message}
@@ -178,7 +153,6 @@ export function ToastTestSection() {
           : <span style={{ color: "var(--error)" }}>· {t("Test toast (default copy)")}</span>}
       </FieldHint>
 
-      {/* ── Description ───────────────────────────────────────────── */}
       <FieldLabel>{t("Optional description (multi-line)")}</FieldLabel>
       <TextArea
         value={description}
@@ -187,7 +161,6 @@ export function ToastTestSection() {
         style={{ minHeight: 56 }}
       />
 
-      {/* ── Action label ──────────────────────────────────────────── */}
       <FieldLabel>{t("Optional action label")}</FieldLabel>
       <TextInput
         value={actionLabel}
@@ -196,7 +169,6 @@ export function ToastTestSection() {
         placeholder="Undo"
       />
 
-      {/* ── Duration ──────────────────────────────────────────────── */}
       <FieldLabel>{t("Custom duration (ms)")}</FieldLabel>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input
@@ -219,7 +191,6 @@ export function ToastTestSection() {
         />
       </div>
 
-      {/* ── Action buttons ────────────────────────────────────────── */}
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
         <PrimaryButton onClick={fireKind} style={{ background: KIND_ACCENT[kind] }}>
           {t("Show this toast")}
@@ -238,12 +209,7 @@ export function ToastTestSection() {
   );
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-
 function DEFAULT_DURATION(kind: ToastKind, custom: number): number {
-  // Map the user's chosen kind to a sensible default so the live preview
-  // doesn't always render at exactly the user's slider value: errors and
-  // warnings linger a bit longer by convention.
   if (kind === "error") return Math.max(custom, 5000);
   if (kind === "warning") return Math.max(custom, 4500);
   return custom;

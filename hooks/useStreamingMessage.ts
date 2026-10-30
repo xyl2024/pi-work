@@ -51,10 +51,6 @@ export function useIsStreamingToolCall(key: string): boolean {
   );
 }
 
-/** The live assistant's last toolCall block (name + args) while a tool call
- *  is being streamed or executed. Narrow selector so per-arg-token updates do
- *  not re-render subscribers — the block object identity only changes when a
- *  new block takes over. */
 export function useStreamingToolCall(key: string): ToolCallContent | null {
   return useSyncExternalStore(
     (listener) => subscribeStreaming(key, listener),
@@ -66,7 +62,6 @@ export function useStreamingToolCall(key: string): ToolCallContent | null {
   );
 }
 
-/** Stable boolean selector for the live assistant's answer-text phase. */
 export function useIsStreamingBody(key: string): boolean {
   return useSyncExternalStore(
     (listener) => subscribeStreaming(key, listener),

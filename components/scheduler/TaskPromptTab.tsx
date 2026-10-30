@@ -1,12 +1,3 @@
-/**
- * TaskPromptTab — read-only view of the configured prompt.
- *
- * Shows the prompt in a monospace, preformatted block so users can read
- * what the agent will receive. A copy button puts the text on the
- * clipboard; `copyText` falls back to `execCommand` when the async
- * Clipboard API refuses (unfocused window, insecure context).
- */
-
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";

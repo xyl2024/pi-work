@@ -26,30 +26,10 @@ function decodeCursor(raw: string): Cursor | null {
     if (typeof parsed.lastUsed === "string" && typeof parsed.cwd === "string") {
       return { lastUsed: parsed.lastUsed, cwd: parsed.cwd };
     }
-  } catch { /* fall through */ }
+  } catch {}
   return null;
 }
 
-/**
- * GET /api/workspaces
- *
- * Query params:
- *   - `limit`  page size; defaults to 5. Pass `all` to return every row.
- *              The response always includes `nextCursor` when more rows
- *              are available.
- *   - `cursor` base64url-encoded `{lastUsed, cwd}` from the previous page.
- *              The next page starts strictly AFTER this point (both fields
- *              must be strictly less, ordered by lastUsed desc then cwd asc).
- *
- *   - `todayFrom` / `todayBefore`: optional browser-local day boundaries.
- *     Adds all matching visible `todaySessions` alongside the normal page,
- *     so toggling the sidebar filter needs no additional requests.
- *
- * Response: { workspaces: Workspace[], nextCursor: string | null, todaySessions? }
- *
- * Sort order: lastUsed desc — i.e. cwd whose newest session was touched
- * most recently comes first. The active-cwd pin is applied by the client.
- */
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const url = new URL(request.url);
@@ -69,20 +49,11 @@ export async function GET(request: Request) {
 
   log.debug("list workspaces requested", { limit, hasCursor: !!cursor });
   try {
-    // Single 5s-TTL scan shared with /api/sessions (same cache slot via
-    // listAllSessionsHeaderOnly). Reads ~16KB of each .jsonl file (one chunk,
-    // more only when the first user message sits deeper) instead of streaming
-    // to EOF — same SessionInfo[] shape, same sort
-    // guarantees. See the header at reader.ts:listAllSessionsHeaderOnly
-    // for the field-precision trade-offs vs. the full scan.
     const allSessions = await listAllSessionsHeaderOnly();
     const subagentIds = new Set(listSubagentChildSessionIds());
     const all = allSessions.filter((session) =>
       !!session.cwd && !subagentIds.has(session.id) && matchesSessionDate(session.modified, dateRange));
 
-    // Group by cwd, picking the most-recently-modified session as the
-    // aggregate "lastUsed" + tooltip source. Empty cwd strings are skipped
-    // (no usable workspace identity).
     const byCwd = new Map<string, { lastUsed: string; firstSession: typeof all[number] }>();
     for (const s of all) {
       if (!s.cwd) continue;
@@ -92,18 +63,10 @@ export async function GET(request: Request) {
       }
     }
 
-    // Build a set of session ids that are currently running, partitioned
-    // by cwd for the per-workspace runningCount. The id→cwd index keeps
-    // lookup O(1) per running session — a previous `all.find((s) => s.id
-    // === id)` ran O(M) per running, making the loop O(n_running ×
-    // n_sessions) which is fine at 10×1600 but quadratic in principle.
     const cwdBySessionId = new Map<string, string>();
     for (const s of all) if (s.cwd) cwdBySessionId.set(s.id, s.cwd);
     const runningByCwd = new Map<string, number>();
     const runningIds = new Set<string>();
-    // Only the sessions that opted into full access (ADR-0021) — one directory
-    // read for the whole response, so a row in the today list can wear its
-    // shield without the session being opened.
     const permissionModes = readSessionPermissionModes();
     for (const { id, running } of listRunningRpcSessions()) {
       if (!running) continue;
@@ -113,14 +76,12 @@ export async function GET(request: Request) {
       runningByCwd.set(cwd, (runningByCwd.get(cwd) ?? 0) + 1);
     }
 
-    // Tally per-cwd session counts. One pass over `all` is enough.
     const countByCwd = new Map<string, number>();
     for (const s of all) {
       if (!s.cwd) continue;
       countByCwd.set(s.cwd, (countByCwd.get(s.cwd) ?? 0) + 1);
     }
 
-    // Compose the Workspace rows from the precomputed maps.
     const rows: Workspace[] = [];
     for (const [cwd, info] of byCwd) {
       rows.push({
@@ -133,13 +94,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Sort: lastUsed desc, with cwd as a tie-breaker so the cursor is stable.
     rows.sort((a, b) => {
       const t = b.lastUsed.localeCompare(a.lastUsed);
       return t !== 0 ? t : a.cwd.localeCompare(b.cwd);
     });
 
-    // Apply cursor — start strictly after the cursor row.
     let startIdx = 0;
     if (cursor) {
       const idx = rows.findIndex(

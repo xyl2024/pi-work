@@ -1,24 +1,5 @@
 "use client";
 
-/* ─────────────────────────────────────────────────────────
- * COMPACTION DIVIDER — an inline notice that sits in the chat
- * stream where the kernel folded history into a summary.
- *
- * The JSONL `compaction` entry is not a user/assistant message,
- * so it never shows up in the message list on its own. This
- * divider fills that gap: a slim accent-tinted strip labelled
- * with the token count at the time of compaction, clickable to
- * expand the kernel's generated summary (Markdown).
- *
- * Expand/collapse animates the wrapper height the same way as
- * ThinkingBlock / ToolCallBlock (useCollapseHeight: ResizeObserver
- * measures the rendered content, CSS transitions the pixel value).
- * The header is a single quiet click target — no hover background,
- * no press scale — and the right-hand chevron mirrors ToolCallBlock:
- * a 10×10 stroke-only svg, `var(--text-dim)`, rotating 180° on
- * expand with a 0.15s transform transition.
- * ───────────────────────────────────────────────────────── */
-
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -34,9 +15,6 @@ export function CompactionDivider({ point }: Props) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const tokenStr = point.tokensBefore.toLocaleString();
-  // Same height-animation pattern as ThinkingBlock / ToolCallBlock:
-  // ResizeObserver measures the rendered summary height, the wrapper
-  // transitions that pixel value so CSS can interpolate it.
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const toggle = () => setExpanded((v) => !v);
 
@@ -95,8 +73,6 @@ export function CompactionDivider({ point }: Props) {
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
           {t("Compacted from {n} tokens", { n: tokenStr })}
         </span>
-        {/* Right-edge chevron — same shape, color, and rotate-180° on
-            expand as ToolCallBlock / ThinkingBlock. */}
         <svg
           width="10"
           height="10"

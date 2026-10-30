@@ -1,14 +1,5 @@
 "use client";
 
-/**
- * BotAppearancePicker — edits one subagent profile's Pi Bot appearance.
- *
- * A compact, controlled version of the GrokBot Lab: the same shapes, body
- * parts, accessories, expressions and states, with a live preview rendered by
- * a *controlled* `<GrokBot>` (so it never touches the user's own companion in
- * `lib/client/grokbot-store`).
- */
-
 import { useMemo, useState } from "react";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import {

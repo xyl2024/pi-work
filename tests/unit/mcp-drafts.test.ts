@@ -14,13 +14,6 @@ import { MCP_LIST_PAGE } from "@/lib/shared/mcp-pages";
 import { draftFromPanelData } from "@/lib/shared/mcp-draft";
 import type { McpPanelData } from "@/lib/shared/mcp-panel";
 
-/**
- * The MCP panel's per-cwd draft buckets (lib/shared/mcp-drafts.ts): leaving a
- * cwd keeps its bucket, a return shows the snapshot, and the shared "any cwd
- * dirty" predicate drives both the badge and the close guard. Plain data — no
- * React, no DOM, no server.
- */
-
 const DATA: McpPanelData = {
   files: [],
   entries: [],
