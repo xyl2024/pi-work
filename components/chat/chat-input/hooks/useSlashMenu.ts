@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
-import { getSlashQuery, rankSlashResources, type SlashResource } from "@/lib/shared/slash-commands";
+import { getSlashQuery } from "@/lib/shared/composer-queries";
+import { rankSlashResources, type SlashResource } from "@/lib/shared/slash-commands";
 import { BUILTIN_SLASH_ACTIONS, SLASH_PAGE_SIZE } from "../constants";
 
 export interface UseSlashMenuOptions {
