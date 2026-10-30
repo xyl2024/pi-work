@@ -10,6 +10,7 @@ import {
 import { Tooltip } from "../ui/Tooltip";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { InlineLoader } from "generative-loaders";
+import { createEdgeAutoscroll } from "@/lib/client/tab-bar-autoscroll";
 
 interface Props {
   tabs: SessionTab[];
@@ -62,6 +63,11 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
   const dragTabIdRef = useRef<string | null>(null);
   const dropIndexRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoscrollRef = useRef<ReturnType<typeof createEdgeAutoscroll> | null>(null);
+  const getAutoscroll = useCallback(() => {
+    if (!autoscrollRef.current) autoscrollRef.current = createEdgeAutoscroll();
+    return autoscrollRef.current;
+  }, []);
   const computeDropIndex = useCallback((clientX: number): number | null => {
     const draggedId = dragTabIdRef.current;
     if (!draggedId) return null;
@@ -78,7 +84,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
   const resetDrag = useCallback(() => {
     dragTabIdRef.current = null;
     dropIndexRef.current = null;
-  }, []);
+    getAutoscroll().stop();
+  }, [getAutoscroll]);
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -137,6 +144,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           if (!dragTabIdRef.current) return;
           event.preventDefault();
           dropIndexRef.current = computeDropIndex(event.clientX);
+          getAutoscroll().update(event.clientX);
         }}
         onDrop={(event) => {
           event.preventDefault();
@@ -165,6 +173,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             onDragStart={(event) => {
               dragTabIdRef.current = tab.tabId;
               dropIndexRef.current = null;
+              const scroller = scrollRef.current;
+              if (scroller) getAutoscroll().start(scroller);
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", tab.tabId);
             }}
