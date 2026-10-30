@@ -9,9 +9,7 @@ import type {
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import {
-  CHAT_BOTTOM_FROST_MASK_BLUR_RADIUS_PX,
-  CHAT_BOTTOM_FROST_MASK_GRADIENT_STOPS,
-  CHAT_BOTTOM_FROST_MASK_HEIGHT_PX,
+  getChatBottomFrostMaskStyle,
   isChatBottomFrostMaskVisible,
 } from "@/lib/shared/chatBottomFrostMask";
 import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
@@ -206,13 +204,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
   const frostMaskVisible = isChatBottomFrostMaskVisible({ pendingAskUserQuestions: !!pendingAskUserQuestions });
-  const frostMaskStyle = {
-    height: `${CHAT_BOTTOM_FROST_MASK_HEIGHT_PX}px`,
-    "--chat-frost-mask-blur-radius": `${CHAT_BOTTOM_FROST_MASK_BLUR_RADIUS_PX}px`,
-    "--chat-frost-mask-gradient": `linear-gradient(to bottom, ${CHAT_BOTTOM_FROST_MASK_GRADIENT_STOPS.map(
-      (stop) => `rgba(0, 0, 0, ${stop.opacity}) ${stop.offsetPx}px`,
-    ).join(", ")})`,
-  } as React.CSSProperties;
+  const frostMaskStyle = getChatBottomFrostMaskStyle();
   const handleOpenFile = useCallback(
     (filePath: string, fileName: string) => {
       if (onOpenFile) onOpenFile(filePath, fileName);
