@@ -5,10 +5,12 @@ import {
   deleteRange,
   emptyComposerState,
   insertNode,
+  insertNodes,
   insertText,
   offsetOfCursor,
   redo,
   moveToOffset,
+  removeImage,
   undo,
 } from "@/lib/client/composer/model";
 import type { ComposerDoc, ComposerNode } from "@/lib/client/composer/types";
@@ -119,5 +121,51 @@ describe("composer undo and redo", () => {
     const afterUndo = undo(state);
     const afterEdit = insertText(afterUndo, "x");
     expect(redo(afterEdit).doc).toEqual(afterEdit.doc);
+  });
+});
+
+function image(id: string): ComposerNode {
+  return { kind: "image", id, data: `data-${id}`, mimeType: "image/png", previewUrl: `blob:${id}` };
+}
+
+describe("composer image chips", () => {
+  it("inserts multiple images at the cursor in insertion order", () => {
+    const state = moveToOffset(insertText(emptyComposerState(), "ab"), 1);
+    const next = insertNodes(state, [image("one"), image("two")]);
+    expect(next.doc).toEqual(docOf(text("a"), image("one"), image("two"), text("b")));
+    expect(offsetOfCursor(next)).toBe(3);
+  });
+
+  it("inserts an image into an empty composer", () => {
+    const next = insertNode(emptyComposerState(), image("one"));
+    expect(next.doc).toEqual(docOf(image("one")));
+    expect(offsetOfCursor(next)).toBe(1);
+  });
+
+  it("deletes an image chip on backspace at its right boundary", () => {
+    const state = moveToOffset(
+      { ...emptyComposerState(), doc: docOf(text("a"), image("one"), text("b")) },
+      2,
+    );
+    const next = backspace(state);
+    expect(next.doc).toEqual(docOf(text("ab")));
+    expect(offsetOfCursor(next)).toBe(1);
+  });
+
+  it("deletes only the targeted image chip", () => {
+    const state = { ...emptyComposerState(), doc: docOf(image("one"), image("two"), text("x")) };
+    const next = removeImage(state, "one");
+    expect(next.doc).toEqual(docOf(image("two"), text("x")));
+    expect(offsetOfCursor(next)).toBe(0);
+  });
+
+  it("leaves the document untouched when removing an unknown image", () => {
+    const state = { ...emptyComposerState(), doc: docOf(image("one")) };
+    expect(removeImage(state, "missing")).toBe(state);
+  });
+
+  it("restores a removed image on undo", () => {
+    const state = { ...emptyComposerState(), doc: docOf(image("one"), text("x")) };
+    expect(undo(removeImage(state, "one")).doc).toEqual(state.doc);
   });
 });

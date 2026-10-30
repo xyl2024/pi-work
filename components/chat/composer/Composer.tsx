@@ -3,11 +3,10 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
-import { AttachmentList } from "../AttachmentList";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { CollapsiblePanel } from "../../ui/CollapsiblePanel";
 import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
-import { useImageAttachments } from "../chat-input/hooks/useImageAttachments";
 import { useToolsDropdown } from "../chat-input/hooks/useToolsDropdown";
 import { BottomToolbar } from "../chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "../chat-input/constants";
@@ -15,19 +14,27 @@ import { FULL_ACCESS_BORDER_COLOR } from "../../ui/permission-mode-colors";
 import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 import type { AttachedImage } from "../chat-input/types";
-import type { ComposerDoc, ComposerHandle, ComposerState } from "@/lib/client/composer/types";
+import type { ComposerDoc, ComposerHandle, ComposerImageNode, ComposerState } from "@/lib/client/composer/types";
 import {
   commitSnapshot,
   emptyComposerState,
+  insertNodes,
   insertText as insertTextInState,
   moveToOffset,
   normalizeDoc,
   offsetOfCursor,
+  removeImage,
   setCursor,
 } from "@/lib/client/composer/model";
 import { docLength, offsetToCursor, projectDocText } from "@/lib/client/composer/offsets";
 import { reduceComposerKey } from "@/lib/client/composer/reducer";
 import { serializeComposer } from "@/lib/client/composer/serialize";
+import {
+  createImageNode,
+  isImageFile,
+  nextImageId,
+  toAttachedImage,
+} from "@/lib/client/composer/images";
 import {
   readDoc,
   readSelection,
@@ -118,17 +125,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   stateRef.current = state;
 
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageUrlsRef = useRef<Set<string>>(new Set());
   const composingRef = useRef(false);
   const skipProjectionRef = useRef(false);
   const skipNextInputRef = useRef(false);
-
-  const {
-    attachedImages,
-    fileInputRef,
-    processImageFiles,
-    removeImage,
-    clearImages,
-  } = useImageAttachments();
 
   const { toolDropdownOpen, customExpanded, toolDropdownRef, setToolDropdownOpen, toggleCustomExpanded } = useToolsDropdown();
 
@@ -136,7 +137,45 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     skill: (node) => t("Skill {name}", { name: node.name }),
     file: (path) => t("File {path}", { path }),
     image: (id) => t("Image {id}", { id }),
+    removeImage: (id) => t("Remove image {id}", { id }),
   }), [t]);
+
+  const images = useMemo(
+    () => state.doc.nodes.filter((node): node is ComposerImageNode => node.kind === "image"),
+    [state.doc],
+  );
+
+  const imageItems = useMemo(
+    () => images.map((node) => ({ alt: t("Image {id}", { id: node.id }), src: node.previewUrl })),
+    [images, t],
+  );
+
+  const { openAt, lightbox } = useImageLightbox(imageItems);
+
+  useEffect(() => {
+    const live = new Set<string>();
+    const collect = (doc: ComposerDoc) => {
+      for (const node of doc.nodes) {
+        if (node.kind === "image") live.add(node.previewUrl);
+      }
+    };
+    for (const snapshot of state.past) collect(snapshot.doc);
+    collect(state.doc);
+    for (const snapshot of state.future) collect(snapshot.doc);
+    for (const url of Array.from(imageUrlsRef.current)) {
+      if (live.has(url)) continue;
+      URL.revokeObjectURL(url);
+      imageUrlsRef.current.delete(url);
+    }
+  }, [state]);
+
+  useEffect(() => {
+    const urls = imageUrlsRef.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const editor = editorRef.current;
@@ -182,13 +221,48 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     focusEditor(next.doc, next.cursor);
   }, [focusEditor, updateState]);
 
+  const addImageFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter(isImageFile);
+    if (imageFiles.length === 0) return;
+    const nodes = await Promise.all(
+      imageFiles.map(
+        (file) =>
+          new Promise<ComposerImageNode | null>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const previewUrl = URL.createObjectURL(file);
+              const node = createImageNode({
+                id: nextImageId(),
+                dataUrl: String(reader.result ?? ""),
+                previewUrl,
+              });
+              if (!node) URL.revokeObjectURL(previewUrl);
+              resolve(node);
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
+    const valid = nodes.filter((node): node is ComposerImageNode => node !== null);
+    if (valid.length === 0) return;
+    for (const node of valid) imageUrlsRef.current.add(node.previewUrl);
+    const next = insertNodes(stateRef.current, valid);
+    updateState(next);
+    focusEditor(next.doc, next.cursor);
+  }, [focusEditor, updateState]);
+
+  const removeImageById = useCallback((id: string) => {
+    updateState(removeImage(stateRef.current, id));
+  }, [updateState]);
+
   const handleSend = useCallback(() => {
     const current = stateRef.current;
     const serialized = serializeComposer(current.doc);
     const raw = serialized.text;
     const trimmed = raw.trim();
     if (isStreaming) return;
-    if (!trimmed && attachedImages.length === 0) return;
+    if (!trimmed && serialized.images.length === 0) return;
 
     if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/model") {
       onSlashAction?.(trimmed.slice(1));
@@ -198,10 +272,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
     const directSlash = findDirectSlashResource(trimmed, slashResources);
     const message = directSlash ? formatSlashContent(directSlash.item, directSlash.args) : trimmed;
-    onSend(message, attachedImages.length ? attachedImages : undefined);
-    clearImages();
+    onSend(message, serialized.images.length ? serialized.images.map(toAttachedImage) : undefined);
     resetDoc();
-  }, [attachedImages, clearImages, isStreaming, onSend, onSlashAction, resetDoc, slashResources]);
+  }, [isStreaming, onSend, onSlashAction, resetDoc, slashResources]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (composingRef.current || event.nativeEvent.isComposing) return;
@@ -265,8 +338,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       .filter((item) => item.type.startsWith("image/"))
       .map((item) => item.getAsFile())
       .filter((file): file is File => file !== null);
-    if (files.length) void processImageFiles(files);
-  }, [processImageFiles, updateState]);
+    if (files.length) void addImageFiles(files);
+  }, [addImageFiles, updateState]);
 
   const handleSelect = useCallback(() => {
     if (composingRef.current) return;
@@ -277,6 +350,28 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     const next = setCursor(stateRef.current, offsetToCursor(stateRef.current.doc, selection.end));
     updateState(next, { skipProjection: true });
   }, [updateState]);
+
+  const handleEditorClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const removeButton = target.closest("[data-composer-remove]");
+    if (removeButton) {
+      event.preventDefault();
+      removeImageById(removeButton.getAttribute("data-composer-remove") ?? "");
+      return;
+    }
+    const chip = target.closest("[data-composer-kind='image']");
+    if (!chip) return;
+    event.preventDefault();
+    const src = chip.getAttribute("data-preview-url");
+    if (src) openAt(src);
+  }, [openAt, removeImageById]);
+
+  const handleEditorMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest("[data-composer-remove]")) return;
+    event.preventDefault();
+  }, []);
 
   useImperativeHandle(ref, () => ({
     insertText(text: string) {
@@ -296,26 +391,26 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       focusEditor(next.doc, next.cursor);
     },
     addImages(files: File[]) {
-      void processImageFiles(files);
+      void addImageFiles(files);
     },
     focus() {
       const next = moveToOffset(stateRef.current, docLength(stateRef.current.doc));
       updateState(next);
       focusEditor(next.doc, next.cursor);
     },
-  }), [focusEditor, processImageFiles, updateState]);
+  }), [addImageFiles, focusEditor, updateState]);
 
   useEffect(() => {
     const serialized = serializeComposer(state.doc);
     onDraftChange?.({
-      dirty: Boolean(serialized.text.trim() || attachedImages.length),
+      dirty: Boolean(serialized.text.trim() || serialized.images.length),
       text: serialized.text,
-      imageCount: attachedImages.length,
+      imageCount: serialized.images.length,
       cursorPosition: offsetOfCursor(state),
     });
-  }, [state, attachedImages.length, onDraftChange]);
+  }, [state, onDraftChange]);
 
-  const canSend = !disabled && !sessionBusy && (Boolean(serializeComposer(state.doc).text.trim()) || attachedImages.length > 0);
+  const canSend = !disabled && !sessionBusy && (Boolean(serializeComposer(state.doc).text.trim()) || images.length > 0);
 
   return (
     <div style={{ flexShrink: 0, background: "transparent", padding: "0 16px 8px" }}>
@@ -327,7 +422,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
         style={{ display: "none" }}
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          void processImageFiles(files);
+          void addImageFiles(files);
           event.target.value = "";
         }}
       />
@@ -346,8 +441,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
             {t("Retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
-        <AttachmentList images={attachedImages} onRemove={removeImage} />
-
         <CollapsiblePanel open={true}>
           <div
             style={{
@@ -375,6 +468,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
               onKeyDown={handleKeyDown}
               onInput={handleInput}
               onPaste={handlePaste}
+              onClick={handleEditorClick}
+              onMouseDown={handleEditorMouseDown}
               onCompositionStart={handleCompositionStart}
               onCompositionEnd={handleCompositionEnd}
               onSelect={handleSelect}
@@ -442,7 +537,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
           t={t}
           isStreaming={isStreaming}
           onSlashAction={onSlashAction}
-          hasAttachedImages={attachedImages.length > 0}
+          hasAttachedImages={images.length > 0}
           fileInputRef={fileInputRef}
           model={model}
           modelNames={modelNames}
@@ -477,6 +572,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
           onNotifyChannelChange={onNotifyChannelChange}
         />
       </div>
+      {lightbox}
     </div>
   );
 });

@@ -141,12 +141,31 @@ export function insertText(state: ComposerState, text: string, range?: ComposerR
   return commitEdit(state, doc, cursorOffset);
 }
 
+export function insertNodes(
+  state: ComposerState,
+  nodes: ComposerNode[],
+  range?: ComposerRange,
+): ComposerState {
+  if (nodes.length === 0) return state;
+  const { doc, cursorOffset } = replaceRange(state.doc, normalizeRange(state, range), nodes);
+  return commitEdit(state, doc, cursorOffset);
+}
+
 export function insertNode(
   state: ComposerState,
   node: ComposerNode,
   range?: ComposerRange,
 ): ComposerState {
-  const { doc, cursorOffset } = replaceRange(state.doc, normalizeRange(state, range), [node]);
+  return insertNodes(state, [node], range);
+}
+
+export function removeImage(state: ComposerState, id: string): ComposerState {
+  const index = state.doc.nodes.findIndex((node) => node.kind === "image" && node.id === id);
+  if (index < 0) return state;
+  const start = state.doc.nodes
+    .slice(0, index)
+    .reduce((total, node) => total + nodeLength(node), 0);
+  const { doc, cursorOffset } = replaceRange(state.doc, { start, end: start + 1 }, []);
   return commitEdit(state, doc, cursorOffset);
 }
 

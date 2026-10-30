@@ -18,6 +18,8 @@ export interface ComposerFileNode {
 export interface ComposerImageNode {
   kind: "image";
   id: string;
+  data: string;
+  mimeType: string;
   previewUrl: string;
 }
 

@@ -5,6 +5,7 @@ export interface ComposerLabels {
   skill: (node: ComposerSkillNode) => string;
   file: (path: string) => string;
   image: (id: string) => string;
+  removeImage: (id: string) => string;
 }
 
 function isChip(node: Node): node is HTMLElement {
@@ -46,12 +47,23 @@ function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
     element.textContent = node.relativePath;
   } else if (node.kind === "image") {
     element.setAttribute("data-id", node.id);
+    element.setAttribute("data-image-data", node.data);
+    element.setAttribute("data-mime-type", node.mimeType);
     element.setAttribute("data-preview-url", node.previewUrl);
     element.classList.add("composer-chip-image");
     const image = document.createElement("img");
     image.src = node.previewUrl;
     image.alt = chipLabel(node, labels);
     element.append(image);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "composer-chip-image-remove";
+    remove.setAttribute("contenteditable", "false");
+    remove.setAttribute("data-composer-remove", node.id);
+    remove.setAttribute("aria-label", labels.removeImage(node.id));
+    remove.setAttribute("title", labels.removeImage(node.id));
+    remove.textContent = "\u00d7";
+    element.append(remove);
   } else {
     element.textContent = node.text;
   }
@@ -87,6 +99,8 @@ function readNode(element: HTMLElement): ComposerNode | null {
       return {
         kind: "image",
         id: element.getAttribute("data-id") ?? "",
+        data: element.getAttribute("data-image-data") ?? "",
+        mimeType: element.getAttribute("data-mime-type") ?? "",
         previewUrl: element.getAttribute("data-preview-url") ?? "",
       };
     }
