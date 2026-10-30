@@ -220,7 +220,7 @@ body {
 /* Completely hide the scrollbar while keeping the element scrollable
    via wheel / touch / arrow keys. Independent semantic from the
    [data-scroll-*] presets — used where the design wants zero visual
-   scrollbar (e.g. the composer editor). */
+   scrollbar (e.g. the ChatInput textarea). */
 [data-hide-v-scrollbar] {
   scrollbar-width: none;
 }
@@ -1449,71 +1449,6 @@ span.linenumber {
 }
 .notes-saving-dot {
   animation: notes-saving-pulse 1s ease-in-out infinite;
-}
-
-.composer-editable[data-empty="true"]::before {
-  content: attr(data-placeholder);
-  color: var(--text-dim);
-  pointer-events: none;
-}
-.composer-chip {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  margin: 0 2px;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-  vertical-align: baseline;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-}
-.composer-chip-image {
-  position: relative;
-  padding: 0;
-  border: none;
-  background: none;
-  overflow: visible;
-  cursor: zoom-in;
-}
-.composer-chip-image img {
-  display: block;
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  vertical-align: middle;
-}
-.composer-chip-image-remove {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 15px;
-  height: 15px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.composer-chip-image:hover .composer-chip-image-remove,
-.composer-chip-image-remove:focus-visible {
-  opacity: 1;
 }
 
 .chat-bottom-frost-mask {

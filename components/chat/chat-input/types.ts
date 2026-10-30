@@ -1,3 +1,7 @@
 "use client";
 
-export type { AttachedImage } from "@/lib/client/composer/types";
+export interface AttachedImage {
+  data: string;
+  mimeType: string;
+  previewUrl: string;
+}

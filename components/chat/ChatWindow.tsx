@@ -23,8 +23,7 @@ import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
 import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent, useStreamingToolCall } from "@/hooks/useStreamingMessage";
-import { Composer } from "./composer/Composer";
-import type { ComposerHandle } from "@/lib/client/composer/types";
+import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
@@ -65,7 +64,7 @@ interface Props {
   onSessionCreated?: (session: SessionInfo) => void;
   onFirstAssistantReady?: () => void;
   modelsRefreshKey?: number;
-  chatInputRef?: React.RefObject<ComposerHandle | null>;
+  chatInputRef?: React.RefObject<ChatInputHandle | null>;
   scrollToEntryId?: string | null;
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
@@ -76,7 +75,12 @@ interface Props {
   onSessionNameChange?: (name: string) => void;
   onSessionInfoLoaded?: (session: SessionInfo) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
-  onDraftChange?: (draft: { dirty: boolean }) => void;
+  onDraftChange?: (draft: {
+    dirty: boolean;
+    text: string;
+    imageCount: number;
+    cursorPosition: number;
+  }) => void;
   onAgentStatusChange?: (status: {
     running: boolean;
     streaming: boolean;
@@ -122,8 +126,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handlePermissionModeChange,
     handleCompact,
-    activeLeafId, currentSessionId,
     userMessageHistory,
+    activeLeafId, currentSessionId,
     inFlightToolResults,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
@@ -504,6 +508,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return () => setChatHeaderActions(null, tabId);
   }, [isActive, headerActions, tabId]);
 
+  const slashResourceKey = sessionId ?? (newSessionCwd ? `new:${newSessionCwd}` : "none");
+
   const messageCallMetrics = useSessionCallMetrics(
     currentSessionId,
     `${agentRunning ? "run" : "idle"}:${messages.length}`,
@@ -555,7 +561,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const chatInputElement = (
     <>
-      <Composer
+      <ChatInput
         ref={chatInputRef}
         onSend={handleSend}
         onAbort={handleAbort}
@@ -583,13 +589,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}
         slashResources={slashResources}
-        userMessageHistory={userMessageHistory}
-        sessionId={currentSessionId}
+        slashResourceKey={slashResourceKey}
         onSlashAction={(action) => {
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
           else if (action === "model") setModelModalOpen(true);
         }}
+        sessionId={currentSessionId}
+        userMessageHistory={userMessageHistory}
         onDraftChange={onDraftChange}
         cwd={cwd ?? null}
         onCwdChange={onCwdChange ?? (() => {})}

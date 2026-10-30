@@ -17,18 +17,6 @@ export const THINKING_LEVEL_ORDER = [
   "max",
 ] as const;
 
-export function nextThinkingLevel(
-  current: ThinkingLevelOption,
-  available: readonly string[] | null | undefined,
-  direction: 1 | -1,
-): ThinkingLevelOption | null {
-  const levels = THINKING_LEVEL_ORDER.filter((level) => (available ?? []).includes(level));
-  if (levels.length === 0) return null;
-  const index = levels.indexOf(current);
-  if (index === -1) return direction > 0 ? levels[0] : levels[levels.length - 1];
-  return levels[(index + direction + levels.length) % levels.length];
-}
-
 export function pickHighestAvailableThinkingLevel(
   available: readonly string[] | null | undefined,
 ): ThinkingLevelOption {
