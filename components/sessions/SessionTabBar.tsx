@@ -19,6 +19,7 @@ interface Props {
   onNewSession?: () => void;
   onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
   onReload?: (tabId: string) => void;
+  onReorder?: (tabId: string, toIndex: number) => void;
   leadingControl?: ReactNode;
 }
 
@@ -55,10 +56,29 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
   );
 }
 
-export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, leadingControl }: Props) {
+export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, onReorder, leadingControl }: Props) {
   const { t } = useI18n();
   const cm = useContextMenu();
+  const dragTabIdRef = useRef<string | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const computeDropIndex = useCallback((clientX: number): number | null => {
+    const draggedId = dragTabIdRef.current;
+    if (!draggedId) return null;
+    const nodes = Array.from(
+      scrollRef.current?.querySelectorAll<HTMLElement>("[data-session-tab-id]") ?? [],
+    ).filter((node) => node.dataset.sessionTabId !== draggedId);
+    let index = 0;
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      if (clientX >= rect.left + rect.width / 2) index += 1;
+    }
+    return index;
+  }, []);
+  const resetDrag = useCallback(() => {
+    dragTabIdRef.current = null;
+    dropIndexRef.current = null;
+  }, []);
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -113,6 +133,21 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           height: 34,
           gap: 2,
         }}
+        onDragOver={(event) => {
+          if (!dragTabIdRef.current) return;
+          event.preventDefault();
+          dropIndexRef.current = computeDropIndex(event.clientX);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          const draggedId = dragTabIdRef.current;
+          const dropIndex = dropIndexRef.current ?? computeDropIndex(event.clientX);
+          resetDrag();
+          if (draggedId && dropIndex !== null) onReorder?.(draggedId, dropIndex);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dropIndexRef.current = null;
+        }}
       >
         {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
@@ -126,6 +161,14 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             key={tab.tabId}
             className="group/tab"
             data-session-tab-id={tab.tabId}
+            draggable
+            onDragStart={(event) => {
+              dragTabIdRef.current = tab.tabId;
+              dropIndexRef.current = null;
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", tab.tabId);
+            }}
+            onDragEnd={resetDrag}
             onClick={() => onSelectTab(tab.tabId)}
             onDoubleClick={(event) => {
               event.stopPropagation();
@@ -188,6 +231,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               <button
                 type="button"
                 aria-label={`${t("Close tab")} ${title}`}
+                draggable={false}
                 className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();

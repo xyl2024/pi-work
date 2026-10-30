@@ -1197,6 +1197,7 @@ export function AppShell() {
           onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
           onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
           onReload={handleReloadSessionTab}
+          onReorder={(tabId, toIndex) => dispatchWorkspace({ type: "reorder", tabId, toIndex })}
           onNewSession={() => handleSlashNew()}
         />
       )}
