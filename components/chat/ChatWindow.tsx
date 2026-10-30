@@ -8,6 +8,10 @@ import type {
   CompactionPoint,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
+import {
+  getChatBottomFrostMaskStyle,
+  isChatBottomFrostMaskVisible,
+} from "@/lib/shared/chatBottomFrostMask";
 import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
@@ -199,6 +203,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [isActive, agentRunning, permissionMode, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
+  const frostMaskVisible = isChatBottomFrostMaskVisible({ pendingAskUserQuestions: !!pendingAskUserQuestions });
+  const frostMaskStyle = getChatBottomFrostMaskStyle();
   const handleOpenFile = useCallback(
     (filePath: string, fileName: string) => {
       if (onOpenFile) onOpenFile(filePath, fileName);
@@ -1030,6 +1036,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             <div ref={messagesEndRef} />
           </div>
         </div>
+
+        {frostMaskVisible && <div aria-hidden className="chat-bottom-frost-mask" style={frostMaskStyle} />}
 
         {pendingAskUserQuestions ? null : (
         <div

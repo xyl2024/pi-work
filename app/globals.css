@@ -1515,3 +1515,24 @@ span.linenumber {
 .composer-chip-image-remove:focus-visible {
   opacity: 1;
 }
+
+.chat-bottom-frost-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--bg);
+  -webkit-mask-image: var(--chat-frost-mask-gradient);
+  mask-image: var(--chat-frost-mask-gradient);
+  -webkit-backdrop-filter: blur(var(--chat-frost-mask-blur-radius));
+  backdrop-filter: blur(var(--chat-frost-mask-blur-radius));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .chat-bottom-frost-mask {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
