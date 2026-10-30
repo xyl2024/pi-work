@@ -10,6 +10,7 @@ import {
 import { Tooltip } from "../ui/Tooltip";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { InlineLoader } from "generative-loaders";
+import { createEdgeAutoscroll } from "@/lib/client/tab-bar-autoscroll";
 
 interface Props {
   tabs: SessionTab[];
@@ -64,9 +65,12 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
   const scrollRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const dragEndedAtRef = useRef(0);
-  const pointerXRef = useRef(0);
-  const autoScrollRafRef = useRef<number | null>(null);
+  const autoscrollRef = useRef<ReturnType<typeof createEdgeAutoscroll> | null>(null);
   const [indicatorX, setIndicatorX] = useState<number | null>(null);
+  const getAutoscroll = useCallback(() => {
+    if (!autoscrollRef.current) autoscrollRef.current = createEdgeAutoscroll();
+    return autoscrollRef.current;
+  }, []);
   const computeDropPoint = useCallback((clientX: number): { index: number; x: number | null } | null => {
     const draggedId = dragTabIdRef.current;
     if (!draggedId) return null;
@@ -90,45 +94,12 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
     }
     return { index, x };
   }, []);
-  const stopAutoScroll = useCallback(() => {
-    if (autoScrollRafRef.current !== null) {
-      cancelAnimationFrame(autoScrollRafRef.current);
-      autoScrollRafRef.current = null;
-    }
-  }, []);
-  const ensureAutoScroll = useCallback(
-    (clientX: number) => {
-      pointerXRef.current = clientX;
-      if (autoScrollRafRef.current !== null) return;
-      const step = () => {
-        const el = scrollRef.current;
-        if (!el) {
-          autoScrollRafRef.current = null;
-          return;
-        }
-        const rect = el.getBoundingClientRect();
-        const margin = 40;
-        let speed = 0;
-        const x = pointerXRef.current - rect.left;
-        if (x < margin) speed = -((1 + (margin - x) / margin) * 10);
-        else if (rect.width - x < margin) speed = (1 + (x - (rect.width - margin)) / margin) * 10;
-        if (speed !== 0 && el.scrollWidth > el.clientWidth) {
-          el.scrollLeft += speed;
-          autoScrollRafRef.current = requestAnimationFrame(step);
-        } else {
-          autoScrollRafRef.current = null;
-        }
-      };
-      autoScrollRafRef.current = requestAnimationFrame(step);
-    },
-    [],
-  );
   const resetDrag = useCallback(() => {
     dragTabIdRef.current = null;
     dropIndexRef.current = null;
     setIndicatorX(null);
-    stopAutoScroll();
-  }, [stopAutoScroll]);
+    getAutoscroll().stop();
+  }, [getAutoscroll]);
   const isNoDropTarget = (event: { target: EventTarget | null }): boolean =>
     event.target instanceof Element && event.target.closest("[data-no-drop]") !== null;
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -187,7 +158,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           if (!point) return;
           dropIndexRef.current = point.index;
           setIndicatorX(point.x);
-          ensureAutoScroll(event.clientX);
+          getAutoscroll().update(event.clientX);
         }}
         onDrop={(event) => {
           event.preventDefault();
@@ -250,6 +221,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               }
               dragTabIdRef.current = tab.tabId;
               dropIndexRef.current = null;
+              const scroller = scrollRef.current;
+              if (scroller) getAutoscroll().start(scroller);
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData("text/plain", tab.tabId);
             }}
