@@ -52,3 +52,6 @@ third
 
 # local agent tooling
 /.qoder/
+
+# local specs and tickets
+/.scratch/
