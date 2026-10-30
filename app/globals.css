@@ -1450,3 +1450,41 @@ span.linenumber {
 .notes-saving-dot {
   animation: notes-saving-pulse 1s ease-in-out infinite;
 }
+
+.composer-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  vertical-align: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.composer-chip-image {
+  padding: 0;
+  border: none;
+  background: none;
+}
+.composer-chip-image img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
