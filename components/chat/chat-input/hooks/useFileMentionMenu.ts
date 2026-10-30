@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
+import { getMentionQuery, resolveMentionDirectory } from "@/lib/shared/composer-queries";
 import { getRelativeFilePath, joinFilePath, normalizeFilePathSlashes } from "@/lib/shared/file-paths";
 import { SLASH_PAGE_SIZE } from "../constants";
 
@@ -12,12 +13,6 @@ export interface FileMentionEntry {
   isParent?: boolean;
 }
 
-export interface FileMentionQuery {
-  start: number;
-  query: string;
-  directory: string;
-}
-
 export interface UseFileMentionMenuOptions {
   cwd?: string | null;
   value: string;
@@ -25,31 +20,6 @@ export interface UseFileMentionMenuOptions {
   setValue: (next: string | ((prev: string) => string)) => void;
   setCursorPosition: (pos: number) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
-}
-
-function getMentionQuery(value: string, cursor: number): FileMentionQuery | null {
-  const before = value.slice(0, cursor);
-  const match = before.match(/(^|\s)@([^\s]*)$/);
-  if (!match) return null;
-  const start = (match.index ?? 0) + match[1].length;
-  const raw = match[2].replace(/\\/g, "/");
-  const parts = raw.split("/");
-  const last = parts.pop() ?? "";
-  const directoryParts = parts.filter(Boolean);
-  return { start, query: last, directory: directoryParts.join("/") };
-}
-
-function pathInsideCwd(cwd: string, path: string): boolean {
-  const base = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
-  const candidate = normalizeFilePathSlashes(path).replace(/\/+$/, "");
-  return candidate === base || candidate.startsWith(`${base}/`);
-}
-
-function getDirectoryPath(cwd: string, directory: string): string | null {
-  const normalizedCwd = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
-  if (!directory) return normalizedCwd;
-  const candidate = normalizeFilePathSlashes(joinFilePath(normalizedCwd, directory));
-  return pathInsideCwd(normalizedCwd, candidate) ? candidate : null;
 }
 
 function codeSpan(path: string): string {
@@ -81,7 +51,7 @@ export function useFileMentionMenu({
     if (!cwd) return null;
     const parsed = getMentionQuery(value, cursorPosition);
     if (!parsed) return null;
-    const directory = getDirectoryPath(cwd, parsed.directory);
+    const directory = resolveMentionDirectory(cwd, parsed.directory);
     return directory ? { ...parsed, directory } : null;
   }, [cwd, value, cursorPosition]);
 
