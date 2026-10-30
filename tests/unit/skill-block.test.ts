@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSkillBlock } from "@/lib/shared/skill-block";
+import { parseSkillBlock, parseSkillCommand } from "@/lib/shared/skill-block";
 
 const block = (name: string, location: string, body: string, tail?: string) =>
   `<skill name="${name}" location="${location}">\nReferences are relative to /base.\n\n${body}\n</skill>` +
   (tail !== undefined ? `\n\n${tail}` : "");
+
+describe("parseSkillCommand", () => {
+  it("recognizes a skill immediately, preserving multiline user arguments", () => {
+    expect(parseSkillCommand("/skill:tdd")).toEqual({ name: "tdd", userMessage: undefined });
+    expect(parseSkillCommand("/skill:tdd fix this\nwith tests ")).toEqual({
+      name: "tdd",
+      userMessage: "fix this\nwith tests",
+    });
+  });
+
+  it.each(["", "ordinary text", "/skill:", "/skills:tdd", "use /skill:tdd", "/other tdd", " /skill:tdd", "/skill:tdd\narguments", "/skill:tdd\targuments"])(
+    "does not treat %s as a skill invocation",
+    (text) => expect(parseSkillCommand(text)).toBeNull(),
+  );
+});
 
 describe("parseSkillBlock", () => {
   it("命中无附加文字的技能块", () => {

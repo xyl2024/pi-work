@@ -4,6 +4,8 @@ import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent"
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
 import { normalizeToolCalls } from "./normalize";
+import { extractMessageText } from "./message-content";
+import { parseSkillBlock, parseSkillCommand } from "./skill-block";
 import {
   mergeInFlightToolPartialResult,
   patchSessionRuntimeState,
@@ -652,13 +654,24 @@ function reduceReducedSessionEvent(
             ? previous
             : [...previous, normalized]);
       }
-      if (completed?.role === "user" && event.origin) {
+      if (completed?.role === "user") {
+        const skillBlock = parseSkillBlock(extractMessageText(completed));
         next = patchSessionRuntimeState(next, "messages", (previous) => {
           const idx = previous.findLastIndex((m) => m.role === "user");
           if (idx === -1) return previous;
           const existing = previous[idx];
-          if ((existing as { origin?: unknown }).origin !== undefined) return previous;
-          const merged = { ...existing, origin: event.origin } as AgentMessage;
+          if (existing.role !== "user") return previous;
+          const command = skillBlock ? parseSkillCommand(extractMessageText(existing)) : null;
+          const replaceContent = command && skillBlock
+            && command.name === skillBlock.name
+            && command.userMessage === skillBlock.userMessage;
+          const mergeOrigin = event.origin && existing.origin === undefined;
+          if (!replaceContent && !mergeOrigin) return previous;
+          const merged = {
+            ...existing,
+            ...(replaceContent ? { content: completed.content } : {}),
+            ...(mergeOrigin ? { origin: event.origin } : {}),
+          };
           return [...previous.slice(0, idx), merged, ...previous.slice(idx + 1)];
         });
       }

@@ -578,6 +578,65 @@ describe("session event reducer: messages and the conversation tree", () => {
     expect(toolB.state.messages).toHaveLength(2);
   });
 
+  it("replaces an optimistic skill command with the expanded user message before the turn ends", () => {
+    const state = patchSessionRuntimeState(createSessionRuntimeState(), "messages", [
+      { role: "user", content: "/skill:tdd fix this\nwith tests", timestamp: 1 },
+    ]);
+    const content = '<skill name="tdd" location="/skills/tdd/SKILL.md">\nSkill instructions\n</skill>\n\nfix this\nwith tests';
+    const event = messageEnd({ role: "user", content: [{ type: "text", text: content }], timestamp: 2 });
+
+    const reduction = reduceSessionEvent(state, event);
+
+    expect(reduction.state.messages).toEqual([
+      { role: "user", content: [{ type: "text", text: content }], timestamp: 1 },
+    ]);
+    expect(reduceSessionEvent(reduction.state, event).state.messages).toBe(reduction.state.messages);
+  });
+
+  it("preserves image attachments and metadata when expanding a skill with an origin", () => {
+    const image = { type: "image", source: { type: "base64", media_type: "image/png", data: "image-data" } } as const;
+    const state = patchSessionRuntimeState(createSessionRuntimeState(), "messages", [
+      { role: "user", content: [{ type: "text", text: "/skill:tdd" }, image], timestamp: 1 },
+    ]);
+    const content = [
+      { type: "text", text: '<skill name="tdd" location="/skills/tdd/SKILL.md">\nInstructions\n</skill>' },
+      image,
+    ];
+    const reduction = reduceSessionEvent(state, {
+      ...messageEnd({ role: "user", content, timestamp: 2 }),
+      origin: { kind: "web" },
+    });
+
+    expect(reduction.state.messages).toEqual([
+      { role: "user", content, timestamp: 1, origin: { kind: "web" } },
+    ]);
+  });
+
+  it("does not append a skill message when there is no optimistic user message", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), messageEnd({
+      role: "user",
+      content: '<skill name="tdd" location="/skills/tdd/SKILL.md">\nInstructions\n</skill>',
+    }));
+
+    expect(reduction.state.messages).toEqual([]);
+  });
+
+  it.each([
+    "/skill:other fix this",
+    "/skill:tdd different arguments",
+    "ordinary message",
+  ])("does not replace an unrelated user message: %s", (content) => {
+    const state = patchSessionRuntimeState(createSessionRuntimeState(), "messages", [
+      { role: "user", content, timestamp: 1 },
+    ]);
+    const reduction = reduceSessionEvent(state, messageEnd({
+      role: "user",
+      content: '<skill name="tdd" location="/skills/tdd/SKILL.md">\nInstructions\n</skill>\n\nfix this',
+    }));
+
+    expect(reduction.state.messages).toBe(state.messages);
+  });
+
   it("settles a user message without committing it or refreshing context", () => {
     const reduction = reduceSessionEvent(
       createSessionRuntimeState(),

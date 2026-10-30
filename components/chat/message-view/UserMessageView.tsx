@@ -13,7 +13,7 @@ import { SmartImage } from "../../ui/SmartImage";
 import { type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
 import { extractMessageImages, extractMessageText } from "@/lib/shared/message-content";
-import { parseSkillBlock } from "@/lib/shared/skill-block";
+import { parseSkillBlock, parseSkillCommand } from "@/lib/shared/skill-block";
 import { ToolIcon } from "../../ui/icons";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
@@ -71,6 +71,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
 
   const content = extractMessageText(message);
   const skillBlock = parseSkillBlock(content);
+  const skillInvocation = skillBlock ?? parseSkillCommand(content);
   const imageBlocks: ImageContent[] = extractMessageImages(message);
   const imageGallery: ImageItem[] = imageBlocks.map((image) => {
     const flat = image as unknown as { data?: string; mimeType?: string };
@@ -222,11 +223,11 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
               </div>
             )}
 
-            {skillBlock ? (
+            {skillInvocation ? (
               <>
-                <div style={{ marginBottom: skillBlock.userMessage ? 8 : 0 }}>
+                <div style={{ marginBottom: skillInvocation.userMessage ? 8 : 0 }}>
                   <SkillInvocationPill
-                    name={skillBlock.name}
+                    name={skillInvocation.name}
                     expanded={skillExpanded}
                     onToggle={() => setSkillExpanded((v) => !v)}
                   />
@@ -234,7 +235,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
                 {skillExpanded && (
                   <div
                     style={{
-                      marginBottom: skillBlock.userMessage ? 8 : 0,
+                      marginBottom: skillInvocation.userMessage ? 8 : 0,
                       padding: "8px 10px",
                       background: "rgba(59,130,246,0.06)",
                       borderLeft: "3px solid rgba(59,130,246,0.35)",
@@ -247,12 +248,12 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
                       wordBreak: "break-word",
                     }}
                   >
-                    {skillBlock.content}
+                    {skillBlock?.content ?? content}
                   </div>
                 )}
-                {skillBlock.userMessage && (
+                {skillInvocation.userMessage && (
                   <div style={USER_TEXT_STYLE}>
-                    {highlightKeywords(skillBlock.userMessage, keywords, isSearchMatch)}
+                    {highlightKeywords(skillInvocation.userMessage, keywords, isSearchMatch)}
                   </div>
                 )}
               </>

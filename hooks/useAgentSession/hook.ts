@@ -30,6 +30,7 @@ import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
 import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
 import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "@/lib/shared/permission-mode";
+import { parseSkillCommand } from "@/lib/shared/skill-block";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -400,6 +401,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
             ? { permissionMode: newSessionPermissionMode }
             : {}),
         });
+        if (parseSkillCommand(message)) void loadSession(realId);
       } else if (session) {
         await ensureEventsConnected(session.id);
         await sendAgentCommand(session.id, {
@@ -422,7 +424,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, loadSession, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
