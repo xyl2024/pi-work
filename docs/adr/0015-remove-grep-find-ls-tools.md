@@ -26,5 +26,5 @@
 - **丢掉的是 `.gitignore` 感知，不是能力。** 这三件工具底层走 `fd` / `ripgrep`，默认跳过被忽略的文件；`bash` 覆盖它们的写法（`grep -r`、`find .`）不跳，模型得自己写 `git grep`、`rg` 或 `fd`，或者补 `--exclude-dir`。目录列表也从「500 条上限 + 按字母序 + 目录带 `/` 后缀」变成 `ls` 的裸输出。这是这次移除**有意**接受的口径变化：`bash` 的输出就是用户自己敲那条命令会看到的东西。
 - 存量会话、cwd 工具选择与子代理档案里残留的这三个名字，前缀展开后没有匹配工具，等价于不选——不需要迁移代码，与 ADR-0011 / ADR-0013 相同。
 - 历史 transcript（含 pi CLI 直接产生的会话）里仍然有这三个工具的调用。`getToolPreview` 与 `ToolCallBlock` 的渲染分支保留 `find` / `grep` / `ls`，老会话与 `pi` 自己的会话回放时预览不变；`classifyToolCall` 不需要改，它们本来就落在 `"other"`。
-- `SUBAGENT_DEFAULT_TOOL_IDS` 的注释里「只读探索核心」现在只有一项，名字照旧；`lib/server/agent-tool-denylist.ts` 与 `lib/shared/agent-shell-tools.ts` 的分工是「产品不发什么」与「平台有没有」，两条理由在前者合成。
+- `SUBAGENT_DEFAULT_TOOL_IDS` 里「只读探索核心」现在只有一项，名字照旧；`lib/server/agent-tool-denylist.ts` 与 `lib/shared/agent-shell-tools.ts` 的分工是「产品不发什么」与「平台有没有」，两条理由在前者合成。
 - 目录列表不再有内置上限这一层保护：`bash ls` 一个超大目录的输出由 `bash` 工具自己的截断（2000 行 / 50KB，取尾）兜底。

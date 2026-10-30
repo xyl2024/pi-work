@@ -1,6 +1,6 @@
 # 交互闸门是一个 module：一张表、两类闸门、不变量靠结构而不靠断言
 
-服务端有两件事需要「一次工具调用停下来等用户」，它们的骨架被写了两遍：`AgentSessionWrapper` 的 `pendingPermissions`（`lib/server/rpc-manager.ts:113-114`、`:491-546`）与 `pendingUserInputs`（`:115`、`:561-650`）。两处都维护同一件事——按 `toolCallId` 存一个未兑现的 Promise、广播一条合成的 SSE 事件、等客户端 POST 回来 resolve、超时或销毁时收摊——两处也都写着同一段「重复请求返回既有 promise」的包装（`:492-499` 与 `:565-572`）。代码里留了一条为这份重复辩护的注释（`:71`）：*「Distinct from `pendingPermissions` because the data shape, lifecycle, and front-end renderer are entirely different.」* 拆开看只有 data shape 站得住：front-end renderer 在客户端，不该成为服务端代码重复的理由；lifecycle 恰恰是同一个（挂起 → 决议 → 收摊），差异只在策略。
+服务端有两件事需要「一次工具调用停下来等用户」，它们的骨架被写了两遍：`AgentSessionWrapper` 的 `pendingPermissions`（`lib/server/rpc-manager.ts:113-114`、`:491-546`）与 `pendingUserInputs`（`:115`、`:561-650`）。两处都维护同一件事——按 `toolCallId` 存一个未兑现的 Promise、广播一条合成的 SSE 事件、等客户端 POST 回来 resolve、超时或销毁时收摊——两处也都写着同一段「重复请求返回既有 promise」的包装（`:492-499` 与 `:565-572`）。代码里曾留有一条为这份重复辩护的注释（`lib/server/rpc-manager.ts`，已按项目约定随注释清理移除）：*「Distinct from `pendingPermissions` because the data shape, lifecycle, and front-end renderer are entirely different.」* 拆开看只有 data shape 站得住：front-end renderer 在客户端，不该成为服务端代码重复的理由；lifecycle 恰恰是同一个（挂起 → 决议 → 收摊），差异只在策略。
 
 重复已经产生三处漂移，且都不是口味问题：
 
@@ -12,7 +12,7 @@
 
 三条边界：
 
-- **表对载荷泛型，不变量不做断言。** 「同一会话至多一个闸门」今天成立，靠的是 pi「先串行 preflight、再并行执行」加上 `ask_user_questions` 声明的 `executionMode: "sequential"`（整批因此降级为串行），而权限确认恰好是在 preflight 阶段提的；这是借来的地基。module 用一张表在结构上让「装不下两个」成立，并把这条假设写在注释里，但**不**为了它抛错——SDK 哪天改了行为，我们要的是降级，不是线上崩溃。
+- **表对载荷泛型，不变量不做断言。** 「同一会话至多一个闸门」今天成立，靠的是 pi「先串行 preflight、再并行执行」加上 `ask_user_questions` 声明的 `executionMode: "sequential"`（整批因此降级为串行），而权限确认恰好是在 preflight 阶段提的；这是借来的地基。module 用一张表在结构上让「装不下两个」成立（这条借来的假设只记录在本文，代码里不写注释），但**不**为了它抛错——SDK 哪天改了行为，我们要的是降级，不是线上崩溃。
 - **module 产出「决定 + 一句拒绝理由」，不产出 pi 的形状。** ADR-0001 要求对子代理说一句话（今天那句在 `subagentPermissionBlock`，`:1064`），所以理由文本是 module 的活；但 `{ block: true, reason }` 是 pi 的扩展返回值形状，由调用点包。这样 module 的测试不需要 SDK 的类型（ADR-0003 规则 3）。
 - **配置不进 module。** 超时以 `timeoutMs: number | null` 传入（`null` 即没有截止时间）；`dangerous_patterns.timeout_ms` 原地不动（它属于那组规则），提问的截止时间另开一个键。module 不认识配置文件。
 
