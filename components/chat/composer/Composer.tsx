@@ -6,8 +6,18 @@ import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { CollapsiblePanel } from "../../ui/CollapsiblePanel";
 import { SlashCommandMenu } from "../SlashCommandMenu";
+import { FileMentionMenu } from "../FileMentionMenu";
+import { useFileMention } from "./useFileMention";
+import { getRelativeFilePath, joinFilePath } from "@/lib/shared/file-paths";
+import {
+  applyMentionDirectorySelection,
+  applyMentionFileSelection,
+  mentionParentSelection,
+  mentionRelativeDirectory,
+  type MentionEntry,
+} from "@/lib/client/composer/mention";
 import { findDirectSlashResource, formatSlashContent, rankSlashResources, type SlashResource } from "@/lib/shared/slash-commands";
-import { getSlashQuery } from "@/lib/shared/composer-queries";
+import { getMentionQuery, getSlashQuery } from "@/lib/shared/composer-queries";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { useToolsDropdown } from "../chat-input/hooks/useToolsDropdown";
 import { BottomToolbar } from "../chat-input/BottomToolbar";
@@ -126,6 +136,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   const [state, setState] = useState<ComposerState>(emptyComposerState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const logicalText = projectDocText(state.doc);
+  const cursorOffset = offsetOfCursor(state);
+  const mention = useFileMention({ cwd, text: logicalText, cursorOffset });
+  const { syncFileMentionMenuForEdit, closeMentionMenu, retryFileMentionLoad } = mention;
+  const mentionMenuOpen = mention.open && Boolean(mention.query);
 
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
@@ -144,9 +159,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     skill: (node) => t("Skill {name}", { name: node.name }),
     skillTitle: (node) => (node.source === "skill" ? t("Skill") : t("Builtin action")),
     file: (path) => t("File {path}", { path }),
+    fileText: (path) => getRelativeFilePath(path, cwd ?? undefined),
+    fileTitle: (path) => (cwd ? joinFilePath(cwd, path) : path),
     image: (id) => t("Image {id}", { id }),
     removeImage: (id) => t("Remove image {id}", { id }),
-  }), [t]);
+  }), [cwd, t]);
 
   const images = useMemo(
     () => state.doc.nodes.filter((node): node is ComposerImageNode => node.kind === "image"),
@@ -201,8 +218,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     stateRef.current = next;
     if (options?.skipProjection) skipProjectionRef.current = true;
     setState(next);
-    setSlashMenuOpen((open) => shouldOpenSlashMenu(projectDocText(next.doc), offsetOfCursor(next), open));
-  }, []);
+    const nextText = projectDocText(next.doc);
+    const nextOffset = offsetOfCursor(next);
+    setSlashMenuOpen((open) => !getMentionQuery(nextText, nextOffset) && shouldOpenSlashMenu(nextText, nextOffset, open));
+    syncFileMentionMenuForEdit(nextText, nextOffset);
+  }, [syncFileMentionMenuForEdit]);
 
   const syncFromDom = useCallback((options?: { resetCompositionSkip?: boolean }) => {
     const editor = editorRef.current;
@@ -232,8 +252,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   }, [focusEditor, updateState]);
 
   const slashQuery = useMemo(
-    () => getSlashQuery(projectDocText(state.doc), offsetOfCursor(state)),
-    [state],
+    () => getSlashQuery(logicalText, cursorOffset),
+    [logicalText, cursorOffset],
+  );
+
+  const slashMenuVisible = slashMenuOpen && Boolean(slashQuery) && !mentionMenuOpen;
+  const relativeMentionDirectory = useMemo(
+    () => (cwd && mention.query ? mentionRelativeDirectory(cwd, mention.query.directory) : ""),
+    [cwd, mention.query],
   );
 
   const filteredSlashResources = useMemo(() => {
@@ -276,8 +302,79 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     focusEditor(next.doc, next.cursor);
   }, [focusEditor, onSlashAction, updateState]);
 
+  const selectMentionEntry = useCallback((entry: MentionEntry) => {
+    const current = stateRef.current;
+    const offset = offsetOfCursor(current);
+    if (entry.isDir || entry.isParent) {
+      const next = applyMentionDirectorySelection(current, relativeMentionDirectory, entry, offset);
+      updateState(next);
+      focusEditor(next.doc, next.cursor);
+      return;
+    }
+    const relativePath = cwd ? getRelativeFilePath(entry.fullPath, cwd).replace(/^\/+/, "") : entry.name;
+    const next = applyMentionFileSelection(current, relativePath, offset);
+    updateState(next);
+    closeMentionMenu();
+    focusEditor(next.doc, next.cursor);
+  }, [closeMentionMenu, cwd, focusEditor, relativeMentionDirectory, updateState]);
+
+  const handleMentionKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>): boolean => {
+    if (!mentionMenuOpen || !mention.query) return false;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMentionMenu();
+      return true;
+    }
+    if (event.key === "Backspace" && mention.query.query === "" && relativeMentionDirectory) {
+      const parent = mentionParentSelection(stateRef.current, relativeMentionDirectory, offsetOfCursor(stateRef.current));
+      if (parent) {
+        event.preventDefault();
+        updateState(parent);
+        focusEditor(parent.doc, parent.cursor);
+        return true;
+      }
+    }
+    if (mention.loading) {
+      if (["Enter", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    }
+    const visible = mention.visibleEntries;
+    if (visible.length === 0) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      mention.setActiveIndex((index) => (index + 1) % visible.length);
+      return true;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      mention.setActiveIndex((index) => (index - 1 + visible.length) % visible.length);
+      return true;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      mention.setPage((page) => (page >= mention.pageCount - 1 ? 0 : page + 1));
+      mention.setActiveIndex(0);
+      return true;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      mention.setPage((page) => (page <= 0 ? mention.pageCount - 1 : page - 1));
+      mention.setActiveIndex(0);
+      return true;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      selectMentionEntry(visible[Math.min(mention.activeIndex, visible.length - 1)] ?? visible[0]);
+      return true;
+    }
+    return false;
+  }, [closeMentionMenu, focusEditor, mention, mentionMenuOpen, relativeMentionDirectory, selectMentionEntry, updateState]);
+
   const handleSlashKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>): boolean => {
-    if (!slashMenuOpen) return false;
+    if (!slashMenuVisible) return false;
     if (event.key === "Escape") {
       event.preventDefault();
       setSlashMenuOpen(false);
@@ -312,7 +409,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       return true;
     }
     return false;
-  }, [slashMenuOpen, slashQuery, visibleSlashResources, slashActiveIndex, slashPageCount, selectSlashResource]);
+  }, [slashMenuVisible, slashQuery, visibleSlashResources, slashActiveIndex, slashPageCount, selectSlashResource]);
 
   const addImageFiles = useCallback(async (files: File[]) => {
     const imageFiles = files.filter(isImageFile);
@@ -371,6 +468,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (composingRef.current || event.nativeEvent.isComposing) return;
+    if (handleMentionKeyDown(event)) return;
     if (handleSlashKeyDown(event)) return;
     const editor = editorRef.current;
     if (!editor) return;
@@ -390,7 +488,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       return;
     }
     updateState(result.state);
-  }, [handleSend, handleSlashKeyDown, updateState]);
+  }, [handleMentionKeyDown, handleSend, handleSlashKeyDown, updateState]);
 
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
@@ -663,7 +761,28 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
           </div>
           </CollapsiblePanel>
 
-          {slashMenuOpen && slashQuery && (
+          {mentionMenuOpen && mention.query && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 44px)", left: 0,
+              zIndex: 200, width: "min(560px, 100%)",
+              background: "var(--bg)", border: "1px solid var(--border)",
+              borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+              overflow: "hidden",
+            }}>
+              <FileMentionMenu
+                items={mention.visibleEntries}
+                activeIndex={mention.activeIndex}
+                loading={mention.loading}
+                error={mention.error}
+                onSelect={selectMentionEntry}
+                onRetry={retryFileMentionLoad}
+                page={mention.page}
+                pageCount={mention.pageCount}
+              />
+            </div>
+          )}
+
+          {slashMenuVisible && (
             <div style={{
               position: "absolute", bottom: "calc(100% + 44px)", left: 0,
               zIndex: 200, width: "min(560px, 100%)",

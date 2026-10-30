@@ -5,6 +5,8 @@ export interface ComposerLabels {
   skill: (node: ComposerSkillNode) => string;
   skillTitle?: (node: ComposerSkillNode) => string;
   file: (path: string) => string;
+  fileText?: (path: string) => string;
+  fileTitle?: (path: string) => string;
   image: (id: string) => string;
   removeImage: (id: string) => string;
 }
@@ -44,8 +46,8 @@ function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
     element.textContent = `/${node.command}`;
   } else if (node.kind === "file") {
     element.setAttribute("data-path", node.relativePath);
-    element.setAttribute("title", node.relativePath);
-    element.textContent = node.relativePath;
+    element.setAttribute("title", labels.fileTitle?.(node.relativePath) ?? node.relativePath);
+    element.textContent = labels.fileText?.(node.relativePath) ?? node.relativePath;
   } else if (node.kind === "image") {
     element.setAttribute("data-id", node.id);
     element.setAttribute("data-image-data", node.data);

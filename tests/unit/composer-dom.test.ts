@@ -87,6 +87,21 @@ describe("composer DOM projection", () => {
     expect(readDoc(element)).toEqual(imageDoc);
   });
 
+  it("renders a file chip with its display text and full path title", () => {
+    const element = mount();
+    const fileDoc: ComposerDoc = { nodes: [{ kind: "file", relativePath: "src/a.ts" }] };
+    writeDoc(element, fileDoc, {
+      ...labels,
+      fileText: (path) => `…${path}`,
+      fileTitle: (path) => `/repo/${path}`,
+    });
+    const chip = element.querySelector("[data-composer-kind='file']") as HTMLElement;
+    expect(chip.textContent).toBe("…src/a.ts");
+    expect(chip.getAttribute("title")).toBe("/repo/src/a.ts");
+    expect(chip.getAttribute("aria-label")).toBe("File src/a.ts");
+    expect(readDoc(element)).toEqual(fileDoc);
+  });
+
   it("reads an empty editor as an empty text document", () => {
     const element = mount();
     writeDoc(element, { nodes: [{ kind: "text", text: "" }] }, labels);
