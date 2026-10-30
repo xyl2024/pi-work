@@ -72,12 +72,7 @@ interface Props {
   onSessionNameChange?: (name: string) => void;
   onSessionInfoLoaded?: (session: SessionInfo) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
-  onDraftChange?: (draft: {
-    dirty: boolean;
-    text: string;
-    imageCount: number;
-    cursorPosition: number;
-  }) => void;
+  onDraftChange?: (draft: { dirty: boolean }) => void;
   onAgentStatusChange?: (status: {
     running: boolean;
     streaming: boolean;
@@ -124,6 +119,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     handlePermissionModeChange,
     handleCompact,
     activeLeafId, currentSessionId,
+    userMessageHistory,
     inFlightToolResults,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
@@ -581,6 +577,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}
         slashResources={slashResources}
+        userMessageHistory={userMessageHistory}
+        sessionId={session?.id ?? null}
         onSlashAction={(action) => {
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();

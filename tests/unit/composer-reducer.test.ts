@@ -120,6 +120,161 @@ describe("composer cursor keys", () => {
   });
 });
 
+describe("composer history keys", () => {
+  const history = ["first message", "second message", "third message"];
+
+  it("walks from the newest message backwards on ArrowUp", () => {
+    const start = reduceComposerKey(typed("draft"), { key: "ArrowUp", history });
+    expect(start.effect).toBe("history-prev");
+    expect(start.state.doc.nodes).toEqual([{ kind: "text", text: "third message" }]);
+    expect(offsetOfCursor(start.state)).toBe("third message".length);
+
+    const older = reduceComposerKey(start.state, { key: "ArrowUp", history });
+    expect(older.state.doc.nodes).toEqual([{ kind: "text", text: "second message" }]);
+    expect(offsetOfCursor(older.state)).toBe("second message".length);
+
+    const oldest = reduceComposerKey(older.state, { key: "ArrowUp", history });
+    expect(oldest.state.doc.nodes).toEqual([{ kind: "text", text: "first message" }]);
+
+    const stuck = reduceComposerKey(oldest.state, { key: "ArrowUp", history });
+    expect(stuck.effect).toBe("history-prev");
+    expect(stuck.state.doc.nodes).toEqual([{ kind: "text", text: "first message" }]);
+  });
+
+  it("restores the pre-history draft on ArrowDown past the oldest entry", () => {
+    const start = reduceComposerKey(typed("my draft"), { key: "ArrowUp", history });
+    const older = reduceComposerKey(start.state, { key: "ArrowUp", history });
+    const oldest = reduceComposerKey(older.state, { key: "ArrowUp", history });
+    const restored = reduceComposerKey(oldest.state, { key: "ArrowDown", history });
+    expect(restored.effect).toBe("history-next");
+    expect(restored.state.doc.nodes).toEqual([{ kind: "text", text: "second message" }]);
+
+    const back = reduceComposerKey(
+      reduceComposerKey(restored.state, { key: "ArrowDown", history }).state,
+      { key: "ArrowDown", history },
+    );
+    expect(back.effect).toBe("history-next");
+    expect(back.state.doc.nodes).toEqual([{ kind: "text", text: "my draft" }]);
+    expect(offsetOfCursor(back.state)).toBe("my draft".length);
+
+    expect(reduceComposerKey(back.state, { key: "ArrowDown", history }).effect).toBe("none");
+  });
+
+  it("filters history by a case-insensitive prefix of the current buffer", () => {
+    const filteredHistory = ["alpha one", "beta", "Alpha two"];
+    const start = reduceComposerKey(typed("al"), { key: "ArrowUp", history: filteredHistory });
+    expect(start.state.doc.nodes).toEqual([{ kind: "text", text: "Alpha two" }]);
+    const older = reduceComposerKey(start.state, { key: "ArrowUp", history: filteredHistory });
+    expect(older.state.doc.nodes).toEqual([{ kind: "text", text: "alpha one" }]);
+  });
+
+  it("falls back to the full history when the prefix subset is empty", () => {
+    const result = reduceComposerKey(typed("zzz"), { key: "ArrowUp", history });
+    expect(result.state.doc.nodes).toEqual([{ kind: "text", text: "third message" }]);
+  });
+
+  it("does not steal ArrowUp in a multi-line draft away from the line start", () => {
+    const state = typed("line one\nline two", 12);
+    expect(reduceComposerKey(state, { key: "ArrowUp", history }).effect).toBe("none");
+    expect(reduceComposerKey(state, { key: "ArrowUp", history }).state).toBe(state);
+  });
+
+  it("still navigates history from the very start of a multi-line draft", () => {
+    const state = typed("line one\nline two", 0);
+    const result = reduceComposerKey(state, { key: "ArrowUp", history });
+    expect(result.effect).toBe("history-prev");
+    expect(result.state.doc.nodes).toEqual([{ kind: "text", text: "third message" }]);
+  });
+
+  it("does not steal arrows while composing", () => {
+    const state = typed("ni");
+    expect(reduceComposerKey(state, { key: "ArrowUp", history, isComposing: true }).effect).toBe("none");
+    expect(reduceComposerKey(state, { key: "ArrowDown", history, isComposing: true }).effect).toBe("none");
+  });
+
+  it("resets navigation when the session changes", () => {
+    const start = reduceComposerKey(typed("draft"), { key: "ArrowUp", history, sessionId: "one" });
+    const older = reduceComposerKey(start.state, { key: "ArrowUp", history, sessionId: "one" });
+    expect(older.state.doc.nodes).toEqual([{ kind: "text", text: "second message" }]);
+
+    expect(reduceComposerKey(older.state, { key: "ArrowDown", history, sessionId: "one" }).effect).toBe("history-next");
+    const switched = reduceComposerKey(older.state, { key: "ArrowDown", history, sessionId: "two" });
+    expect(switched.effect).toBe("none");
+    expect(switched.state).toBe(older.state);
+  });
+});
+
+describe("composer thinking level keys", () => {
+  const availableThinkingLevels = ["off", "low", "high"];
+
+  it("cycles forward on Tab and wraps around", () => {
+    const low = reduceComposerKey(typed(""), {
+      key: "Tab",
+      thinkingLevel: "off",
+      availableThinkingLevels,
+    });
+    expect(low.effect).toEqual({ type: "thinking", level: "low" });
+
+    const high = reduceComposerKey(typed(""), {
+      key: "Tab",
+      thinkingLevel: "low",
+      availableThinkingLevels,
+    });
+    expect(high.effect).toEqual({ type: "thinking", level: "high" });
+
+    const wrapped = reduceComposerKey(typed(""), {
+      key: "Tab",
+      thinkingLevel: "high",
+      availableThinkingLevels,
+    });
+    expect(wrapped.effect).toEqual({ type: "thinking", level: "off" });
+  });
+
+  it("cycles backward on Shift+Tab and wraps around", () => {
+    const off = reduceComposerKey(typed(""), {
+      key: "Tab",
+      shiftKey: true,
+      thinkingLevel: "low",
+      availableThinkingLevels,
+    });
+    expect(off.effect).toEqual({ type: "thinking", level: "off" });
+
+    const wrapped = reduceComposerKey(typed(""), {
+      key: "Tab",
+      shiftKey: true,
+      thinkingLevel: "off",
+      availableThinkingLevels,
+    });
+    expect(wrapped.effect).toEqual({ type: "thinking", level: "high" });
+  });
+
+  it("skips levels the current model does not support", () => {
+    const result = reduceComposerKey(typed(""), {
+      key: "Tab",
+      thinkingLevel: "off",
+      availableThinkingLevels: ["high", "off", "medium"],
+    });
+    expect(result.effect).toEqual({ type: "thinking", level: "medium" });
+  });
+
+  it("does not act when there are no available levels", () => {
+    const state = typed("hello");
+    expect(reduceComposerKey(state, { key: "Tab", thinkingLevel: "off" }).effect).toBe("none");
+    expect(reduceComposerKey(state, { key: "Tab", availableThinkingLevels: [] }).effect).toBe("none");
+    expect(reduceComposerKey(state, { key: "Tab", availableThinkingLevels: [] }).state).toBe(state);
+  });
+
+  it("does not act while composing", () => {
+    const state = typed("hello");
+    expect(reduceComposerKey(state, {
+      key: "Tab",
+      thinkingLevel: "off",
+      availableThinkingLevels,
+      isComposing: true,
+    }).effect).toBe("none");
+  });
+});
+
 describe("composer undo and redo keys", () => {
   it("undoes on Cmd/Ctrl+Z", () => {
     const state = typed("abc");

@@ -1,3 +1,5 @@
+import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
+
 export interface ComposerTextNode {
   kind: "text";
   text: string;
@@ -44,18 +46,25 @@ export interface ComposerSnapshot {
   cursor: Cursor;
 }
 
+export interface ComposerHistory {
+  sessionId: string | null;
+  index: number | null;
+  draft: string;
+}
+
 export interface ComposerState extends ComposerSnapshot {
   past: ComposerSnapshot[];
   future: ComposerSnapshot[];
+  history: ComposerHistory;
 }
 
 export type ComposerEffect =
   | "none"
   | "edit"
   | "send"
-  | "thinking-next"
   | "history-prev"
-  | "history-next";
+  | "history-next"
+  | { type: "thinking"; level: ThinkingLevelOption };
 
 export interface ComposerKeyInput {
   key: string;
@@ -65,6 +74,10 @@ export interface ComposerKeyInput {
   altKey?: boolean;
   isComposing?: boolean;
   selection?: ComposerRange;
+  sessionId?: string | null;
+  history?: readonly string[];
+  thinkingLevel?: ThinkingLevelOption;
+  availableThinkingLevels?: readonly string[] | null;
 }
 
 export interface ComposerKeyResult {

@@ -81,15 +81,12 @@ interface Props {
   onPermissionModeToggle?: () => void;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   slashResources?: SlashResource[];
+  userMessageHistory?: string[];
+  sessionId?: string | null;
   onSlashAction?: (action: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
-  onDraftChange?: (draft: {
-    dirty: boolean;
-    text: string;
-    imageCount: number;
-    cursorPosition: number;
-  }) => void;
+  onDraftChange?: (draft: { dirty: boolean }) => void;
   disabled?: boolean;
   showNotifyPicker?: boolean;
   notifyChannelId?: string | null;
@@ -121,6 +118,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   permissionMode = "confirm", onPermissionModeToggle,
   retryInfo,
   slashResources = [],
+  userMessageHistory,
+  sessionId,
   onSlashAction,
   cwd,
   onCwdChange,
@@ -480,6 +479,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       metaKey: event.metaKey,
       altKey: event.altKey,
       selection,
+      sessionId,
+      history: userMessageHistory,
+      thinkingLevel: thinkingLevel ?? "off",
+      availableThinkingLevels: onThinkingLevelChange ? availableThinkingLevels : undefined,
     });
     if (result.effect === "none") return;
     event.preventDefault();
@@ -487,8 +490,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       handleSend();
       return;
     }
+    if (typeof result.effect === "object") {
+      onThinkingLevelChange?.(result.effect.level);
+      return;
+    }
     updateState(result.state);
-  }, [handleMentionKeyDown, handleSend, handleSlashKeyDown, updateState]);
+  }, [handleMentionKeyDown, handleSend, handleSlashKeyDown, onThinkingLevelChange, sessionId, thinkingLevel, availableThinkingLevels, userMessageHistory, updateState]);
 
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
@@ -630,9 +637,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     const serialized = serializeComposer(state.doc);
     onDraftChange?.({
       dirty: Boolean(serialized.text.trim() || serialized.images.length),
-      text: serialized.text,
-      imageCount: serialized.images.length,
-      cursorPosition: offsetOfCursor(state),
     });
   }, [state, onDraftChange]);
 
