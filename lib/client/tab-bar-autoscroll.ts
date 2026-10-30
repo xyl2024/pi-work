@@ -23,6 +23,15 @@ export function computeEdgeScrollVelocity(
   return tLeft <= tRight ? -speed : speed;
 }
 
+export function keepPointerInRect(
+  clientX: number | null,
+  rect: EdgeRect,
+): number | null {
+  if (clientX === null) return null;
+  if (clientX < rect.left || clientX > rect.right) return null;
+  return clientX;
+}
+
 export type EdgeAutoscrollTarget = HTMLElement;
 
 export function createEdgeAutoscroll(options: EdgeScrollOptions = {}) {
@@ -35,11 +44,11 @@ export function createEdgeAutoscroll(options: EdgeScrollOptions = {}) {
       frame = null;
       return;
     }
-    if (clientX !== null) {
-      const velocity = computeEdgeScrollVelocity(clientX, target.getBoundingClientRect(), options);
-      if (velocity !== 0 && target.scrollWidth > target.clientWidth) {
-        target.scrollLeft += velocity;
-      }
+    const rect = target.getBoundingClientRect();
+    clientX = keepPointerInRect(clientX, rect);
+    if (clientX !== null && target.scrollWidth > target.clientWidth) {
+      const velocity = computeEdgeScrollVelocity(clientX, rect, options);
+      if (velocity !== 0) target.scrollLeft += velocity;
     }
     frame = requestAnimationFrame(step);
   };
@@ -47,6 +56,9 @@ export function createEdgeAutoscroll(options: EdgeScrollOptions = {}) {
   return {
     update(x: number) {
       clientX = x;
+    },
+    outside() {
+      clientX = null;
     },
     start(element: EdgeAutoscrollTarget) {
       target = element;
