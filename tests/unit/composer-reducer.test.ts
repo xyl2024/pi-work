@@ -179,11 +179,18 @@ describe("composer history keys", () => {
     expect(reduceComposerKey(state, { key: "ArrowUp", history }).state).toBe(state);
   });
 
-  it("still navigates history from the very start of a multi-line draft", () => {
+  it("does not navigate history from a multi-line draft even at the start", () => {
     const state = typed("line one\nline two", 0);
     const result = reduceComposerKey(state, { key: "ArrowUp", history });
-    expect(result.effect).toBe("history-prev");
-    expect(result.state.doc.nodes).toEqual([{ kind: "text", text: "third message" }]);
+    expect(result.effect).toBe("none");
+    expect(result.state).toBe(state);
+  });
+
+  it("does not navigate history down from a multi-line draft even at the end", () => {
+    const state = typed("line one\nline two", 17);
+    const result = reduceComposerKey(state, { key: "ArrowDown", history });
+    expect(result.effect).toBe("none");
+    expect(result.state).toBe(state);
   });
 
   it("does not steal arrows while composing", () => {
@@ -201,6 +208,59 @@ describe("composer history keys", () => {
     const switched = reduceComposerKey(older.state, { key: "ArrowDown", history, sessionId: "two" });
     expect(switched.effect).toBe("none");
     expect(switched.state).toBe(older.state);
+  });
+});
+
+describe("composer modifier passthrough", () => {
+  const passthrough = (
+    key: string,
+    extra: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean },
+  ) => {
+    const state = typed("abcdef", 3);
+    const result = reduceComposerKey(state, { key, ...extra });
+    expect(result.effect).toBe("none");
+    expect(result.state).toBe(state);
+  };
+
+  it.each([
+    { key: "Backspace", extra: { ctrlKey: true } },
+    { key: "Backspace", extra: { metaKey: true } },
+    { key: "Backspace", extra: { altKey: true } },
+    { key: "Delete", extra: { ctrlKey: true } },
+    { key: "Delete", extra: { metaKey: true } },
+    { key: "Delete", extra: { altKey: true } },
+    { key: "ArrowLeft", extra: { ctrlKey: true } },
+    { key: "ArrowLeft", extra: { metaKey: true } },
+    { key: "ArrowLeft", extra: { altKey: true } },
+    { key: "ArrowRight", extra: { ctrlKey: true } },
+    { key: "ArrowRight", extra: { metaKey: true } },
+    { key: "ArrowRight", extra: { altKey: true } },
+    { key: "Home", extra: { ctrlKey: true } },
+    { key: "Home", extra: { metaKey: true } },
+    { key: "Home", extra: { altKey: true } },
+    { key: "End", extra: { ctrlKey: true } },
+    { key: "End", extra: { metaKey: true } },
+    { key: "End", extra: { altKey: true } },
+    { key: "ArrowLeft", extra: { shiftKey: true } },
+    { key: "ArrowRight", extra: { shiftKey: true } },
+  ])("leaves $key to the browser when a modifier is held", ({ key, extra }) => {
+    passthrough(key, extra);
+  });
+
+  it("still deletes a chip on Shift+Backspace", () => {
+    const state = moveToOffset(withChip(), 2);
+    expect(reduceComposerKey(state, { key: "Backspace", shiftKey: true }).state.doc.nodes)
+      .toEqual([{ kind: "text", text: "ab" }]);
+  });
+
+  it("still sends on Cmd/Ctrl+Enter and cycles thinking on Tab", () => {
+    expect(reduceComposerKey(typed("hello"), { key: "Enter", ctrlKey: true }).effect).toBe("send");
+    expect(reduceComposerKey(typed("hello"), { key: "Enter", metaKey: true }).effect).toBe("send");
+    expect(reduceComposerKey(typed(""), {
+      key: "Tab",
+      thinkingLevel: "off",
+      availableThinkingLevels: ["off", "low"],
+    }).effect).toEqual({ type: "thinking", level: "low" });
   });
 });
 

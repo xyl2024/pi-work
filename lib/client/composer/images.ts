@@ -2,6 +2,7 @@ import type { AttachedImage, ComposerImageNode } from "./types";
 
 export interface ImageSource {
   id: string;
+  name?: string;
   dataUrl: string;
   previewUrl: string;
 }
@@ -27,6 +28,7 @@ export function createImageNode(source: ImageSource): ComposerImageNode | null {
   return {
     kind: "image",
     id: source.id,
+    ...(source.name ? { name: source.name } : {}),
     data: parsed.data,
     mimeType: parsed.mimeType,
     previewUrl: source.previewUrl,

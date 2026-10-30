@@ -20,6 +20,7 @@ export interface ComposerFileNode {
 export interface ComposerImageNode {
   kind: "image";
   id: string;
+  name?: string;
   data: string;
   mimeType: string;
   previewUrl: string;

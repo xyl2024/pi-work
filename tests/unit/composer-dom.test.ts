@@ -44,6 +44,7 @@ describe("composer DOM projection", () => {
     writeDoc(element, doc, labels);
     const chip = element.querySelector("[data-composer-kind='skill']");
     expect(chip?.getAttribute("contenteditable")).toBe("false");
+    expect(chip?.getAttribute("role")).toBe("img");
     expect(chip?.getAttribute("aria-label")).toBe("Skill review");
     expect(chip?.getAttribute("title")).toBe("skill");
   });
@@ -80,10 +81,30 @@ describe("composer DOM projection", () => {
     };
     writeDoc(element, imageDoc, labels);
     const chip = element.querySelector("[data-composer-kind='image']") as HTMLElement;
+    expect(chip.getAttribute("role")).toBe("img");
     expect(chip.getAttribute("aria-label")).toBe("Image one");
     expect(chip.querySelector("img")?.getAttribute("src")).toBe("blob:one");
     expect(chip.querySelector("[data-composer-remove]")?.getAttribute("aria-label"))
       .toBe("Remove image one");
+    expect(readDoc(element)).toEqual(imageDoc);
+  });
+
+  it("uses an image file name for its accessible label when one exists", () => {
+    const element = mount();
+    const imageDoc: ComposerDoc = {
+      nodes: [
+        { kind: "image", id: "one", name: "cat.png", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
+      ],
+    };
+    writeDoc(element, imageDoc, {
+      ...labels,
+      image: (id, name) => `Image ${name ?? id}`,
+      removeImage: (id, name) => `Remove image ${name ?? id}`,
+    });
+    const chip = element.querySelector("[data-composer-kind='image']") as HTMLElement;
+    expect(chip.getAttribute("aria-label")).toBe("Image cat.png");
+    expect(chip.querySelector("[data-composer-remove]")?.getAttribute("aria-label"))
+      .toBe("Remove image cat.png");
     expect(readDoc(element)).toEqual(imageDoc);
   });
 
