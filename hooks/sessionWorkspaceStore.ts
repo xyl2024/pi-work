@@ -32,7 +32,8 @@ export type SessionWorkspaceAction =
   | { type: "set_dirty"; tabId: string; dirty: boolean }
   | { type: "set_status"; tabId: string; status: SessionTabStatus }
   | { type: "close"; tabId: string }
-  | { type: "close_session"; sessionId: string };
+  | { type: "close_session"; sessionId: string }
+  | { type: "reorder"; tabId: string; toIndex: number };
 
 function makeDraftId(preferred?: string): string {
   if (preferred) return preferred;
@@ -272,6 +273,16 @@ export function sessionWorkspaceReducer(
       next.tabOrder.push(draft.tabId);
       next.tabs[draft.tabId] = draft;
       next.activeTabId = draft.tabId;
+      return next;
+    }
+
+    case "reorder": {
+      const index = state.tabOrder.indexOf(action.tabId);
+      if (index === -1) return state;
+      const next = copyState(state);
+      next.tabOrder.splice(index, 1);
+      const toIndex = Math.max(0, Math.min(action.toIndex, next.tabOrder.length));
+      next.tabOrder.splice(toIndex, 0, action.tabId);
       return next;
     }
   }

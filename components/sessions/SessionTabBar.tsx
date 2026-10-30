@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getSessionTabTitle,
@@ -10,6 +10,9 @@ import {
 import { Tooltip } from "../ui/Tooltip";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { InlineLoader } from "generative-loaders";
+import { createEdgeAutoscroll } from "@/lib/client/tab-bar-autoscroll";
+
+const DRAG_END_SUPPRESS_MS = 500;
 
 interface Props {
   tabs: SessionTab[];
@@ -19,6 +22,7 @@ interface Props {
   onNewSession?: () => void;
   onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
   onReload?: (tabId: string) => void;
+  onReorder?: (tabId: string, toIndex: number) => void;
   leadingControl?: ReactNode;
 }
 
@@ -55,10 +59,68 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
   );
 }
 
-export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, leadingControl }: Props) {
+export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, onReorder, leadingControl }: Props) {
   const { t } = useI18n();
   const cm = useContextMenu();
+  const dragTabIdRef = useRef<string | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dragEndedAtRef = useRef(0);
+  const closeArmedRef = useRef<string | null>(null);
+  const [closeArmedId, setCloseArmedId] = useState<string | null>(null);
+  const autoscrollRef = useRef<ReturnType<typeof createEdgeAutoscroll> | null>(null);
+  const [indicatorX, setIndicatorX] = useState<number | null>(null);
+  const getAutoscroll = useCallback(() => {
+    if (!autoscrollRef.current) autoscrollRef.current = createEdgeAutoscroll();
+    return autoscrollRef.current;
+  }, []);
+  const computeDropPoint = useCallback((clientX: number): { index: number; x: number | null } | null => {
+    const draggedId = dragTabIdRef.current;
+    if (!draggedId) return null;
+    const container = scrollRef.current;
+    if (!container) return null;
+    const nodes = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-session-tab-id]"),
+    ).filter((node) => node.dataset.sessionTabId !== draggedId);
+    let index = 0;
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      if (clientX >= rect.left + rect.width / 2) index += 1;
+    }
+    const containerRect = container.getBoundingClientRect();
+    let x: number | null = null;
+    if (nodes.length > 0) {
+      const anchorRect =
+        index < nodes.length ? nodes[index].getBoundingClientRect() : nodes[nodes.length - 1].getBoundingClientRect();
+      const anchor = index < nodes.length ? anchorRect.left : anchorRect.right;
+      x = anchor - containerRect.left + container.scrollLeft;
+    }
+    return { index, x };
+  }, []);
+  const clearDropTarget = useCallback(() => {
+    dropIndexRef.current = null;
+    setIndicatorX(null);
+  }, []);
+  const resetDrag = useCallback(() => {
+    dragTabIdRef.current = null;
+    clearDropTarget();
+    getAutoscroll().stop();
+  }, [clearDropTarget, getAutoscroll]);
+  const releaseCloseGuard = useCallback(() => {
+    if (closeArmedRef.current === null) return;
+    closeArmedRef.current = null;
+    setCloseArmedId(null);
+    window.removeEventListener("pointerup", releaseCloseGuard);
+  }, []);
+  const armCloseGuard = useCallback((tabId: string) => {
+    releaseCloseGuard();
+    closeArmedRef.current = tabId;
+    setCloseArmedId(tabId);
+    window.addEventListener("pointerup", releaseCloseGuard);
+  }, [releaseCloseGuard]);
+  useEffect(() => releaseCloseGuard, [releaseCloseGuard]);
+  const isNoDropTarget = (event: { target: EventTarget | null }): boolean =>
+    event.target instanceof Element && event.target.closest("[data-no-drop]") !== null;
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -103,6 +165,32 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         ref={scrollRef}
         onWheel={handleWheel}
         data-hide-v-scrollbar
+        onDragOver={(event) => {
+          if (!dragTabIdRef.current) return;
+          if (isNoDropTarget(event)) {
+            clearDropTarget();
+            return;
+          }
+          event.preventDefault();
+          const point = computeDropPoint(event.clientX);
+          if (!point) return;
+          dropIndexRef.current = point.index;
+          setIndicatorX(point.x);
+          getAutoscroll().update(event.clientX);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          const draggedId = dragTabIdRef.current;
+          const dropIndex = dropIndexRef.current ?? computeDropPoint(event.clientX)?.index ?? null;
+          resetDrag();
+          if (draggedId && dropIndex !== null && !isNoDropTarget(event)) onReorder?.(draggedId, dropIndex);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            clearDropTarget();
+            getAutoscroll().outside();
+          }
+        }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -112,8 +200,25 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           overflowX: "auto",
           height: 34,
           gap: 2,
+          position: "relative",
         }}
       >
+        {indicatorX !== null && dragTabIdRef.current !== null && (
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: 2,
+              bottom: 2,
+              left: 0,
+              width: 2,
+              borderRadius: 1,
+              background: "var(--accent)",
+              transform: `translateX(${indicatorX - 1}px)`,
+              pointerEvents: "none",
+            }}
+          />
+        )}
         {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
         const title = tab.kind === "draft" ? t("New session") : getSessionTabTitle(tab.session!);
@@ -126,8 +231,29 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             key={tab.tabId}
             className="group/tab"
             data-session-tab-id={tab.tabId}
-            onClick={() => onSelectTab(tab.tabId)}
+            draggable={closeArmedId !== tab.tabId}
+            onDragStart={(event) => {
+              if (event.target instanceof Element && event.target.closest("[data-no-drag]")) {
+                event.preventDefault();
+                return;
+              }
+              dragTabIdRef.current = tab.tabId;
+              clearDropTarget();
+              const scroller = scrollRef.current;
+              if (scroller) getAutoscroll().start(scroller);
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", tab.tabId);
+            }}
+            onDragEnd={() => {
+              dragEndedAtRef.current = Date.now();
+              resetDrag();
+            }}
+            onClick={() => {
+              if (Date.now() - dragEndedAtRef.current < DRAG_END_SUPPRESS_MS) return;
+              onSelectTab(tab.tabId);
+            }}
             onDoubleClick={(event) => {
+              if (Date.now() - dragEndedAtRef.current < DRAG_END_SUPPRESS_MS) return;
               event.stopPropagation();
               onCloseTab(tab.tabId);
             }}
@@ -188,6 +314,12 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               <button
                 type="button"
                 aria-label={`${t("Close tab")} ${title}`}
+                draggable={false}
+                data-no-drag
+                onMouseDown={(event) => {
+                  if (event.button !== 0) return;
+                  armCloseGuard(tab.tabId);
+                }}
                 className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -222,6 +354,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             type="button"
             aria-label={t("New session")}
             onClick={onNewSession}
+            data-no-drag
+            data-no-drop
             style={{
               display: "flex",
               alignItems: "center",
