@@ -62,7 +62,7 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
-import type { ChatInputHandle } from "../chat/ChatInput";
+import type { ComposerHandle } from "@/lib/client/composer/types";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { buildCommands, type Command, type CommandContext } from "@/lib/client/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
@@ -291,7 +291,7 @@ function highlightBasePrompt(text: string, keyPrefix: string): ReactNode[] {
 interface WorkspaceChatTabProps {
   tab: SessionTab;
   isActive: boolean;
-  registerChatInputRef: (tabId: string, ref: RefObject<ChatInputHandle | null> | null) => void;
+  registerChatInputRef: (tabId: string, ref: RefObject<ComposerHandle | null> | null) => void;
   onAgentEnd: (tabId: string) => void;
   onSessionCreated: (tabId: string, session: SessionInfo) => void;
   onSessionInfoLoaded: (tabId: string, session: SessionInfo) => void;
@@ -329,7 +329,7 @@ function WorkspaceChatTabView({
   onDraftChange,
   onAgentStatusChange,
 }: WorkspaceChatTabProps) {
-  const chatInputRef = useRef<ChatInputHandle | null>(null);
+  const chatInputRef = useRef<ComposerHandle | null>(null);
 
   useEffect(() => {
     registerChatInputRef(tab.tabId, chatInputRef);
@@ -444,7 +444,7 @@ export function AppShell() {
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
+  const chatInputRefs = useRef<Map<string, RefObject<ComposerHandle | null>>>(new Map());
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelSelection = useTextSelection(rightPanelRef);
   const confirm = useConfirm();
@@ -772,7 +772,7 @@ export function AppShell() {
       chatInputRefs.current.delete(id);
     }
   }, [confirm, t]);
-  const registerChatInputRef = useCallback((tabId: string, ref: RefObject<ChatInputHandle | null> | null) => {
+  const registerChatInputRef = useCallback((tabId: string, ref: RefObject<ComposerHandle | null> | null) => {
     if (ref) chatInputRefs.current.set(tabId, ref);
     else chatInputRefs.current.delete(tabId);
   }, []);
