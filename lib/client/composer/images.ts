@@ -1,10 +1,4 @@
-import type { ComposerImageNode } from "./types";
-
-export interface AttachedComposerImage {
-  data: string;
-  mimeType: string;
-  previewUrl: string;
-}
+import type { AttachedImage, ComposerImageNode } from "./types";
 
 export interface ImageSource {
   id: string;
@@ -39,7 +33,7 @@ export function createImageNode(source: ImageSource): ComposerImageNode | null {
   };
 }
 
-export function toAttachedImage(node: ComposerImageNode): AttachedComposerImage {
+export function toAttachedImage(node: ComposerImageNode): AttachedImage {
   return { data: node.data, mimeType: node.mimeType, previewUrl: node.previewUrl };
 }
 
