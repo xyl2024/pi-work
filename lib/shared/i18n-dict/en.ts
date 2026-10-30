@@ -18,8 +18,6 @@ export const EN_TRANSLATIONS = {
   "Stopping": "Stopping",
   "Cancelled": "Cancelled",
   "Interrupted": "Interrupted",
-  "Waiting for a free slot…": "Waiting for a free slot…",
-  "Refresh the conversation to see the final result": "Refresh the conversation to see the final result",
   "channels.channelName": "Channel name",
   "channels.rename": "Rename",
   "channels.save": "Save",

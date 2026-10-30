@@ -3,7 +3,7 @@
 //
 // The single source of the facts a view needs to draw one tool call:
 //
-//   - which kind it is (read / file mutation / bash / subagent / other);
+//   - which kind it is (read / file mutation / bash / codemode / other);
 //   - how many lines it added / deleted, and where that number comes from;
 //   - whether its result counts as empty.
 //
@@ -31,7 +31,6 @@ import {
   sumDiffStats,
   type ToolDiffStats,
 } from "./tool-diff-stats";
-import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import type {
   AgentMessage,
   AssistantMessage,
@@ -41,9 +40,9 @@ import type {
   ToolResultMessage,
 } from "./types";
 
-/** The display category of one tool call. Only these six exist — views must
+/** The display category of one tool call. Only these five exist — views must
  *  not re-derive "is this a file mutation?" from a tool-name comparison. */
-export type ToolCallKind = "read" | "file-mutation" | "bash" | "subagent" | "codemode" | "other";
+export type ToolCallKind = "read" | "file-mutation" | "bash" | "codemode" | "other";
 
 /** Classify one tool call by name. Unknown tools are `"other"`. */
 export function classifyToolCall(toolName: string): ToolCallKind {
@@ -55,11 +54,6 @@ export function classifyToolCall(toolName: string): ToolCallKind {
       return "file-mutation";
     case "bash":
       return "bash";
-    // The current tool name, plus the pre-rename one so old messages keep
-    // rendering as subagent cards (they are never executed any more).
-    case SUBAGENT_TOOL_NAME:
-    case LEGACY_SPAWN_SUBAGENT_TOOL_NAME:
-      return "subagent";
     case "codemode":
       return "codemode";
     default:

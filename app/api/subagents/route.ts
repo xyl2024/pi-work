@@ -17,7 +17,6 @@ const log = createLogger("api/subagents");
 
 // /api/subagents — the user-defined subagent profiles `spawn_subagent` can
 // launch. GET lists them; POST/PUT/DELETE manage one profile keyed by name.
-// (The separate /api/subagents/[sessionId]/activity route reads task rows.)
 
 export async function GET() {
   try {

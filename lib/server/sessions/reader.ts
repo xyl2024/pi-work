@@ -805,18 +805,17 @@ export async function readSubagentSessionStats(sessionId: string): Promise<Subag
 // ============================================================================
 // Subagent live info (stats + recent tool-call activity)
 //
-// Used by /api/subagents/[sessionId]/activity: polled every few seconds by
-// the parent session's subagent ToolCallBlock while the child runs.
-// Same mtime-cache pattern as readSubagentSessionStats — an unchanged JSONL
-// is never re-parsed.
+// Feeds the activity window of a subagent task detail (`subagent` tool
+// `get` / session lookups). Same mtime-cache pattern as
+// readSubagentSessionStats — an unchanged JSONL is never re-parsed.
 // ============================================================================
 
-/** One recent tool call in the child session, for the live activity feed. */
-export type { SubagentActivityItem, SubagentLiveInfo } from "@/lib/shared/types";
+/** One recent tool call in the child session, for the activity window. */
+export type { SubagentActivityItem } from "@/lib/shared/types";
 import type { SubagentActivityItem } from "@/lib/shared/types";
 
-/** Raw aggregate computed from the child session JSONL (before the route
- *  attaches task metadata to form the shared SubagentLiveInfo). */
+/** Raw aggregate computed from the child session JSONL (before callers slice
+ *  their own window off it). */
 export interface SubagentLiveSnapshot {
   assistantCount: number;
   readCount: number;

@@ -290,20 +290,13 @@ export const chat = {
   "Not a folder": "不是文件夹",
   "Failed to load folder": "加载文件夹失败",
 
-  // Spawn subagent live panel
-  "Subagent running": "子代理运行中",
-  "Waiting for subagent session…": "等待子会话启动…",
-  "{n} messages": "{n} 条消息",
   // Turn process fold: the summary row's expand-by-page controls. The page
   // size is a constant (`PROCESS_FOLD_PAGE`), so only the count is in the copy.
+  "{n} messages": "{n} 条消息",
   "{n} / {total} messages": "{n} / {total} 条消息",
   "Expand last {n}": "展开最后 {n} 条",
   "Expand next {n}": "再展开 {n} 条",
   "Expand remaining {n}": "展开剩余 {n} 条",
-  "{n} files read": "已读 {n} 个文件",
-  "Model {m}": "模型 {m}",
-  "Elapsed {t}": "已运行 {t}",
-  "No activity yet": "暂无活动",
 
   // 消息来源（Message origin）：悬停完整说明。键即映射产物里的 hover.key。
   "Message from channel {channel}": "来自频道 {channel}",

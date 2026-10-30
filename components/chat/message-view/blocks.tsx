@@ -11,9 +11,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { extractMessageText } from "@/lib/shared/message-content";
-import { deriveSubagentBlockState } from "@/lib/shared/subagent-block-state";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
-import { SubagentLivePanel } from "./SubagentLivePanel";
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
@@ -166,12 +164,10 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
   const isFileMutation = toolKind === "file-mutation";
-  const isSubagent = toolKind === "subagent";
   const isCodemode = toolKind === "codemode";
-  // Only the specialized renderers (bash / diff for edit & write / the
-  // subagent live panel) stay expanded by default; every other tool call
-  // block collapses by default.
-  const isSpecialized = isBash || isFileMutation || isSubagent;
+  // Only the specialized renderers (bash / diff for edit & write) stay
+  // expanded by default; every other tool call block collapses by default.
+  const isSpecialized = isBash || isFileMutation;
   const isCollapsedByDefault = !isSpecialized;
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
     ? String(block.input.timeout)
@@ -195,13 +191,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     () => (isFileMutation ? toolCallDiffStats(block, result) : null),
     [isFileMutation, block, result],
   );
-
-  // subagent: while the task is unfinished, the output area shows the live
-  // activity panel (details arrive via in-flight tool_execution_update
-  // partials, and via the final result when the caller's wait expired first).
-  // Once the task reaches a terminal status the result replaces the panel.
-  const subagentState = isSubagent ? deriveSubagentBlockState({ result, isError, input: block.input }) : null;
-  const isSubagentRunning = subagentState?.running ?? false;
 
   const header = (
     <div
@@ -245,9 +234,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
             <span style={{ color: "#16a34a" }}>+{diffStats.additions}</span>
             {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
           </span>
-        )}
-        {isSubagentRunning && (
-          <span aria-hidden="true" className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
         )}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -330,23 +316,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
               >
                 {inputStr}
               </pre>
-              {isSubagent && isSubagentRunning ? (
-                <>
-                  {/* A wait that expired returns text the user must see (the
-                      task id, and that nothing was cancelled) while the panel
-                      keeps tracking the live task. */}
-                  {subagentState?.waitExpired && result && (
-                    <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
-                  )}
-                  <SubagentLivePanel
-                    childSessionId={subagentState?.childSessionId ?? null}
-                    subagentName={subagentState?.subagentName ?? null}
-                    status={subagentState?.status ?? null}
-                  />
-                </>
-              ) : (
-                result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
-              )}
+              {result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />}
             </>
           )}
         </div>

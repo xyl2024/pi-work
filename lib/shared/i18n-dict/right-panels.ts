@@ -172,8 +172,6 @@ export const rightPanels = {
   "Stopping": "停止中",
   "Cancelled": "已取消",
   "Interrupted": "已中断",
-  "Waiting for a free slot…": "等待空闲执行位…",
-  "Refresh the conversation to see the final result": "刷新会话可查看最终结果",
   "User": "用户",
   "Direct": "直接调用",
   "Unknown": "未知",
