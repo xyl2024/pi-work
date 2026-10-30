@@ -98,6 +98,8 @@ export const EN_TRANSLATIONS = {
   "channels.healthLastPoll": "Last poll",
   "channels.healthAgo": "{s} ago",
   "Close while scanning?": "Close while scanning?",
+  "Remove": "Remove",
+  "Type / to select a skill, @ to select a file": "Type / to select a skill, @ to select a file",
   "The scan will be interrupted and you'll need a new QR code.": "The scan will be interrupted and you'll need a new QR code.",
   "Back to channels": "Back to channels",
   "channels.healthWorker": "Worker",

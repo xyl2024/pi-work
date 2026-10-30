@@ -10,7 +10,7 @@ export function SlashCommandHint({ resource, onRemove }: {
 }) {
   const { t } = useI18n();
   return (
-    <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
       <span style={{
         display: "inline-flex", alignItems: "center", gap: 6,
         maxWidth: "100%", padding: "4px 8px",

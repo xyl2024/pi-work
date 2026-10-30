@@ -3,8 +3,7 @@
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
-import { AttachmentList } from "./AttachmentList";
-import { SlashCommandHint } from "./SlashCommandHint";
+import { ChatInputAttachments } from "./ChatInputAttachments";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { FileMentionMenu } from "./FileMentionMenu";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
@@ -388,7 +387,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           }}
         />
       )}
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", position: "relative" }}>
         {retryInfo && (
           <div style={{
             marginBottom: 8, padding: "5px 10px",
@@ -403,7 +402,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {t("Retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
           </div>
         )}
-        {!hideToolbar && <AttachmentList images={attachedImages} onRemove={removeImage} />}
+        {!hideToolbar && (
+          <ChatInputAttachments
+            images={attachedImages}
+            selectedSlashResource={selectedSlashResource}
+            onRemoveImage={removeImage}
+            onRemoveSlashResource={() => setSelectedSlashResource(null)}
+          />
+        )}
 
         <CollapsiblePanel open={true}>
         <div
@@ -446,6 +452,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               syncInputMenus(e.currentTarget.value, pos);
             }}
             rows={1}
+            placeholder={t("Type / to select a skill, @ to select a file")}
             disabled={disabled}
             style={{
               flex: 1,
@@ -518,11 +525,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
         </div>
         </CollapsiblePanel>
-        {(selectedSlashResource || (slashMenuOpen && slashQuery) || (mentionMenuOpen && mentionQuery)) && !hideToolbar && (
+        {(slashMenuOpen && slashQuery || mentionMenuOpen && mentionQuery) && !hideToolbar && (
           <div style={{ position: "relative" }}>
-            {selectedSlashResource && (
-              <SlashCommandHint resource={selectedSlashResource} onRemove={() => setSelectedSlashResource(null)} />
-            )}
             {slashMenuOpen && slashQuery && (
               <div style={{
                 position: "absolute", bottom: "calc(100% + 44px)", left: 0,

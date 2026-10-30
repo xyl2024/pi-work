@@ -24,6 +24,8 @@ export const chat = {
 
   "Send": "发送",
   "Stop": "停止",
+  "Remove": "移除",
+  "Type / to select a skill, @ to select a file": "输入 / 选择技能，输入 @ 选择文件",
   "Upload image": "上传图片",
   "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",
   "↑↓ switch, Enter to pick": "↑↓切换，回车确认",

@@ -1,7 +1,7 @@
 "use client";
 
 import { SmartImage } from "../ui/SmartImage";
-import type { AttachedImage } from "./ChatInput";
+import type { AttachedImage } from "./chat-input/types";
 
 export function AttachmentList({ images, onRemove }: {
   images: AttachedImage[];
@@ -9,7 +9,7 @@ export function AttachmentList({ images, onRemove }: {
 }) {
   if (images.length === 0) return null;
   return (
-    <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
       {images.map((img, i) => (
         <div key={i} style={{ position: "relative", flexShrink: 0 }}>
           <SmartImage
