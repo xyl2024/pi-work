@@ -34,7 +34,7 @@ describe("composer DOM projection", () => {
   it("writes and reads text and chips back into the document model", () => {
     const element = mount();
     writeDoc(element, doc, labels);
-    expect(element.textContent).toBe("abreviewcd");
+    expect(element.textContent).toBe("ab/reviewcd");
     expect(readDoc(element)).toEqual(doc);
   });
 
@@ -44,6 +44,7 @@ describe("composer DOM projection", () => {
     const chip = element.querySelector("[data-composer-kind='skill']");
     expect(chip?.getAttribute("contenteditable")).toBe("false");
     expect(chip?.getAttribute("aria-label")).toBe("Skill review");
+    expect(chip?.getAttribute("title")).toBe("skill");
   });
 
   it("maps a DOM selection to logical offsets and back", () => {

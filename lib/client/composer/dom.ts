@@ -3,6 +3,7 @@ import { cursorToOffset } from "./offsets";
 
 export interface ComposerLabels {
   skill: (node: ComposerSkillNode) => string;
+  skillTitle?: (node: ComposerSkillNode) => string;
   file: (path: string) => string;
   image: (id: string) => string;
 }
@@ -38,8 +39,8 @@ function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
     element.setAttribute("data-name", node.name);
     element.setAttribute("data-command", node.command);
     element.setAttribute("data-source", node.source);
-    element.setAttribute("title", node.source);
-    element.textContent = node.name;
+    element.setAttribute("title", labels.skillTitle?.(node) ?? node.source);
+    element.textContent = `/${node.command}`;
   } else if (node.kind === "file") {
     element.setAttribute("data-path", node.relativePath);
     element.setAttribute("title", node.relativePath);
