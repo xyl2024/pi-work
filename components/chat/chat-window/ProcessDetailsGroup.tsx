@@ -11,11 +11,17 @@ import {
   type ProcessFoldEvent,
   type ProcessFoldState,
 } from "@/lib/shared/process-fold";
+import { formatDuration } from "../message-view/utils";
 import { Tooltip } from "../../ui/Tooltip";
 import { useCollapseNonce } from "../message-view/context";
 import { useProcessFoldMotion } from "./hooks/useProcessFoldMotion";
 
 const MAX_TOOL_BREAKDOWN = 3;
+
+export interface ProcessDetailsDuration {
+  startMs: number;
+  endMs?: number;
+}
 
 export interface ProcessDetailsItem {
   key: string;
@@ -23,7 +29,13 @@ export interface ProcessDetailsItem {
   toolCalls: Record<string, number>;
 }
 
-export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) {
+export function ProcessDetailsGroup({
+  items,
+  turnDuration,
+}: {
+  items: ProcessDetailsItem[];
+  turnDuration?: ProcessDetailsDuration;
+}) {
   const { t, locale } = useI18n();
   const total = items.length;
   const [fold, setFold] = useState<ProcessFoldState>({ kind: "collapsed" });
@@ -69,6 +81,13 @@ export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) 
         .replace("{n}", String(foldWindow.shown))
         .replace("{total}", String(total))
     : t("{n} messages").replace("{n}", String(foldWindow.shown));
+  const durationSummary =
+    turnDuration && turnDuration.endMs !== undefined
+      ? ` · ${t("Turn took {n}").replace(
+          "{n}",
+          formatDuration(turnDuration.endMs - turnDuration.startMs),
+        )}`
+      : "";
   const withCalls =
     toolCallCount > 0
       ? ` · ${t(toolCallCount === 1 ? "{n} tool call" : "{n} tool calls").replace("{n}", String(toolCallCount))}`
@@ -145,6 +164,7 @@ export function ProcessDetailsGroup({ items }: { items: ProcessDetailsItem[] }) 
         <span style={{ minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {summary}
           {withCalls}
+          {durationSummary}
           {toolSummary && (toolFullList ? (
             <Tooltip content={toolFullList}>
               <span>{toolSummary}</span>

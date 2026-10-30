@@ -896,6 +896,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     rendered.push(
                       <ProcessDetailsGroup
                         key={`process-${userIdx}`}
+                        turnDuration={{
+                          startMs: renderMessages[userIdx].timestamp as number,
+                          endMs: renderEntryTimestamps[finalAssistantIdx],
+                        }}
                         items={visibleProcessIndices.map((i) => ({
                           key: `proc-${i}`,
                           toolCalls: countToolCallsByName(renderMessages, [i], []),
