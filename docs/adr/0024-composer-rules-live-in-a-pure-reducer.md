@@ -9,7 +9,7 @@
 1. **规则住在纯 reducer。** 文档是唯一真值，光标是逻辑偏移，DOM 只是投影。新增行为先问「它能不能写成 `reduceComposerKey` 的一个分支或一个纯函数」，不能才退到视图层。视图层里只允许出现接线：读选区、写选区、调用 `preventDefault`、请求动画帧、执行效果。
 2. **副作用是值。** reducer 不发送消息、不切换思考级别、不写 DOM；它返回 `"none" | "edit" | "send" | "history-prev" | "history-next" | { type: "thinking", level }`。要不要发送是 reducer 的结论，发送本身由视图执行。
 3. **视图是投影。** 每次状态变化都从文档重新生成 DOM 与光标，不反向信任浏览器留下的内容。唯一例外是输入法合成：合成期间冻结模型，`compositionend` 时先把 DOM 同步进模型，再一次性投影回去；合成期间完成的图片编码也排队到此时插入，避免投影擦掉正在拼写的文字。
-4. **只有一处浏览器测试例外。** 规则由纯模块测试覆盖；DOM 适配层只保留一个 jsdom 文件级例外，用来钉住 `Selection ↔ 逻辑偏移` 与「合成期间模型不更新」。不引入 testing-library，也不改 vitest 的 include 配置。渲染结构、样式与 `field-sizing` 仍走人工清单。
+4. **浏览器测试只保留 jsdom 文件级例外。** 规则由纯模块测试覆盖；DOM 适配层只用 jsdom 文件级环境（手写挂载）钉住 `Selection ↔ 逻辑偏移`、Composer 视图接线与「合成期间模型不更新」。不引入 testing-library，也不改 vitest 的 include 配置。渲染结构、样式与 `field-sizing` 仍走人工清单。
 
 ## Considered Options
 
