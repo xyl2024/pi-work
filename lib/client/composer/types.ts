@@ -90,6 +90,12 @@ export interface SerializedComposer {
   images: ComposerImageNode[];
 }
 
+export interface AttachedImage {
+  data: string;
+  mimeType: string;
+  previewUrl: string;
+}
+
 export interface ComposerHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;

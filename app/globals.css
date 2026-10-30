@@ -220,7 +220,7 @@ body {
 /* Completely hide the scrollbar while keeping the element scrollable
    via wheel / touch / arrow keys. Independent semantic from the
    [data-scroll-*] presets — used where the design wants zero visual
-   scrollbar (e.g. the ChatInput textarea). */
+   scrollbar (e.g. the composer editor). */
 [data-hide-v-scrollbar] {
   scrollbar-width: none;
 }
