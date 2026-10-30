@@ -15,7 +15,13 @@ export function emptyDoc(): ComposerDoc {
 }
 
 export function emptyComposerState(): ComposerState {
-  return { doc: emptyDoc(), cursor: { node: 0, offset: 0 }, past: [], future: [] };
+  return {
+    doc: emptyDoc(),
+    cursor: { node: 0, offset: 0 },
+    past: [],
+    future: [],
+    history: { sessionId: null, index: null, draft: "" },
+  };
 }
 
 export function normalizeDoc(doc: ComposerDoc): ComposerDoc {
@@ -48,6 +54,7 @@ export function commitSnapshot(state: ComposerState, snapshot: ComposerSnapshot)
   if (snapshot.doc === state.doc && sameCursor(snapshot.cursor, state.cursor)) return state;
   const past = [...state.past, snapshotState(state)];
   return {
+    ...state,
     doc: snapshot.doc,
     cursor: snapshot.cursor,
     past: past.slice(Math.max(0, past.length - HISTORY_LIMIT)),
@@ -194,6 +201,7 @@ export function undo(state: ComposerState): ComposerState {
   if (state.past.length === 0) return state;
   const previous = state.past[state.past.length - 1];
   return {
+    ...state,
     doc: previous.doc,
     cursor: previous.cursor,
     past: state.past.slice(0, -1),
@@ -205,6 +213,7 @@ export function redo(state: ComposerState): ComposerState {
   if (state.future.length === 0) return state;
   const next = state.future[0];
   return {
+    ...state,
     doc: next.doc,
     cursor: next.cursor,
     past: [...state.past, snapshotState(state)],
