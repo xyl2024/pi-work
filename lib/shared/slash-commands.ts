@@ -6,19 +6,6 @@ export interface SlashResource {
   path: string;
 }
 
-export function getSlashQuery(value: string, cursor: number): { start: number; query: string } | null {
-  if (cursor === 0) return null;
-  const beforeCursor = value.slice(0, cursor);
-  const match = beforeCursor.match(/\/([^\s/]*)$/);
-  if (!match) return null;
-  const start = match.index!;
-  if (start >= 2 && value.slice(start - 2, start + 1) === "://") return null;
-  return {
-    start,
-    query: match[1],
-  };
-}
-
 export function rankSlashResources(resources: readonly SlashResource[], query: string): SlashResource[] {
   const q = query.trim().toLowerCase();
   if (!q) return [...resources];

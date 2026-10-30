@@ -10,6 +10,9 @@ import type {
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type { SessionEvent } from "@/lib/shared/session-events";
+import type { AttachedImage, ComposerHandle } from "@/lib/client/composer/types";
+
+export type { AttachedImage } from "@/lib/client/composer/types";
 
 export type { AgentPhase, ContextUsage, RetryInfo } from "@/lib/shared/session-runtime-state";
 
@@ -44,18 +47,6 @@ export type AgentRuntimeState = SessionSnapshotPayload;
 
 export type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
-export interface ChatInputHandle {
-  insertText: (text: string) => void;
-  insertIfEmpty: (content: string) => void;
-  addImages: (files: File[]) => void;
-}
-
-export interface AttachedImage {
-  data: string;
-  mimeType: string;
-  previewUrl: string;
-}
-
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -63,7 +54,7 @@ export interface UseAgentSessionOptions {
   onSessionCreated?: (session: SessionInfo) => void;
   onFirstAssistantReady?: () => void;
   modelsRefreshKey?: number;
-  chatInputRef?: RefObject<ChatInputHandle | null>;
+  chatInputRef?: RefObject<ComposerHandle | null>;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
   scrollToEntryId?: string | null;
   onEntryNavigated?: () => void;

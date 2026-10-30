@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import type { FileMentionEntry } from "./chat-input/hooks/useFileMentionMenu";
+import type { MentionEntry } from "@/lib/client/composer/mention";
 import { getFileIcon, FolderIcon } from "../files/FileIcons";
 
 export function FileMentionMenu({
@@ -14,11 +14,11 @@ export function FileMentionMenu({
   page,
   pageCount,
 }: {
-  items: FileMentionEntry[];
+  items: MentionEntry[];
   activeIndex: number;
   loading: boolean;
   error: string | null;
-  onSelect: (item: FileMentionEntry) => void;
+  onSelect: (item: MentionEntry) => void;
   onRetry: () => void;
   page: number;
   pageCount: number;
