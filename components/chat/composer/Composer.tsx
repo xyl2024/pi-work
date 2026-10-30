@@ -3,11 +3,11 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
-import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { CollapsiblePanel } from "../../ui/CollapsiblePanel";
 import { SlashCommandMenu } from "../SlashCommandMenu";
 import { FileMentionMenu } from "../FileMentionMenu";
 import { useFileMention } from "./useFileMention";
+import { useComposerImages } from "./useComposerImages";
 import { getRelativeFilePath, joinFilePath } from "@/lib/shared/file-paths";
 import {
   applyMentionDirectorySelection,
@@ -26,28 +26,22 @@ import { FULL_ACCESS_BORDER_COLOR } from "../../ui/permission-mode-colors";
 import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 import type { AttachedImage } from "../chat-input/types";
-import type { ComposerDoc, ComposerHandle, ComposerImageNode, ComposerState } from "@/lib/client/composer/types";
+import type { ComposerDoc, ComposerHandle, ComposerState } from "@/lib/client/composer/types";
 import {
   commitSnapshot,
   emptyComposerState,
-  insertNodes,
   insertText as insertTextInState,
   moveToOffset,
   normalizeDoc,
   offsetOfCursor,
-  removeImage,
   setCursor,
 } from "@/lib/client/composer/model";
 import { docLength, offsetToCursor, projectDocText } from "@/lib/client/composer/offsets";
 import { reduceComposerKey } from "@/lib/client/composer/reducer";
-import { serializeComposer } from "@/lib/client/composer/serialize";
+import { isComposerEmpty, serializeComposer } from "@/lib/client/composer/serialize";
+import { clampIndex, wrapIndex, wrapPage } from "@/lib/client/composer/menu";
 import { applySlashSelection, shouldOpenSlashMenu } from "@/lib/client/composer/slash";
-import {
-  createImageNode,
-  isImageFile,
-  nextImageId,
-  toAttachedImage,
-} from "@/lib/client/composer/images";
+import { toAttachedImage } from "@/lib/client/composer/images";
 import {
   readDoc,
   readSelection,
@@ -135,6 +129,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   const [state, setState] = useState<ComposerState>(emptyComposerState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const getState = useCallback(() => stateRef.current, []);
   const logicalText = projectDocText(state.doc);
   const cursorOffset = offsetOfCursor(state);
   const mention = useFileMention({ cwd, text: logicalText, cursorOffset });
@@ -147,7 +142,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageUrlsRef = useRef<Set<string>>(new Set());
   const composingRef = useRef(false);
   const skipProjectionRef = useRef(false);
   const skipNextInputRef = useRef(false);
@@ -160,56 +154,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     file: (path) => t("File {path}", { path }),
     fileText: (path) => getRelativeFilePath(path, cwd ?? undefined),
     fileTitle: (path) => (cwd ? joinFilePath(cwd, path) : path),
-    image: (id) => t("Image {id}", { id }),
-    removeImage: (id) => t("Remove image {id}", { id }),
+    image: (id, name) => (name ? t("Image {name}", { name }) : t("Image {id}", { id })),
+    removeImage: (id, name) => (name ? t("Remove image {name}", { name }) : t("Remove image {id}", { id })),
   }), [cwd, t]);
-
-  const images = useMemo(
-    () => state.doc.nodes.filter((node): node is ComposerImageNode => node.kind === "image"),
-    [state.doc],
-  );
-
-  const imageItems = useMemo(
-    () => images.map((node) => ({ alt: t("Image {id}", { id: node.id }), src: node.previewUrl })),
-    [images, t],
-  );
-
-  const { openAt, lightbox } = useImageLightbox(imageItems);
-
-  useEffect(() => {
-    const live = new Set<string>();
-    const collect = (doc: ComposerDoc) => {
-      for (const node of doc.nodes) {
-        if (node.kind === "image") live.add(node.previewUrl);
-      }
-    };
-    for (const snapshot of state.past) collect(snapshot.doc);
-    collect(state.doc);
-    for (const snapshot of state.future) collect(snapshot.doc);
-    for (const url of Array.from(imageUrlsRef.current)) {
-      if (live.has(url)) continue;
-      URL.revokeObjectURL(url);
-      imageUrlsRef.current.delete(url);
-    }
-  }, [state]);
-
-  useEffect(() => {
-    const urls = imageUrlsRef.current;
-    return () => {
-      for (const url of urls) URL.revokeObjectURL(url);
-      urls.clear();
-    };
-  }, []);
 
   useLayoutEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-    if (skipProjectionRef.current) {
-      skipProjectionRef.current = false;
-      return;
+    if (!skipProjectionRef.current) {
+      writeDoc(editor, state.doc, labels);
+      restoreCursor(editor, state.cursor, state.doc);
     }
-    writeDoc(editor, state.doc, labels);
-    restoreCursor(editor, state.cursor, state.doc);
+    skipProjectionRef.current = false;
+    editor.setAttribute("data-empty", String(isComposerEmpty(state.doc)));
   }, [state, labels]);
 
   const updateState = useCallback((next: ComposerState, options?: { skipProjection?: boolean }) => {
@@ -250,6 +207,22 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     focusEditor(next.doc, next.cursor);
   }, [focusEditor, updateState]);
 
+  const {
+    images,
+    lightbox,
+    openAt,
+    addImages: addImagesFromFiles,
+    flushPendingImages,
+    removeImageById,
+  } = useComposerImages({
+    state,
+    getState,
+    updateState,
+    focusEditor,
+    composingRef,
+    labels,
+  });
+
   const slashQuery = useMemo(
     () => getSlashQuery(logicalText, cursorOffset),
     [logicalText, cursorOffset],
@@ -286,7 +259,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   }, [slashPageCount]);
 
   useEffect(() => {
-    setSlashActiveIndex((index) => Math.min(index, Math.max(0, visibleSlashResources.length - 1)));
+    setSlashActiveIndex((index) => clampIndex(index, visibleSlashResources.length));
   }, [visibleSlashResources.length]);
 
   const selectSlashResource = useCallback((item: SlashResource) => {
@@ -344,29 +317,29 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     if (visible.length === 0) return false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      mention.setActiveIndex((index) => (index + 1) % visible.length);
+      mention.setActiveIndex((index) => wrapIndex(index, visible.length, 1));
       return true;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      mention.setActiveIndex((index) => (index - 1 + visible.length) % visible.length);
+      mention.setActiveIndex((index) => wrapIndex(index, visible.length, -1));
       return true;
     }
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      mention.setPage((page) => (page >= mention.pageCount - 1 ? 0 : page + 1));
+      mention.setPage((page) => wrapPage(page, mention.pageCount, 1));
       mention.setActiveIndex(0);
       return true;
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      mention.setPage((page) => (page <= 0 ? mention.pageCount - 1 : page - 1));
+      mention.setPage((page) => wrapPage(page, mention.pageCount, -1));
       mention.setActiveIndex(0);
       return true;
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      selectMentionEntry(visible[Math.min(mention.activeIndex, visible.length - 1)] ?? visible[0]);
+      selectMentionEntry(visible[clampIndex(mention.activeIndex, visible.length)] ?? visible[0]);
       return true;
     }
     return false;
@@ -382,68 +355,33 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     if (!slashQuery || visibleSlashResources.length === 0) return false;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSlashActiveIndex((index) => (index + 1) % visibleSlashResources.length);
+      setSlashActiveIndex((index) => wrapIndex(index, visibleSlashResources.length, 1));
       return true;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSlashActiveIndex((index) => (index - 1 + visibleSlashResources.length) % visibleSlashResources.length);
+      setSlashActiveIndex((index) => wrapIndex(index, visibleSlashResources.length, -1));
       return true;
     }
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      setSlashPage((page) => (page >= slashPageCount - 1 ? 0 : page + 1));
+      setSlashPage((page) => wrapPage(page, slashPageCount, 1));
       setSlashActiveIndex(0);
       return true;
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      setSlashPage((page) => (page <= 0 ? slashPageCount - 1 : page - 1));
+      setSlashPage((page) => wrapPage(page, slashPageCount, -1));
       setSlashActiveIndex(0);
       return true;
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      selectSlashResource(visibleSlashResources[slashActiveIndex] ?? visibleSlashResources[0]);
+      selectSlashResource(visibleSlashResources[clampIndex(slashActiveIndex, visibleSlashResources.length)] ?? visibleSlashResources[0]);
       return true;
     }
     return false;
   }, [slashMenuVisible, slashQuery, visibleSlashResources, slashActiveIndex, slashPageCount, selectSlashResource]);
-
-  const addImageFiles = useCallback(async (files: File[]) => {
-    const imageFiles = files.filter(isImageFile);
-    if (imageFiles.length === 0) return;
-    const nodes = await Promise.all(
-      imageFiles.map(
-        (file) =>
-          new Promise<ComposerImageNode | null>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const previewUrl = URL.createObjectURL(file);
-              const node = createImageNode({
-                id: nextImageId(),
-                dataUrl: String(reader.result ?? ""),
-                previewUrl,
-              });
-              if (!node) URL.revokeObjectURL(previewUrl);
-              resolve(node);
-            };
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(file);
-          }),
-      ),
-    );
-    const valid = nodes.filter((node): node is ComposerImageNode => node !== null);
-    if (valid.length === 0) return;
-    for (const node of valid) imageUrlsRef.current.add(node.previewUrl);
-    const next = insertNodes(stateRef.current, valid);
-    updateState(next);
-    focusEditor(next.doc, next.cursor);
-  }, [focusEditor, updateState]);
-
-  const removeImageById = useCallback((id: string) => {
-    updateState(removeImage(stateRef.current, id));
-  }, [updateState]);
 
   const handleSend = useCallback(() => {
     const current = stateRef.current;
@@ -508,37 +446,49 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
   const handleCompositionStart = useCallback(() => {
     composingRef.current = true;
+    editorRef.current?.setAttribute("data-empty", "false");
   }, []);
 
   const handleCompositionEnd = useCallback(() => {
     composingRef.current = false;
     syncFromDom({ resetCompositionSkip: true });
-  }, [syncFromDom]);
+    skipProjectionRef.current = false;
+    flushPendingImages();
+    editorRef.current?.setAttribute("data-empty", String(isComposerEmpty(stateRef.current.doc)));
+  }, [flushPendingImages, syncFromDom]);
+
+  const insertTextAtSelection = useCallback((text: string) => {
+    const editor = editorRef.current;
+    const selection = editor ? readSelection(editor) ?? undefined : undefined;
+    const next = insertTextInState(stateRef.current, text, selection);
+    updateState(next);
+    const target = next.cursor;
+    requestAnimationFrame(() => {
+      const element = editorRef.current;
+      if (!element) return;
+      element.focus();
+      restoreCursor(element, target, next.doc);
+    });
+  }, [updateState]);
 
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
     const data = event.clipboardData;
     if (!data) return;
-    const editor = editorRef.current;
-    const selection = editor ? readSelection(editor) ?? undefined : undefined;
     const text = data.getData("text/plain");
-    if (text) {
-      const next = insertTextInState(stateRef.current, text, selection);
-      updateState(next);
-      const target = next.cursor;
-      requestAnimationFrame(() => {
-        const element = editorRef.current;
-        if (!element) return;
-        element.focus();
-        restoreCursor(element, target, next.doc);
-      });
-    }
+    if (text) insertTextAtSelection(text);
     const files = Array.from(data.items)
       .filter((item) => item.type.startsWith("image/"))
       .map((item) => item.getAsFile())
       .filter((file): file is File => file !== null);
-    if (files.length) void addImageFiles(files);
-  }, [addImageFiles, updateState]);
+    if (files.length) void addImagesFromFiles(files);
+  }, [addImagesFromFiles, insertTextAtSelection]);
+
+  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const text = event.dataTransfer?.getData("text/plain") ?? "";
+    if (text) insertTextAtSelection(text);
+  }, [insertTextAtSelection]);
 
   const handleSelect = useCallback(() => {
     if (composingRef.current) return;
@@ -619,19 +569,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     insertIfEmpty(content: string) {
       const current = stateRef.current;
       if (serializeComposer(current.doc).text.trim()) return;
-      const next = insertTextInState(emptyComposerState(), content);
+      const next = insertTextInState(current, content, { start: 0, end: 0 });
       updateState(next);
       focusEditor(next.doc, next.cursor);
     },
     addImages(files: File[]) {
-      void addImageFiles(files);
+      void addImagesFromFiles(files);
     },
     focus() {
       const next = moveToOffset(stateRef.current, docLength(stateRef.current.doc));
       updateState(next);
       focusEditor(next.doc, next.cursor);
     },
-  }), [addImageFiles, focusEditor, updateState]);
+  }), [addImagesFromFiles, focusEditor, updateState]);
 
   useEffect(() => {
     const serialized = serializeComposer(state.doc);
@@ -652,7 +602,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
         style={{ display: "none" }}
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          void addImageFiles(files);
+          void addImagesFromFiles(files);
           event.target.value = "";
         }}
       />
@@ -705,7 +655,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
               onSelect={handleSelect}
               onMouseDown={handleChipMouseDown}
               onDoubleClick={handleChipDoubleClick}
-              onDrop={(event) => event.preventDefault()}
+              onDrop={handleDrop}
               style={EDITABLE_STYLE}
             />
 

@@ -39,10 +39,17 @@ export function serializeComposer(doc: ComposerDoc): SerializedComposer {
 
     text += `/skill:${node.name}`;
     const following = doc.nodes[index + 1];
-    if (following?.kind === "text" && following.text.length > 0 && !/^\s/.test(following.text)) {
+    if (!following) continue;
+    if (following.kind !== "text") {
       text += " ";
+      continue;
     }
+    if (following.text.length > 0 && !/^\s/.test(following.text)) text += " ";
   }
 
   return { text, images };
+}
+
+export function isComposerEmpty(doc: ComposerDoc): boolean {
+  return serializeComposer(doc).text.length === 0 && !doc.nodes.some((node) => node.kind === "image");
 }

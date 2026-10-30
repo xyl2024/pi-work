@@ -1,4 +1,4 @@
-import { docLength, nodeLength, offsetToCursor } from "./offsets";
+import { cursorToOffset, docLength, nodeLength, offsetToCursor } from "./offsets";
 import type {
   ComposerDoc,
   ComposerNode,
@@ -80,17 +80,7 @@ export function normalizeRange(state: ComposerState, range?: ComposerRange): Com
 }
 
 export function offsetOfCursor(state: ComposerState): number {
-  return cursorOffset(state.doc, state.cursor);
-}
-
-function cursorOffset(doc: ComposerDoc, cursor: Cursor): number {
-  let offset = 0;
-  for (let index = 0; index < doc.nodes.length; index += 1) {
-    const node = doc.nodes[index];
-    if (index === cursor.node) return offset + Math.max(0, Math.min(cursor.offset, nodeLength(node)));
-    offset += nodeLength(node);
-  }
-  return offset;
+  return cursorToOffset(state.doc, state.cursor);
 }
 
 function splitDocAt(doc: ComposerDoc, offset: number): { left: ComposerNode[]; right: ComposerNode[] } {

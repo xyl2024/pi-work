@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getMentionQuery, resolveMentionDirectory } from "@/lib/shared/composer-queries";
-import { getRelativeFilePath, joinFilePath, normalizeFilePathSlashes } from "@/lib/shared/file-paths";
+import { getRelativeFilePath, joinFilePath } from "@/lib/shared/file-paths";
 import { SLASH_PAGE_SIZE } from "../chat-input/constants";
-import { filterMentionEntries, type MentionEntry } from "@/lib/client/composer/mention";
+import {
+  filterMentionEntries,
+  mentionRelativeDirectory,
+  parentMentionEntry,
+  type MentionEntry,
+} from "@/lib/client/composer/mention";
+import { clampIndex } from "@/lib/client/composer/menu";
 
 export interface UseFileMentionOptions {
   cwd?: string | null;
@@ -71,12 +77,12 @@ export function useFileMention({ cwd, text, cursorOffset }: UseFileMentionOption
           ...entry,
           fullPath: joinFilePath(key, entry.name),
         }));
-        if (key !== normalizeFilePathSlashes(cwd).replace(/\/+$/, "")) {
+        const relativeDirectory = mentionRelativeDirectory(cwd, key);
+        const parent = parentMentionEntry(relativeDirectory);
+        if (parent) {
           next.unshift({
-            name: "..",
-            fullPath: normalizeFilePathSlashes(key).replace(/\/[^/]+$/, ""),
-            isDir: true,
-            isParent: true,
+            ...parent,
+            fullPath: parent.fullPath ? joinFilePath(cwd, parent.fullPath) : cwd,
           });
         }
         cacheRef.current.set(key, next);
@@ -106,11 +112,11 @@ export function useFileMention({ cwd, text, cursorOffset }: UseFileMentionOption
   }, [mentionQuery?.query, mentionQuery?.directory]);
 
   useEffect(() => {
-    setPage((value) => Math.min(value, pageCount - 1));
+    setPage((value) => clampIndex(value, pageCount));
   }, [pageCount]);
 
   useEffect(() => {
-    setActiveIndex((index) => Math.min(index, Math.max(0, visibleEntries.length - 1)));
+    setActiveIndex((index) => clampIndex(index, visibleEntries.length));
   }, [visibleEntries.length]);
 
   const syncFileMentionMenuForEdit = useCallback((nextText: string, nextCursor: number) => {

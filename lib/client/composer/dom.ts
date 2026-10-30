@@ -7,8 +7,8 @@ export interface ComposerLabels {
   file: (path: string) => string;
   fileText?: (path: string) => string;
   fileTitle?: (path: string) => string;
-  image: (id: string) => string;
-  removeImage: (id: string) => string;
+  image: (id: string, name?: string) => string;
+  removeImage: (id: string, name?: string) => string;
 }
 
 function isChip(node: Node): node is HTMLElement {
@@ -27,13 +27,14 @@ function isChipKind(element: HTMLElement, kind: string): boolean {
 function chipLabel(node: ComposerNode, labels: ComposerLabels): string {
   if (node.kind === "skill") return labels.skill(node);
   if (node.kind === "file") return labels.file(node.relativePath);
-  if (node.kind === "image") return labels.image(node.id);
+  if (node.kind === "image") return labels.image(node.id, node.name);
   return node.text;
 }
 
 function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
   const element = document.createElement("span");
   element.setAttribute("contenteditable", "false");
+  element.setAttribute("role", "img");
   element.className = "composer-chip";
   element.setAttribute("data-composer-kind", node.kind);
   element.setAttribute("aria-label", chipLabel(node, labels));
@@ -50,6 +51,7 @@ function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
     element.textContent = labels.fileText?.(node.relativePath) ?? node.relativePath;
   } else if (node.kind === "image") {
     element.setAttribute("data-id", node.id);
+    if (node.name) element.setAttribute("data-name", node.name);
     element.setAttribute("data-image-data", node.data);
     element.setAttribute("data-mime-type", node.mimeType);
     element.setAttribute("data-preview-url", node.previewUrl);
@@ -63,8 +65,8 @@ function createChip(node: ComposerNode, labels: ComposerLabels): HTMLElement {
     remove.className = "composer-chip-image-remove";
     remove.setAttribute("contenteditable", "false");
     remove.setAttribute("data-composer-remove", node.id);
-    remove.setAttribute("aria-label", labels.removeImage(node.id));
-    remove.setAttribute("title", labels.removeImage(node.id));
+    remove.setAttribute("aria-label", labels.removeImage(node.id, node.name));
+    remove.setAttribute("title", labels.removeImage(node.id, node.name));
     remove.textContent = "\u00d7";
     element.append(remove);
   } else {
@@ -99,9 +101,11 @@ function readNode(element: HTMLElement): ComposerNode | null {
     }
     if (kind === "file") return { kind: "file", relativePath: element.getAttribute("data-path") ?? "" };
     if (kind === "image") {
+      const name = element.getAttribute("data-name");
       return {
         kind: "image",
         id: element.getAttribute("data-id") ?? "",
+        ...(name ? { name } : {}),
         data: element.getAttribute("data-image-data") ?? "",
         mimeType: element.getAttribute("data-mime-type") ?? "",
         previewUrl: element.getAttribute("data-preview-url") ?? "",

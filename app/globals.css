@@ -1451,7 +1451,7 @@ span.linenumber {
   animation: notes-saving-pulse 1s ease-in-out infinite;
 }
 
-.composer-editable:empty::before {
+.composer-editable[data-empty="true"]::before {
   content: attr(data-placeholder);
   color: var(--text-dim);
   pointer-events: none;

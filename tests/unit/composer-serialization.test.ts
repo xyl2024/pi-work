@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serializeComposer } from "@/lib/client/composer/serialize";
+import { isComposerEmpty, serializeComposer } from "@/lib/client/composer/serialize";
 import type { ComposerDoc, ComposerNode } from "@/lib/client/composer/types";
 
 function skill(name = "review"): ComposerNode {
@@ -94,5 +94,33 @@ describe("serializeComposer", () => {
       { kind: "text", text: " done" },
     ));
     expect(result.text).toBe("run /skill:review now`./src/x.ts` done");
+  });
+});
+
+describe("serializeComposer chip boundaries", () => {
+  it("keeps one space between a skill chip and a following file chip", () => {
+    expect(serializeComposer(docOf(skill(), { kind: "file", relativePath: "src/a.ts" })).text)
+      .toBe("/skill:review `./src/a.ts` ");
+  });
+
+  it("keeps one space between a skill chip and a following image chip", () => {
+    expect(serializeComposer(docOf(
+      skill(),
+      { kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
+    )).text).toBe("/skill:review ");
+  });
+
+  it("does not add a trailing space to a bare skill at the end of the document", () => {
+    expect(serializeComposer(docOf(skill())).text).toBe("/skill:review");
+    expect(serializeComposer(docOf(skill(), { kind: "text", text: "" })).text).toBe("/skill:review");
+  });
+});
+
+describe("isComposerEmpty", () => {
+  it("is true for an empty document and false for text, chips, or images", () => {
+    expect(isComposerEmpty(docOf({ kind: "text", text: "" }))).toBe(true);
+    expect(isComposerEmpty(docOf({ kind: "text", text: "x" }))).toBe(false);
+    expect(isComposerEmpty(docOf(skill()))).toBe(false);
+    expect(isComposerEmpty(docOf({ kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" }))).toBe(false);
   });
 });

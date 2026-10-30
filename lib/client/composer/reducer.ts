@@ -56,13 +56,11 @@ function historyKey(
   const historyState = resolveHistory(state, input.sessionId);
   const base = historyState === state.history ? state : withHistory(state, historyState);
   const text = projectDocText(state.doc);
-  const selection = normalizeRange(state, input.selection);
-  const collapsed = selection.start === selection.end;
+
+  if (text.includes("\n")) return { state, effect: "none" };
 
   if (direction === "prev") {
     if (history.length === 0) return { state, effect: "none" };
-    const cursorAtStart = collapsed && selection.start === 0;
-    if (text.includes("\n") && !cursorAtStart) return { state, effect: "none" };
 
     if (historyState.index === null) {
       const pool = historyPool(history, text);
@@ -87,8 +85,6 @@ function historyKey(
   }
 
   if (historyState.index === null) return { state, effect: "none" };
-  const cursorAtEnd = collapsed && selection.end === text.length;
-  if (text.includes("\n") && !cursorAtEnd) return { state, effect: "none" };
 
   const index = historyState.index - 1;
   if (index < 0) {
@@ -129,6 +125,7 @@ export function reduceComposerKey(state: ComposerState, input: ComposerKeyInput)
   if (input.isComposing) return { state, effect: "none" };
 
   const hasModifier = Boolean(input.ctrlKey || input.metaKey);
+  const hasCommandModifier = Boolean(input.ctrlKey || input.metaKey || input.altKey);
   const selection = normalizeRange(state, input.selection);
 
   if (input.key === "Tab") return thinkingKey(state, input);
@@ -140,8 +137,10 @@ export function reduceComposerKey(state: ComposerState, input: ComposerKeyInput)
     return edit(insertText(state, "\n", selection));
   }
 
-  if (input.key === "Backspace") return edit(backspace(state, selection));
-  if (input.key === "Delete") return edit(deleteForward(state, selection));
+  if (input.key === "Backspace" || input.key === "Delete") {
+    if (hasCommandModifier) return { state, effect: "none" };
+    return edit(input.key === "Backspace" ? backspace(state, selection) : deleteForward(state, selection));
+  }
 
   if ((input.key === "z" || input.key === "Z") && hasModifier) {
     return edit(input.shiftKey ? redo(state) : undo(state));
@@ -150,17 +149,16 @@ export function reduceComposerKey(state: ComposerState, input: ComposerKeyInput)
     return edit(redo(state));
   }
 
-  if (input.key === "ArrowLeft") {
-    const target = selection.start !== selection.end ? selection.start : offsetOfCursor(state) - 1;
-    return edit(moveToOffset(state, target));
-  }
-
-  if (input.key === "ArrowRight") {
-    const target = selection.start !== selection.end ? selection.end : offsetOfCursor(state) + 1;
+  if (input.key === "ArrowLeft" || input.key === "ArrowRight") {
+    if (hasCommandModifier || input.shiftKey) return { state, effect: "none" };
+    const target = input.key === "ArrowLeft"
+      ? selection.start !== selection.end ? selection.start : offsetOfCursor(state) - 1
+      : selection.start !== selection.end ? selection.end : offsetOfCursor(state) + 1;
     return edit(moveToOffset(state, target));
   }
 
   if (input.key === "Home" || input.key === "End") {
+    if (hasCommandModifier) return { state, effect: "none" };
     const projected = projectDocText(state.doc);
     const anchor = input.key === "Home" ? selection.start : selection.end;
     const target = input.key === "Home"

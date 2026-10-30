@@ -578,7 +578,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         retryInfo={retryInfo}
         slashResources={slashResources}
         userMessageHistory={userMessageHistory}
-        sessionId={session?.id ?? null}
+        sessionId={currentSessionId}
         onSlashAction={(action) => {
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
