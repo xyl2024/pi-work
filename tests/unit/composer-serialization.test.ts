@@ -61,12 +61,25 @@ describe("serializeComposer", () => {
       .toBe("``./a`b.ts`` ");
   });
 
+  it("returns image payloads with the nodes, in document order", () => {
+    const result = serializeComposer(docOf(
+      { kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
+      { kind: "text", text: "x" },
+      { kind: "image", id: "two", data: "REVG", mimeType: "image/jpeg", previewUrl: "blob:two" },
+    ));
+    expect(result.text).toBe("x");
+    expect(result.images).toEqual([
+      { kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
+      { kind: "image", id: "two", data: "REVG", mimeType: "image/jpeg", previewUrl: "blob:two" },
+    ]);
+  });
+
   it("keeps images out of text and returns them in document order", () => {
     const result = serializeComposer(docOf(
       { kind: "text", text: "a" },
-      { kind: "image", id: "one", previewUrl: "blob:one" },
+      { kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
       { kind: "text", text: "b" },
-      { kind: "image", id: "two", previewUrl: "blob:two" },
+      { kind: "image", id: "two", data: "REVG", mimeType: "image/png", previewUrl: "blob:two" },
     ));
     expect(result.text).toBe("ab");
     expect(result.images.map((node) => node.id)).toEqual(["one", "two"]);

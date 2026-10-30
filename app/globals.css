@@ -1475,9 +1475,12 @@ span.linenumber {
   user-select: none;
 }
 .composer-chip-image {
+  position: relative;
   padding: 0;
   border: none;
   background: none;
+  overflow: visible;
+  cursor: zoom-in;
 }
 .composer-chip-image img {
   display: block;
@@ -1487,4 +1490,28 @@ span.linenumber {
   border-radius: 6px;
   border: 1px solid var(--border);
   vertical-align: middle;
+}
+.composer-chip-image-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.composer-chip-image:hover .composer-chip-image-remove,
+.composer-chip-image-remove:focus-visible {
+  opacity: 1;
 }

@@ -7,6 +7,7 @@ const labels = {
   skill: (node: { name: string }) => `Skill ${node.name}`,
   file: (path: string) => `File ${path}`,
   image: (id: string) => `Image ${id}`,
+  removeImage: (id: string) => `Remove image ${id}`,
 };
 
 const doc: ComposerDoc = {
@@ -66,6 +67,24 @@ describe("composer DOM projection", () => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     expect(readSelection(element)).toEqual({ start: 3, end: 3 });
+  });
+
+  it("writes and reads an image chip with its payload and remove button", () => {
+    const element = mount();
+    const imageDoc: ComposerDoc = {
+      nodes: [
+        { kind: "text", text: "a" },
+        { kind: "image", id: "one", data: "QUJD", mimeType: "image/png", previewUrl: "blob:one" },
+        { kind: "text", text: "b" },
+      ],
+    };
+    writeDoc(element, imageDoc, labels);
+    const chip = element.querySelector("[data-composer-kind='image']") as HTMLElement;
+    expect(chip.getAttribute("aria-label")).toBe("Image one");
+    expect(chip.querySelector("img")?.getAttribute("src")).toBe("blob:one");
+    expect(chip.querySelector("[data-composer-remove]")?.getAttribute("aria-label"))
+      .toBe("Remove image one");
+    expect(readDoc(element)).toEqual(imageDoc);
   });
 
   it("reads an empty editor as an empty text document", () => {

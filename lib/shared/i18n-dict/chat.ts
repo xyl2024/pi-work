@@ -31,6 +31,7 @@ export const chat = {
   "Builtin action": "内置动作",
   "File {path}": "文件 {path}",
   "Image {id}": "图片 {id}",
+  "Remove image {id}": "移除图片 {id}",
   "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",
   "↑↓ switch, Enter to pick": "↑↓切换，回车确认",
   "Files": "文件",
