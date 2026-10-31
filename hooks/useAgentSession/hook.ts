@@ -32,6 +32,7 @@ import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-eve
 import {
   DEFAULT_PERMISSION_MODE,
   isPermissionMode,
+  isSessionPermissionMode,
   type PermissionMode,
   type SessionPermissionMode,
 } from "@/lib/shared/permission-mode";
@@ -76,8 +77,10 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const [data, setData] = useState<SessionData | null>(null);
   const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>(() => {
     const state = createSessionRuntimeState({
-      permissionMode: session?.permissionMode ?? DEFAULT_PERMISSION_MODE,
-      isBackgroundSession: session?.background ?? false,
+      permissionMode: isSessionPermissionMode(session?.permissionMode)
+        ? session.permissionMode
+        : DEFAULT_PERMISSION_MODE,
+      isBackgroundSession: session?.background === true,
     });
     const pending = session ? getPendingAskUserQuestions(session.id) : null;
     if (pending) state.seenAskUserQuestionsToolCallIds.claim(pending.toolCallId);
