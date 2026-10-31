@@ -4,6 +4,7 @@ import type {
   AssistantMessage,
   ImageContent,
   TextContent,
+  ToolResultMessage,
 } from "./types";
 
 export function extractMessageText(message: AgentMessage): string {
@@ -43,6 +44,29 @@ export function extractMessageImages(message: AgentMessage): ImageContent[] {
     return message.content.filter((block): block is ImageContent => block.type === "image");
   }
   return [];
+}
+
+export interface ToolResultContent {
+  text: string;
+  images: ImageContent[];
+}
+
+export function extractToolResultContent(message?: ToolResultMessage): ToolResultContent {
+  if (!message) return { text: "", images: [] };
+  return { text: extractMessageText(message), images: extractMessageImages(message) };
+}
+
+export function imageContentSrc(image: ImageContent): string {
+  const flat = image as unknown as { data?: string; mimeType?: string };
+  if (image.source) {
+    if (image.source.type === "base64") {
+      return image.source.data
+        ? `data:${image.source.media_type};base64,${image.source.data}`
+        : "";
+    }
+    return image.source.url ?? "";
+  }
+  return flat.data ? `data:${flat.mimeType};base64,${flat.data}` : "";
 }
 
 export function countImages(message: AgentMessage): number {

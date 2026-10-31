@@ -12,7 +12,7 @@ import { copyText } from "@/lib/client/clipboard";
 import { SmartImage } from "../../ui/SmartImage";
 import { type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
-import { extractMessageImages, extractMessageText } from "@/lib/shared/message-content";
+import { extractMessageImages, extractMessageText, imageContentSrc } from "@/lib/shared/message-content";
 import { parseSkillBlock, parseSkillCommand } from "@/lib/shared/skill-block";
 import { ToolIcon } from "../../ui/icons";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
@@ -73,17 +73,10 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   const skillBlock = parseSkillBlock(content);
   const skillInvocation = skillBlock ?? parseSkillCommand(content);
   const imageBlocks: ImageContent[] = extractMessageImages(message);
-  const imageGallery: ImageItem[] = imageBlocks.map((image) => {
-    const flat = image as unknown as { data?: string; mimeType?: string };
-    const src = image.source
-      ? image.source.type === "base64"
-        ? `data:${image.source.media_type};base64,${image.source.data}`
-        : image.source.url ?? ""
-      : flat.data
-        ? `data:${flat.mimeType};base64,${flat.data}`
-        : "";
-    return { alt: "", src };
-  });
+  const imageGallery: ImageItem[] = imageBlocks.map((image) => ({
+    alt: "",
+    src: imageContentSrc(image),
+  }));
   const lightbox = useImageLightbox(imageGallery);
 
   const time = formatTime(message.timestamp);
@@ -196,14 +189,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
             {imageBlocks.length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
                 {imageBlocks.map((image, index) => {
-                  const flat = image as unknown as { data?: string; mimeType?: string };
-                  const src = image.source
-                    ? image.source.type === "base64"
-                      ? `data:${image.source.media_type};base64,${image.source.data}`
-                      : image.source.url ?? ""
-                    : flat.data
-                      ? `data:${flat.mimeType};base64,${flat.data}`
-                      : "";
+                  const src = imageContentSrc(image);
                   return (
                     <Tooltip key={index} content={t("Click to expand")}>
                       <span

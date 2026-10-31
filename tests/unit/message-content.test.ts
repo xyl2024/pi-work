@@ -5,6 +5,8 @@ import {
   countImages,
   extractMessageImages,
   extractMessageText,
+  extractToolResultContent,
+  imageContentSrc,
 } from "@/lib/shared/message-content";
 import type {
   AssistantMessage,
@@ -180,5 +182,60 @@ describe("countAssistantBlocks", () => {
       thinking: 0,
       toolCalls: 0,
     });
+  });
+});
+
+describe("extractToolResultContent", () => {
+  it("returns text and no images for a text-only result", () => {
+    expect(extractToolResultContent(toolResultMessage([{ type: "text", text: "done" }]))).toEqual({
+      text: "done",
+      images: [],
+    });
+  });
+
+  it("returns images and empty text for an image-only result", () => {
+    const projected = extractToolResultContent(
+      toolResultMessage([image("AAAA"), image("BBBB")]),
+    );
+    expect(projected.text).toBe("");
+    expect(projected.images.map((block) => block.source.data)).toEqual(["AAAA", "BBBB"]);
+  });
+
+  it("keeps both halves of a mixed result", () => {
+    const projected = extractToolResultContent(
+      toolResultMessage([{ type: "text", text: "screenshot" }, image("CCCC")]),
+    );
+    expect(projected.text).toBe("screenshot");
+    expect(projected.images.map((block) => block.source.data)).toEqual(["CCCC"]);
+  });
+
+  it("returns an empty projection for a missing result or a result with no blocks", () => {
+    expect(extractToolResultContent(undefined)).toEqual({ text: "", images: [] });
+    expect(extractToolResultContent(toolResultMessage([]))).toEqual({ text: "", images: [] });
+  });
+});
+
+describe("imageContentSrc", () => {
+  it("builds a data URL for a base64 image", () => {
+    expect(imageContentSrc(image("AAAA"))).toBe("data:image/png;base64,AAAA");
+  });
+
+  it("passes through a url image", () => {
+    expect(
+      imageContentSrc({
+        type: "image",
+        source: { type: "url", url: "https://example.com/a.png" },
+      }),
+    ).toBe("https://example.com/a.png");
+  });
+
+  it("falls back to the legacy flat image shape", () => {
+    expect(
+      imageContentSrc({ type: "image", data: "BBBB", mimeType: "image/jpeg" } as unknown as ImageContent),
+    ).toBe("data:image/jpeg;base64,BBBB");
+  });
+
+  it("returns an empty string when no source data is present", () => {
+    expect(imageContentSrc({ type: "image", source: { type: "url" } })).toBe("");
   });
 });

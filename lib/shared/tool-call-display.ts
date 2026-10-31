@@ -1,4 +1,5 @@
 import { getFileName } from "./file-paths";
+import { extractMessageImages } from "./message-content";
 import {
   extractEditDiffStats,
   extractWriteDiffStats,
@@ -49,6 +50,7 @@ export function toolCallDiffStats(
 
 export function isToolResultEmpty(result?: ToolResultMessage): boolean {
   if (!result) return false;
+  if (extractMessageImages(result).length > 0) return false;
   const text = result.content
     .filter((item): item is TextContent => item.type === "text")
     .map((item) => item.text)
