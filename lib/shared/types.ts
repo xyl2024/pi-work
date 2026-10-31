@@ -284,6 +284,7 @@ export interface SessionContext {
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
   compactionPoints?: CompactionPoint[];
+  changeMarkers?: ChangeMarker[];
 }
 
 export interface CompactionPoint {
@@ -293,6 +294,32 @@ export interface CompactionPoint {
   beforeMessageEntryId?: string;
   timestamp?: string;
 }
+
+export type ModelChangeMarker = {
+  entryId: string;
+  kind: "model";
+  provider: string;
+  modelId: string;
+  beforeMessageEntryId?: string;
+  timestamp?: string;
+};
+
+export type ChangeMarker =
+  | {
+      entryId: string;
+      kind: "model";
+      provider: string;
+      modelId: string;
+      beforeMessageEntryId?: string;
+      timestamp?: string;
+    }
+  | {
+      entryId: string;
+      kind: "thinking_level";
+      thinkingLevel: string;
+      beforeMessageEntryId?: string;
+      timestamp?: string;
+    };
 
 export interface SessionSearchResult {
   id: string;

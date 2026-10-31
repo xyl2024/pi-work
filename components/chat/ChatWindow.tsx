@@ -5,14 +5,14 @@ import type {
   AgentMessage,
   SessionInfo,
   ReadFileInfo,
-  CompactionPoint,
+  ModelChangeMarker,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import {
   getChatBottomFrostMaskStyle,
   isChatBottomFrostMaskVisible,
 } from "@/lib/shared/chatBottomFrostMask";
-import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
+import { buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
@@ -38,6 +38,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { CompactionDivider } from "./CompactionDivider";
+import { ChangeDivider } from "./ChangeDivider";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 import { setToolCallScrollCallback } from "@/hooks/toolCallScrollStore";
@@ -112,7 +113,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, []);
 
   const {
-    data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
+    data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, changeMarkers, streamState,
     agentRunning, modelNames, modelIcons, modelIconPreferences, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel, permissionMode,
     retryInfo,
@@ -342,15 +343,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return map;
   }, [messages, inFlightToolResults]);
 
-  const { dividerBefore, trailingCompactionPoints } = useMemo(() => {
-    const m = new Map<string, CompactionPoint>();
-    const tail: CompactionPoint[] = [];
-    for (const p of compactionPoints) {
-      if (p.beforeMessageEntryId) m.set(p.beforeMessageEntryId, p);
-      else tail.push(p);
-    }
-    return { dividerBefore: m, trailingCompactionPoints: tail };
-  }, [compactionPoints]);
+  const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
+    const modelMarkers = changeMarkers.filter((marker): marker is ModelChangeMarker => marker.kind === "model");
+    return buildTimelineDividers({
+      timeline,
+      entryIds: renderEntryIds,
+      compactionPoints,
+      changeMarkers: modelMarkers,
+    });
+  }, [timeline, renderEntryIds, compactionPoints, changeMarkers]);
 
   const optimisticCompactionMessageIdx = useMemo(() => {
     if (trailingCompactionPoints.length === 0) return -1;
@@ -805,14 +806,28 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               let streamingTurnReadFiles: ReadFileInfo[] = [];
               let streamingTurnDiffStats: ToolDiffStats | null = null;
               const maybeDivider = (idx: number): React.ReactNode => {
-                const point = dividerBefore.get(renderEntryIds[idx]);
-                if (point) return <CompactionDivider key={`comp-${point.entryId}`} point={point} />;
-                if (idx === optimisticCompactionMessageIdx) {
-                  return trailingCompactionPoints.map((pendingPoint) => (
-                    <CompactionDivider key={`comp-tail-${pendingPoint.entryId}`} point={pendingPoint} />
-                  ));
+                const nodes: React.ReactNode[] = [];
+                for (const divider of beforeVisible.get(idx) ?? []) {
+                  if (divider.kind === "compaction") {
+                    nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
+                  } else {
+                    const marker = divider.marker as ModelChangeMarker;
+                    nodes.push(
+                      <ChangeDivider
+                        key={`change-${marker.entryId}`}
+                        marker={marker}
+                        modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+                      />,
+                    );
+                  }
                 }
-                return null;
+                if (idx === optimisticCompactionMessageIdx) {
+                  for (const pendingPoint of trailingCompactionPoints) {
+                    nodes.push(<CompactionDivider key={`comp-tail-${pendingPoint.entryId}`} point={pendingPoint} />);
+                  }
+                }
+                if (nodes.length === 0) return null;
+                return <Fragment key={`dividers-${idx}`}>{nodes}</Fragment>;
               };
               for (let idx = 0; idx < renderMessages.length;) {
                 const div = maybeDivider(idx);
@@ -1022,6 +1037,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
             {optimisticCompactionMessageIdx === -1 && trailingCompactionPoints.map((point) => (
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
+            ))}
+
+            {trailingChangeMarkers.filter((marker): marker is ModelChangeMarker => marker.kind === "model").map((marker) => (
+              <ChangeDivider
+                key={`change-tail-${marker.entryId}`}
+                marker={marker}
+                modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+              />
             ))}
 
             {!liveTurnActive && isStreamingThinking && (

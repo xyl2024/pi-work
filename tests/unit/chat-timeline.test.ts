@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { AgentMessage, AssistantMessage, ToolResultMessage, UserMessage } from "@/lib/shared/types";
+import type { AgentMessage, AssistantMessage, ChangeMarker, CompactionPoint, ToolResultMessage, UserMessage } from "@/lib/shared/types";
 import {
   buildChatTimeline,
+  buildTimelineDividers,
   decideSearchJump,
   indexToolResults,
   isVisibleChatMessage,
@@ -238,5 +239,80 @@ describe("decideSearchJump", () => {
       entryId: "e2",
       visibleIndex: 2,
     });
+  });
+});
+
+describe("buildTimelineDividers", () => {
+  const messages: AgentMessage[] = [
+    user("one"),
+    assistant([toolCall("call-a")]),
+    toolResult("call-a"),
+    user("two"),
+  ];
+  const timeline = timelineOf(messages, ["e0", "e1", "e2", "e3"]);
+  const entryIds = ["e0", "e1", "e2", "e3"];
+  const compaction = (entryId: string, beforeMessageEntryId?: string): CompactionPoint => ({
+    entryId,
+    tokensBefore: 1000,
+    summary: "summary",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:00.000Z",
+  });
+  const modelChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "model",
+    provider: "anthropic",
+    modelId: "claude-x",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:01.000Z",
+  });
+
+  it("places a change marker before the visible message it anchors to", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [modelChange("mc1", "e1")],
+    });
+    expect(dividers.beforeVisible.get(1)?.map((d) => d.kind)).toEqual(["change"]);
+    expect(dividers.beforeVisible.get(1)?.[0]).toEqual({ kind: "change", marker: modelChange("mc1", "e1") });
+  });
+
+  it("orders compaction before change at the same visible index", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1", "e3")],
+      changeMarkers: [modelChange("mc1", "e3")],
+    });
+    expect(dividers.beforeVisible.get(2)?.map((d) => d.kind)).toEqual(["compaction", "change"]);
+  });
+
+  it("keeps anchors that sit in the rendered slice and hides ones cropped away", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds: ["e0", "e1"],
+      changeMarkers: [modelChange("mc1", "e1"), modelChange("mc2", "e3")],
+    });
+    expect(dividers.beforeVisible.get(1)?.map((d) => d.kind)).toEqual(["change"]);
+    expect(dividers.beforeVisible.size).toBe(1);
+  });
+
+  it("keeps unanchored events as trailing dividers", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1")],
+      changeMarkers: [modelChange("mc1")],
+    });
+    expect(dividers.trailingCompactionPoints.map((p) => p.entryId)).toEqual(["c1"]);
+    expect(dividers.trailingChangeMarkers.map((m) => m.entryId)).toEqual(["mc1"]);
+    expect(dividers.beforeVisible.size).toBe(0);
+  });
+
+  it("produces no dividers when no events are supplied", () => {
+    const dividers = buildTimelineDividers({ timeline, entryIds });
+    expect(dividers.beforeVisible.size).toBe(0);
+    expect(dividers.trailingCompactionPoints).toEqual([]);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
   });
 });

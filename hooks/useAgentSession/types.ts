@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolInfo, ToolResultMessage, ToolSelection } from "@/lib/shared/types";
+import type { AgentMessage, ChangeMarker, CompactionPoint, SessionInfo, SessionTreeNode, ToolInfo, ToolResultMessage, ToolSelection } from "@/lib/shared/types";
 import type {
   AgentPhase,
   ContextUsage,
@@ -26,6 +26,7 @@ export interface SessionData {
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
     compactionPoints?: CompactionPoint[];
+    changeMarkers?: ChangeMarker[];
   };
 }
 
@@ -132,6 +133,7 @@ export interface UseAgentSessionResult {
   entryIds: string[];
   entryTimestamps: (number | undefined)[];
   compactionPoints: CompactionPoint[];
+  changeMarkers: ChangeMarker[];
   inFlightToolResults: Map<string, ToolResultMessage>;
   streamState: StreamingState;
   runtimeError: string | null;

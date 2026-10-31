@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
-import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
+import type { AgentMessage, ChangeMarker, CompactionPoint, ToolInfo } from "@/lib/shared/types";
 import { adoptDiskTranscript } from "@/lib/shared/session-runtime-state";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import type { SessionRuntimeInput } from "@/lib/shared/session-events";
@@ -23,6 +23,7 @@ type UseAgentSessionDataOptions = {
   setEntryIds: StateSetter<string[]>;
   setEntryTimestamps: StateSetter<(number | undefined)[]>;
   setCompactionPoints: StateSetter<CompactionPoint[]>;
+  setChangeMarkers: StateSetter<ChangeMarker[]>;
   setCurrentModelOverride: StateSetter<{ provider: string; modelId: string } | null>;
   setThinkingLevel: StateSetter<ThinkingLevelOption>;
   applyRuntimeInput: (input: SessionRuntimeInput) => void;
@@ -48,6 +49,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     setEntryIds,
     setEntryTimestamps,
     setCompactionPoints,
+    setChangeMarkers,
     setCurrentModelOverride,
     setThinkingLevel,
     applyRuntimeInput,
@@ -88,6 +90,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCompactionPoints(d.context.compactionPoints ?? []);
+      setChangeMarkers(d.context.changeMarkers ?? []);
       setCurrentModelOverride(null);
       setError(null);
       const migrateLegacyAuto = (raw: string | undefined): ThinkingLevelOption | null => {
@@ -122,7 +125,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [modelThinkingLevels, onSessionLoaded, setActiveLeafId, setCompactionPoints, setCurrentModelOverride, setData, setEntryIds, setEntryTimestamps, setError, setLoading, setMessages, setThinkingLevel]);
+  }, [modelThinkingLevels, onSessionLoaded, setActiveLeafId, setChangeMarkers, setCompactionPoints, setCurrentModelOverride, setData, setEntryIds, setEntryTimestamps, setError, setLoading, setMessages, setThinkingLevel]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
@@ -131,15 +134,16 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
         : `/api/sessions/${encodeURIComponent(sid)}/context`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[]; compactionPoints?: CompactionPoint[] } };
+      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[]; compactionPoints?: CompactionPoint[]; changeMarkers?: ChangeMarker[] } };
       setMessages((previous) => (leafId === null ? adoptDiskTranscript(previous, d.context.messages) : d.context.messages));
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCompactionPoints(d.context.compactionPoints ?? []);
+      setChangeMarkers(d.context.changeMarkers ?? []);
     } catch (e) {
       console.error("Failed to load context:", e);
     }
-  }, [setCompactionPoints, setEntryIds, setEntryTimestamps, setMessages]);
+  }, [setChangeMarkers, setCompactionPoints, setEntryIds, setEntryTimestamps, setMessages]);
 
   const ensureAvailableTools = useCallback(async (availableToolsLength: number, toolsLoading: boolean) => {
     if (availableToolsLength > 0 || toolsLoading) return;
