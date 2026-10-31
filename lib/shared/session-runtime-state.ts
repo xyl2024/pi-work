@@ -1,7 +1,7 @@
 import type { AgentMessage, SessionTreeNode, ToolInfo, ToolSelection, ToolResultMessage } from "./types";
 import type { ContextComposition } from "./context-composition";
 import type { ThinkingLevelOption } from "./thinking-level-utils";
-import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "./permission-mode";
+import { DEFAULT_PERMISSION_MODE, type SessionPermissionMode } from "./permission-mode";
 
 export type StateUpdater<T> = T | ((previous: T) => T);
 
@@ -28,7 +28,8 @@ export interface SessionSnapshotPayload {
     contextComposition?: ContextComposition | null;
     systemPrompt?: string;
     thinkingLevel?: string;
-    permissionMode?: PermissionMode;
+    permissionMode?: SessionPermissionMode;
+    background?: boolean;
     toolNames?: ToolSelection;
   };
 }
@@ -79,7 +80,8 @@ export interface SessionRuntimeState {
   inFlightTools: Map<string, InFlightToolCall>;
   subagentRefreshKey: number;
   thinkingLevel: ThinkingLevelOption;
-  permissionMode: PermissionMode;
+  permissionMode: SessionPermissionMode;
+  isBackgroundSession: boolean;
   retryInfo: RetryInfo | null;
   contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
@@ -109,6 +111,7 @@ export function createSessionRuntimeState(
     subagentRefreshKey: 0,
     thinkingLevel: "off",
     permissionMode: DEFAULT_PERMISSION_MODE,
+    isBackgroundSession: false,
     retryInfo: null,
     contextUsage: null,
     contextComposition: null,

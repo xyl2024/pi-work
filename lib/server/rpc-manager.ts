@@ -535,6 +535,7 @@ export class AgentSessionWrapper {
           systemPrompt: this.effectiveSystemPrompt(),
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           permissionMode: this.permissionMode,
+          background: this.isBackgroundSession,
           toolNames: this.toolSelection,
         };
       }

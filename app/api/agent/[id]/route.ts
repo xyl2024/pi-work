@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveSessionPath } from "@/lib/server/session-reader";
-import { startRpcSession, getRpcSession } from "@/lib/server/rpc-manager";
-import type { AgentSessionWrapper } from "@/lib/server/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getRpcSession } from "@/lib/server/rpc-manager";
+import { openSessionForRuntime } from "@/lib/server/session-runtime-open";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   findSubagentSessionOwner,
@@ -10,7 +8,6 @@ import {
   submitSubagentManualPrompt,
   SubagentManualInputError,
 } from "@/lib/server/subagent-manual-input";
-import { openSubagentChildSession } from "@/lib/server/subagent-tasks";
 
 const log = createLogger("api/agent/[id]");
 
@@ -67,27 +64,12 @@ export async function POST(
       return manual;
     }
 
-    let sendWrapper: AgentSessionWrapper | null = null;
-    let sessionSource = "existing";
     const existing = getRpcSession(id);
-    if (existing?.isAlive()) {
-      sendWrapper = existing;
-    } else {
-      const childSession = await openSubagentChildSession(id);
-      if (childSession) {
-        sendWrapper = childSession;
-        sessionSource = "started-subagent";
-      } else {
-        const filePath = await resolveSessionPath(id);
-        if (!filePath) {
-          log.warn("agent command session not found", { id, commandType, durationMs: elapsedMs(startedAt) });
-          return NextResponse.json({ error: "Session not found" }, { status: 404 });
-        }
-        const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
-        const { session } = await startRpcSession(id, filePath, cwd);
-        sendWrapper = session;
-        sessionSource = "started";
-      }
+    const sessionSource = existing?.isAlive() ? "existing" : "started";
+    const sendWrapper = existing?.isAlive() ? existing : await openSessionForRuntime(id);
+    if (!sendWrapper) {
+      log.warn("agent command session not found", { id, commandType, durationMs: elapsedMs(startedAt) });
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
     const result = await sendWrapper.send(body);
@@ -123,15 +105,12 @@ export async function GET(
   try {
     let session = getRpcSession(id);
     if (!session || !session.isAlive()) {
-      const filePath = await resolveSessionPath(id);
-      if (!filePath) {
-        log.debug("agent state completed: session not found", { id, durationMs: elapsedMs(startedAt) });
-        return NextResponse.json({ running: false });
-      }
-      const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
       try {
-        session = await openSubagentChildSession(id)
-          ?? (await startRpcSession(id, filePath, cwd)).session;
+        session = (await openSessionForRuntime(id)) ?? undefined;
+        if (!session) {
+          log.debug("agent state completed: session not found", { id, durationMs: elapsedMs(startedAt) });
+          return NextResponse.json({ running: false });
+        }
         log.debug("agent state started session", { id, durationMs: elapsedMs(startedAt) });
       } catch (startError) {
         log.warn("agent state failed to start session", { id, error: String(startError), durationMs: elapsedMs(startedAt) });

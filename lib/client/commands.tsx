@@ -4,7 +4,12 @@ import type { ReactNode } from "react";
 import type { ThemePreset } from "@/hooks/useTheme";
 import { PRESETS } from "@/hooks/useTheme";
 import type { Locale } from "@/hooks/useI18n";
-import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
+import {
+  flippedPermissionMode,
+  isPermissionMode,
+  type PermissionMode,
+  type SessionPermissionMode,
+} from "@/lib/shared/permission-mode";
 import { ICONS } from "@/components/ui/icons";
 import { PANEL_TAB_SPECS, type PanelViewKind } from "@/lib/shared/panelTabs";
 import {
@@ -17,7 +22,8 @@ import {
 export interface AgentControls {
   abortStreaming: () => void | Promise<void>;
   isStreaming: boolean;
-  permissionMode?: PermissionMode;
+  permissionMode?: SessionPermissionMode;
+  canChangePermissionMode?: boolean;
   setPermissionMode?: (mode: PermissionMode) => void | Promise<void>;
 }
 
@@ -121,9 +127,10 @@ export function buildCommands(
     run: () => ctx.openCwdPicker(),
   });
 
+  const permissionMode = ctx.agentControls?.permissionMode;
   cmds.push({
     id: "session.permission_mode",
-    title: ctx.agentControls?.permissionMode === "full_access"
+    title: permissionMode === "full_access"
       ? t("Switch to confirm dangerous commands")
       : t("Switch to allow full access"),
     group: "Session",
@@ -132,10 +139,15 @@ export function buildCommands(
       "权限", "完全访问", "确认", "危险命令",
     ],
     icon: <ShieldIcon />,
-    when: (c) => !!c.agentControls?.setPermissionMode,
-    run: () => ctx.agentControls?.setPermissionMode?.(
-      flippedPermissionMode(ctx.agentControls?.permissionMode ?? "confirm"),
-    ),
+    when: (c) =>
+      !!c.agentControls?.setPermissionMode
+      && c.agentControls.canChangePermissionMode !== false
+      && isPermissionMode(c.agentControls.permissionMode),
+    run: () => {
+      const mode = ctx.agentControls?.permissionMode;
+      if (!isPermissionMode(mode)) return;
+      return ctx.agentControls?.setPermissionMode?.(flippedPermissionMode(mode));
+    },
   });
 
   cmds.push({

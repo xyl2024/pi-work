@@ -1,5 +1,5 @@
 import type { ToolDiffStats } from "./tool-diff-stats";
-import type { PermissionMode } from "./permission-mode";
+import type { SessionPermissionMode } from "./permission-mode";
 import type { MessageOrigin } from "./message-origin";
 
 interface SessionEntryBase {
@@ -210,7 +210,8 @@ export interface SessionInfo {
   firstMessage: string;
   parentSessionId?: string;
   running: boolean;
-  permissionMode?: PermissionMode;
+  permissionMode?: SessionPermissionMode;
+  background?: boolean;
 }
 
 export const MAX_CONCURRENT_SUBAGENT_RUNS = 4;

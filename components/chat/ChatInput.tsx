@@ -16,8 +16,11 @@ import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
-import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
-import type { PermissionMode } from "@/lib/shared/permission-mode";
+import {
+  AUTO_DENY_BORDER_COLOR,
+  FULL_ACCESS_BORDER_COLOR,
+} from "../ui/permission-mode-colors";
+import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
 import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
@@ -46,7 +49,7 @@ interface Props {
   onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
-  permissionMode?: PermissionMode;
+  permissionMode?: SessionPermissionMode;
   onPermissionModeToggle?: () => void;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   slashResources?: SlashResource[];
@@ -418,7 +421,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: 8,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1.5px solid ${permissionMode === "full_access" ? FULL_ACCESS_BORDER_COLOR : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
+            border: `1.5px solid ${permissionMode === "full_access"
+              ? FULL_ACCESS_BORDER_COLOR
+              : permissionMode === "auto_deny"
+                ? AUTO_DENY_BORDER_COLOR
+                : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
             boxShadow: "none",

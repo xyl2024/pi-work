@@ -8,7 +8,7 @@ import type {
   SessionStats,
 } from "@/lib/shared/session-runtime-state";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
-import type { PermissionMode } from "@/lib/shared/permission-mode";
+import type { PermissionMode, SessionPermissionMode } from "@/lib/shared/permission-mode";
 import type { SessionEvent } from "@/lib/shared/session-events";
 
 export type { AgentPhase, ContextUsage, RetryInfo } from "@/lib/shared/session-runtime-state";
@@ -156,7 +156,8 @@ export interface UseAgentSessionResult {
   toolsLoading: boolean;
   toolsError: string | null;
   thinkingLevel: ThinkingLevelOption;
-  permissionMode: PermissionMode;
+  permissionMode: SessionPermissionMode;
+  isBackgroundSession: boolean;
   systemPrompt: string | null;
   currentModel: { provider: string; modelId: string } | null;
   displayModel: { provider: string; modelId: string } | null;

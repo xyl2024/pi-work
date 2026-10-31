@@ -4,7 +4,9 @@ import {
   readSessionDetails,
   renameSession,
 } from "@/lib/server/sessions";
-import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
+import { getRpcSession } from "@/lib/server/rpc-manager";
+import { openSessionForRuntime } from "@/lib/server/session-runtime-open";
+import { resolveSessionPermission, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]");
@@ -32,13 +34,13 @@ export async function GET(req: Request, { params }: RouteContext) {
         agentState = { running: true, state };
       } else {
         try {
-          const resolved = await startRpcSession(
-            id,
-            session.filePath,
-            session.info?.cwd || process.cwd(),
-          );
-          const state = await resolved.session.send({ type: "get_state" });
-          agentState = { running: true, state };
+          const opened = await openSessionForRuntime(id);
+          if (opened) {
+            const state = await opened.send({ type: "get_state" });
+            agentState = { running: true, state };
+          } else {
+            agentState = { running: false };
+          }
         } catch (bootError) {
           log.warn("get session includeState failed to start rpc session", {
             id,
@@ -60,6 +62,9 @@ export async function GET(req: Request, { params }: RouteContext) {
     });
     return NextResponse.json({
       ...session,
+      info: session.info
+        ? { ...session.info, ...sessionPermissionFields(resolveSessionPermission(id)) }
+        : session.info,
       ...(agentState !== undefined ? { agentState } : {}),
     });
   } catch (error) {

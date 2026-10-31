@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
-import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
+import { resolveSessionPermissions, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { WorkspacesResponse, Workspace } from "@/lib/shared/types";
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     for (const s of all) if (s.cwd) cwdBySessionId.set(s.id, s.cwd);
     const runningByCwd = new Map<string, number>();
     const runningIds = new Set<string>();
-    const permissionModes = readSessionPermissionModes();
+    const permissionStates = resolveSessionPermissions(all.map((session) => session.id));
     for (const { id, running } of listRunningRpcSessions()) {
       if (!running) continue;
       runningIds.add(id);
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
           .map((session) => ({
             ...session,
             running: runningIds.has(session.id),
-            ...permissionModeField(permissionModes, session.id),
+            ...sessionPermissionFields(permissionStates[session.id]),
           })),
       } : {}),
     };
