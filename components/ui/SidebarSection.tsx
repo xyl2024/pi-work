@@ -44,7 +44,7 @@ export function SidebarSection({
       style={{
         display: "flex",
         flexDirection: "column",
-        flexGrow: open && contentHeight === undefined ? grow : 0,
+        flexGrow: open ? grow : 0,
         flexShrink: open && (grow > 0 || contentHeight !== undefined) ? 1 : 0,
         flexBasis: "auto",
         minHeight: 0,

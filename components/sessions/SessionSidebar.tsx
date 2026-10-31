@@ -775,6 +775,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onToggle={() => setSessionsOpen((v) => !v)}
         scrollRef={attachSessionsScroll}
         contentHeight={SESSIONS_CONTENT_HEIGHT_PX}
+        grow={selectedCwdProp && explorerOpen ? 0 : 1}
         actions={
           <>
           <Tooltip content={t("Only today's sessions")}>
