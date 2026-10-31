@@ -248,6 +248,7 @@ export const chat = {
   "Compacted from {n} tokens": "已从 {n} tokens 压缩",
   "Context compacted": "上下文已压缩",
   "Model changed to {model}": "模型变更为 {model}",
+  "Thinking level changed to {level}": "推理强度变为 {level}",
   "View summary": "查看摘要",
   "Estimated tokens while streaming": "预估 token 数（流式接收中）",
   "Model call failed": "模型调用失败",

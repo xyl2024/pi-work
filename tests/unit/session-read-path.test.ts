@@ -227,6 +227,20 @@ describe("session change markers", () => {
     ]);
   });
 
+  it("collects a thinking-level change anchored to the next visible message", async () => {
+    const { agentDir } = sandbox();
+    const user1 = messageLine("u1", null, "user", "one", "2026-01-02T03:04:06.000Z");
+    const thinking1 = JSON.stringify({ type: "thinking_level_change", id: "tl1", parentId: "u1", timestamp: "2026-01-02T03:04:07.000Z", thinkingLevel: "medium" }) + "\n";
+    const assistant1 = messageLine("a1", "tl1", "assistant", "two", "2026-01-02T03:04:08.000Z");
+    writeSession(agentDir, "thinking.jsonl", headerLine("thinking-1"), user1, thinking1, assistant1);
+    clearCaches();
+
+    const details = await readSessionDetails("thinking-1");
+    expect(details?.context.changeMarkers).toEqual([
+      { entryId: "tl1", kind: "thinking_level", thinkingLevel: "medium", beforeMessageEntryId: "a1", timestamp: "2026-01-02T03:04:07.000Z" },
+    ]);
+  });
+
   it("returns an empty list for sessions written before change tracking", async () => {
     const { agentDir } = sandbox();
     writeSession(

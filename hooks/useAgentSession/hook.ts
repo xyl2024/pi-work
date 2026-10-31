@@ -507,11 +507,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     if (!sid) return;
     try {
       await sendAgentCommand(sid, { type: "set_thinking_level", level: effective });
+      await loadSession(sid);
     } catch (e) {
       console.error("Failed to set thinking level:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change thinking level") });
     }
-  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, setThinkingLevel, showToast, t]);
+  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, loadSession, setThinkingLevel, showToast, t]);
 
   const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
     const sid = sessionIdRef.current;
