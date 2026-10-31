@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm";
 import { useI18n } from "@/hooks/useI18n";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { shortenPath } from "@/lib/client/paths";
 import { groupSkillFiles, stripFrontmatter } from "@/lib/shared/skill-files";
 import { skillGroup, type SkillDetailData } from "@/lib/shared/skills";
@@ -14,6 +13,7 @@ import { fetchSkillDetail } from "@/lib/client/skills-io";
 import { toggleSkillInvocation, useSkillsStore } from "@/lib/client/skills-store";
 import { SkillFileRow } from "./SkillFileRow";
 import { SkillsBackButton } from "./SkillsBackButton";
+import { HumanCallBadge } from "./HumanCallBadge";
 
 export function SkillDetailPage({ filePath }: { filePath: string }) {
   const { t } = useI18n();
@@ -114,17 +114,8 @@ export function SkillDetailPage({ filePath }: { filePath: string }) {
         >
           {skill?.name ?? filePath}
         </span>
-        {toggleNode &&
-          (frontmatterLocked ? (
-            <Tooltip
-              content={t("Locked by SKILL.md frontmatter (disable-model-invocation)")}
-              side="bottom"
-            >
-              <span style={{ display: "inline-flex" }}>{toggleNode}</span>
-            </Tooltip>
-          ) : (
-            toggleNode
-          ))}
+        {skill && frontmatterLocked && <HumanCallBadge />}
+        {toggleNode && !frontmatterLocked && toggleNode}
       </div>
 
       <div

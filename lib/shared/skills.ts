@@ -102,6 +102,16 @@ export function skillGroup(skill: Skill): SkillGroup {
   return "path";
 }
 
+export function filterSkills(skills: readonly Skill[], query: string): Skill[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...skills];
+  return skills.filter(
+    (skill) =>
+      skill.name.toLowerCase().includes(needle) ||
+      skill.description.toLowerCase().includes(needle),
+  );
+}
+
 export function groupSkills(
   skills: readonly Skill[],
 ): { group: SkillGroup; skills: Skill[] }[] {

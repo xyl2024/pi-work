@@ -3,10 +3,10 @@
 import { type CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import type { Skill } from "@/lib/shared/skills";
+import { HumanCallBadge } from "./HumanCallBadge";
 
 const CLAMP_STYLE: CSSProperties = {
   display: "-webkit-box",
@@ -110,16 +110,7 @@ export function SkillCard({
           }}
         />
         <span style={{ display: "inline-flex" }}>
-          {frontmatterLocked ? (
-            <Tooltip
-              content={t("Locked by SKILL.md frontmatter (disable-model-invocation)")}
-              side="top"
-            >
-              <span style={{ display: "inline-flex" }}>{toggleNode}</span>
-            </Tooltip>
-          ) : (
-            toggleNode
-          )}
+          {frontmatterLocked ? <HumanCallBadge /> : toggleNode}
         </span>
       </div>
       <TruncatedText

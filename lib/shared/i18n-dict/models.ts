@@ -115,11 +115,13 @@ export const models = {
   "No providers configured": "还没有配置任何提供商",
 
   "Add Skill": "添加技能",
+  "Search skills...": "搜索技能...",
   "Select a skill": "选择一个技能",
   "Search skills hint": "搜索 skills.sh，为你的 Agent 发现并安装技能。",
   "Visible in model prompt - click to disable": "在模型提示词中可见 - 点击禁用",
   "Hidden from model prompt - click to enable": "对模型提示词隐藏 - 点击启用",
 
+  "Human Call": "人工调用",
   "Locked": "已锁定",
   "Locked by SKILL.md frontmatter (disable-model-invocation)": "已由 SKILL.md frontmatter（disable-model-invocation）锁定",
   "This skill sets disable-model-invocation: true in its frontmatter, so pi never lists it in the system prompt. It can still be invoked explicitly via /skill:name.": "该技能在 frontmatter 中声明了 disable-model-invocation: true，pi 不会将其列入系统提示词，只能通过 /skill:name 手动调用。",

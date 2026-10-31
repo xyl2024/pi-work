@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
+import { SearchIcon } from "@/components/ui/icons";
 import { shortenPath } from "@/lib/client/paths";
-import { groupSkills } from "@/lib/shared/skills";
+import { filterSkills, groupSkills } from "@/lib/shared/skills";
 import {
   openSkillsAdd,
   openSkillsDetail,
@@ -18,8 +19,10 @@ export function SkillsRootPage() {
   const { t } = useI18n();
   const toast = useToast();
   const { cwd, skills, loading, loaded, loadError, toggleBusy } = useSkillsStore();
+  const [query, setQuery] = useState("");
 
-  const groups = groupSkills(skills);
+  const groups = useMemo(() => groupSkills(filterSkills(skills, query)), [skills, query]);
+  const searching = query.trim() !== "";
 
   const handleToggle = useCallback(
     async (filePath: string, disableModelInvocation: boolean) => {
@@ -94,6 +97,40 @@ export function SkillsRootPage() {
         </button>
       </div>
 
+      <div style={{ padding: "0 12px 8px", flexShrink: 0 }}>
+        <div style={{ position: "relative" }}>
+          <SearchIcon
+            width={11}
+            height={11}
+            style={{
+              position: "absolute",
+              left: 9,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-dim)",
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("Search skills...")}
+            spellCheck={false}
+            style={{
+              width: "100%",
+              padding: "5px 10px 5px 26px",
+              fontSize: 12,
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--text)",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+      </div>
+
       <div
         data-scroll-side
         style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 12px 18px" }}
@@ -128,7 +165,7 @@ export function SkillsRootPage() {
         ) : !loaded ? (
           <Muted>{loading ? t("Loading...") : ""}</Muted>
         ) : groups.length === 0 ? (
-          <Muted>{t("No skills found")}</Muted>
+          <Muted>{searching ? t("No matches") : t("No skills found")}</Muted>
         ) : (
           groups.map(({ group, skills: groupSkills }) => (
             <section key={group} style={{ marginBottom: 18 }}>
