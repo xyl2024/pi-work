@@ -8,8 +8,6 @@ export const dynamic = "force-dynamic";
 
 interface SuggestRequestBody {
   leafId?: unknown;
-  provider?: unknown;
-  modelId?: unknown;
 }
 
 function optionalString(value: unknown): string | null {
@@ -37,8 +35,6 @@ export async function POST(
     const outcome = await suggestForSession({
       sessionId: id,
       leafId: optionalString(body.leafId),
-      provider: optionalString(body.provider),
-      modelId: optionalString(body.modelId),
     });
 
     if (outcome.kind === "none" && outcome.reason === "session-not-found") {

@@ -200,4 +200,7 @@ export const EN_TRANSLATIONS = {
   "Message from channel {channel}": "From channel {channel}",
   "Message from scheduled task {task}": "From scheduled task {task}",
   "Message from session {session}": "From session {session}",
+
+  "Suggested prompt": "Suggested prompt",
+  "Enable suggested prompts": "Enable suggested prompts",
 } as const;

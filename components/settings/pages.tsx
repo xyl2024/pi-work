@@ -12,6 +12,7 @@ import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
+import { SuggestedPromptSection } from "./sections/SuggestedPromptSection";
 import { NetworkProxySection } from "./sections/NetworkProxySection";
 import { DeepSeekKeySection } from "./sections/DeepSeekKeySection";
 import { SubagentSection } from "./sections/SubagentSection";
@@ -53,6 +54,9 @@ export const SETTINGS_PAGES = {
   ),
   subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,
+  "suggested-prompt": ({ config, apply }) => (
+    <SuggestedPromptSection config={config} apply={apply} />
+  ),
   "network-proxy": ({ config, apply, reportDirty }) => (
     <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
   ),
