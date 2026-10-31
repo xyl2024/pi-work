@@ -11,10 +11,7 @@ import {
   decideSuggestedPromptEligibility,
   extractSuggestedPromptContext,
   resolveActivePath,
-  type NormalEndAbandonReason,
-  type SuggestedPromptAbandonReason,
   type SuggestedPromptContextEntry,
-  type SuggestionCleanupReason,
 } from "../shared/suggested-prompt";
 import type { SessionEntry } from "../shared/types";
 
@@ -59,10 +56,14 @@ export type SuggestedPromptGenerator = (
 export type SuggestedPromptSkipReason =
   | "disabled"
   | "session-not-found"
+  | "subagent-session"
+  | "scheduled-session"
+  | "no-assistant-message"
+  | "turn-not-complete"
+  | "empty-assistant-text"
   | "generation-failed"
-  | SuggestedPromptAbandonReason
-  | NormalEndAbandonReason
-  | SuggestionCleanupReason;
+  | "empty-suggestion"
+  | "suggestion-too-long";
 
 export type SuggestedPromptOutcome =
   | { kind: "suggestion"; suggestion: string }
@@ -72,15 +73,6 @@ export interface SuggestForSessionInput {
   sessionId: string;
   leafId?: string | null;
   generate?: SuggestedPromptGenerator;
-}
-
-function skipSuggestion(
-  sessionId: string,
-  reason: SuggestedPromptSkipReason,
-  detail: Record<string, unknown> = {},
-): SuggestedPromptOutcome {
-  log.debug("suggested prompt skipped", { sessionId, ...detail, reason });
-  return { kind: "none", reason };
 }
 
 function buildPromptText(context: readonly SuggestedPromptContextEntry[]): string {
@@ -97,8 +89,21 @@ export async function suggestForSession(
   const settings = readConfig().suggested_prompt;
 
   const filePath = await resolveSessionPath(input.sessionId);
-  if (!filePath) return skipSuggestion(input.sessionId, "session-not-found");
-  if (!settings.enabled) return skipSuggestion(input.sessionId, "disabled");
+  if (!filePath) {
+    log.debug("suggested prompt skipped", {
+      sessionId: input.sessionId,
+      reason: "session-not-found",
+    });
+    return { kind: "none", reason: "session-not-found" };
+  }
+
+  if (!settings.enabled) {
+    log.debug("suggested prompt skipped", {
+      sessionId: input.sessionId,
+      reason: "disabled",
+    });
+    return { kind: "none", reason: "disabled" };
+  }
 
   const identity = resolveBackgroundSessionIdentity(input.sessionId);
   const eligibility = decideSuggestedPromptEligibility({
@@ -106,7 +111,11 @@ export async function suggestForSession(
     isScheduledSession: identity.scheduledPermissionMode !== null,
   });
   if (eligibility.kind === "abandon") {
-    return skipSuggestion(input.sessionId, eligibility.reason);
+    log.debug("suggested prompt skipped", {
+      sessionId: input.sessionId,
+      reason: eligibility.reason,
+    });
+    return { kind: "none", reason: eligibility.reason };
   }
 
   const sm = SessionManager.open(filePath);
@@ -116,7 +125,12 @@ export async function suggestForSession(
 
   const normalEnd = decideNormalEnd(path);
   if (normalEnd.kind === "abandon") {
-    return skipSuggestion(input.sessionId, normalEnd.reason, { leafId });
+    log.debug("suggested prompt skipped", {
+      sessionId: input.sessionId,
+      leafId,
+      reason: normalEnd.reason,
+    });
+    return { kind: "none", reason: normalEnd.reason };
   }
 
   const context = extractSuggestedPromptContext(path);
