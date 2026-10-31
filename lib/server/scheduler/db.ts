@@ -29,6 +29,7 @@ const SCHEMA = `
     model_id        TEXT,
     thinking_level  TEXT,
     tool_names      TEXT,
+    permission_mode TEXT,
     max_lifetime_ms INTEGER,
     timezone        TEXT,
     notification    TEXT,
@@ -73,6 +74,11 @@ function runMigrations(db: Database.Database): void {
   if (!hasNotification) {
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN notification TEXT");
     log.info("migration: added scheduled_tasks.notification column");
+  }
+  const hasPermissionMode = taskColumns.some((c) => c.name === "permission_mode");
+  if (!hasPermissionMode) {
+    db.exec("ALTER TABLE scheduled_tasks ADD COLUMN permission_mode TEXT");
+    log.info("migration: added scheduled_tasks.permission_mode column");
   }
 }
 

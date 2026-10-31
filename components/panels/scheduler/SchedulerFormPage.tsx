@@ -183,6 +183,20 @@ export function SchedulerFormPage() {
               }
             }}
           />
+          <Field label={t("Dangerous commands")}>
+            <select
+              value={form.permissionMode}
+              onChange={(e) =>
+                update({
+                  permissionMode: e.target.value === "full_access" ? "full_access" : "auto_deny",
+                })
+              }
+              style={inputStyle}
+            >
+              <option value="auto_deny">{t("Auto-deny")}</option>
+              <option value="full_access">{t("Full access")}</option>
+            </select>
+          </Field>
         </Section>
 
         <Section title={t("Scheduler")}>

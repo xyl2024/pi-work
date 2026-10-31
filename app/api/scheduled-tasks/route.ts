@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       modelId: body.modelId,
       thinkingLevel: body.thinkingLevel,
       toolNames: body.toolNames,
+      permissionMode: body.permissionMode,
       maxLifetimeMs: body.maxLifetimeMs,
       timezone: body.timezone,
       notification: body.notification,

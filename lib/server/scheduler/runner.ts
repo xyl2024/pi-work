@@ -68,6 +68,7 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
         ? { thinkingLevel: task.thinkingLevel as RunTurnRpcSpec["thinkingLevel"] }
         : {}),
       toolNames: task.toolNames ?? "all",
+      permissionMode: task.permissionMode,
       origin: {
         kind: "scheduled-task",
         taskId: task.id,
