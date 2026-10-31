@@ -375,7 +375,7 @@ function AssistantMessageViewInner({
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.12s",
           }}>
-            <UsageIcons usage={message.usage} />
+            <UsageIcons usage={message.usage} durationMs={message.durationMs} />
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
           </span>
         )}
