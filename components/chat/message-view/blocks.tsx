@@ -10,7 +10,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, projectNestedCalls, toolCallDiffStats } from "@/lib/shared/tool-call-display";
-import { extractMessageText, extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
+import { extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
 import { formatToolDuration } from "@/lib/shared/tool-duration";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
