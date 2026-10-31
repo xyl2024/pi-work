@@ -60,6 +60,14 @@ function snapshotFor(providerId: string): OAuthLoginState {
   return sessions.get(providerId)?.state ?? OAUTH_LOGIN_IDLE;
 }
 
+export function getOAuthLoginState(providerId: string): OAuthLoginState {
+  return snapshotFor(providerId);
+}
+
+export function subscribeOAuthLogins(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 export function useOAuthLoginState(providerId: string): OAuthLoginState {
   return useSyncExternalStore(
     subscribe,

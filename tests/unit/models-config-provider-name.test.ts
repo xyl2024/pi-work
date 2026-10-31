@@ -10,14 +10,14 @@ vi.mock("@/lib/client/models-config-io", () => ({
 
 import { putModelsConfig } from "@/lib/client/models-config-io";
 import {
-  releaseModelsConfigDraft, updateModelsConfigProvider, renameModelsConfigProvider,
-  useModelsConfigStore as getStoreSnapshot, saveModelsConfig, selectModelsConfigDirty,
+  modelsConfigPanel, updateModelsConfigProvider, renameModelsConfigProvider,
+  saveModelsConfig, selectModelsConfigDirty,
   selectModelsConfigProblem, openModelsConfigProvider,
-} from "@/lib/client/models-config-store";
+} from "@/lib/client/models-config-panel";
 
 describe("provider name waits for explicit Save", () => {
   beforeEach(() => {
-    releaseModelsConfigDraft();
+    modelsConfigPanel.release();
     vi.mocked(putModelsConfig).mockClear();
     vi.mocked(putModelsConfig).mockResolvedValue({ ok: true });
     updateModelsConfigProvider("original", { api: "openai-completions" });
@@ -25,38 +25,38 @@ describe("provider name waits for explicit Save", () => {
   });
 
   it("keeps config and navigation unchanged while typing, then renames on Save", async () => {
-    const pages = getStoreSnapshot().pages;
+    const pages = modelsConfigPanel.pages();
     for (const text of ["n", "ne", "new"]) {
       renameModelsConfigProvider("original", text);
-      const state = getStoreSnapshot();
+      const state = modelsConfigPanel.get();
       expect(state.config.providers).toHaveProperty("original");
       expect(state.config.providers).not.toHaveProperty(text);
-      expect(state.pages).toBe(pages);
+      expect(modelsConfigPanel.pages()).toBe(pages);
       expect(state.providerNames.original).toBe(text);
       expect(selectModelsConfigDirty(state)).toBe(true);
       expect(putModelsConfig).not.toHaveBeenCalled();
     }
     await saveModelsConfig();
     expect(putModelsConfig).toHaveBeenCalledWith({ providers: { new: { api: "openai-completions" } } });
-    expect(getStoreSnapshot().config.providers).toHaveProperty("new");
-    expect(getStoreSnapshot().providerNames).toEqual({});
-    expect(selectModelsConfigDirty(getStoreSnapshot())).toBe(false);
+    expect(modelsConfigPanel.get().config.providers).toHaveProperty("new");
+    expect(modelsConfigPanel.get().providerNames).toEqual({});
+    expect(selectModelsConfigDirty(modelsConfigPanel.get())).toBe(false);
   });
 
   it("keeps the original name and input when saving fails", async () => {
     vi.mocked(putModelsConfig).mockResolvedValue({ ok: false, error: "failed" });
     renameModelsConfigProvider("original", "new");
     await saveModelsConfig();
-    expect(getStoreSnapshot().config.providers).toHaveProperty("original");
-    expect(getStoreSnapshot().providerNames.original).toBe("new");
+    expect(modelsConfigPanel.get().config.providers).toHaveProperty("original");
+    expect(modelsConfigPanel.get().providerNames.original).toBe("new");
   });
 
   it("blocks empty and conflicting names without losing input", () => {
     renameModelsConfigProvider("original", " ");
-    expect(selectModelsConfigProblem(getStoreSnapshot())?.reason).toBe("provider-name");
+    expect(selectModelsConfigProblem(modelsConfigPanel.get())?.reason).toBe("provider-name");
     updateModelsConfigProvider("existing", {});
     renameModelsConfigProvider("original", "existing");
-    expect(selectModelsConfigProblem(getStoreSnapshot())?.reason).toBe("provider-name-conflict");
-    expect(getStoreSnapshot().providerNames.original).toBe("existing");
+    expect(selectModelsConfigProblem(modelsConfigPanel.get())?.reason).toBe("provider-name-conflict");
+    expect(modelsConfigPanel.get().providerNames.original).toBe("existing");
   });
 });

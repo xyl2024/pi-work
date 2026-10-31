@@ -17,7 +17,10 @@ import {
   type ModelIconPreferences,
 } from "@/lib/shared/model-icon-match";
 import { saveModelIconPreference } from "@/lib/client/model-icon-preferences";
-import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
+import {
+  applyModelsConfigModelIconPreferences,
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 
 interface ModelsApiResponse {
   catalog?: RuntimeCatalog;
@@ -30,7 +33,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
   const toast = useToast();
   const [models, setModels] = useState<RuntimeModelInfo[]>([]);
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
-  const [preferences, setPreferences] = useState<ModelIconPreferences>({});
+  const { modelIconPreferences: preferences } = useModelsConfigPanel().view;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -49,7 +52,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
         const catalogProvider = data.catalog?.providers.find((provider) => provider.id === providerId);
         setModels(catalogProvider?.models ?? []);
         setModelIcons(data.modelIcons ?? {});
-        setPreferences(data.modelIconPreferences ?? {});
+        applyModelsConfigModelIconPreferences(data.modelIconPreferences ?? {});
       } catch (e) {
         if (cancelled) return;
         setModels([]);
@@ -60,8 +63,6 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
     })();
     return () => { cancelled = true; };
   }, [providerId, t]);
-
-  useModelIconPreferencesSync(setPreferences);
 
   const providerIconId = useMemo(
     () => resolveProviderIcon(providerId, undefined, modelIcons),
@@ -81,7 +82,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
         modelId,
         useProviderIcon ? MODEL_ICON_PREFERENCE_PROVIDER : MODEL_ICON_PREFERENCE_AUTO,
       );
-      setPreferences(next);
+      applyModelsConfigModelIconPreferences(next);
     } catch {
       toast.show({ kind: "error", message: t("Failed to update icon preference") });
     } finally {

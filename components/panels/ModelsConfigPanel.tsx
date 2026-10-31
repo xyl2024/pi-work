@@ -3,12 +3,11 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { currentModelsConfigPage } from "@/lib/shared/models-config-pages";
 import {
-  ensureModelsConfigLoaded,
-  escapeModelsConfig,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  MODELS_CONFIG_ROOT_PAGE,
+  modelsConfigPanel,
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 import { ModelsConfigRootPage } from "./models-config/ModelsConfigRootPage";
 import { ModelsConfigProviderPage } from "./models-config/ModelsConfigProviderPage";
 import { ModelsConfigModelPage } from "./models-config/ModelsConfigModelPage";
@@ -22,15 +21,16 @@ import { ModelsConfigSaveBar } from "./models-config/ModelsConfigSaveBar";
 
 export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
   const { t } = useI18n();
-  const { loaded, loadError, pages } = useModelsConfigStore();
+  const { view, pages } = useModelsConfigPanel();
+  const { loaded, loadError } = view;
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ensureModelsConfigLoaded();
+    modelsConfigPanel.open();
   }, []);
 
-  const page = currentModelsConfigPage(pages);
+  const page = pages.length > 0 ? pages[pages.length - 1] : MODELS_CONFIG_ROOT_PAGE;
   const fullHeightPage =
     page.kind === "addProvider" ||
     page.kind === "addModelName" ||
@@ -47,7 +47,7 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (escapeModelsConfig().closePanel) onCloseTab?.();
+    if (modelsConfigPanel.back().closePanel) onCloseTab?.();
   });
 
   return (

@@ -57,7 +57,6 @@ import {
   selectCanExpand,
   selectOpenCount,
   selectTab,
-  selectTabByKind,
   type PanelMode,
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
@@ -67,13 +66,12 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
-import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import {
   schedulerPanel,
   setSchedulerPanelOpen,
   useSchedulerRunning,
 } from "@/lib/client/scheduler-panel";
-import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
+import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
 import {
@@ -82,7 +80,6 @@ import {
 } from "@/hooks/usePanelViewLifecycleSync";
 import { mcpPanel } from "@/lib/client/mcp-store";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
-import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
@@ -162,39 +159,17 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
-interface PanelCloseGuard {
-  titleKey: string;
-  descriptionKey: string;
-  confirmLabelKey: string;
-}
-
-const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | null>> = {
-  modelsConfig: () =>
-    selectModelsConfigCloseConfirm({
-      dirty: getModelsConfigDirty(),
-      oauthInProgress: hasActiveOAuthLogin(),
-    }),
-};
-
-const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
-  modelsConfig: () => {
-    if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
-  },
-};
-
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel, schedulerPanel, mcpPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel, schedulerPanel, mcpPanel, modelsConfigPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   mcp: mcpPanel,
   channels: channelsPanel,
   skills: skillsPanel,
   scheduler: schedulerPanel,
+  modelsConfig: modelsConfigPanel,
 };
 
-const PANEL_KINDS_WITH_CLOSE_GUARD = [
-  ...(Object.keys(PANEL_CLOSE_GUARDS) as PanelViewKind[]),
-  ...(Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[]),
-];
+const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   const closing = new Set(tabs.map((tab) => tab.kind));
@@ -413,11 +388,7 @@ export function AppShell() {
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  const modelsConfigDirty = useModelsConfigDirty();
-  const modelsConfigTabOpen = selectTabByKind(panelTabsState, "modelsConfig") !== null;
-  useEffect(() => {
-    if (!modelsConfigTabOpen) releaseModelsConfigDraft();
-  }, [modelsConfigTabOpen]);
+  const modelsConfigDirty = modelsConfigPanel.useStatus() === true;
   const skillsInstalling = skillsPanel.useStatus() === true;
   const schedulerRunning = useSchedulerRunning();
   useEffect(() => {
@@ -806,21 +777,14 @@ export function AppShell() {
   const confirmDropPanelTabs = useCallback(
     async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
       const closingStores: PanelViewLifecycleStore[] = [];
-      const confirmedKinds: PanelViewKind[] = [];
       for (const kind of kinds) {
         const store = PANEL_VIEW_STORE_BY_KIND[kind];
-        if (store) {
-          const guard = store.guard();
-          if (guard && !(await askPanelClose(guard))) return false;
-          closingStores.push(store);
-          continue;
-        }
-        const guard = PANEL_CLOSE_GUARDS[kind]?.();
+        if (!store) continue;
+        const guard = store.guard();
         if (guard && !(await askPanelClose(guard))) return false;
-        confirmedKinds.push(kind);
+        closingStores.push(store);
       }
       for (const store of closingStores) await store.requestClose(() => true);
-      for (const kind of confirmedKinds) PANEL_CLOSE_SIDE_EFFECTS[kind]?.();
       return true;
     },
     [askPanelClose],

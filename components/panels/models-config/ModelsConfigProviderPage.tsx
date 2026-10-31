@@ -13,12 +13,12 @@ import {
   openModelsConfigModel,
   renameModelsConfigProvider,
   updateModelsConfigProvider,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 
 export function ModelsConfigProviderPage({ name }: { name: string }) {
   const { t } = useI18n();
-  const state = useModelsConfigStore();
+  const { view: state } = useModelsConfigPanel();
   const { config, providerNames } = state;
   const provider = config.providers?.[name];
   if (!provider) return null;
