@@ -29,6 +29,8 @@
 - 聊天输入区选当前模型的弹层完全不动：那是「这个会话用哪个模型」，与 `~/.pi/agent/models.json`（有哪些 provider / 模型、怎么接）是两件事。
 - 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/models-config-draft.ts`（服务端载荷 → 草稿、dirty 判定、阻止保存的问题、保存提交的载荷）、`models-config-pages.ts`（页栈 push / back / 删除与保存后的收敛）、`models-config-close.ts`（关标签确认与重开是否重读盘）。面板内的视觉布局、角标渲染位置、OAuth 与 HTTP 胶水仍属人工清单（ADR-0003 规则 3）。
 
+**参见**：ADR-0024「面板视图的生命周期是一个 module」——本文的面板视图状态（保活、释放、页栈与关闭确认）由那一个 module 拥有，本文只提供 adapter，Decision 不变。
+
 ## 修订 2026-10-17（技能面板 #121）
 
 上面「Skills 这次不动」这句话已不再成立：技能沿同一条路迁移成了右侧面板视图，全屏技能模态与它的三条入口已删除。按钮是 `sessionBound: false` 的全局按钮、内容跟随当前会话的工作目录、面板身份仍是 `config.yaml` 里的一个键（缺键即默认可见）——这三条与本文一致，不另解释。

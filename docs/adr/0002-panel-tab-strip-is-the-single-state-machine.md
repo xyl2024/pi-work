@@ -20,6 +20,7 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 - A panel view's glyph and body are each looked up by kind exactly once: the tab strip can never carry an icon the button column does not, and the body table is exhaustive by type, so a new kind fails `tsc` until both sides are registered.
 - Palette panel commands and right-bar buttons share one toggle path (`togglePanel`), matching "clicking the active view collapses the panel".
 - Behaviour is intentionally unchanged, including "close falls back to the oldest tab" and "the palette commands toggle rather than open"; any change to those rules is a separate product decision.
+- Panel view lifetime (keep-alive, release, page stack, close confirmation) is not part of this state machine, but it is not a fourth declaration outside the registry either: ADR-0024 owns it in one module, and each registry entry corresponds to exactly one adapter.
 
 ## 修订 2026-09-16（计划面板 #42）
 
