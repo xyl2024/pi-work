@@ -142,6 +142,10 @@ _Avoid_: 用 conversation 指代整个会话
 向一个会话投递一次输入、直到该会话彻底结束（不再有待重试、压缩重试或排队续跑）的完整过程；聊天里的一轮对话与后台任务的一次执行都是回合。
 _Avoid_: 把它当作 pi SDK 的 turn（那是一步 assistant 响应加其工具调用）；用裸的 run / 「运行」指代它
 
+**推理强度（Thinking level）**：
+会话级的模型思考档位（off/minimal/low/medium/high/highest），会话中途可变更，每次变更是对话时间线里的一次结构性事件。
+_Avoid_: 思考级别、思考强度（历史叫法，已统一废弃）
+
 **上下文窗口（Context Window）**：
 会话当前送入模型的上下文内容与容量；压缩（compact）是对它的操作。
 _Avoid_: context、Context 面板视图、React Context
@@ -271,6 +275,10 @@ _Avoid_: 用「工具」指代一组工具
 **工具集（Tool set）**：
 一次会话或调度任务实际选定的那组工具。
 _Avoid_: 用「工具」指代工具集
+
+**嵌套调用（Nested call）**：
+一次工具执行内部发起的下层工具调用（如 codemode 脚本里调用 read）。它属于那次工具调用的结果，不是对话时间线里的独立工具调用。
+_Avoid_: 与「子代理任务」混用（那是独立会话与独立回合）；把它当作对话时间线里的独立工具卡片
 
 **自定义工具（Custom Tool）**：
 在 Pi Work 代码中实现、暴露给 pi agent 的工具。
