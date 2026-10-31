@@ -14,6 +14,8 @@ export interface PanelViewCloseGuard {
 
 export type PanelViewConfirm = (guard: PanelViewCloseGuard) => boolean | Promise<boolean>;
 
+export type PanelViewStatus = string | number | boolean | null;
+
 export interface PanelViewWriter<S> {
   get(): S;
   patch(partial: Partial<S>): void;
@@ -34,7 +36,7 @@ export interface PanelViewAdapter<S, P, C, K> {
   stop?(context: PanelViewWriter<S>): void;
   release(context: PanelViewWriter<S>): void;
   guard(state: S): PanelViewCloseGuard | null;
-  status(state: S): unknown;
+  status(state: S): PanelViewStatus;
   isRootPage(pages: readonly P[]): boolean;
   isSiblingPage(next: P, current: P): boolean;
 }
@@ -56,6 +58,7 @@ export interface PanelViewStore<S, P, C = void> {
   getSnapshot(): PanelViewSnapshot<S, P>;
   subscribe(listener: () => void): () => void;
   useSnapshot(): PanelViewSnapshot<S, P>;
+  useStatus(): PanelViewStatus;
   open(context: C): void;
   setVisible(visible: boolean): void;
   reload(): void;
@@ -65,7 +68,7 @@ export interface PanelViewStore<S, P, C = void> {
   openPage(page: P): void;
   resetPages(): void;
   back(): PanelViewBackResult;
-  status(): unknown;
+  status(): PanelViewStatus;
   guard(): PanelViewCloseGuard | null;
   requestClose(confirm: PanelViewConfirm): Promise<boolean>;
   release(): void;
@@ -288,6 +291,14 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   }
 
+  function useStatus(): PanelViewStatus {
+    return useSyncExternalStore(
+      subscribe,
+      () => adapter.status(snapshot.view),
+      () => adapter.status(initialSnapshot.view),
+    );
+  }
+
   return {
     kind: adapter.kind,
     get: () => snapshot.view,
@@ -296,6 +307,7 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     getSnapshot,
     subscribe,
     useSnapshot,
+    useStatus,
     open,
     setVisible,
     reload,
