@@ -186,8 +186,6 @@ export const chat = {
   "Go to file {n}": "第 {n} 个文件",
   "{n}× {tool}": "{n} 次 {tool}",
   "No output": "无输出",
-  "Nested calls": "嵌套调用",
-  "Unfinished": "未完成",
   "No messages yet": "暂无消息",
 
   "Tool": "工具",

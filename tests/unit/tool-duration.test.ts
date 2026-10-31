@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatToolDuration } from "@/lib/shared/tool-duration";
+import { formatToolAnnotation, formatToolDuration } from "@/lib/shared/tool-duration";
 
 describe("formatToolDuration", () => {
   it("renders sub-second durations in milliseconds", () => {
@@ -34,5 +34,26 @@ describe("formatToolDuration", () => {
     expect(formatToolDuration(Number.NaN)).toBeNull();
     expect(formatToolDuration(Number.POSITIVE_INFINITY)).toBeNull();
     expect(formatToolDuration(-1)).toBeNull();
+  });
+});
+
+describe("formatToolAnnotation", () => {
+  it("merges a timeout and a duration into one annotation", () => {
+    expect(formatToolAnnotation({ timeout: "10", durationMs: 1200 })).toBe("(timeout=10s, duration=1.2s)");
+  });
+
+  it("shows only the timeout when the duration is missing", () => {
+    expect(formatToolAnnotation({ timeout: "10" })).toBe("(timeout=10s)");
+  });
+
+  it("shows only the duration when the timeout is missing", () => {
+    expect(formatToolAnnotation({ durationMs: 1200 })).toBe("(duration=1.2s)");
+    expect(formatToolAnnotation({ timeout: null, durationMs: 320 })).toBe("(duration=320ms)");
+  });
+
+  it("renders nothing when neither is present", () => {
+    expect(formatToolAnnotation({})).toBeNull();
+    expect(formatToolAnnotation({ timeout: null, durationMs: undefined })).toBeNull();
+    expect(formatToolAnnotation({ timeout: "", durationMs: Number.NaN })).toBeNull();
   });
 });
