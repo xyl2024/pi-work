@@ -19,6 +19,7 @@ import { BlockView } from "./blocks";
 import { CallMetricsBadges, formatTime, TurnDuration, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
 import { countContentChars, extractMessageText, imageContentSrc } from "@/lib/shared/message-content";
+import { modelDisplayName } from "@/lib/shared/model-display";
 import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 
 interface AssistantMessageViewProps {
@@ -196,7 +197,7 @@ function AssistantMessageViewInner({
         {message.provider && (
           <>
             <ProviderIcon id={resolveProviderIcon(message.provider, message.model, modelIcons, modelIconPreferences) ?? ""} size={16} fallback={<ProviderGearIcon size={16} />} />
-            <span>{message.provider} - {modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+            <span>{message.provider} - {modelDisplayName(modelNames, message.provider, message.model)}</span>
           </>
         )}
         {!isStreaming && <CallMetricsBadges metrics={callMetrics} hidden={!hovered} />}

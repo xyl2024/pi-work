@@ -345,3 +345,71 @@ describe("buildTimelineDividers", () => {
     expect(dividers.trailingChangeMarkers).toEqual([]);
   });
 });
+
+describe("buildTimelineDividers entry anchoring", () => {
+  const messages: AgentMessage[] = [
+    user("one"),
+    assistant([toolCall("call-a")]),
+    toolResult("call-a"),
+    assistant([{ type: "text", text: "done" }]),
+  ];
+  const entryIds = ["e0", "e1", "e2", "e3"];
+  const timeline = timelineOf(messages, entryIds);
+  const compaction = (entryId: string, beforeMessageEntryId?: string): CompactionPoint => ({
+    entryId,
+    tokensBefore: 1000,
+    summary: "summary",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:00.000Z",
+  });
+  const modelChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "model",
+    provider: "anthropic",
+    modelId: "claude-x",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:01.000Z",
+  });
+
+  it("anchors a divider to the visible entry id after an invisible tool result", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [modelChange("mc1", "e2")],
+    });
+    expect(dividers.beforeVisible.get(2)?.map((d) => d.kind)).toEqual(["change"]);
+    expect(dividers.beforeEntryId.get("e3")?.map((d) => d.kind)).toEqual(["change"]);
+    expect(dividers.beforeEntryId.has("e2")).toBe(false);
+  });
+
+  it("keeps beforeEntryId sharing the same divider instances as beforeVisible", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1", "e1")],
+      changeMarkers: [modelChange("mc1", "e1")],
+    });
+    expect(dividers.beforeEntryId.get("e1")).toBe(dividers.beforeVisible.get(1));
+    expect(dividers.beforeEntryId.get("e1")?.map((d) => d.kind)).toEqual(["compaction", "change"]);
+  });
+
+  it("anchors compaction dividers to the visible entry id", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1", "e3")],
+    });
+    expect(dividers.beforeEntryId.get("e3")?.map((d) => d.kind)).toEqual(["compaction"]);
+    expect(dividers.beforeVisible.get(2)?.map((d) => d.kind)).toEqual(["compaction"]);
+  });
+
+  it("leaves cropped anchors out of both maps", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds: ["e0", "e1"],
+      changeMarkers: [modelChange("mc1", "e1"), modelChange("mc2", "e3")],
+    });
+    expect([...dividers.beforeEntryId.keys()]).toEqual(["e1"]);
+    expect([...dividers.beforeVisible.keys()]).toEqual([1]);
+  });
+});
