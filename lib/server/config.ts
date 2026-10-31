@@ -10,6 +10,7 @@ import {
   type DangerousPatternsConfig,
   type PiWorkConfig,
   type McpConfig,
+  type SuggestedPromptConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
 } from "../shared/config-types";
@@ -55,6 +56,29 @@ const DEFAULT_MCP: McpConfig = {
   startup_wait_ms: 3000,
 };
 
+const DEFAULT_SUGGESTED_PROMPT: SuggestedPromptConfig = {
+  enabled: true,
+  model: null,
+};
+
+function parseSuggestedPrompt(raw: unknown): SuggestedPromptConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_SUGGESTED_PROMPT };
+  }
+  const obj = raw as Record<string, unknown>;
+  const modelRaw = obj.model;
+  const model =
+    modelRaw && typeof modelRaw === "object" && !Array.isArray(modelRaw)
+      ? (modelRaw as Record<string, unknown>)
+      : null;
+  const provider = typeof model?.provider === "string" ? model.provider.trim() : "";
+  const modelId = typeof model?.modelId === "string" ? model.modelId.trim() : "";
+  return {
+    enabled: obj.enabled !== false,
+    model: provider && modelId ? { provider, modelId } : null,
+  };
+}
+
 function parseMcp(raw: unknown): McpConfig {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
   const obj = raw as Record<string, unknown>;
@@ -86,6 +110,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   disabled_skills: {},
   network_proxy: { enabled: false, url: "", no_proxy: "" },
   mcp: { ...DEFAULT_MCP },
+  suggested_prompt: { ...DEFAULT_SUGGESTED_PROMPT },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -239,18 +264,23 @@ function parseDisabledSkills(raw: unknown): Record<string, string[]> {
   return out;
 }
 
-const CONFIG_DIR = dataPath();
-const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
+function configDir(): string {
+  return dataPath();
+}
+
+function configPath(): string {
+  return join(configDir(), "config.yaml");
+}
 
 function ensureConfigDir(): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
+  mkdirSync(configDir(), { recursive: true });
 }
 
 function writeDefaultConfig(): PiWorkConfig {
   try {
     ensureConfigDir();
-    writeFileSync(CONFIG_PATH, dump(DEFAULT_CONFIG), "utf8");
-    log.info("created default config", { path: CONFIG_PATH });
+    writeFileSync(configPath(), dump(DEFAULT_CONFIG), "utf8");
+    log.info("created default config", { path: configPath() });
   } catch (err) {
     log.error("failed to write default config", { error: String(err) });
   }
@@ -259,7 +289,7 @@ function writeDefaultConfig(): PiWorkConfig {
 
 function statConfig(): { mtimeMs: number; size: number } | null {
   try {
-    const stat = statSync(CONFIG_PATH);
+    const stat = statSync(configPath());
     return { mtimeMs: stat.mtimeMs, size: stat.size };
   } catch {
     return null;
@@ -278,7 +308,7 @@ export function readConfig(): PiWorkConfig {
     return cached.config;
   }
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf8");
+    const raw = readFileSync(configPath(), "utf8");
     const parsed = load(raw);
 
     if (!parsed || typeof parsed !== "object") {
@@ -301,6 +331,7 @@ export function readConfig(): PiWorkConfig {
         disabled_skills: parseDisabledSkills(cfg.disabled_skills),
         network_proxy: parseNetworkProxy(cfg.network_proxy),
         mcp: parseMcp(cfg.mcp),
+        suggested_prompt: parseSuggestedPrompt(cfg.suggested_prompt),
       },
       statConfig(),
     );
@@ -312,8 +343,8 @@ export function readConfig(): PiWorkConfig {
 
 export function writeConfig(config: PiWorkConfig): PiWorkConfig {
   ensureConfigDir();
-  writeFileSync(CONFIG_PATH, dump(config), "utf8");
-  log.info("config written", { path: CONFIG_PATH });
+  writeFileSync(configPath(), dump(config), "utf8");
+  log.info("config written", { path: configPath() });
   globalThis.__piWorkConfigCache = undefined;
   return config;
 }

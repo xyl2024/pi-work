@@ -2,6 +2,7 @@ import type {
   AppendSystemConfig,
   NetworkProxyConfig,
   PiWorkConfig,
+  SuggestedPromptConfig,
   UiSoundsConfig,
 } from "./config-types";
 import type { FileViewerConfig } from "./file-viewer-limits";
@@ -14,6 +15,7 @@ export const SETTINGS_OWNED_KEYS = [
   "file_viewer",
   "ui_sounds",
   "network_proxy",
+  "suggested_prompt",
 ] as const satisfies readonly (keyof PiWorkConfig)[];
 
 export type SettingsOwnedKey = (typeof SETTINGS_OWNED_KEYS)[number];
@@ -25,6 +27,7 @@ export type SettingsPatch = Partial<{
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
   network_proxy: NetworkProxyConfig;
+  suggested_prompt: SuggestedPromptConfig;
 }>;
 
 const OWNED_KEY_SET: ReadonlySet<string> = new Set(SETTINGS_OWNED_KEYS);
