@@ -154,11 +154,33 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
       trailingCompactionPoints.push(point);
     }
   }
-  for (const marker of input.changeMarkers ?? []) {
+
+  const firstVisibleUserIndex = input.timeline.visibleMessages.findIndex(
+    (message) => message.role === "user",
+  );
+  const changeAnchors: { marker: ChangeMarker; anchorKey: string }[] = [];
+  if (firstVisibleUserIndex !== -1) {
+    for (const marker of input.changeMarkers ?? []) {
+      if (!marker.beforeMessageEntryId) {
+        changeAnchors.push({ marker, anchorKey: "trailing" });
+        continue;
+      }
+      const visibleIndex = input.timeline.visibleIndexOfEntry(marker.beforeMessageEntryId);
+      if (visibleIndex === null || visibleIndex <= firstVisibleUserIndex) continue;
+      changeAnchors.push({ marker, anchorKey: `visible:${visibleIndex}` });
+    }
+  }
+
+  const lastChangeAtAnchor = new Map<string, number>();
+  changeAnchors.forEach(({ marker, anchorKey }, index) => {
+    lastChangeAtAnchor.set(`${marker.kind}:${anchorKey}`, index);
+  });
+  changeAnchors.forEach(({ marker, anchorKey }, index) => {
+    if (lastChangeAtAnchor.get(`${marker.kind}:${anchorKey}`) !== index) return;
     if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
       trailingChangeMarkers.push(marker);
     }
-  }
+  });
 
   for (const dividers of beforeVisible.values()) {
     dividers.sort((a, b) => DIVIDER_ORDER[a.kind] - DIVIDER_ORDER[b.kind]);

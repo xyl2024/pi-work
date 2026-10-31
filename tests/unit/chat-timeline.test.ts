@@ -413,3 +413,121 @@ describe("buildTimelineDividers entry anchoring", () => {
     expect([...dividers.beforeVisible.keys()]).toEqual([1]);
   });
 });
+
+describe("buildTimelineDividers change marker suppression and folding", () => {
+  const entryIds = ["e0", "e1", "e2"];
+  const messages: AgentMessage[] = [
+    user("one"),
+    assistant([{ type: "text", text: "hi" }]),
+    user("two"),
+  ];
+  const timeline = timelineOf(messages, entryIds);
+  const compaction = (entryId: string, beforeMessageEntryId?: string): CompactionPoint => ({
+    entryId,
+    tokensBefore: 1000,
+    summary: "summary",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:00.000Z",
+  });
+  const modelChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "model",
+    provider: "anthropic",
+    modelId: "claude-x",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:01.000Z",
+  });
+  const thinkingChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "thinking_level",
+    thinkingLevel: "high",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:02.000Z",
+  });
+
+  it("hides change markers landing before or at the first visible user message", () => {
+    const leadingAssistantTimeline = timelineOf(
+      [assistant([{ type: "text", text: "warmup" }]), user("one"), assistant([{ type: "text", text: "hi" }])],
+      entryIds,
+    );
+    const dividers = buildTimelineDividers({
+      timeline: leadingAssistantTimeline,
+      entryIds,
+      changeMarkers: [
+        modelChange("mc0", "e0"),
+        thinkingChange("tl1", "e1"),
+        modelChange("mc2", "e2"),
+      ],
+    });
+    expect(dividers.beforeVisible.size).toBe(1);
+    expect(dividers.beforeVisible.get(2)?.map((d) => d.kind)).toEqual(["change"]);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
+  });
+
+  it("hides every change marker when there is no visible user message", () => {
+    const noUserTimeline = timelineOf([assistant([{ type: "text", text: "hi" }])], ["e0"]);
+    const dividers = buildTimelineDividers({
+      timeline: noUserTimeline,
+      entryIds: ["e0"],
+      changeMarkers: [modelChange("mc0", "e0"), thinkingChange("tl1")],
+    });
+    expect(dividers.beforeVisible.size).toBe(0);
+    expect(dividers.beforeEntryId.size).toBe(0);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
+  });
+
+  it("folds consecutive same-kind changes at one anchor to the last one", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [
+        modelChange("mc1", "e1"),
+        modelChange("mc2", "e1"),
+        thinkingChange("tl1", "e1"),
+        thinkingChange("tl2", "e1"),
+      ],
+    });
+    const markers = dividers.beforeVisible.get(1) ?? [];
+    expect(markers.map((d) => (d.kind === "change" ? d.marker.entryId : d.kind))).toEqual([
+      "mc2",
+      "tl2",
+    ]);
+  });
+
+  it("keeps same-kind changes that land on different anchors", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [modelChange("mc1", "e1"), modelChange("mc2", "e2")],
+    });
+    expect(
+      (dividers.beforeVisible.get(1) ?? []).map((d) => (d.kind === "change" ? d.marker.entryId : d.kind)),
+    ).toEqual(["mc1"]);
+    expect(
+      (dividers.beforeVisible.get(2) ?? []).map((d) => (d.kind === "change" ? d.marker.entryId : d.kind)),
+    ).toEqual(["mc2"]);
+  });
+
+  it("folds unanchored same-kind changes to the last one", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [modelChange("mc1"), modelChange("mc2"), thinkingChange("tl1")],
+    });
+    expect(dividers.trailingChangeMarkers.map((m) => m.entryId)).toEqual(["mc2", "tl1"]);
+  });
+
+  it("keeps compaction before the folded change at the same landing point", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1", "e2")],
+      changeMarkers: [modelChange("mc1", "e2"), modelChange("mc2", "e2")],
+    });
+    const markers = dividers.beforeVisible.get(2) ?? [];
+    expect(markers.map((d) => (d.kind === "change" ? d.marker.entryId : d.kind))).toEqual([
+      "compaction",
+      "mc2",
+    ]);
+  });
+});

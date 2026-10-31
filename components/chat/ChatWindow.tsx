@@ -352,6 +352,18 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     });
   }, [timeline, renderEntryIds, compactionPoints, changeMarkers]);
 
+  const trailingChangeNodes = trailingChangeMarkers.map((marker) => (
+    marker.kind === "model"
+      ? (
+        <ChangeDivider
+          key={`change-tail-${marker.entryId}`}
+          {...marker}
+          modelName={modelDisplayName(modelNames, marker.provider, marker.modelId)}
+        />
+      )
+      : <ChangeDivider key={`change-tail-${marker.entryId}`} {...marker} />
+  ));
+
   const optimisticCompactionMessageIdx = useMemo(() => {
     if (trailingCompactionPoints.length === 0) return -1;
     const idx = renderEntryIds.length;
@@ -948,7 +960,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {rendered}
                   {liveTurnActive && (
                     <>
-                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent) && (
+                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingChangeMarkers.length > 0) && (
                         <StreamingMessageViewport
                           tabId={streamingKey}
                           userScrollingUpRef={userScrolledUpRef}
@@ -956,6 +968,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           onHeightIncrease={scrollFollow.handleHeightIncrease}
                         >
                           {streamingRendered}
+                          {trailingChangeNodes}
                           {!streamingErrorAlreadyRendered && (
                             <StreamingBubble
                               tabId={streamingKey}
@@ -1043,17 +1056,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
             ))}
 
-            {trailingChangeMarkers.map((marker) => (
-              marker.kind === "model"
-                ? (
-                  <ChangeDivider
-                    key={`change-tail-${marker.entryId}`}
-                    {...marker}
-                    modelName={modelDisplayName(modelNames, marker.provider, marker.modelId)}
-                  />
-                )
-                : <ChangeDivider key={`change-tail-${marker.entryId}`} {...marker} />
-            ))}
+            {!liveTurnActive && trailingChangeNodes}
 
             {!liveTurnActive && isStreamingThinking && (
               <div className="py-2">
