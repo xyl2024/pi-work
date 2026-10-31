@@ -4,6 +4,7 @@ import {
   resolveBackgroundPermissionMode,
   type BackgroundPermissionMode,
   type SessionPermissionMode,
+  type SessionPermissionState,
 } from "../shared/permission-mode";
 import { getRpcSession } from "./session-registry";
 import { readSessionPermissionMode, readSessionPermissionModes } from "./session-permission-mode";
@@ -16,11 +17,6 @@ import {
   getRunSessionPermissionMode,
   listRunSessionPermissionModes,
 } from "./scheduler/store";
-
-export interface SessionPermissionState {
-  permissionMode: SessionPermissionMode;
-  background: boolean;
-}
 
 function snapshotPermissionMode(configSnapshot: string | null): BackgroundPermissionMode {
   if (!configSnapshot) return DEFAULT_BACKGROUND_PERMISSION_MODE;

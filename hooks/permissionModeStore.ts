@@ -4,14 +4,10 @@ import { useSyncExternalStore } from "react";
 import {
   DEFAULT_PERMISSION_MODE,
   type SessionPermissionMode,
+  type SessionPermissionState,
 } from "@/lib/shared/permission-mode";
 
-interface SessionPermissionEntry {
-  permissionMode: SessionPermissionMode;
-  background: boolean;
-}
-
-type State = ReadonlyMap<string, SessionPermissionEntry>;
+type State = ReadonlyMap<string, SessionPermissionState>;
 
 let state: State = new Map();
 const listeners = new Set<() => void>();
@@ -54,7 +50,7 @@ export function useSessionPermission(
   sessionId: string | null,
   fallbackMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
   fallbackBackground = false,
-): SessionPermissionEntry {
+): SessionPermissionState {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   if (!sessionId) {
     return { permissionMode: DEFAULT_PERMISSION_MODE, background: false };
@@ -63,11 +59,4 @@ export function useSessionPermission(
     permissionMode: fallbackMode,
     background: fallbackBackground,
   };
-}
-
-export function useSessionPermissionMode(
-  sessionId: string | null,
-  fallback: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
-): SessionPermissionMode {
-  return useSessionPermission(sessionId, fallback).permissionMode;
 }

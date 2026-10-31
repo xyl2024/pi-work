@@ -74,6 +74,8 @@ export class AgentSessionWrapper {
   private lastAssistantText = "";
   private _toolSelection: ToolSelection = "all";
   private _permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE;
+  private readonly piDocsManaged: boolean;
+  private readonly background: boolean;
   private contextComposition: ContextComposition | null = null;
   private compositionRefreshId = 0;
   private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
@@ -90,12 +92,12 @@ export class AgentSessionWrapper {
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
     permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
-    private readonly piDocsManaged = false,
-    private readonly background = false,
+    options: { piDocsManaged?: boolean; background?: boolean } = {},
   ) {
     this._permissionMode = permissionMode;
+    this.piDocsManaged = options.piDocsManaged ?? false;
+    this.background = options.background ?? false;
     this.gates = new InteractionGates({
-      source,
       emit: (event) => this.emit(event),
       permissionMode: () => this._permissionMode,
     });
@@ -1051,8 +1053,7 @@ export async function startRpcSession(
       background
         ? resolveBackgroundPermissionMode(options.permissionMode)
         : readSessionPermissionMode(inner.sessionId),
-      piDocsManaged,
-      background,
+      { piDocsManaged, background },
     );
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;

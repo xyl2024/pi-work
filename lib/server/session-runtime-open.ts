@@ -3,7 +3,10 @@ import { getRpcSession, startRpcSession } from "./rpc-manager";
 import { resolveSessionPath } from "./session-reader";
 import { openSubagentChildSession } from "./subagent-tasks";
 import { resolveSessionPermission } from "./session-permission-visibility";
+import { createLogger } from "./logger";
 import type { AgentSessionWrapper } from "./rpc-manager";
+
+const log = createLogger("session-runtime-open");
 
 export async function openSessionForRuntime(
   sessionId: string,
@@ -12,7 +15,10 @@ export async function openSessionForRuntime(
   if (live?.isAlive()) return live;
 
   const child = await openSubagentChildSession(sessionId);
-  if (child) return child;
+  if (child) {
+    log.info("reopened subagent session", { sessionId });
+    return child;
+  }
 
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
@@ -26,5 +32,11 @@ export async function openSessionForRuntime(
     permission.background ? "scheduled" : "user",
     permission.background ? { permissionMode: permission.permissionMode } : {},
   );
+  log.info("started session", {
+    sessionId,
+    cwd,
+    background: permission.background,
+    permissionMode: permission.permissionMode,
+  });
   return session;
 }

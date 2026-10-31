@@ -74,7 +74,7 @@ describe("session permission visibility", () => {
     } as unknown as import("@/lib/server/pi-types").AgentSessionLike;
     getRegistry().set(
       "live-background",
-      new AgentSessionWrapper(inner, "scheduled", null, "auto_deny", false, true),
+      new AgentSessionWrapper(inner, "scheduled", null, "auto_deny", { background: true }),
     );
 
     expect(resolveSessionPermission("live-background")).toEqual({
@@ -129,11 +129,11 @@ describe("session permission visibility", () => {
     });
   });
 
-  it("uses the scheduled task behind a run session", async () => {
-    const { createTask, recordRunEnd, recordRunStart } = await import(
+  it("uses the scheduled task tier recorded when the run started", async () => {
+    const { createTask, recordRunEnd, recordRunStart, updateTask } = await import(
       "@/lib/server/scheduler/store"
     );
-    const { resolveSessionPermission, sessionPermissionFields } = await import(
+    const { resolveSessionPermission, resolveSessionPermissions, sessionPermissionFields } = await import(
       "@/lib/server/session-permission-visibility"
     );
 
@@ -146,14 +146,78 @@ describe("session permission visibility", () => {
     });
     const run = recordRunStart(task.id);
     recordRunEnd(run.id, { status: "success", sessionId: "scheduled-session" });
+    updateTask({ id: task.id, permissionMode: "full_access" });
 
     expect(resolveSessionPermission("scheduled-session")).toEqual({
       permissionMode: "auto_deny",
       background: true,
     });
+    expect(resolveSessionPermissions(["scheduled-session"])).toEqual({
+      "scheduled-session": { permissionMode: "auto_deny", background: true },
+    });
     expect(sessionPermissionFields(resolveSessionPermission("scheduled-session"))).toEqual({
       permissionMode: "auto_deny",
       background: true,
+    });
+  });
+
+  it("reports an old run without a recorded tier as auto-deny", async () => {
+    const { createTask, recordRunEnd, recordRunStart } = await import(
+      "@/lib/server/scheduler/store"
+    );
+    const { getSchedulerDb } = await import("@/lib/server/scheduler/db");
+    const { resolveSessionPermission } = await import(
+      "@/lib/server/session-permission-visibility"
+    );
+
+    const task = createTask({
+      name: "Nightly",
+      cron: "0 9 * * *",
+      cwd: root,
+      prompt: "build",
+      permissionMode: "full_access",
+    });
+    const run = recordRunStart(task.id);
+    recordRunEnd(run.id, { status: "success", sessionId: "legacy-run" });
+    getSchedulerDb().prepare("UPDATE task_runs SET permission_mode = NULL WHERE id = ?").run(run.id);
+
+    expect(resolveSessionPermission("legacy-run")).toEqual({
+      permissionMode: "auto_deny",
+      background: true,
+    });
+  });
+
+  it("resolves multiple subagent snapshots to the latest task in both single and batch paths", async () => {
+    const { createSubagentTask, markSubagentRunning } = await import("@/lib/server/subagent-store");
+    const { resolveSessionPermission, resolveSessionPermissions } = await import(
+      "@/lib/server/session-permission-visibility"
+    );
+
+    const older = createSubagentTask({
+      taskId: "0001",
+      parentSessionId: "parent-session",
+      subagentName: "codebase_explorer",
+      description: "explore",
+      prompt: "look around",
+      configSnapshot: JSON.stringify({ permissionMode: "auto_deny" }),
+    });
+    markSubagentRunning("parent-session", older.taskId, "shared-child");
+    const newer = createSubagentTask({
+      taskId: "0002",
+      parentSessionId: "parent-session",
+      subagentName: "codebase_explorer",
+      description: "explore again",
+      prompt: "look around again",
+      configSnapshot: JSON.stringify({ permissionMode: "full_access" }),
+    });
+    markSubagentRunning("parent-session", newer.taskId, "shared-child");
+
+    expect(resolveSessionPermission("shared-child")).toEqual({
+      permissionMode: "full_access",
+      background: true,
+    });
+    expect(resolveSessionPermissions(["shared-child"])).toEqual({
+      "shared-child": { permissionMode: "full_access", background: true },
     });
   });
 

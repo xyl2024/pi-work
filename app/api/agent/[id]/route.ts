@@ -65,12 +65,16 @@ export async function POST(
     }
 
     const existing = getRpcSession(id);
-    const sessionSource = existing?.isAlive() ? "existing" : "started";
     const sendWrapper = existing?.isAlive() ? existing : await openSessionForRuntime(id);
     if (!sendWrapper) {
       log.warn("agent command session not found", { id, commandType, durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+    const sessionSource = existing?.isAlive()
+      ? "existing"
+      : sendWrapper.source === "subagent"
+        ? "started-subagent"
+        : "started";
 
     const result = await sendWrapper.send(body);
     log.info("agent command completed", {

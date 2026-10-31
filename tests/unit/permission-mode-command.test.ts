@@ -4,7 +4,6 @@ import type { PermissionMode, SessionPermissionMode } from "@/lib/shared/permiss
 
 function makeContext(over: {
   permissionMode?: SessionPermissionMode;
-  canChangePermissionMode?: boolean;
   setPermissionMode?: (mode: PermissionMode) => void;
 } = {}) {
   const calls: PermissionMode[] = [];
@@ -21,7 +20,6 @@ function makeContext(over: {
       abortStreaming: () => {},
       isStreaming: false,
       permissionMode: over.permissionMode ?? "confirm",
-      canChangePermissionMode: over.canChangePermissionMode ?? true,
       ...("setPermissionMode" in over
         ? { setPermissionMode: over.setPermissionMode }
         : { setPermissionMode: (mode: PermissionMode) => calls.push(mode) }),
@@ -49,13 +47,13 @@ describe("the permission-mode palette entry", () => {
   });
 
   it("is absent for a background auto-deny session", () => {
-    const { ctx } = makeContext({ permissionMode: "auto_deny", canChangePermissionMode: false });
+    const { ctx } = makeContext({ permissionMode: "auto_deny", setPermissionMode: undefined });
 
     expect(permissionCommand(ctx)).toBeUndefined();
   });
 
   it("is absent for a background full-access session", () => {
-    const { ctx } = makeContext({ permissionMode: "full_access", canChangePermissionMode: false });
+    const { ctx } = makeContext({ permissionMode: "full_access", setPermissionMode: undefined });
 
     expect(permissionCommand(ctx)).toBeUndefined();
   });

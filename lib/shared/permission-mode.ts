@@ -8,6 +8,11 @@ export type BackgroundPermissionMode = (typeof BACKGROUND_PERMISSION_MODES)[numb
 
 export type SessionPermissionMode = PermissionMode | BackgroundPermissionMode;
 
+export interface SessionPermissionState {
+  permissionMode: SessionPermissionMode;
+  background: boolean;
+}
+
 export const DEFAULT_PERMISSION_MODE: PermissionMode = "confirm";
 
 export const DEFAULT_BACKGROUND_PERMISSION_MODE: BackgroundPermissionMode = "auto_deny";

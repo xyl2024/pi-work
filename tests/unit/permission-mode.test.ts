@@ -140,7 +140,7 @@ function fakeWrapper(
     sessionManager: { getSessionName: () => null },
     getContextUsage: () => undefined,
   } as unknown as AgentSessionLike;
-  const wrapper = new AgentSessionWrapper(inner, source, null, permissionMode, false, background);
+  const wrapper = new AgentSessionWrapper(inner, source, null, permissionMode, { background });
   const events: SessionEvent[] = [];
   wrapper.onEvent((event) => events.push(event));
   return { wrapper, events };

@@ -16,10 +16,7 @@ import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
-import {
-  AUTO_DENY_BORDER_COLOR,
-  FULL_ACCESS_BORDER_COLOR,
-} from "../ui/permission-mode-colors";
+import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
 import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
@@ -423,9 +420,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             background: "var(--bg)",
             border: `1.5px solid ${permissionMode === "full_access"
               ? FULL_ACCESS_BORDER_COLOR
-              : permissionMode === "auto_deny"
-                ? AUTO_DENY_BORDER_COLOR
-                : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
+              : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
             boxShadow: "none",

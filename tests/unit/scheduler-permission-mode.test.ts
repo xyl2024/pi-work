@@ -161,14 +161,32 @@ describe("scheduled task permission mode storage", () => {
     expect(getTask(task.id)?.permissionMode).toBe("auto_deny");
   });
 
-  it("adds the column to an old database idempotently", async () => {
+  it("records the task's tier on the run when it starts", async () => {
+    const { createTask, recordRunStart } = await import("@/lib/server/scheduler/store");
+    const { getSchedulerDb } = await import("@/lib/server/scheduler/db");
+
+    const full = createTask(minimalTask("full_access"));
+    const auto = createTask(minimalTask("auto_deny"));
+    const fullRun = recordRunStart(full.id);
+    const autoRun = recordRunStart(auto.id);
+    const rows = getSchedulerDb()
+      .prepare("SELECT id, permission_mode FROM task_runs")
+      .all() as Array<{ id: string; permission_mode: string | null }>;
+
+    expect(rows.find((row) => row.id === fullRun.id)?.permission_mode).toBe("full_access");
+    expect(rows.find((row) => row.id === autoRun.id)?.permission_mode).toBe("auto_deny");
+  });
+
+  it("adds both permission columns to an old database idempotently", async () => {
     legacyDatabase("legacy-idempotent");
     const { getSchedulerDb } = await import("@/lib/server/scheduler/db");
 
     getSchedulerDb();
     resetSchedulerGlobals();
     const db = getSchedulerDb();
-    const columns = db.prepare("PRAGMA table_info(scheduled_tasks)").all() as Array<{ name: string }>;
-    expect(columns.filter((column) => column.name === "permission_mode")).toHaveLength(1);
+    const taskColumns = db.prepare("PRAGMA table_info(scheduled_tasks)").all() as Array<{ name: string }>;
+    const runColumns = db.prepare("PRAGMA table_info(task_runs)").all() as Array<{ name: string }>;
+    expect(taskColumns.filter((column) => column.name === "permission_mode")).toHaveLength(1);
+    expect(runColumns.filter((column) => column.name === "permission_mode")).toHaveLength(1);
   });
 });

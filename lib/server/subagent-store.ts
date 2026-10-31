@@ -476,7 +476,7 @@ export function listSubagentChildConfigSnapshots(): Array<{
 }> {
   if (!hasSubagentStore()) return [];
   const rows = getSubagentDb().prepare(
-    "SELECT child_session_id, config_snapshot FROM subagent_tasks WHERE child_session_id IS NOT NULL ORDER BY created_at ASC, rowid ASC",
+    "SELECT child_session_id, config_snapshot FROM subagent_tasks WHERE child_session_id IS NOT NULL ORDER BY created_at DESC, rowid DESC",
   ).all() as Array<{ child_session_id: string; config_snapshot: string | null }>;
   return rows.map((row) => ({
     childSessionId: row.child_session_id,

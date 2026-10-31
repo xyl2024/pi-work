@@ -23,7 +23,6 @@ export interface AgentControls {
   abortStreaming: () => void | Promise<void>;
   isStreaming: boolean;
   permissionMode?: SessionPermissionMode;
-  canChangePermissionMode?: boolean;
   setPermissionMode?: (mode: PermissionMode) => void | Promise<void>;
 }
 
@@ -141,7 +140,6 @@ export function buildCommands(
     icon: <ShieldIcon />,
     when: (c) =>
       !!c.agentControls?.setPermissionMode
-      && c.agentControls.canChangePermissionMode !== false
       && isPermissionMode(c.agentControls.permissionMode),
     run: () => {
       const mode = ctx.agentControls?.permissionMode;

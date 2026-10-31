@@ -22,7 +22,7 @@ import { ICONS } from "../../ui/icons";
 import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
 import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
-import { canSwitchSessionPermissionMode, type SessionPermissionMode } from "@/lib/shared/permission-mode";
+import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
 import type { ContextUsage, SessionStats } from "@/hooks/sessionUiStore";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 
@@ -447,7 +447,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
             onClose={() => setToolsPickerOpen(false)}
           />
         )}
-        {onPermissionModeToggle && canSwitchSessionPermissionMode(permissionMode, false) && (
+        {onPermissionModeToggle && (
           <Tooltip
             content={
               <div style={{ display: "flex", flexDirection: "column", gap: 3, maxWidth: 240 }}>

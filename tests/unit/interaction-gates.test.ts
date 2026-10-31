@@ -8,12 +8,10 @@ import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types
 import type { SessionEvent } from "@/lib/shared/session-events";
 
 function makeGates(
-  source = "user",
   permissionMode?: () => "confirm" | "full_access" | "auto_deny",
 ) {
   const emitted: SessionEvent[] = [];
   const gates = new InteractionGates({
-    source,
     emit: (event) => emitted.push(event),
     ...(permissionMode ? { permissionMode } : {}),
   });
@@ -113,7 +111,7 @@ describe("refusing", () => {
   });
 
   it("refuses auto-deny sessions outright, with a readable reason and no gate at all", async () => {
-    const { gates, emitted } = makeGates("scheduled", () => "auto_deny");
+    const { gates, emitted } = makeGates(() => "auto_deny");
     const outcome = await gates.runPermissionGate(bashGate());
 
     expect(outcome.decision).toBe("deny");
@@ -128,18 +126,8 @@ describe("refusing", () => {
     expect(gates.resolvePermission("call-1", "allow_once")).toBe(false);
   });
 
-  it("uses the same auto-deny reason regardless of the session source", async () => {
-    const subagent = makeGates("subagent", () => "auto_deny");
-    const scheduled = makeGates("scheduled", () => "auto_deny");
-
-    const a = await subagent.gates.runPermissionGate(bashGate());
-    const b = await scheduled.gates.runPermissionGate(bashGate());
-
-    expect(a).toEqual(b);
-  });
-
   it("opens the ordinary gate when the mode allows confirmation", async () => {
-    const confirm = makeGates("scheduled", () => "confirm");
+    const confirm = makeGates(() => "confirm");
     const pending = confirm.gates.runPermissionGate(bashGate());
 
     expect(confirm.emitted).toHaveLength(1);
@@ -151,7 +139,7 @@ describe("refusing", () => {
 describe("auto-deny ignores the session memo", () => {
   it("does not let a remembered rule outrank auto-deny", async () => {
     let mode: "confirm" | "auto_deny" = "confirm";
-    const { gates, emitted } = makeGates("scheduled", () => mode);
+    const { gates, emitted } = makeGates(() => mode);
 
     const remembered = gates.runPermissionGate(bashGate());
     gates.resolvePermission("call-1", "allow_similar");

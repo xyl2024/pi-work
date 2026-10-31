@@ -539,11 +539,15 @@ export function getRun(runId: string): TaskRun | null {
 export function recordRunStart(taskId: string): TaskRun {
   const id = newId();
   const startedAt = Date.now();
+  const task = getSchedulerDb()
+    .prepare("SELECT permission_mode FROM scheduled_tasks WHERE id = ?")
+    .get(taskId) as { permission_mode: string | null } | undefined;
   getSchedulerDb()
     .prepare(
-      `INSERT INTO task_runs (id, task_id, started_at, status) VALUES (?, ?, ?, 'running')`
+      `INSERT INTO task_runs (id, task_id, started_at, status, permission_mode)
+       VALUES (?, ?, ?, 'running', ?)`
     )
-    .run(id, taskId, startedAt);
+    .run(id, taskId, startedAt, resolveBackgroundPermissionMode(task?.permission_mode));
   return {
     id,
     taskId,
@@ -581,11 +585,10 @@ export function listRunSessionPermissionModes(): Record<string, BackgroundPermis
   if (!hasSchedulerStore()) return {};
   const rows = getSchedulerDb()
     .prepare(
-      `SELECT r.session_id, t.permission_mode
-         FROM task_runs r
-         JOIN scheduled_tasks t ON t.id = r.task_id
-        WHERE r.session_id IS NOT NULL
-        ORDER BY r.started_at ASC`,
+      `SELECT session_id, permission_mode
+         FROM task_runs
+        WHERE session_id IS NOT NULL
+        ORDER BY started_at ASC`,
     )
     .all() as Array<{ session_id: string; permission_mode: string | null }>;
   const modes: Record<string, BackgroundPermissionMode> = {};
@@ -599,11 +602,10 @@ export function getRunSessionPermissionMode(sessionId: string): BackgroundPermis
   if (!hasSchedulerStore()) return null;
   const row = getSchedulerDb()
     .prepare(
-      `SELECT t.permission_mode
-         FROM task_runs r
-         JOIN scheduled_tasks t ON t.id = r.task_id
-        WHERE r.session_id = ?
-        ORDER BY r.started_at DESC LIMIT 1`,
+      `SELECT permission_mode
+         FROM task_runs
+        WHERE session_id = ?
+        ORDER BY started_at DESC LIMIT 1`,
     )
     .get(sessionId) as { permission_mode: string | null } | undefined;
   return row ? resolveBackgroundPermissionMode(row.permission_mode) : null;

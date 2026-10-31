@@ -213,7 +213,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
       permissionMode,
-      canChangePermissionMode: canSwitchPermissionMode,
       ...(canSwitchPermissionMode
         ? { setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode) }
         : {}),

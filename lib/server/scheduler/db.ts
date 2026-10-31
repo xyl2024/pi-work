@@ -49,6 +49,7 @@ const SCHEMA = `
     error       TEXT,
     session_id  TEXT,
     duration_ms INTEGER,
+    permission_mode TEXT,
     FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE
   );
 
@@ -79,6 +80,12 @@ function runMigrations(db: Database.Database): void {
   if (!hasPermissionMode) {
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN permission_mode TEXT");
     log.info("migration: added scheduled_tasks.permission_mode column");
+  }
+  const runColumns = db.prepare("PRAGMA table_info(task_runs)").all() as Array<{ name: string }>;
+  const hasRunPermissionMode = runColumns.some((c) => c.name === "permission_mode");
+  if (!hasRunPermissionMode) {
+    db.exec("ALTER TABLE task_runs ADD COLUMN permission_mode TEXT");
+    log.info("migration: added task_runs.permission_mode column");
   }
 }
 

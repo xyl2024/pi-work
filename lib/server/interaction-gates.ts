@@ -36,7 +36,6 @@ export type GateOutcome =
   | { decision: "deny"; reason: string };
 
 export interface InteractionGatesOptions {
-  source: string;
   emit: (event: SessionEvent) => void;
   permissionMode?: () => SessionPermissionMode;
 }
