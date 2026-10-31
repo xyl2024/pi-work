@@ -75,12 +75,30 @@ export interface AssistantMessage {
   };
 }
 
+export type NestedToolCallStatus = "ok" | "error" | "unfinished";
+
+export interface NestedToolCallRecord {
+  id: string;
+  name: string;
+  arguments?: Record<string, unknown>;
+  argumentsBytes?: number;
+  status: NestedToolCallStatus;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface NestedToolCalls {
+  calls: NestedToolCallRecord[];
+  complete: boolean;
+}
+
 export interface ToolResultMessage {
   role: "toolResult";
   toolCallId: string;
   toolName?: string;
   content: (TextContent | ImageContent)[];
   details?: unknown;
+  nestedCalls?: NestedToolCalls;
   isError?: boolean;
   timestamp?: number;
   durationMs?: number;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyToolCall,
   isToolResultEmpty,
+  projectNestedCalls,
   summarizeTurn,
   toolCallDiffStats,
   type ToolCallKind,
@@ -277,5 +278,52 @@ describe("summarizeTurn", () => {
 
     expect(summary.readFiles).toEqual([]);
     expect(summary.diffStats).toEqual({ additions: 1, deletions: 0 });
+  });
+});
+
+describe("projectNestedCalls", () => {
+  it("returns no rows when a tool result has no nested calls", () => {
+    expect(projectNestedCalls(undefined)).toEqual([]);
+    expect(projectNestedCalls({ calls: [], complete: true })).toEqual([]);
+  });
+
+  it("projects a successful nested call with its duration", () => {
+    expect(
+      projectNestedCalls({
+        calls: [{ id: "n1", name: "read", status: "ok", durationMs: 120 }],
+        complete: true,
+      }),
+    ).toEqual([{ id: "n1", name: "read", status: "ok", durationMs: 120 }]);
+  });
+
+  it("passes a failed nested call's error text through", () => {
+    expect(
+      projectNestedCalls({
+        calls: [{ id: "n2", name: "bash", status: "error", durationMs: 30, error: "exit code 1" }],
+        complete: true,
+      }),
+    ).toEqual([{ id: "n2", name: "bash", status: "error", durationMs: 30, error: "exit code 1" }]);
+  });
+
+  it("keeps an unfinished nested call visible without a duration", () => {
+    expect(
+      projectNestedCalls({
+        calls: [{ id: "n3", name: "codemode", status: "unfinished" }],
+        complete: false,
+      }),
+    ).toEqual([{ id: "n3", name: "codemode", status: "unfinished" }]);
+  });
+
+  it("preserves the recorded call order", () => {
+    expect(
+      projectNestedCalls({
+        calls: [
+          { id: "a", name: "read", status: "ok", durationMs: 5 },
+          { id: "b", name: "bash", status: "ok", durationMs: 7 },
+          { id: "c", name: "grep", status: "error", error: "boom" },
+        ],
+        complete: true,
+      }).map((row) => row.id),
+    ).toEqual(["a", "b", "c"]);
   });
 });

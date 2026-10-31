@@ -9,6 +9,8 @@ import {
 import type {
   AgentMessage,
   AssistantMessage,
+  NestedToolCallRecord,
+  NestedToolCalls,
   ReadFileInfo,
   TextContent,
   ToolCallContent,
@@ -46,6 +48,24 @@ export function toolCallDiffStats(
     default:
       return null;
   }
+}
+
+export interface NestedCallRow {
+  id: string;
+  name: string;
+  status: NestedToolCallRecord["status"];
+  durationMs?: number;
+  error?: string;
+}
+
+export function projectNestedCalls(nestedCalls?: NestedToolCalls): NestedCallRow[] {
+  if (!nestedCalls) return [];
+  return nestedCalls.calls.map((call) => {
+    const row: NestedCallRow = { id: call.id, name: call.name, status: call.status };
+    if (call.durationMs !== undefined) row.durationMs = call.durationMs;
+    if (call.error !== undefined) row.error = call.error;
+    return row;
+  });
 }
 
 export function isToolResultEmpty(result?: ToolResultMessage): boolean {
