@@ -1,3 +1,5 @@
+export type McpPage = { kind: "list" } | { kind: "entry"; uid: string };
+
 export type McpScope = "global" | "project";
 
 export const MCP_SCOPES: readonly McpScope[] = ["global", "project"];

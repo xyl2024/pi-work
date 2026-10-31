@@ -18,9 +18,8 @@ import {
 } from "./channels-io";
 import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
 import { isLoginInProgress, type LoginPhase } from "@/lib/shared/channels-login";
-import type { ChannelRecord } from "@/lib/shared/channels/types";
-
-export type ChannelsPage = { kind: "root" } | { kind: "detail"; channelId: string };
+import { errorMessage } from "@/lib/shared/error-message";
+import type { ChannelRecord, ChannelsPage } from "@/lib/shared/channels/types";
 
 export interface ChannelsLoginState {
   channelId: string | null;
@@ -69,10 +68,6 @@ const INITIAL: ChannelsViewState = {
 };
 
 const ROOT_PAGE: ChannelsPage = { kind: "root" };
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
 let loginGeneration = 0;
@@ -305,9 +300,6 @@ const channelsAdapter: PanelViewAdapter<ChannelsViewState, ChannelsPage, void, s
   },
   status(state) {
     return state.busy;
-  },
-  isRootPage(pages) {
-    return pages.length <= 1;
   },
   isSiblingPage(next, current) {
     return next.kind === "detail" && current.kind === "detail";

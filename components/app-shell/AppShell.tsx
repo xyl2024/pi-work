@@ -74,7 +74,7 @@ import {
   usePanelViewLifecycleSync,
   type PanelViewLifecycleStore,
 } from "@/hooks/usePanelViewLifecycleSync";
-import { mcpPanel } from "@/lib/client/mcp-store";
+import { mcpPanel } from "@/lib/client/mcp-panel";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";

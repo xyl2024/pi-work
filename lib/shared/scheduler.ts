@@ -1,3 +1,8 @@
+export type SchedulerPage =
+  | { kind: "root" }
+  | { kind: "detail"; taskId: string }
+  | { kind: "form"; taskId: string | null };
+
 import type { TaskNotification } from "./notifications";
 import type { ToolSelection } from "./types";
 

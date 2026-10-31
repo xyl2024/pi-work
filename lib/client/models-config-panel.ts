@@ -31,9 +31,11 @@ import {
   type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
+import { errorMessage } from "@/lib/shared/error-message";
 import type {
   ApiKeyProvider,
   ModelEntry,
+  ModelsConfigPage,
   ModelsJson,
   OAuthLoginState,
   OAuthProvider,
@@ -49,17 +51,6 @@ import {
 import { OAUTH_LOGIN_IDLE } from "./oauth-login";
 import { subscribeModelIconPreferences } from "./model-icon-preferences";
 import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
-
-export type ModelsConfigPage =
-  | { kind: "root" }
-  | { kind: "provider"; name: string }
-  | { kind: "model"; providerName: string; index: number }
-  | { kind: "oauth"; providerId: string }
-  | { kind: "apikey"; providerId: string }
-  | { kind: "catalog" }
-  | { kind: "addProvider" }
-  | { kind: "addModelName"; providerName: string }
-  | { kind: "fillModel"; providerName: string; index: number };
 
 export const MODELS_CONFIG_ROOT_PAGE: ModelsConfigPage = { kind: "root" };
 
@@ -160,13 +151,7 @@ function openPanelPage(page: ModelsConfigPage): void {
     modelsConfigPanel.resetPages();
     return;
   }
-  const base = baseStackFor(page);
-  const pages = modelsConfigPanel.pages();
-  if (sameStack(pages.slice(0, base.length), base)) {
-    modelsConfigPanel.openPage(page);
-    return;
-  }
-  replacePages([...base, page]);
+  replacePages([...baseStackFor(page), page]);
 }
 
 function renameProviderPage(
@@ -183,14 +168,10 @@ function renameProviderPage(
   });
 }
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 let unsubscribeOAuth: (() => void) | null = null;
 let unsubscribeModelIcons: (() => void) | null = null;
 
-function patchOAuthPhase(writer: PanelViewWriter<ModelsConfigViewState>): void {
+function patchOAuthPhase(writer: PanelViewWriter<ModelsConfigViewState, ModelsConfigPage>): void {
   const providerId = writer.get().oauthProviderId;
   writer.patch({
     oauthInProgress: hasActiveOAuthLogin(),
@@ -258,9 +239,6 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
   },
   status(state) {
     return selectModelsConfigDirty(state);
-  },
-  isRootPage(pages) {
-    return pages.length <= 1;
   },
   isSiblingPage(next, current) {
     return next.kind !== "root" && next.kind === current.kind;

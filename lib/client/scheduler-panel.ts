@@ -28,8 +28,10 @@ import {
   schedulerFormFromTask,
 } from "@/lib/shared/scheduler-form";
 import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
+import { errorMessage } from "@/lib/shared/error-message";
 import type {
   SchedulerModelMeta,
+  SchedulerPage,
   SchedulerTaskForm,
   ScheduledTask,
   TaskCreatePayload,
@@ -38,11 +40,6 @@ import type {
 import type { TaskNotification } from "@/lib/shared/notifications";
 
 export type SchedulerFilter = "all" | "enabled" | "disabled" | "error";
-
-export type SchedulerPage =
-  | { kind: "root" }
-  | { kind: "detail"; taskId: string }
-  | { kind: "form"; taskId: string | null };
 
 export interface SchedulerViewState {
   loading: boolean;
@@ -84,14 +81,10 @@ const INITIAL: SchedulerViewState = {
   runsVisible: false,
 };
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let polling = false;
-let pollWriter: PanelViewWriter<SchedulerViewState> | null = null;
+let pollWriter: PanelViewWriter<SchedulerViewState, SchedulerPage> | null = null;
 let unsubscribeIconPreferences: (() => void) | null = null;
 let writeGeneration = 0;
 let writesInFlight = 0;
@@ -366,9 +359,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
   },
   status(state) {
     return state.tasks.some((task) => task.lastRunStatus === "running");
-  },
-  isRootPage(pages) {
-    return pages.length <= 1;
   },
   isSiblingPage(next, current) {
     return next.kind === "detail" && current.kind === "detail";

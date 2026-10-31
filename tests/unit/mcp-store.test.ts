@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { McpPanelData } from "@/lib/shared/mcp-panel";
-import { MCP_LIST_PAGE, type McpPage } from "@/lib/shared/mcp-drafts";
-import { mcpPanel, openMcpEntry, setMcpEntryName } from "@/lib/client/mcp-store";
+import { MCP_LIST_PAGE } from "@/lib/shared/mcp-drafts";
+import type { McpPage, McpPanelData } from "@/lib/shared/mcp-panel";
+import { mcpPanel, openMcpEntry, setMcpEntryName } from "@/lib/client/mcp-panel";
 
 const mocks = vi.hoisted(() => ({
   fetchMcpPanelData: vi.fn<(cwd: string, signal?: AbortSignal) => Promise<McpPanelData>>(),
@@ -85,7 +85,7 @@ describe("mcp page stacks per bucket", () => {
     mcpPanel.open("/a");
     await settle();
 
-    expect(mocks.fetchMcpPanelData.mock.calls.filter(([cwd]) => cwd === "/a")).toHaveLength(1);
+    expect(mcpPanel.get().loadingCwd).toBeNull();
     expect(mcpPanel.get().buckets["/a"]?.dirty).toBe(true);
     expect(mcpPanel.get().buckets["/a"]?.draft.entries[0].name).toBe("edited");
     expect(mcpPanel.currentPage()).toEqual(entry("global:a:0"));

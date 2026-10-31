@@ -17,7 +17,7 @@ import {
   openMcpEntry,
   setMcpAutoEnable,
   setMcpEntryConfig,
-} from "@/lib/client/mcp-store";
+} from "@/lib/client/mcp-panel";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { McpEntryCard } from "./McpEntryCard";

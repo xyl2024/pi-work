@@ -1,7 +1,5 @@
 import type { McpDraft } from "./mcp-draft";
-import type { McpPanelData } from "./mcp-panel";
-
-export type McpPage = { kind: "list" } | { kind: "entry"; uid: string };
+import type { McpPage, McpPanelData } from "./mcp-panel";
 
 export const MCP_LIST_PAGE: McpPage = { kind: "list" };
 

@@ -19,7 +19,7 @@ import {
   reloadMcp,
   saveMcpChanges,
   useMcpPanel,
-} from "@/lib/client/mcp-store";
+} from "@/lib/client/mcp-panel";
 import { isMcpBucketVerifying, selectMcpBucket } from "@/lib/shared/mcp-drafts";
 import { McpListPage } from "./mcp/McpListPage";
 import { McpEntryPage } from "./mcp/McpEntryPage";
@@ -44,7 +44,6 @@ export function McpPanel({
   useEffect(() => {
     mcpPanel.setVisible(visible);
     mcpPanel.open(cwd);
-    if (visible && mcpPanel.get().loadErrorCwd === cwd) mcpPanel.reload();
   }, [cwd, visible]);
 
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);

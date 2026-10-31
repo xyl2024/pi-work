@@ -12,7 +12,7 @@ import {
   setMcpEntryName,
   setMcpEntryRawJson,
   setMcpEntryScope,
-} from "@/lib/client/mcp-store";
+} from "@/lib/client/mcp-panel";
 import { SecondaryButton } from "@/components/settings/controls";
 import { PanelBackButton } from "../PanelBackButton";
 import { McpEntryForm } from "./McpEntryForm";
