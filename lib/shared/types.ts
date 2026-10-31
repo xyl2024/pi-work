@@ -93,6 +93,7 @@ export interface ToolInfo {
   description: string;
   active?: boolean;
   exposure?: ToolExposure;
+  parameters?: unknown;
 }
 
 export type ToolSelection = string[] | "all";
