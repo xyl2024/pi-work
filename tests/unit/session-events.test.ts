@@ -995,6 +995,16 @@ describe("session event reducer: turn and phase", () => {
     expect(reduction.effects).toEqual([]);
   });
 
+  it("mirrors an unattended session's auto-deny mode", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), {
+      type: "permission_mode_changed",
+      mode: "auto_deny",
+    });
+
+    expect(reduction.state.permissionMode).toBe("auto_deny");
+    expect(reduction.effects).toEqual([]);
+  });
+
   it("leaves the permission mode alone when the wire value is not a mode", () => {
     const fullAccess = createSessionRuntimeState({ permissionMode: "full_access" });
     const reduction = reduceSessionEvent(fullAccess, {

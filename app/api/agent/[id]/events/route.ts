@@ -1,9 +1,7 @@
-import { resolveSessionPath } from "@/lib/server/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getRpcSession } from "@/lib/server/rpc-manager";
+import { openSessionForRuntime } from "@/lib/server/session-runtime-open";
 import type { SessionEvent } from "@/lib/shared/session-events";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
-import { openSubagentChildSession } from "@/lib/server/subagent-tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -20,20 +18,12 @@ export async function GET(
   let session = getRpcSession(id);
   if (!session || !session.isAlive()) {
     try {
-      const childSession = await openSubagentChildSession(id);
-      if (childSession) {
-        session = childSession;
-        log.info("agent event stream reopened subagent session", { id, durationMs: elapsedMs(startedAt) });
-      } else {
-        const filePath = await resolveSessionPath(id);
-        if (!filePath) {
-          log.warn("agent event stream session not found", { id, durationMs: elapsedMs(startedAt) });
-          return new Response("Session not found", { status: 404 });
-        }
-        const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
-        ({ session } = await startRpcSession(id, filePath, cwd));
-        log.info("agent event stream started session", { id, cwd, durationMs: elapsedMs(startedAt) });
+      session = (await openSessionForRuntime(id)) ?? undefined;
+      if (!session) {
+        log.warn("agent event stream session not found", { id, durationMs: elapsedMs(startedAt) });
+        return new Response("Session not found", { status: 404 });
       }
+      log.info("agent event stream started session", { id, durationMs: elapsedMs(startedAt) });
     } catch (error) {
       log.error("agent event stream failed to start session", { id, error, durationMs: elapsedMs(startedAt) });
       return new Response(`Failed to start agent: ${error}`, { status: 500 });

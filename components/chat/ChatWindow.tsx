@@ -15,7 +15,12 @@ import { branchAnchorEntryId, buildChatTimeline, buildTimelineDividers, indexToo
 import { modelDisplayName } from "@/lib/shared/model-display";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
-import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
+import {
+  canSwitchSessionPermissionMode,
+  flippedPermissionMode,
+  isPermissionMode,
+  type PermissionMode,
+} from "@/lib/shared/permission-mode";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { MessageCallMetricsProvider } from "./message-view/context";
 import { useSessionCallMetrics } from "@/hooks/useSessionCallMetrics";
@@ -116,6 +121,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, changeMarkers, streamState,
     agentRunning, modelNames, modelIcons, modelIconPreferences, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel, permissionMode,
+    isBackgroundSession,
     retryInfo,
     displayModel: displayModelValue,
     agentPhase,
@@ -196,16 +202,24 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return null;
   }, [messages]);
 
+  const canSwitchPermissionMode = canSwitchSessionPermissionMode(
+    permissionMode,
+    isBackgroundSession,
+  );
+
   useEffect(() => {
     if (!isActive) return;
     setAgentControls({
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
       permissionMode,
-      setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode),
+      canChangePermissionMode: canSwitchPermissionMode,
+      ...(canSwitchPermissionMode
+        ? { setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode) }
+        : {}),
     }, tabId);
     return () => setAgentControls(null, tabId);
-  }, [isActive, agentRunning, permissionMode, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, agentRunning, permissionMode, canSwitchPermissionMode, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
   const frostMaskVisible = isChatBottomFrostMaskVisible({ pendingAskUserQuestions: !!pendingAskUserQuestions });
@@ -601,9 +615,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         thinkingLevel={thinkingLevel}
         onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
         permissionMode={permissionMode}
-        onPermissionModeToggle={() => {
-          void handlePermissionModeChange(flippedPermissionMode(permissionMode));
-        }}
+        onPermissionModeToggle={canSwitchPermissionMode && isPermissionMode(permissionMode)
+          ? () => {
+              void handlePermissionModeChange(flippedPermissionMode(permissionMode));
+            }
+          : undefined}
         availableThinkingLevels={availableThinkingLevels}
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}

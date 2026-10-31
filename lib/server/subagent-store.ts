@@ -469,3 +469,17 @@ export function getSubagentSessionConfigSnapshot(
   ).get(parentSessionId, childSessionId) as { config_snapshot: string | null } | undefined;
   return row?.config_snapshot ?? null;
 }
+
+export function listSubagentChildConfigSnapshots(): Array<{
+  childSessionId: string;
+  configSnapshot: string | null;
+}> {
+  if (!hasSubagentStore()) return [];
+  const rows = getSubagentDb().prepare(
+    "SELECT child_session_id, config_snapshot FROM subagent_tasks WHERE child_session_id IS NOT NULL ORDER BY created_at ASC, rowid ASC",
+  ).all() as Array<{ child_session_id: string; config_snapshot: string | null }>;
+  return rows.map((row) => ({
+    childSessionId: row.child_session_id,
+    configSnapshot: row.config_snapshot,
+  }));
+}

@@ -1,7 +1,7 @@
 import { Cron } from "croner";
 import { migrateToolName } from "../../shared/subagent";
 import { existsSync } from "fs";
-import { getSchedulerDb } from "./db";
+import { getSchedulerDb, hasSchedulerStore } from "./db";
 import { sanitizeNotification } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
 import type { TaskNotification } from "@/lib/shared/notifications";
@@ -575,4 +575,36 @@ export function recordRunEnd(runId: string, input: RecordRunEndInput): TaskRun {
     .run(now, existing.taskId);
 
   return getRun(runId)!;
+}
+
+export function listRunSessionPermissionModes(): Record<string, BackgroundPermissionMode> {
+  if (!hasSchedulerStore()) return {};
+  const rows = getSchedulerDb()
+    .prepare(
+      `SELECT r.session_id, t.permission_mode
+         FROM task_runs r
+         JOIN scheduled_tasks t ON t.id = r.task_id
+        WHERE r.session_id IS NOT NULL
+        ORDER BY r.started_at ASC`,
+    )
+    .all() as Array<{ session_id: string; permission_mode: string | null }>;
+  const modes: Record<string, BackgroundPermissionMode> = {};
+  for (const row of rows) {
+    modes[row.session_id] = resolveBackgroundPermissionMode(row.permission_mode);
+  }
+  return modes;
+}
+
+export function getRunSessionPermissionMode(sessionId: string): BackgroundPermissionMode | null {
+  if (!hasSchedulerStore()) return null;
+  const row = getSchedulerDb()
+    .prepare(
+      `SELECT t.permission_mode
+         FROM task_runs r
+         JOIN scheduled_tasks t ON t.id = r.task_id
+        WHERE r.session_id = ?
+        ORDER BY r.started_at DESC LIMIT 1`,
+    )
+    .get(sessionId) as { permission_mode: string | null } | undefined;
+  return row ? resolveBackgroundPermissionMode(row.permission_mode) : null;
 }

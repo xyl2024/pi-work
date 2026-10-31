@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { dirname } from "path";
-import { mkdirSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { createLogger } from "../logger";
 import { dataPath } from "../data-dir";
 
@@ -80,6 +80,10 @@ function runMigrations(db: Database.Database): void {
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN permission_mode TEXT");
     log.info("migration: added scheduled_tasks.permission_mode column");
   }
+}
+
+export function hasSchedulerStore(): boolean {
+  return existsSync(resolveDbPath());
 }
 
 export function getSchedulerDb(): Database.Database {

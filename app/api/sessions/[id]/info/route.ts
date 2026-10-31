@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
-import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
+import { resolveSessionPermission, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/info");
@@ -29,7 +29,7 @@ export async function GET(
       session: {
         ...info,
         running: getRpcSession(info.id)?.isRunning() ?? false,
-        ...permissionModeField(readSessionPermissionModes(), info.id),
+        ...sessionPermissionFields(resolveSessionPermission(info.id)),
       },
     });
   } catch (error) {

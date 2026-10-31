@@ -18,7 +18,7 @@ import {
 } from "./session-runtime-state";
 import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
 import type { ContextComposition } from "./context-composition";
-import { isPermissionMode, type PermissionMode } from "./permission-mode";
+import { isSessionPermissionMode, type SessionPermissionMode } from "./permission-mode";
 
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
 
@@ -80,7 +80,7 @@ export type SessionEvent =
   | { type: "thinking_level_changed"; level: string }
   | {
       type: "permission_mode_changed";
-      mode: PermissionMode;
+      mode: SessionPermissionMode;
     }
   | {
       type: "auto_retry_start";
@@ -470,8 +470,11 @@ function reduceClientSessionInput(
       if (live?.contextComposition !== undefined) {
         next = patchSessionRuntimeState(next, "contextComposition", live.contextComposition ?? null);
       }
-      if (isPermissionMode(live?.permissionMode)) {
+      if (isSessionPermissionMode(live?.permissionMode)) {
         next = patchSessionRuntimeState(next, "permissionMode", live.permissionMode);
+      }
+      if (typeof live?.background === "boolean") {
+        next = patchSessionRuntimeState(next, "isBackgroundSession", live.background);
       }
       const effects: SessionEventEffect[] = [];
       if (live?.systemPrompt !== undefined) {
@@ -807,7 +810,7 @@ function reduceReducedSessionEvent(
         effects: [],
       };
     case "permission_mode_changed":
-      return isPermissionMode(event.mode)
+      return isSessionPermissionMode(event.mode)
         ? { state: patchSessionRuntimeState(state, "permissionMode", event.mode), effects: [] }
         : { state, effects: [] };
   }

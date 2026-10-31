@@ -38,3 +38,21 @@ export function resolveBackgroundPermissionMode(value: unknown): BackgroundPermi
 export function isBackgroundSessionSource(source: string): boolean {
   return source === "scheduled" || source === "subagent";
 }
+
+export function canSwitchSessionPermissionMode(
+  mode: SessionPermissionMode,
+  background: boolean,
+): boolean {
+  return !background && isPermissionMode(mode);
+}
+
+export type SessionPermissionBadgeKind = "auto_deny" | "full_access";
+
+export function sessionPermissionBadge(
+  mode: SessionPermissionMode,
+  background: boolean,
+): SessionPermissionBadgeKind | null {
+  if (mode === "auto_deny") return "auto_deny";
+  if (background && mode === "full_access") return "full_access";
+  return null;
+}

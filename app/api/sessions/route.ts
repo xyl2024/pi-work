@@ -6,7 +6,7 @@ import {
 } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
-import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
+import { resolveSessionPermissions, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { SessionInfo } from "@/lib/shared/types";
 
@@ -68,10 +68,10 @@ export async function GET(request: Request) {
   try {
     const allSessions = await listAllSessionsHeaderOnly();
     const subagentIds = new Set(listSubagentChildSessionIds());
-    const permissionModes = readSessionPermissionModes();
+    const permissionStates = resolveSessionPermissions(allSessions.map((session) => session.id));
     const withPermissionMode = <T extends { id: string }>(row: T): T => ({
       ...row,
-      ...permissionModeField(permissionModes, row.id),
+      ...sessionPermissionFields(permissionStates[row.id]),
     });
     const all = allSessions.filter((session) => !subagentIds.has(session.id));
     const recent = recentCwds(all, 5);
