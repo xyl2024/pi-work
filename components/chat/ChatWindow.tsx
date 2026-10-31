@@ -370,6 +370,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return renderMessages[idx] ? idx : -1;
   }, [renderEntryIds, renderMessages, trailingCompactionPoints]);
 
+  const trailingCompactionNodes = optimisticCompactionMessageIdx === -1
+    ? trailingCompactionPoints.map((point) => (
+        <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
+      ))
+    : [];
+  const trailingNodes = [...trailingCompactionNodes, ...trailingChangeNodes];
+
   const turnDurationMap = useMemo(() => {
     const map = new Map<number, { startMs: number; endMs?: number; running: boolean }>();
     for (let i = 0; i < renderMessages.length; i++) {
@@ -960,7 +967,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {rendered}
                   {liveTurnActive && (
                     <>
-                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingChangeMarkers.length > 0) && (
+                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingNodes.length > 0) && (
                         <StreamingMessageViewport
                           tabId={streamingKey}
                           userScrollingUpRef={userScrolledUpRef}
@@ -968,7 +975,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           onHeightIncrease={scrollFollow.handleHeightIncrease}
                         >
                           {streamingRendered}
-                          {trailingChangeNodes}
+                          {trailingNodes}
                           {!streamingErrorAlreadyRendered && (
                             <StreamingBubble
                               tabId={streamingKey}
@@ -1052,11 +1059,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               />
             )}
 
-            {optimisticCompactionMessageIdx === -1 && trailingCompactionPoints.map((point) => (
-              <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
-            ))}
-
-            {!liveTurnActive && trailingChangeNodes}
+            {!liveTurnActive && trailingNodes}
 
             {!liveTurnActive && isStreamingThinking && (
               <div className="py-2">

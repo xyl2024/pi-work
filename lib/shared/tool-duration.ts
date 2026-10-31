@@ -1,8 +1,34 @@
-export function formatToolAnnotation({ timeout, durationMs }: { timeout?: string | null; durationMs?: number | null }): string | null {
+export type ToolAnnotationTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
+
+const interpolateLabel: ToolAnnotationTranslator = (key, values) =>
+  values
+    ? key.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in values ? String(values[name]) : match,
+      )
+    : key;
+
+function normalizeTimeout(timeout: unknown): string | null {
+  if (typeof timeout === "number") {
+    return Number.isFinite(timeout) ? String(timeout) : null;
+  }
+  if (typeof timeout === "string" && timeout.trim() !== "") return timeout;
+  return null;
+}
+
+export function formatToolAnnotation(
+  { timeout, durationMs }: { timeout?: unknown; durationMs?: number | null },
+  translate: ToolAnnotationTranslator = interpolateLabel,
+): string | null {
   const parts: string[] = [];
-  if (typeof timeout === "string" && timeout !== "") parts.push(`timeout=${timeout}s`);
+  const timeoutValue = normalizeTimeout(timeout);
+  if (timeoutValue !== null) {
+    parts.push(translate("timeout={timeout}s", { timeout: timeoutValue }));
+  }
   const duration = formatToolDuration(durationMs);
-  if (duration) parts.push(`duration=${duration}`);
+  if (duration) parts.push(translate("duration={duration}", { duration }));
   if (parts.length === 0) return null;
   return `(${parts.join(", ")})`;
 }

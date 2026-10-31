@@ -193,6 +193,9 @@ export const EN_TRANSLATIONS = {
   "mcp.problemInvalidJson": "{name} is not valid JSON.",
   "mcp.problemMissingTransport": "{name} needs a command or a URL.",
 
+  "timeout={timeout}s": "timeout={timeout}s",
+  "duration={duration}": "duration={duration}",
+
   "Message from channel {channel}": "From channel {channel}",
   "Message from scheduled task {task}": "From scheduled task {task}",
   "Message from session {session}": "From session {session}",
