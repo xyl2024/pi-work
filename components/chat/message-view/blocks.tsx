@@ -11,6 +11,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { extractMessageText } from "@/lib/shared/message-content";
+import { formatToolDuration } from "@/lib/shared/tool-duration";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
@@ -215,6 +216,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
             {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
           </span>
         )}
+        <ToolDuration ms={result?.durationMs} />
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
@@ -232,6 +234,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
+        <ToolDurationRow ms={result?.durationMs} />
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
@@ -248,6 +251,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
+        <ToolDurationRow ms={result?.durationMs} />
         <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
@@ -294,6 +298,26 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ToolDuration({ ms }: { ms?: number }) {
+  const text = formatToolDuration(ms);
+  if (!text) return null;
+  return (
+    <span style={{ flexShrink: 0, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+      {text}
+    </span>
+  );
+}
+
+function ToolDurationRow({ ms }: { ms?: number }) {
+  const text = formatToolDuration(ms);
+  if (!text) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", padding: "5px 10px 0" }}>
+      <ToolDuration ms={ms} />
     </div>
   );
 }

@@ -59,6 +59,7 @@ export interface AssistantMessage {
   stopReason?: string;
   errorMessage?: string;
   timestamp?: number;
+  durationMs?: number;
   usage?: {
     input: number;
     output: number;
@@ -82,6 +83,7 @@ export interface ToolResultMessage {
   details?: unknown;
   isError?: boolean;
   timestamp?: number;
+  durationMs?: number;
 }
 
 export type ToolExposure = "direct" | "model-only" | "codemode" | "deferred" | "hidden";
