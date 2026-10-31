@@ -20,6 +20,9 @@ export const permissions = {
     "本会话里的危险命令执行前会先征求确认。",
   "This session is in full access": "本会话处于完全访问",
   "Failed to change permission mode": "切换权限模式失败",
+  "Dangerous commands": "危险命令",
+  "Auto-deny": "自动拒绝",
+  "Full access": "完全访问",
   "Auto-deny dangerous commands": "自动拒绝危险命令",
   "Full access to dangerous commands": "危险命令完全访问",
   "This unattended session denies dangerous commands instead of asking.":

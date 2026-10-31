@@ -102,7 +102,7 @@ function VerdictView({ verdict }: { verdict: DangerousCommandVerdict }) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
-            {t("Asks for confirmation")}
+            {t("Matches a rule")}
           </span>
           <span
             style={{
@@ -121,7 +121,7 @@ function VerdictView({ verdict }: { verdict: DangerousCommandVerdict }) {
         </code>
         <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
           {t(
-            "The command is not blocked: it waits for your answer (allow once, allow similar, or deny) until the confirmation times out.",
+            "A matched command is not hard-blocked: a foreground session waits for your answer (allow once, allow similar, or deny) until the confirmation times out, while an unattended session follows its permission tier.",
           )}
         </span>
       </div>
@@ -322,7 +322,7 @@ export function DangerousCommandsSection({
         {current.rules.length > 0 && (
           <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
             {t(
-              "Order only affects which rule name is shown and remembered when several rules match the same command — it never changes whether a confirmation appears.",
+              "Order only affects which rule name is shown and remembered when several rules match the same command — it never changes whether the command matches.",
             )}
           </p>
         )}
