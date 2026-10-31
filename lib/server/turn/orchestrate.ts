@@ -12,6 +12,7 @@ import type { ToolSelection } from "../../shared/types";
 import type { LlmAuditSource } from "../../shared/llm-audit-types";
 import type { CallPurpose, ModelCallCommandOptions } from "../../shared/token-audit-types";
 import type { MessageOrigin } from "../../shared/message-origin";
+import type { SessionPermissionMode } from "../../shared/permission-mode";
 
 export type TurnSendOptions = ModelCallCommandOptions;
 
@@ -40,6 +41,7 @@ export type TurnSessionFactory = (
   toolNames: ToolSelection | undefined,
   source: LlmAuditSource,
   policy: TurnSessionPolicy,
+  permissionMode?: SessionPermissionMode,
 ) => Promise<AcquiredTurnSession>;
 
 export interface RunTurnSpec {
@@ -52,6 +54,7 @@ export interface RunTurnSpec {
   origin?: MessageOrigin;
   purpose?: CallPurpose;
   session?: TurnSessionPolicy;
+  permissionMode?: SessionPermissionMode;
   timeoutMs: number;
   abortSources?: TurnAbortSource[];
   confirmStop?: boolean;
@@ -168,6 +171,7 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
     spec.toolNames,
     spec.source ?? "user",
     policy,
+    spec.permissionMode,
   );
   const ids = { sessionId, realSessionId };
 

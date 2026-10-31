@@ -55,6 +55,29 @@ describe("client snapshot input", () => {
     expect(next.state.permissionMode).toBe("full_access");
   });
 
+  it("adopts an unattended session's auto-deny mode and background flag", () => {
+    const next = snapshot(createSessionRuntimeState(), {
+      type: "client_snapshot",
+      snapshot: { running: false, state: { permissionMode: "auto_deny", background: true } },
+    });
+    expect(next.state.permissionMode).toBe("auto_deny");
+    expect(next.state.isBackgroundSession).toBe(true);
+  });
+
+  it("clears the background flag when a snapshot reports a foreground session", () => {
+    const background = patchSessionRuntimeState(
+      createSessionRuntimeState({ isBackgroundSession: true, permissionMode: "auto_deny" }),
+      "isBackgroundSession",
+      true,
+    );
+    const next = snapshot(background, {
+      type: "client_snapshot",
+      snapshot: { running: false, state: { permissionMode: "confirm", background: false } },
+    });
+    expect(next.state.isBackgroundSession).toBe(false);
+    expect(next.state.permissionMode).toBe("confirm");
+  });
+
   it("never reads a malformed permission mode as full access", () => {
     const confirm = snapshot(createSessionRuntimeState(), {
       type: "client_snapshot",

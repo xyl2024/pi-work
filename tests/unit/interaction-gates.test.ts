@@ -7,11 +7,13 @@ import {
 import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
 import type { SessionEvent } from "@/lib/shared/session-events";
 
-function makeGates(source = "user") {
+function makeGates(
+  permissionMode?: () => "confirm" | "full_access" | "auto_deny",
+) {
   const emitted: SessionEvent[] = [];
   const gates = new InteractionGates({
-    source,
     emit: (event) => emitted.push(event),
+    ...(permissionMode ? { permissionMode } : {}),
   });
   return { gates, emitted };
 }
@@ -108,16 +110,45 @@ describe("refusing", () => {
     });
   });
 
-  it("refuses a subagent outright, with a readable reason and no gate at all", async () => {
-    const { gates, emitted } = makeGates("subagent");
+  it("refuses auto-deny sessions outright, with a readable reason and no gate at all", async () => {
+    const { gates, emitted } = makeGates(() => "auto_deny");
     const outcome = await gates.runPermissionGate(bashGate());
 
     expect(outcome.decision).toBe("deny");
     const reason = outcome.decision === "deny" ? outcome.reason : "";
     expect(reason).toContain('the dangerous-command rule "rm-rf"');
-    expect(reason).toContain("subagent session");
+    expect(reason).toContain("unattended session");
+    expect(reason).toContain("configured to auto-deny");
+    expect(reason).toContain("safe alternative");
+    expect(reason).toContain("run manually");
     expect(emitted).toEqual([]);
+    expect(gates.snapshot()).toEqual([]);
     expect(gates.resolvePermission("call-1", "allow_once")).toBe(false);
+  });
+
+  it("opens the ordinary gate when the mode allows confirmation", async () => {
+    const confirm = makeGates(() => "confirm");
+    const pending = confirm.gates.runPermissionGate(bashGate());
+
+    expect(confirm.emitted).toHaveLength(1);
+    confirm.gates.resolvePermission("call-1", "allow_once");
+    await expect(pending).resolves.toEqual({ decision: "allow" });
+  });
+});
+
+describe("auto-deny ignores the session memo", () => {
+  it("does not let a remembered rule outrank auto-deny", async () => {
+    let mode: "confirm" | "auto_deny" = "confirm";
+    const { gates, emitted } = makeGates(() => mode);
+
+    const remembered = gates.runPermissionGate(bashGate());
+    gates.resolvePermission("call-1", "allow_similar");
+    await expect(remembered).resolves.toEqual({ decision: "allow" });
+
+    mode = "auto_deny";
+    const denied = await gates.runPermissionGate(bashGate({ toolCallId: "call-2" }));
+    expect(denied.decision).toBe("deny");
+    expect(emitted).toHaveLength(1);
   });
 });
 

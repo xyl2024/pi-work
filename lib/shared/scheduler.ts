@@ -4,6 +4,7 @@ export type SchedulerPage =
   | { kind: "form"; taskId: string | null };
 
 import type { TaskNotification } from "./notifications";
+import type { BackgroundPermissionMode } from "./permission-mode";
 import type { ToolSelection } from "./types";
 
 export type TaskRunStatus = "running" | "success" | "error" | "timeout" | "interrupted";
@@ -19,6 +20,7 @@ export interface ScheduledTask {
   modelId: string | null;
   thinkingLevel: string | null;
   toolNames: string[] | null;
+  permissionMode: BackgroundPermissionMode;
   maxLifetimeMs: number | null;
   timezone: string;
   notification: TaskNotification | null;
@@ -59,6 +61,7 @@ export interface TaskCreatePayload {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  permissionMode?: BackgroundPermissionMode;
   maxLifetimeMs?: number | null;
   timezone?: string;
   notification?: TaskNotification | null;
@@ -75,6 +78,7 @@ export interface TaskUpdatePayload {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  permissionMode?: BackgroundPermissionMode;
   maxLifetimeMs?: number | null;
   timezone?: string;
   notification?: TaskNotification | null;
@@ -101,6 +105,7 @@ export interface SchedulerTaskForm {
   modelId: string;
   thinkingLevel: string;
   toolSelection: ToolSelection;
+  permissionMode: BackgroundPermissionMode;
   maxLifetimeMinutes: string;
   timezone: string;
   notifyEnabled: boolean;

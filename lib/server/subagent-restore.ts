@@ -1,5 +1,9 @@
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
+  DEFAULT_BACKGROUND_PERMISSION_MODE,
+  resolveBackgroundPermissionMode,
+} from "../shared/permission-mode";
+import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   LEGACY_SPAWN_SUBAGENT_TOOL_NAME,
   SUBAGENT_THINKING_LEVELS,
@@ -71,6 +75,7 @@ export function parseSubagentConfigSnapshot(
     cwd: raw.cwd,
     model: { provider: model.provider, modelId: model.modelId },
     thinkingLevel: raw.thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(raw.permissionMode),
     tools: restrictSubagentTools(raw.tools as string[]),
     systemPrompt: { kind: prompt.kind, text: prompt.text },
     timeoutMs: raw.timeoutMs,
@@ -141,6 +146,7 @@ async function recoverLegacyConfig(input: {
       cwd,
       model: context.model,
       thinkingLevel: isThinkingLevel(context.thinkingLevel) ? context.thinkingLevel : "off",
+      permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
       tools,
       systemPrompt: { kind: "prefix", text: LEGACY_SUBAGENT_SYSTEM_PROMPT },
       timeoutMs: DEFAULT_SUBAGENT_TIMEOUT_MS,
@@ -186,6 +192,7 @@ export function subagentChildSessionStartOptions(
   return {
     model: config.model,
     thinkingLevel: config.thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(config.permissionMode),
     allowedToolNames: tools,
     ...(config.systemPrompt.kind === "override"
       ? { systemPromptOverride: config.systemPrompt.text }

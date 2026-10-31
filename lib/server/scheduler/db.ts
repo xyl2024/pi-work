@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { dirname } from "path";
-import { mkdirSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { createLogger } from "../logger";
 import { dataPath } from "../data-dir";
 
@@ -29,6 +29,7 @@ const SCHEMA = `
     model_id        TEXT,
     thinking_level  TEXT,
     tool_names      TEXT,
+    permission_mode TEXT,
     max_lifetime_ms INTEGER,
     timezone        TEXT,
     notification    TEXT,
@@ -48,6 +49,7 @@ const SCHEMA = `
     error       TEXT,
     session_id  TEXT,
     duration_ms INTEGER,
+    permission_mode TEXT,
     FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE
   );
 
@@ -74,6 +76,21 @@ function runMigrations(db: Database.Database): void {
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN notification TEXT");
     log.info("migration: added scheduled_tasks.notification column");
   }
+  const hasPermissionMode = taskColumns.some((c) => c.name === "permission_mode");
+  if (!hasPermissionMode) {
+    db.exec("ALTER TABLE scheduled_tasks ADD COLUMN permission_mode TEXT");
+    log.info("migration: added scheduled_tasks.permission_mode column");
+  }
+  const runColumns = db.prepare("PRAGMA table_info(task_runs)").all() as Array<{ name: string }>;
+  const hasRunPermissionMode = runColumns.some((c) => c.name === "permission_mode");
+  if (!hasRunPermissionMode) {
+    db.exec("ALTER TABLE task_runs ADD COLUMN permission_mode TEXT");
+    log.info("migration: added task_runs.permission_mode column");
+  }
+}
+
+export function hasSchedulerStore(): boolean {
+  return existsSync(resolveDbPath());
 }
 
 export function getSchedulerDb(): Database.Database {

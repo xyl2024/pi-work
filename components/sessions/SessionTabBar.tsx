@@ -8,6 +8,7 @@ import {
   type SessionTabStatus,
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "../ui/Tooltip";
+import { SessionPermissionBadge } from "../ui/SessionPermissionBadge";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { InlineLoader } from "generative-loaders";
 import { createEdgeAutoscroll } from "@/lib/client/tab-bar-autoscroll";
@@ -288,6 +289,11 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             }}
           >
             <StatusMark status={tab.status} />
+            <SessionPermissionBadge
+              sessionId={tab.sessionId}
+              fallbackMode={tab.session?.permissionMode}
+              fallbackBackground={tab.session?.background}
+            />
             {tab.dirty && (
               <Tooltip content={t("Unsaved draft")}>
                 <span

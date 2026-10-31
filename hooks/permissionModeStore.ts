@@ -1,9 +1,13 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "@/lib/shared/permission-mode";
+import {
+  DEFAULT_PERMISSION_MODE,
+  type SessionPermissionMode,
+  type SessionPermissionState,
+} from "@/lib/shared/permission-mode";
 
-type State = ReadonlyMap<string, PermissionMode>;
+type State = ReadonlyMap<string, SessionPermissionState>;
 
 let state: State = new Map();
 const listeners = new Set<() => void>();
@@ -28,19 +32,31 @@ function getServerSnapshot(): State {
   return EMPTY;
 }
 
-export function setSessionPermissionMode(sessionId: string, mode: PermissionMode): void {
-  if (!sessionId || state.get(sessionId) === mode) return;
+export function setSessionPermissionMode(
+  sessionId: string,
+  permissionMode: SessionPermissionMode,
+  background = false,
+): void {
+  if (!sessionId) return;
+  const existing = state.get(sessionId);
+  if (existing?.permissionMode === permissionMode && existing.background === background) return;
   const next = new Map(state);
-  next.set(sessionId, mode);
+  next.set(sessionId, { permissionMode, background });
   state = next;
   emit();
 }
 
-export function useSessionPermissionMode(
+export function useSessionPermission(
   sessionId: string | null,
-  fallback: PermissionMode = DEFAULT_PERMISSION_MODE,
-): PermissionMode {
+  fallbackMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
+  fallbackBackground = false,
+): SessionPermissionState {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  if (!sessionId) return DEFAULT_PERMISSION_MODE;
-  return snapshot.get(sessionId) ?? fallback;
+  if (!sessionId) {
+    return { permissionMode: DEFAULT_PERMISSION_MODE, background: false };
+  }
+  return snapshot.get(sessionId) ?? {
+    permissionMode: fallbackMode,
+    background: fallbackBackground,
+  };
 }

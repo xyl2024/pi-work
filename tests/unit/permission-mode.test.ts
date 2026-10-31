@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionLike } from "@/lib/server/pi-types";
 import type { SessionEvent } from "@/lib/shared/session-events";
-import { isPermissionMode } from "@/lib/shared/permission-mode";
+import {
+  DEFAULT_BACKGROUND_PERMISSION_MODE,
+  isBackgroundPermissionMode,
+  isPermissionMode,
+  isSessionPermissionMode,
+  resolveBackgroundPermissionMode,
+} from "@/lib/shared/permission-mode";
 
 const root = mkdtempSync(join(tmpdir(), "pi-work-permission-mode-"));
 
@@ -83,6 +89,31 @@ describe("evaluateDangerousCommand × permission mode", () => {
     expect(evaluateDangerousCommand("git status", "full_access")).toEqual({ kind: "none" });
   });
 
+  it("still reports the match in auto-deny so the gate decides", () => {
+    expect(evaluateDangerousCommand("pytest -q", "auto_deny")).toEqual({
+      kind: "matched",
+      ruleName: "run-pytest",
+      source: "user",
+    });
+    expect(evaluateDangerousCommand("rm -rf build", "auto_deny")).toEqual({
+      kind: "matched",
+      ruleName: "rm -rf",
+      source: "builtin",
+    });
+  });
+
+  it("hard-blocks self-protection in auto-deny too", () => {
+    expect(evaluateDangerousCommand("pkill no" + "de", "auto_deny")).toEqual({
+      kind: "self_protected",
+      reason: expect.any(String),
+    });
+    expect(evaluateDangerousCommand("shutdown -h now", "auto_deny").kind).toBe("self_protected");
+  });
+
+  it("never matches an empty command in auto-deny", () => {
+    expect(evaluateDangerousCommand("   ", "auto_deny")).toEqual({ kind: "none" });
+  });
+
   it("defaults to confirm when the mode is omitted", () => {
     expect(evaluateDangerousCommand("pytest -q").kind).toBe("matched");
   });
@@ -92,7 +123,12 @@ describe("evaluateDangerousCommand × permission mode", () => {
   });
 });
 
-function fakeWrapper(sessionId: string) {
+function fakeWrapper(
+  sessionId: string,
+  source: "user" | "scheduled" | "subagent" = "user",
+  permissionMode: "confirm" | "full_access" | "auto_deny" = "confirm",
+  background = false,
+) {
   const inner = {
     sessionId,
     sessionFile: undefined,
@@ -104,7 +140,7 @@ function fakeWrapper(sessionId: string) {
     sessionManager: { getSessionName: () => null },
     getContextUsage: () => undefined,
   } as unknown as AgentSessionLike;
-  const wrapper = new AgentSessionWrapper(inner, "user", null);
+  const wrapper = new AgentSessionWrapper(inner, source, null, permissionMode, { background });
   const events: SessionEvent[] = [];
   wrapper.onEvent((event) => events.push(event));
   return { wrapper, events };
@@ -168,6 +204,20 @@ describe("set_permission_mode", () => {
       decision: "deny",
       reason: expect.any(String),
     });
+  });
+
+  it("keeps an unattended session on its configured mode and never writes the sidecar", async () => {
+    const { wrapper, events } = fakeWrapper("scheduled-session-1", "scheduled", "auto_deny", true);
+    expect(wrapper.permissionMode).toBe("auto_deny");
+    expect(wrapper.isBackgroundSession).toBe(true);
+
+    await expect(wrapper.send({ type: "set_permission_mode", mode: "full_access" })).rejects.toThrow(
+      /fixed for an unattended session/,
+    );
+
+    expect(wrapper.permissionMode).toBe("auto_deny");
+    expect(sidecar.readSessionPermissionMode("scheduled-session-1")).toBe("confirm");
+    expect(events.filter((e) => e.type === "permission_mode_changed")).toEqual([]);
   });
 
   it("neither approves nor denies a gate that is already waiting", async () => {
@@ -255,8 +305,35 @@ describe("isPermissionMode", () => {
   it("accepts exactly the two modes", () => {
     expect(isPermissionMode("confirm")).toBe(true);
     expect(isPermissionMode("full_access")).toBe(true);
-    for (const value of ["", "full access", "FULL_ACCESS", "yolo", null, undefined, 1, {}]) {
+    for (const value of ["", "full access", "FULL_ACCESS", "auto_deny", "yolo", null, undefined, 1, {}]) {
       expect(isPermissionMode(value)).toBe(false);
+    }
+  });
+});
+
+describe("background permission modes", () => {
+  it("accepts exactly full access and auto-deny", () => {
+    expect(isBackgroundPermissionMode("full_access")).toBe(true);
+    expect(isBackgroundPermissionMode("auto_deny")).toBe(true);
+    for (const value of ["confirm", "", "full access", "AUTO_DENY", "yolo", null, undefined, 1, {}]) {
+      expect(isBackgroundPermissionMode(value)).toBe(false);
+    }
+  });
+
+  it("falls back to auto-deny for empty, null and unknown values", () => {
+    expect(DEFAULT_BACKGROUND_PERMISSION_MODE).toBe("auto_deny");
+    for (const value of [undefined, null, "", "confirm", "yolo", 1]) {
+      expect(resolveBackgroundPermissionMode(value)).toBe("auto_deny");
+    }
+    expect(resolveBackgroundPermissionMode("full_access")).toBe("full_access");
+  });
+
+  it("treats the runtime mode as the union of the two sets", () => {
+    for (const value of ["confirm", "full_access", "auto_deny"]) {
+      expect(isSessionPermissionMode(value)).toBe(true);
+    }
+    for (const value of ["", "yolo", null, 1, {}]) {
+      expect(isSessionPermissionMode(value)).toBe(false);
     }
   });
 });

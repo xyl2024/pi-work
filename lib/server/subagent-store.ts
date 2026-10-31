@@ -114,6 +114,7 @@ const SCHEMA = `
     model_provider TEXT,
     model_id       TEXT,
     thinking_level TEXT NOT NULL,
+    permission_mode TEXT,
     bot            TEXT NOT NULL,
     timeout_ms     INTEGER NOT NULL,
     builtin        INTEGER NOT NULL DEFAULT 0,
@@ -135,6 +136,9 @@ function migrateProfileColumns(db: Database.Database): void {
     .map((column) => column.name);
   if (!columns.includes("inherit_system_prompt")) {
     db.exec("ALTER TABLE subagent_profiles ADD COLUMN inherit_system_prompt INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!columns.includes("permission_mode")) {
+    db.exec("ALTER TABLE subagent_profiles ADD COLUMN permission_mode TEXT");
   }
 }
 
@@ -464,4 +468,18 @@ export function getSubagentSessionConfigSnapshot(
     "SELECT config_snapshot FROM subagent_tasks WHERE parent_session_id = ? AND child_session_id = ? AND config_snapshot IS NOT NULL ORDER BY created_at ASC, rowid ASC LIMIT 1",
   ).get(parentSessionId, childSessionId) as { config_snapshot: string | null } | undefined;
   return row?.config_snapshot ?? null;
+}
+
+export function listSubagentChildConfigSnapshots(): Array<{
+  childSessionId: string;
+  configSnapshot: string | null;
+}> {
+  if (!hasSubagentStore()) return [];
+  const rows = getSubagentDb().prepare(
+    "SELECT child_session_id, config_snapshot FROM subagent_tasks WHERE child_session_id IS NOT NULL ORDER BY created_at DESC, rowid DESC",
+  ).all() as Array<{ child_session_id: string; config_snapshot: string | null }>;
+  return rows.map((row) => ({
+    childSessionId: row.child_session_id,
+    configSnapshot: row.config_snapshot,
+  }));
 }

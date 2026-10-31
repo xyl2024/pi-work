@@ -227,6 +227,7 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     modelId: form.modelId.trim() || null,
     thinkingLevel: form.thinkingLevel.trim() || null,
     toolNames,
+    permissionMode: form.permissionMode,
     notification: buildNotification(form),
     maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : parseMaxLifetimeMinutes(form.maxLifetimeMinutes),
     timezone: form.timezone.trim() || browserTimezone(),

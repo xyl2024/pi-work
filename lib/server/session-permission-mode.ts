@@ -83,14 +83,6 @@ export function readSessionPermissionModes(): Record<string, PermissionMode> {
   return out;
 }
 
-export function permissionModeField(
-  modes: Record<string, PermissionMode>,
-  sessionId: string,
-): { permissionMode?: PermissionMode } {
-  const mode = modes[sessionId];
-  return mode ? { permissionMode: mode } : {};
-}
-
 export function deleteSessionPermissionMode(sessionId: string): void {
   const id = safeIdOrNull(sessionId);
   if (id === null) return;

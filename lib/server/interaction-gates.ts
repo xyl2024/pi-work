@@ -6,6 +6,10 @@ import {
   type AskUserQuestionsDecision,
   type UserInputResolution,
 } from "../shared/ask-user-questions-tool-types";
+import {
+  DEFAULT_PERMISSION_MODE,
+  type SessionPermissionMode,
+} from "../shared/permission-mode";
 import { createLogger } from "./logger";
 
 const log = createLogger("interaction-gates");
@@ -32,8 +36,8 @@ export type GateOutcome =
   | { decision: "deny"; reason: string };
 
 export interface InteractionGatesOptions {
-  source: string;
   emit: (event: SessionEvent) => void;
+  permissionMode?: () => SessionPermissionMode;
 }
 
 type GateKind = "permission" | "user_input";
@@ -63,10 +67,11 @@ export class InteractionGates {
   constructor(private readonly options: InteractionGatesOptions) {}
 
   async runPermissionGate(request: PermissionGateRequest): Promise<GateOutcome> {
-    if (this.allowedRules.has(request.rule)) return { decision: "allow" };
-    if (this.options.source === "subagent") {
-      return { decision: "deny", reason: subagentRefusal(request.what) };
+    const mode = this.options.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+    if (mode === "auto_deny") {
+      return { decision: "deny", reason: autoDenyReason(request.what) };
     }
+    if (this.allowedRules.has(request.rule)) return { decision: "allow" };
     const decision = await this.openGate<PermissionDecision>({
       kind: "permission",
       toolCallId: request.toolCallId,
@@ -217,8 +222,8 @@ export class InteractionGates {
   }
 }
 
-function subagentRefusal(what: string): string {
-  return `Blocked: ${what} requires the user's confirmation, which is unavailable inside a subagent session. Don't retry it; use a read-only alternative and tell the user what you need.`;
+function autoDenyReason(what: string): string {
+  return `Blocked: ${what} matches a dangerous-command rule, and this unattended session is configured to auto-deny dangerous commands. Don't retry it; use a safe alternative if one exists, or stop and tell the user the exact command to run manually.`;
 }
 
 function denialReason(request: PermissionGateRequest): string {

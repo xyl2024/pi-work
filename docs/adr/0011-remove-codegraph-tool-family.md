@@ -20,7 +20,7 @@ CodeGraph 是内置进产品的一套语义代码智能工具（`lib/server/code
 
 ## Consequences
 
-- ADR-0001 里「子代理不允许带需要确认的工具」那条规则的示例（`codegraph_build` 从默认工具集排除）随工具消失，规则本身不变：`SUBAGENT_READ_ONLY_TOOLS` 仍然只有只读核心 + 平台 shell。
+- ADR-0001 里「子代理不能依赖交互确认」那条规则的示例（`codegraph_build` 从默认工具集排除）随工具消失，规则本身不变：`SUBAGENT_READ_ONLY_TOOLS` 仍然只有只读核心 + 平台 shell。
 - 工具选择器的绑定家族机制（`TOOL_GROUPS` / `buildToolChecklistRows` / `toggleSelectionEntry` 的 group 分支、`ToolCheckRow` 的 `memberCount` 徽标）暂时没有成员，是本仓库已知的空注册表；注册新家族时不需要改机制。
 - Electron 外壳仍必须用独立 Node 运行时：`better-sqlite3` 与 `node-pty` 的 ABI 理由不变。
 - 存量会话若曾选择 `codegraph_*` 模式，前缀展开后没有匹配工具，等价于不选——不需要迁移代码。

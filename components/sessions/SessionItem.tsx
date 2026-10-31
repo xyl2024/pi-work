@@ -10,6 +10,7 @@ import { useI18n } from "@/hooks/useI18n";
 import type { SessionAttention } from "@/lib/shared/session-attention";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
+import { SessionPermissionBadge } from "../ui/SessionPermissionBadge";
 
 interface SessionItemProps {
   session: SessionInfo;
@@ -338,6 +339,11 @@ export function SessionItem({
                 />
               </Tooltip>
             )}
+            <SessionPermissionBadge
+              sessionId={session.id}
+              fallbackMode={session.permissionMode}
+              fallbackBackground={session.background}
+            />
             <Tooltip content={title}>
             <div
               style={{

@@ -1,10 +1,16 @@
 import { Cron } from "croner";
 import { migrateToolName } from "../../shared/subagent";
 import { existsSync } from "fs";
-import { getSchedulerDb } from "./db";
+import { getSchedulerDb, hasSchedulerStore } from "./db";
 import { sanitizeNotification } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
 import type { TaskNotification } from "@/lib/shared/notifications";
+import {
+  DEFAULT_BACKGROUND_PERMISSION_MODE,
+  isBackgroundPermissionMode,
+  resolveBackgroundPermissionMode,
+  type BackgroundPermissionMode,
+} from "@/lib/shared/permission-mode";
 
 const log = createLogger("scheduler-store");
 
@@ -29,6 +35,7 @@ export interface ScheduledTask {
   modelId: string | null;
   thinkingLevel: string | null;
   toolNames: string[] | null;
+  permissionMode: BackgroundPermissionMode;
   maxLifetimeMs: number | null;
   timezone: string;
   notification: TaskNotification | null;
@@ -61,6 +68,7 @@ export interface CreateTaskInput {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  permissionMode?: BackgroundPermissionMode;
   maxLifetimeMs?: number | null;
   timezone?: string;
   notification?: TaskNotification | null;
@@ -77,6 +85,7 @@ export interface UpdateTaskInput {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  permissionMode?: BackgroundPermissionMode;
   maxLifetimeMs?: number | null;
   timezone?: string;
   notification?: TaskNotification | null;
@@ -176,6 +185,16 @@ function validateToolNames(raw: unknown): string[] | null {
   throw new SchedulerValidationError("toolNames", "toolNames must be an array or null");
 }
 
+function validatePermissionMode(raw: unknown): BackgroundPermissionMode {
+  if (!isBackgroundPermissionMode(raw)) {
+    throw new SchedulerValidationError(
+      "permissionMode",
+      "permissionMode must be one of: full_access, auto_deny",
+    );
+  }
+  return raw;
+}
+
 function validateTimezone(raw: unknown): string {
   if (raw === undefined || raw === null || raw === "") return "UTC";
   if (typeof raw !== "string") throw new SchedulerValidationError("timezone", "timezone must be a string");
@@ -238,6 +257,7 @@ interface Row {
   model_id: string | null;
   thinking_level: string | null;
   tool_names: string | null;
+  permission_mode: string | null;
   max_lifetime_ms: number | null;
   timezone: string | null;
   notification: string | null;
@@ -289,6 +309,7 @@ function rowToTask(row: Row): ScheduledTask {
     modelId: row.model_id,
     thinkingLevel: row.thinking_level,
     toolNames: parseToolNames(row.tool_names),
+    permissionMode: resolveBackgroundPermissionMode(row.permission_mode),
     maxLifetimeMs: row.max_lifetime_ms,
     timezone,
     notification: parseNotification(row.notification),
@@ -353,6 +374,10 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
   const modelId = validateOptionalString("modelId", input.modelId);
   const thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   const toolNames = validateToolNames(input.toolNames);
+  const permissionMode =
+    input.permissionMode === undefined
+      ? DEFAULT_BACKGROUND_PERMISSION_MODE
+      : validatePermissionMode(input.permissionMode);
   const maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
   const timezone = validateTimezone(input.timezone);
   const notification = validateNotification(input.notification);
@@ -364,14 +389,14 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
     .prepare(
       `INSERT INTO scheduled_tasks
         (id, name, cron, cwd, prompt, enabled, provider, model_id, thinking_level, tool_names,
-         max_lifetime_ms, timezone, notification, created_at, updated_at, last_run_at, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
+         permission_mode, max_lifetime_ms, timezone, notification, created_at, updated_at, last_run_at, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     )
     .run(
       id, name, cron, cwd, prompt, enabled ? 1 : 0,
       provider, modelId, thinkingLevel,
       toolNames ? JSON.stringify(toolNames) : null,
-      maxLifetimeMs, timezone,
+      permissionMode, maxLifetimeMs, timezone,
       notification ? JSON.stringify(notification) : null,
       now, now, nextRunAt,
     );
@@ -394,6 +419,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
   if (input.modelId !== undefined) patch.modelId = validateOptionalString("modelId", input.modelId);
   if (input.thinkingLevel !== undefined) patch.thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   if (input.toolNames !== undefined) patch.toolNames = validateToolNames(input.toolNames);
+  if (input.permissionMode !== undefined) patch.permissionMode = validatePermissionMode(input.permissionMode);
   if (input.maxLifetimeMs !== undefined) patch.maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
   if (input.timezone !== undefined) patch.timezone = validateTimezone(input.timezone);
   if (input.notification !== undefined) patch.notification = validateNotification(input.notification);
@@ -406,7 +432,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       `UPDATE scheduled_tasks SET
         name = ?, cron = ?, cwd = ?, prompt = ?, enabled = ?,
         provider = ?, model_id = ?, thinking_level = ?, tool_names = ?,
-        max_lifetime_ms = ?, timezone = ?, notification = ?,
+        permission_mode = ?, max_lifetime_ms = ?, timezone = ?, notification = ?,
         updated_at = ?, next_run_at = ?
        WHERE id = ?`
     )
@@ -414,7 +440,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       merged.name, merged.cron, merged.cwd, merged.prompt, merged.enabled ? 1 : 0,
       merged.provider, merged.modelId, merged.thinkingLevel,
       merged.toolNames ? JSON.stringify(merged.toolNames) : null,
-      merged.maxLifetimeMs, merged.timezone,
+      merged.permissionMode, merged.maxLifetimeMs, merged.timezone,
       merged.notification ? JSON.stringify(merged.notification) : null,
       Date.now(), nextRunAt, input.id,
     );
@@ -513,11 +539,15 @@ export function getRun(runId: string): TaskRun | null {
 export function recordRunStart(taskId: string): TaskRun {
   const id = newId();
   const startedAt = Date.now();
+  const task = getSchedulerDb()
+    .prepare("SELECT permission_mode FROM scheduled_tasks WHERE id = ?")
+    .get(taskId) as { permission_mode: string | null } | undefined;
   getSchedulerDb()
     .prepare(
-      `INSERT INTO task_runs (id, task_id, started_at, status) VALUES (?, ?, ?, 'running')`
+      `INSERT INTO task_runs (id, task_id, started_at, status, permission_mode)
+       VALUES (?, ?, ?, 'running', ?)`
     )
-    .run(id, taskId, startedAt);
+    .run(id, taskId, startedAt, resolveBackgroundPermissionMode(task?.permission_mode));
   return {
     id,
     taskId,
@@ -549,4 +579,34 @@ export function recordRunEnd(runId: string, input: RecordRunEndInput): TaskRun {
     .run(now, existing.taskId);
 
   return getRun(runId)!;
+}
+
+export function listRunSessionPermissionModes(): Record<string, BackgroundPermissionMode> {
+  if (!hasSchedulerStore()) return {};
+  const rows = getSchedulerDb()
+    .prepare(
+      `SELECT session_id, permission_mode
+         FROM task_runs
+        WHERE session_id IS NOT NULL
+        ORDER BY started_at ASC`,
+    )
+    .all() as Array<{ session_id: string; permission_mode: string | null }>;
+  const modes: Record<string, BackgroundPermissionMode> = {};
+  for (const row of rows) {
+    modes[row.session_id] = resolveBackgroundPermissionMode(row.permission_mode);
+  }
+  return modes;
+}
+
+export function getRunSessionPermissionMode(sessionId: string): BackgroundPermissionMode | null {
+  if (!hasSchedulerStore()) return null;
+  const row = getSchedulerDb()
+    .prepare(
+      `SELECT permission_mode
+         FROM task_runs
+        WHERE session_id = ?
+        ORDER BY started_at DESC LIMIT 1`,
+    )
+    .get(sessionId) as { permission_mode: string | null } | undefined;
+  return row ? resolveBackgroundPermissionMode(row.permission_mode) : null;
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildCommands, type CommandContext } from "@/lib/client/commands";
-import type { PermissionMode } from "@/lib/shared/permission-mode";
+import type { PermissionMode, SessionPermissionMode } from "@/lib/shared/permission-mode";
 
 function makeContext(over: {
-  permissionMode?: PermissionMode;
+  permissionMode?: SessionPermissionMode;
   setPermissionMode?: (mode: PermissionMode) => void;
 } = {}) {
   const calls: PermissionMode[] = [];
@@ -44,6 +44,18 @@ describe("the permission-mode palette entry", () => {
     const { ctx } = makeContext({ permissionMode: "full_access" });
 
     expect(permissionCommand(ctx)?.title).toBe("Switch to confirm dangerous commands");
+  });
+
+  it("is absent for a background auto-deny session", () => {
+    const { ctx } = makeContext({ permissionMode: "auto_deny", setPermissionMode: undefined });
+
+    expect(permissionCommand(ctx)).toBeUndefined();
+  });
+
+  it("is absent for a background full-access session", () => {
+    const { ctx } = makeContext({ permissionMode: "full_access", setPermissionMode: undefined });
+
+    expect(permissionCommand(ctx)).toBeUndefined();
   });
 
   it("is absent when the active ChatWindow registered no handler", () => {

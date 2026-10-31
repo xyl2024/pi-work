@@ -29,7 +29,13 @@ import {
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
 import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
-import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "@/lib/shared/permission-mode";
+import {
+  DEFAULT_PERMISSION_MODE,
+  isPermissionMode,
+  isSessionPermissionMode,
+  type PermissionMode,
+  type SessionPermissionMode,
+} from "@/lib/shared/permission-mode";
 import { parseSkillCommand } from "@/lib/shared/skill-block";
 import type {
   AgentPhase,
@@ -70,7 +76,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
 
   const [data, setData] = useState<SessionData | null>(null);
   const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>(() => {
-    const state = createSessionRuntimeState();
+    const state = createSessionRuntimeState({
+      permissionMode: isSessionPermissionMode(session?.permissionMode)
+        ? session.permissionMode
+        : DEFAULT_PERMISSION_MODE,
+      isBackgroundSession: session?.background === true,
+    });
     const pending = session ? getPendingAskUserQuestions(session.id) : null;
     if (pending) state.seenAskUserQuestionsToolCallIds.claim(pending.toolCallId);
     return state;
@@ -180,7 +191,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
 
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
-  const permissionMode: PermissionMode = isNew
+  const permissionMode: SessionPermissionMode = isNew
     ? newSessionPermissionMode
     : runtimeState.permissionMode;
 
@@ -516,14 +527,16 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
 
   const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
     const sid = sessionIdRef.current;
+    const current = runtimeStateRef.current;
     if (!sid) {
       setNewSessionPermissionMode(mode);
       return;
     }
+    if (current.isBackgroundSession || !isPermissionMode(current.permissionMode)) return;
     try {
       await sendAgentCommand(sid, { type: "set_permission_mode", mode });
       patchRuntime("permissionMode", mode);
-      setSessionPermissionMode(sid, mode);
+      setSessionPermissionMode(sid, mode, false);
     } catch (e) {
       console.error("Failed to set permission mode:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change permission mode") });
@@ -670,8 +683,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   useEffect(() => {
     if (!currentSessionId) return;
     if (!permissionModeKnownRef.current) return;
-    setSessionPermissionMode(currentSessionId, runtimeState.permissionMode);
-  }, [currentSessionId, runtimeState.permissionMode]);
+    setSessionPermissionMode(
+      currentSessionId,
+      runtimeState.permissionMode,
+      runtimeState.isBackgroundSession,
+    );
+  }, [currentSessionId, runtimeState.permissionMode, runtimeState.isBackgroundSession]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -738,6 +755,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     toolSelection, availableTools, toolsLoading, toolsError,
     thinkingLevel: runtimeState.thinkingLevel,
     permissionMode,
+    isBackgroundSession: runtimeState.isBackgroundSession,
     systemPrompt,
     currentModel, displayModel, sessionStats,
     isNew,
