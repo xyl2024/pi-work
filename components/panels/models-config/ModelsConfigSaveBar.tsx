@@ -5,13 +5,13 @@ import {
   saveModelsConfig,
   selectModelsConfigDirty,
   selectModelsConfigProblem,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
 
 export function ModelsConfigSaveBar() {
   const { t } = useI18n();
-  const state = useModelsConfigStore();
+  const { view: state } = useModelsConfigPanel();
   const { saving, savedOk, saveError } = state;
   const dirty = selectModelsConfigDirty(state);
   const problem = selectModelsConfigProblem(state);

@@ -5,7 +5,7 @@ import {
   addModelsConfigModel,
   addModelsConfigModelFromCatalog,
   modelsConfigBack,
-} from "@/lib/client/models-config-store";
+} from "@/lib/client/models-config-panel";
 
 export function ModelsConfigAddModelNamePage({ providerName }: { providerName: string }) {
   return (

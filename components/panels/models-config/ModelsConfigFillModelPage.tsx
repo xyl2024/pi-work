@@ -4,7 +4,7 @@ import { ModelCatalogPickerBody } from "@/components/settings/models-config/runt
 import {
   fillModelsConfigModelFromCatalog,
   modelsConfigBack,
-} from "@/lib/client/models-config-store";
+} from "@/lib/client/models-config-panel";
 
 export function ModelsConfigFillModelPage({
   providerName,

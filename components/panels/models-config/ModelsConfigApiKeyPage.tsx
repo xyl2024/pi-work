@@ -2,13 +2,13 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { ApiKeyDetail } from "@/components/settings/models-config/runtime";
-import { reloadModelsConfigApiKeyProviders, useModelsConfigStore } from "@/lib/client/models-config-store";
+import { reloadModelsConfigApiKeyProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
   const { t } = useI18n();
-  const { apiKeyProviders } = useModelsConfigStore();
+  const { apiKeyProviders } = useModelsConfigPanel().view;
   const provider = apiKeyProviders.find((item) => item.id === providerId);
 
   return (

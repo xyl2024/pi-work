@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { modelsConfigBack } from "@/lib/client/models-config-store";
+import { modelsConfigBack } from "@/lib/client/models-config-panel";
 
 export function ModelsConfigBackButton() {
   const { t } = useI18n();

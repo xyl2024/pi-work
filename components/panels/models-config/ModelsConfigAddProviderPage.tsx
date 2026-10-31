@@ -6,11 +6,11 @@ import {
   modelsConfigBack,
   openModelsConfigApiKey,
   openModelsConfigOAuth,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 
 export function ModelsConfigAddProviderPage() {
-  const { oauthProviders, apiKeyProviders } = useModelsConfigStore();
+  const { oauthProviders, apiKeyProviders } = useModelsConfigPanel().view;
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <AddProviderPickerBody

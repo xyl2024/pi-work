@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
-import type { OAuthProvider } from "./types";
+import type { OAuthLoginState, OAuthProvider } from "./types";
 import { SectionTitle } from "./form-fields";
 import {
   bindOAuthLoginSuccess,
@@ -12,14 +12,16 @@ import {
   resetSettledOAuthLogin,
   startOAuthLogin,
   submitOAuthLoginCode,
-  useOAuthLoginState,
 } from "@/lib/client/oauth-login-store";
 import { isOAuthLoginWorking } from "@/lib/client/oauth-login";
 
-export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
+export function OAuthDetail({ provider, loginState, onRefresh }: {
+  provider: OAuthProvider;
+  loginState: OAuthLoginState;
+  onRefresh: () => void;
+}) {
   const { t } = useI18n();
   const toast = useToast();
-  const loginState = useOAuthLoginState(provider.id);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 

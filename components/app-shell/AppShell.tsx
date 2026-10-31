@@ -67,7 +67,6 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
-import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 import {
   releaseSchedulerState,
@@ -75,7 +74,7 @@ import {
   setSchedulerPanelOpen,
   useSchedulerRunning,
 } from "@/lib/client/scheduler-store";
-import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
+import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import {
   cancelSkillInstall,
   getSkillInstallPhase,
@@ -90,7 +89,6 @@ import {
 import { getMcpDirty, releaseMcpState, useMcpDirty } from "@/lib/client/mcp-store";
 import { selectMcpCloseConfirm } from "@/lib/shared/mcp-close";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
-import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
@@ -177,27 +175,20 @@ interface PanelCloseGuard {
 }
 
 const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | null>> = {
-  modelsConfig: () =>
-    selectModelsConfigCloseConfirm({
-      dirty: getModelsConfigDirty(),
-      oauthInProgress: hasActiveOAuthLogin(),
-    }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
 const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
-  modelsConfig: () => {
-    if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
-  },
   skills: () => cancelSkillInstall(),
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, modelsConfigPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   channels: channelsPanel,
+  modelsConfig: modelsConfigPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = [
@@ -422,11 +413,7 @@ export function AppShell() {
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  const modelsConfigDirty = useModelsConfigDirty();
-  const modelsConfigTabOpen = selectTabByKind(panelTabsState, "modelsConfig") !== null;
-  useEffect(() => {
-    if (!modelsConfigTabOpen) releaseModelsConfigDraft();
-  }, [modelsConfigTabOpen]);
+  const modelsConfigDirty = modelsConfigPanel.useStatus() === true;
   const skillsInstalling = useSkillInstallRunning();
   const skillsTabOpen = selectTabByKind(panelTabsState, "skills") !== null;
   useEffect(() => {

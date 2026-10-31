@@ -2,13 +2,14 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { OAuthDetail } from "@/components/settings/models-config/OAuthDetail";
-import { reloadModelsConfigOAuthProviders, useModelsConfigStore } from "@/lib/client/models-config-store";
+import { reloadModelsConfigOAuthProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
   const { t } = useI18n();
-  const { oauthProviders } = useModelsConfigStore();
+  const { view } = useModelsConfigPanel();
+  const { oauthProviders } = view;
   const provider = oauthProviders.find((item) => item.id === providerId);
 
   return (
@@ -19,7 +20,7 @@ export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
       </div>
       {provider ? (
         <>
-          <OAuthDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigOAuthProviders} />
+          <OAuthDetail key={provider.id} provider={provider} loginState={view.oauthLogin} onRefresh={reloadModelsConfigOAuthProviders} />
           <ProviderModelIconsSection providerId={provider.id} />
         </>
       ) : (

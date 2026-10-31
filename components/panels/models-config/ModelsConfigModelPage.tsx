@@ -17,14 +17,14 @@ import {
   selectModelsConfigDirty,
   updateModelsConfigModel,
   updateModelsConfigRawEdit,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
 
 export function ModelsConfigModelPage({ providerName, index }: { providerName: string; index: number }) {
   const { t } = useI18n();
   const toast = useToast();
-  const state = useModelsConfigStore();
+  const { view: state } = useModelsConfigPanel();
   const model = state.config.providers?.[providerName]?.models?.[index];
   if (!model) return null;
 
