@@ -5,6 +5,7 @@ import { getRpcSession, startRpcSession } from "../rpc-manager";
 import { resolveSessionPath } from "../session-reader";
 import type { ToolSelection } from "../../shared/types";
 import type { MessageOrigin } from "../../shared/message-origin";
+import type { SessionPermissionMode } from "../../shared/permission-mode";
 
 type RpcSessionSource = "scheduled" | "user" | "subagent";
 
@@ -30,11 +31,12 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.purpose ? { purpose: spec.purpose } : {}),
       ...(spec.origin ? { origin: spec.origin } : {}),
       ...(spec.session ? { session: spec.session } : {}),
+      ...(spec.permissionMode ? { permissionMode: spec.permissionMode } : {}),
       ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
       ...(spec.confirmStop ? { confirmStop: true } : {}),
       ...(spec.onSession ? { onSession: spec.onSession } : {}),
     },
-    async (cwd, toolNames, source, policy) => {
+    async (cwd, toolNames, source, policy, permissionMode) => {
       if (policy.kind === "reuse") {
         return await acquireReusedSession(policy.sessionId, {
           getLiveSession: (sessionId) => {
@@ -44,7 +46,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
           findSessionFile: (sessionId) => resolveSessionPath(sessionId),
           readSessionCwd: (sessionFile) => SessionManager.open(sessionFile).getHeader()?.cwd ?? process.cwd(),
           reopenSession: (sessionId, sessionFile, sessionCwd) =>
-            startExistingSession(sessionId, sessionFile, sessionCwd, toolNames, source as RpcSessionSource),
+            startExistingSession(sessionId, sessionFile, sessionCwd, toolNames, source as RpcSessionSource, permissionMode),
         });
       }
 
@@ -55,6 +57,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
         cwd,
         toolNames,
         source as RpcSessionSource,
+        permissionMode ? { permissionMode } : {},
       );
       return { session, sessionId: tempKey, realSessionId };
     },
@@ -67,7 +70,15 @@ async function startExistingSession(
   cwd: string,
   toolNames: ToolSelection | undefined,
   source: RpcSessionSource,
+  permissionMode?: SessionPermissionMode,
 ): Promise<AcquiredTurnSession> {
-  const { session, realSessionId } = await startRpcSession(sessionId, sessionFile, cwd, toolNames, source);
+  const { session, realSessionId } = await startRpcSession(
+    sessionId,
+    sessionFile,
+    cwd,
+    toolNames,
+    source,
+    permissionMode ? { permissionMode } : {},
+  );
   return { session, sessionId, realSessionId };
 }

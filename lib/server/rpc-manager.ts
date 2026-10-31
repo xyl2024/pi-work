@@ -36,7 +36,13 @@ import { stopAllSubagentTasksForParent, SUBAGENT_PARENT_STOPPED } from "./subage
 import { SUBAGENT_TOOL_NAME, LEGACY_SPAWN_SUBAGENT_TOOL_NAME } from "../shared/subagent";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { evaluateDangerousCommand, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
-import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../shared/permission-mode";
+import {
+  DEFAULT_PERMISSION_MODE,
+  isBackgroundSessionSource,
+  isPermissionMode,
+  resolveBackgroundPermissionMode,
+  type SessionPermissionMode,
+} from "../shared/permission-mode";
 import { readSessionPermissionMode, writeSessionPermissionMode } from "./session-permission-mode";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
 import { agentToolDenylist } from "./agent-tool-denylist";
@@ -67,7 +73,7 @@ export class AgentSessionWrapper {
   readonly gates: InteractionGates;
   private lastAssistantText = "";
   private _toolSelection: ToolSelection = "all";
-  private _permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE;
+  private _permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE;
   private contextComposition: ContextComposition | null = null;
   private compositionRefreshId = 0;
   private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
@@ -83,13 +89,15 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
-    permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE,
+    permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
     private readonly piDocsManaged = false,
+    private readonly background = false,
   ) {
     this._permissionMode = permissionMode;
     this.gates = new InteractionGates({
       source,
       emit: (event) => this.emit(event),
+      permissionMode: () => this._permissionMode,
     });
   }
 
@@ -135,8 +143,12 @@ export class AgentSessionWrapper {
     );
   }
 
-  get permissionMode(): PermissionMode {
+  get permissionMode(): SessionPermissionMode {
     return this._permissionMode;
+  }
+
+  get isBackgroundSession(): boolean {
+    return this.background;
   }
 
   isAlive(): boolean {
@@ -597,6 +609,9 @@ export class AgentSessionWrapper {
         if (!isPermissionMode(mode)) {
           throw new Error(`Unknown permission mode: ${String(mode)}`);
         }
+        if (this.background) {
+          throw new Error("Permission mode is fixed for an unattended session");
+        }
         this._permissionMode = mode;
         if (mode === "confirm") this.gates.clearSessionMemo();
         if (!writeSessionPermissionMode(this.sessionId, mode)) {
@@ -706,6 +721,7 @@ export interface StartRpcSessionOptions {
   persistToolSelection?: boolean;
   parentSessionId?: string;
   mcp?: boolean;
+  permissionMode?: SessionPermissionMode;
 }
 
 export async function startRpcSession(
@@ -1026,12 +1042,16 @@ export async function startRpcSession(
 
     }
 
+    const background = isBackgroundSessionSource(source);
     const wrapper = new AgentSessionWrapper(
       inner,
       source,
       cwd,
-      readSessionPermissionMode(inner.sessionId),
+      background
+        ? resolveBackgroundPermissionMode(options.permissionMode)
+        : readSessionPermissionMode(inner.sessionId),
       piDocsManaged,
+      background,
     );
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;

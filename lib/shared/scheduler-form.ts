@@ -1,5 +1,6 @@
 import { Cron } from "croner";
 import type { SchedulerTaskForm, ScheduledTask } from "./scheduler";
+import { DEFAULT_BACKGROUND_PERMISSION_MODE } from "./permission-mode";
 
 export const MIN_MAX_LIFETIME_MS = 1_000;
 export const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -15,6 +16,7 @@ export const EMPTY_SCHEDULER_FORM: SchedulerTaskForm = {
   modelId: "",
   thinkingLevel: "",
   toolSelection: "all",
+  permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
   maxLifetimeMinutes: "",
   timezone: "",
   notifyEnabled: false,
@@ -60,6 +62,7 @@ export function schedulerFormFromTask(task: ScheduledTask): SchedulerTaskForm {
     modelId: task.modelId ?? "",
     thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
     toolSelection: task.toolNames === null ? "all" : task.toolNames,
+    permissionMode: task.permissionMode,
     maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
     timezone: task.timezone || browserTimezone(),
     notifyEnabled: !!notification && notification.channels.length > 0,

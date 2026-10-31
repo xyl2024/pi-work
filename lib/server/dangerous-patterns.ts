@@ -8,7 +8,11 @@ import {
   type DangerousRuleSetSnapshot,
   type SourcedDangerousCommandMatch,
 } from "../shared/dangerous-commands";
-import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../shared/permission-mode";
+import {
+  DEFAULT_PERMISSION_MODE,
+  isSessionPermissionMode,
+  type SessionPermissionMode,
+} from "../shared/permission-mode";
 import { readConfig, writeConfig } from "./config";
 import { createLogger } from "./logger";
 import { matchSelfKillCommand } from "./self-protection";
@@ -41,9 +45,9 @@ export function matchDangerousPattern(command: string): SourcedDangerousCommandM
 
 export function evaluateDangerousCommand(
   command: string,
-  mode: PermissionMode = DEFAULT_PERMISSION_MODE,
+  mode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
 ): DangerousCommandVerdict {
-  const effectiveMode = isPermissionMode(mode) ? mode : DEFAULT_PERMISSION_MODE;
+  const effectiveMode = isSessionPermissionMode(mode) ? mode : DEFAULT_PERMISSION_MODE;
   if (command.trim() === "") return { kind: "none" };
 
   const selfKill = matchSelfKillCommand(command);
