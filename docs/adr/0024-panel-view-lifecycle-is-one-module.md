@@ -9,7 +9,7 @@
 - **保活与释放**：收起面板、切标签都不释放；只有关闭面板标签才释放。释放统一保证「先取消在飞请求、定时器、流与外部订阅，再丢状态」，迟到回调写不回来，释放幂等，释放过程中用 closing 闩挡住重开读到旧状态。
 - **加载并发**：module 为每个 adapter 保证「同一时刻只有最新一次加载生效」（generation + 注入的 `AbortSignal`）。重拉时机由 adapter 的 `loadPolicy` 声明：`once`（已加载则复用）、`on-open`（每次打开重拉）、`on-visible`（面板可见才加载；是否复用快照仍由该面板自己的纯模块决定）。
 - **关闭确认**：`guard()` 返回 `null` 或 `{ confirm, discard() }`；确认函数由外壳注入 `requestClose(confirm)`。顺序是判定 → 问一次 → `discard()` → `release()` → 移除标签，返回 `true` 才允许外壳 dispatch 关闭。确认、丢弃、释放的顺序因此是 module interface 的一部分，不渲染 UI 也能测。
-- **adapter 的形状**：每个面板声明 `kind`、`initial`、`key(ctx)`、`load(key, { signal })`、`loadPolicy`、`release()`、`guard()`、`status(state)`，以及页栈所需的 `rootPage`、`isRootPage`、`isSiblingPage`。页类型与草稿形状仍住在各自的 `lib/shared` 纯模块里，adapter 只是调用它们。adapter 还可以声明几个可选钩子：`start()` / `stop()` 成对订阅其它 client store，把派生结果合进自己的 `patch`；`afterPages()` 在每次页栈变化后拿到新的页栈（MCP 用它把页栈写回按 cwd 分桶）；`afterBack()` 在出栈后拿到被弹出的页与是否落在根页（定时任务用它在离开表单时清草稿）。module 不把这些订阅或副作用提升成通用概念，`back()` 仍是页内返回的唯一入口，返回控件与 Esc 都走它。
+- **adapter 的形状**：每个面板声明 `kind`（取 `PanelViewKind`）、`initial`、`key(ctx)`、`load(key, { signal })`、`loadPolicy`、`release()`、`guard()`、`status(state)`，以及页栈所需的 `rootPage`、`isSiblingPage`；`isRootPage` 是可选钩子，不声明时 module 以 `pages.length <= 1` 判定。页类型与草稿形状仍住在各自的 `lib/shared` 领域模块里（`skills.ts`、`scheduler.ts`、`models-config.ts`、`channels/types.ts`、`mcp-panel.ts`），adapter 只是调用它们。adapter 还可以声明几个可选钩子：`start()` / `stop()` 成对订阅其它 client store，把派生结果合进自己的 `patch`；`afterPages()` 在每次页栈变化后拿到新的页栈（MCP 用它把页栈写回按 cwd 分桶）；`afterBack()` 在出栈后拿到被弹出的页与是否落在根页（定时任务用它在离开表单时清草稿）。`load` 与 `afterPages` 这类异步路径拿到的 writer 同时带 `patch` 与 `openPage` / `resetPages`，页栈写回与状态写回受同一道 epoch / generation 闸门约束。module 不把这些订阅或副作用提升成通用概念，`back()` 仍是页内返回的唯一入口，返回控件与 Esc 都走它。
 - **键语义保持现状**：模型配置、定时任务、频道为全局单份；技能按 cwd 重置；MCP 内部仍按 cwd 分桶。module 只负责在 key 变化时调用 `load(newKey)`，不统一分桶策略。
 
 module **不拥有**面板的领域概念与保存语义：哪些相位算阻塞、确认文案、草稿是否 dirty 仍留在各面板的 `lib/shared` 关闭判定与草稿模块里；一个面板的保存动作属于即时生效项还是待保存项，仍由 ADR-0009 按输入形态分档。右栏注册表、面板身份与 body 选择仍是 ADR-0002 的标签条状态机与既有注册表，本次不合并。
@@ -28,8 +28,10 @@ module **不拥有**面板的领域概念与保存语义：哪些相位算阻塞
 - 关闭确认与清理由同一份 adapter 声明驱动，批量关标签、Esc 退页、面板标签重置与热重载走同一条路径；确认函数由外壳注入，因此顺序可测。
 - 领域判定留在各面板的纯模块里（哪些相位阻塞、确认文案、dirty 判据、页类型），module 里没有模型配置、MCP、技能、定时任务或频道中的任何一个名词。保存语义完全不动：ADR-0009 的两档分法、各面板的保存栏与即时生效项都保持原样，用户可见文案与交互除上述复活修复外不变。
 - 右栏角标改由每个 adapter 的 `status` 选择器派生，模型配置未保存、技能安装中、定时任务运行中、MCP 跨 cwd 未保存等判据仍各自定义，但不再各养一个 hook。
-- 外壳只剩一次 `usePanelLifecycleSync(panelTabsState)` 和一条兜底「标签不存在 → 释放」路径，覆盖批量关标签、面板标签重置与热重载；正常关闭走 `requestClose` 的同步释放。
+- 外壳只剩一次 `usePanelViewLifecycleSync(panelTabsState, stores)` 和一条兜底「标签不存在 → 释放」路径，覆盖批量关标签、面板标签重置与热重载；正常关闭走 `requestClose` 的同步释放。
 - 五个面板的页栈行为逐条保留；逐字重复的返回控件换成一个从 store 读取页栈深度的统一控件，可点状态与文案随深度变化，只是外观与位置统一，不是行为变化。
+- 定时任务的轮询现在由 adapter 的 `start()` / `stop()` 驱动，不再依赖右栏角标的订阅；因此**面板从未打开过时，右栏「运行中」角标不会亮**。这是「关掉标签后不再轮询」的必然结果（关标签不复活状态要的正是后者）。
+- MCP 的 `nextLoadIsForeground` 这类「一次性前台刷新标记」仍是 adapter 的私有实现细节，没有提升成 module 的通用机制。
 - 生命周期不是注册表之外的第四处声明：注册表的一条面板身份对应一个 adapter，两者一起构成一个面板视图的完整声明。
 - 测试的 seam 收成一个：契约测试用假 adapter 驱动 `createPanelViewStore` 的 external interface，钉住页栈不变式、保活、释放顺序与幂等、迟到响应不写回、加载策略与关闭确认；五个面板的关闭判定测试继续作为 adapter 的领域测试保留，页栈测试删除。外壳胶水与返回控件仍靠人工 smoke（ADR-0003 规则 3）。
 - 不在本次范围：注册表合并、只读面板视图（翻译、Token 审计、LLM 审计、Git Diff 等，没有草稿与关闭确认）、统一各面板的分桶策略、各面板既有的独立小问题。五条面板 ADR 的 Decision 不改，只在 Consequences 加指针。

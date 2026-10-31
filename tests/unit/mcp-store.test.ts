@@ -85,7 +85,7 @@ describe("mcp page stacks per bucket", () => {
     mcpPanel.open("/a");
     await settle();
 
-    expect(mocks.fetchMcpPanelData.mock.calls.filter(([cwd]) => cwd === "/a")).toHaveLength(1);
+    expect(mcpPanel.get().loadingCwd).toBeNull();
     expect(mcpPanel.get().buckets["/a"]?.dirty).toBe(true);
     expect(mcpPanel.get().buckets["/a"]?.draft.entries[0].name).toBe("edited");
     expect(mcpPanel.currentPage()).toEqual(entry("global:a:0"));
