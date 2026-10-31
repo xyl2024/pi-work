@@ -9,7 +9,7 @@
 - **保活与释放**：收起面板、切标签都不释放；只有关闭面板标签才释放。释放统一保证「先取消在飞请求、定时器、流与外部订阅，再丢状态」，迟到回调写不回来，释放幂等，释放过程中用 closing 闩挡住重开读到旧状态。
 - **加载并发**：module 为每个 adapter 保证「同一时刻只有最新一次加载生效」（generation + 注入的 `AbortSignal`）。重拉时机由 adapter 的 `loadPolicy` 声明：`once`（已加载则复用）、`on-open`（每次打开重拉）、`on-visible`（面板可见才加载；是否复用快照仍由该面板自己的纯模块决定）。
 - **关闭确认**：`guard()` 返回 `null` 或 `{ confirm, discard() }`；确认函数由外壳注入 `requestClose(confirm)`。顺序是判定 → 问一次 → `discard()` → `release()` → 移除标签，返回 `true` 才允许外壳 dispatch 关闭。确认、丢弃、释放的顺序因此是 module interface 的一部分，不渲染 UI 也能测。
-- **adapter 的形状**：每个面板声明 `kind`、`initial`、`key(ctx)`、`load(key, { signal })`、`loadPolicy`、`release()`、`guard()`、`status(state)`，以及页栈所需的 `rootPage`、`isRootPage`、`isSiblingPage`。页类型与草稿形状仍住在各自的 `lib/shared` 纯模块里，adapter 只是调用它们。adapter 可以在自己的 `start()` / `stop()` 里订阅其它 client store，把派生结果合进自己的 `patch`；module 不把这些订阅提升成通用概念。
+- **adapter 的形状**：每个面板声明 `kind`、`initial`、`key(ctx)`、`load(key, { signal })`、`loadPolicy`、`release()`、`guard()`、`status(state)`，以及页栈所需的 `rootPage`、`isRootPage`、`isSiblingPage`。页类型与草稿形状仍住在各自的 `lib/shared` 纯模块里，adapter 只是调用它们。adapter 还可以声明几个可选钩子：`start()` / `stop()` 成对订阅其它 client store，把派生结果合进自己的 `patch`；`afterPages()` 在每次页栈变化后拿到新的页栈（MCP 用它把页栈写回按 cwd 分桶）；`afterBack()` 在出栈后拿到被弹出的页与是否落在根页（定时任务用它在离开表单时清草稿）。module 不把这些订阅或副作用提升成通用概念，`back()` 仍是页内返回的唯一入口，返回控件与 Esc 都走它。
 - **键语义保持现状**：模型配置、定时任务、频道为全局单份；技能按 cwd 重置；MCP 内部仍按 cwd 分桶。module 只负责在 key 变化时调用 `load(newKey)`，不统一分桶策略。
 
 module **不拥有**面板的领域概念与保存语义：哪些相位算阻塞、确认文案、草稿是否 dirty 仍留在各面板的 `lib/shared` 关闭判定与草稿模块里；一个面板的保存动作属于即时生效项还是待保存项，仍由 ADR-0009 按输入形态分档。右栏注册表、面板身份与 body 选择仍是 ADR-0002 的标签条状态机与既有注册表，本次不合并。
