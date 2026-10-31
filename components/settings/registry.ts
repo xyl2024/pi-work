@@ -15,6 +15,7 @@ export type SettingsSectionId =
   | "dangerous-commands"
   | "subagent"
   | "retry"
+  | "suggested-prompt"
   | "network-proxy"
   | "deepseek-key"
   | "toast-test"
@@ -52,6 +53,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "dangerous-commands", labelKey: "Dangerous commands", group: "agent" },
   { id: "subagent", labelKey: "Subagent settings", group: "agent" },
   { id: "retry", labelKey: "Agent retry", group: "agent" },
+  { id: "suggested-prompt", labelKey: "Suggested prompt", group: "agent" },
 
   { id: "network-proxy", labelKey: "Network proxy", group: "integrations" },
   { id: "deepseek-key", labelKey: "DeepSeek API Key", group: "integrations" },
