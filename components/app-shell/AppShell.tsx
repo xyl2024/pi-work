@@ -70,11 +70,10 @@ import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-ba
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 import {
-  releaseSchedulerState,
-  schedulerCloseGuard,
+  schedulerPanel,
   setSchedulerPanelOpen,
   useSchedulerRunning,
-} from "@/lib/client/scheduler-store";
+} from "@/lib/client/scheduler-panel";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
 import {
   cancelSkillInstall,
@@ -183,7 +182,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
       oauthInProgress: hasActiveOAuthLogin(),
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
-  scheduler: () => schedulerCloseGuard(),
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
@@ -194,10 +192,11 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   skills: () => cancelSkillInstall(),
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, schedulerPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   channels: channelsPanel,
+  scheduler: schedulerPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = [
@@ -433,10 +432,6 @@ export function AppShell() {
     if (!skillsTabOpen) releaseSkillsState();
   }, [skillsTabOpen]);
   const schedulerRunning = useSchedulerRunning();
-  const schedulerTabOpen = selectTabByKind(panelTabsState, "scheduler") !== null;
-  useEffect(() => {
-    if (!schedulerTabOpen) releaseSchedulerState();
-  }, [schedulerTabOpen]);
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);

@@ -1,7 +1,12 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { isContentEqual } from "./shallowEqual";
+import {
+  createPanelViewStore,
+  type PanelViewAdapter,
+  type PanelViewCloseGuard,
+  type PanelViewStore,
+  type PanelViewWriter,
+} from "./panel-view-store";
 import {
   createScheduledTask,
   deleteScheduledTask,
@@ -12,18 +17,7 @@ import {
   updateScheduledTask,
 } from "./scheduler-io";
 import {
-  backSchedulerPage,
-  createSchedulerPageStack,
-  currentSchedulerPage,
-  isSchedulerRootPage,
-  openSchedulerPage,
-  schedulerPagesAfterDelete,
-  schedulerPagesAfterSave,
-  type SchedulerPage,
-} from "@/lib/shared/scheduler-pages";
-import {
   isSchedulerFormDirty,
-  type SchedulerCloseConfirm,
   selectSchedulerCloseConfirm,
 } from "@/lib/shared/scheduler-close";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
@@ -33,6 +27,7 @@ import {
   parseMaxLifetimeMinutes,
   schedulerFormFromTask,
 } from "@/lib/shared/scheduler-form";
+import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
 import type {
   SchedulerModelMeta,
   SchedulerTaskForm,
@@ -41,11 +36,15 @@ import type {
   TaskUpdatePayload,
 } from "@/lib/shared/scheduler";
 import type { TaskNotification } from "@/lib/shared/notifications";
-import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
 
 export type SchedulerFilter = "all" | "enabled" | "disabled" | "error";
 
-export interface SchedulerStoreState {
+export type SchedulerPage =
+  | { kind: "root" }
+  | { kind: "detail"; taskId: string }
+  | { kind: "form"; taskId: string | null };
+
+export interface SchedulerViewState {
   loading: boolean;
   loaded: boolean;
   loadError: string | null;
@@ -53,7 +52,6 @@ export interface SchedulerStoreState {
   selectedTaskId: string | null;
   filter: SchedulerFilter;
   query: string;
-  pages: SchedulerPage[];
   meta: SchedulerModelMeta | null;
   form: SchedulerTaskForm | null;
   formTaskId: string | null;
@@ -65,7 +63,9 @@ export interface SchedulerStoreState {
   runsVisible: boolean;
 }
 
-const INITIAL: SchedulerStoreState = {
+const ROOT_PAGE: SchedulerPage = { kind: "root" };
+
+const INITIAL: SchedulerViewState = {
   loading: false,
   loaded: false,
   loadError: null,
@@ -73,7 +73,6 @@ const INITIAL: SchedulerStoreState = {
   selectedTaskId: null,
   filter: "all",
   query: "",
-  pages: createSchedulerPageStack(),
   meta: null,
   form: null,
   formTaskId: null,
@@ -85,34 +84,15 @@ const INITIAL: SchedulerStoreState = {
   runsVisible: false,
 };
 
-let state: SchedulerStoreState = INITIAL;
-const listeners = new Set<() => void>();
-
-function emit(): void {
-  for (const listener of listeners) listener();
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
-
-function patch(partial: Partial<SchedulerStoreState>): void {
-  let changed = false;
-  for (const key of Object.keys(partial) as (keyof SchedulerStoreState)[]) {
-    if (!isContentEqual(partial[key], state[key])) {
-      changed = true;
-      break;
-    }
-  }
-  if (!changed) return;
-  state = { ...state, ...partial };
-  emit();
-}
-
-subscribeModelIconPreferences((modelIconPreferences) => {
-  if (!state.meta) return;
-  patch({ meta: { ...state.meta, modelIconPreferences } });
-});
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let polling = false;
+let pollWriter: PanelViewWriter<SchedulerViewState> | null = null;
+let unsubscribeIconPreferences: (() => void) | null = null;
 let writeGeneration = 0;
 let writesInFlight = 0;
 
@@ -129,9 +109,12 @@ function endWrite(): void {
 function schedulePoll(): void {
   if (!polling) return;
   if (pollTimer) clearTimeout(pollTimer);
+  const writer = pollWriter;
+  if (!writer) return;
+  const view = writer.get();
   const delay = schedulerPollDelayMs({
-    panelOpen: state.panelOpen,
-    runsVisible: state.runsVisible,
+    panelOpen: view.panelOpen,
+    runsVisible: view.runsVisible,
     hidden: typeof document !== "undefined" && document.hidden,
   });
   if (delay === null) return;
@@ -149,8 +132,9 @@ async function poll(): Promise<void> {
   const generation = writeGeneration;
   try {
     const tasks = await fetchScheduledTasks();
-    if (generation === writeGeneration && writesInFlight === 0) {
-      patch({ tasks, loadError: null, loaded: true });
+    const writer = pollWriter;
+    if (writer && polling && generation === writeGeneration && writesInFlight === 0) {
+      writer.patch({ tasks, loadError: null, loaded: true });
     }
   } catch {
   } finally {
@@ -169,111 +153,47 @@ function onVisibilityChange(): void {
   void poll();
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  if (!polling) {
-    polling = true;
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", onVisibilityChange);
-    }
-    void poll();
+function clearPollingResources(): void {
+  polling = false;
+  pollWriter = null;
+  if (pollTimer) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
   }
-  return () => {
-    listeners.delete(listener);
-    if (listeners.size === 0 && polling) {
-      polling = false;
-      if (pollTimer) clearTimeout(pollTimer);
-      pollTimer = null;
-      if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", onVisibilityChange);
-      }
-    }
-  };
-}
-
-function getSnapshot(): SchedulerStoreState {
-  return state;
-}
-
-function getServerSnapshot(): SchedulerStoreState {
-  return INITIAL;
-}
-
-export function useSchedulerStore(): SchedulerStoreState {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
-export function selectSchedulerRunning(snapshot: SchedulerStoreState): boolean {
-  return snapshot.tasks.some((task) => task.lastRunStatus === "running");
-}
-
-export function useSchedulerRunning(): boolean {
-  return useSyncExternalStore(subscribe, () => selectSchedulerRunning(state), () => false);
-}
-
-function selectSchedulerDirty(snapshot: SchedulerStoreState): boolean {
-  return isSchedulerFormDirty(snapshot.form, snapshot.formBaseline);
-}
-
-function getSchedulerDirty(): boolean {
-  return selectSchedulerDirty(state);
-}
-
-export function schedulerCloseGuard(): SchedulerCloseConfirm | null {
-  return selectSchedulerCloseConfirm({ dirty: getSchedulerDirty() });
-}
-
-async function loadFromDisk(): Promise<void> {
-  patch({ loading: true, loadError: null });
-  void fetchSchedulerModelMeta()
-    .then((meta) => patch({ meta }))
-    .catch(() => {});
-  try {
-    const tasks = await fetchScheduledTasks();
-    patch({ loading: false, loaded: true, tasks, loadError: null });
-  } catch (e) {
-    patch({ loading: false, loadError: e instanceof Error ? e.message : String(e) });
+  if (typeof document !== "undefined") {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
   }
-}
-
-export async function reloadSchedulerTasks(): Promise<void> {
-  await loadFromDisk();
-}
-
-export function releaseSchedulerState(): void {
-  if (state === INITIAL) return;
-  state = INITIAL;
-  emit();
+  unsubscribeIconPreferences?.();
+  unsubscribeIconPreferences = null;
 }
 
 export function setSchedulerPanelOpen(panelOpen: boolean): void {
-  patch({ panelOpen });
+  schedulerPanel.patch({ panelOpen });
 }
 
 export function setSchedulerRunsVisible(runsVisible: boolean): void {
-  patch({ runsVisible });
+  schedulerPanel.patch({ runsVisible });
 }
 
 export function setSchedulerFilter(filter: SchedulerFilter): void {
-  patch({ filter });
+  schedulerPanel.patch({ filter });
 }
 
 export function setSchedulerQuery(query: string): void {
-  patch({ query });
+  schedulerPanel.patch({ query });
 }
 
 export function openSchedulerTask(taskId: string): void {
-  patch({
-    pages: openSchedulerPage({ kind: "detail", taskId }),
-    selectedTaskId: taskId,
-    runsVisible: false,
-  });
+  schedulerPanel.openPage({ kind: "detail", taskId });
+  schedulerPanel.patch({ selectedTaskId: taskId, runsVisible: false });
 }
 
 export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null): void {
   const form = task ? schedulerFormFromTask(task) : newSchedulerForm(cwd);
-  patch({
-    pages: openSchedulerPage({ kind: "form", taskId: task?.id ?? null }),
+  const page: SchedulerPage = { kind: "form", taskId: task?.id ?? null };
+  if (page.taskId === null) schedulerPanel.resetPages();
+  schedulerPanel.openPage(page);
+  schedulerPanel.patch({
     form,
     formTaskId: task?.id ?? null,
     formBaseline: { ...form },
@@ -282,26 +202,26 @@ export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null
   });
 }
 
-export function schedulerBack(): void {
-  const leavingForm = currentSchedulerPage(state.pages).kind === "form";
-  patch({
-    pages: backSchedulerPage(state.pages),
-    runsVisible: false,
-    ...(leavingForm
-      ? { form: null, formTaskId: null, formBaseline: null, saveError: null }
-      : {}),
-  });
+export function schedulerBack(): { closePanel: boolean } {
+  const leavingForm = schedulerPanel.currentPage().kind === "form";
+  if (leavingForm) {
+    schedulerPanel.patch({ form: null, formTaskId: null, formBaseline: null, saveError: null });
+  }
+  const result = schedulerPanel.back();
+  schedulerPanel.patch({ runsVisible: false });
+  return result;
 }
 
 export function escapeScheduler(): { closePanel: boolean } {
-  if (isSchedulerRootPage(state.pages)) return { closePanel: true };
+  if (schedulerPanel.pageDepth() <= 1) return { closePanel: true };
   schedulerBack();
   return { closePanel: false };
 }
 
 export function updateSchedulerForm(partial: Partial<SchedulerTaskForm>): void {
-  if (state.form === null) return;
-  patch({ form: { ...state.form, ...partial } });
+  const form = schedulerPanel.get().form;
+  if (form === null) return;
+  schedulerPanel.patch({ form: { ...form, ...partial } });
 }
 
 function buildNotification(form: SchedulerTaskForm): TaskNotification | null {
@@ -316,9 +236,10 @@ function buildNotification(form: SchedulerTaskForm): TaskNotification | null {
 }
 
 export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string }> {
-  const form = state.form;
+  const scope = schedulerPanel.scope();
+  const form = scope.get().form;
   if (form === null) return { ok: false, error: "no form" };
-  if (state.saving) return { ok: false };
+  if (scope.get().saving) return { ok: false };
   const toolNames: string[] | null = form.toolSelection === "all" ? null : form.toolSelection;
   const base = {
     name: form.name.trim(),
@@ -333,27 +254,26 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : parseMaxLifetimeMinutes(form.maxLifetimeMinutes),
     timezone: form.timezone.trim() || browserTimezone(),
   };
-  patch({ saving: true, saveError: null });
+  scope.patch({ saving: true, saveError: null });
   beginWrite();
   try {
-    const saved = state.formTaskId
-      ? await updateScheduledTask({ id: state.formTaskId, ...base } satisfies TaskUpdatePayload)
+    const formTaskId = scope.get().formTaskId;
+    const saved = formTaskId
+      ? await updateScheduledTask({ id: formTaskId, ...base } satisfies TaskUpdatePayload)
       : await createScheduledTask(base satisfies TaskCreatePayload);
-    patch({
-      saving: false,
-      tasks: upsertTask(state.tasks, saved),
-      selectedTaskId: saved.id,
-      pages: schedulerPagesAfterSave(saved.id),
+    scope.patch({ saving: false, selectedTaskId: saved.id, saveError: null, runsVisible: false });
+    schedulerPanel.resetPages();
+    schedulerPanel.openPage({ kind: "detail", taskId: saved.id });
+    scope.patch({
+      tasks: upsertTask(scope.get().tasks, saved),
       form: null,
       formTaskId: null,
       formBaseline: null,
-      saveError: null,
-      runsVisible: false,
     });
     return { ok: true };
   } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
-    patch({ saving: false, saveError: error });
+    const error = errorMessage(e);
+    scope.patch({ saving: false, saveError: error });
     return { ok: false, error };
   } finally {
     endWrite();
@@ -369,40 +289,114 @@ function upsertTask(tasks: ScheduledTask[], task: ScheduledTask): ScheduledTask[
 }
 
 export async function toggleSchedulerTask(taskId: string, enabled: boolean): Promise<void> {
+  const scope = schedulerPanel.scope();
   beginWrite();
   try {
     const saved = await patchScheduledTask(taskId, enabled);
-    patch({ tasks: upsertTask(state.tasks, saved) });
+    scope.patch({ tasks: upsertTask(scope.get().tasks, saved) });
   } finally {
     endWrite();
   }
 }
 
 export async function removeSchedulerTask(taskId: string): Promise<void> {
+  const scope = schedulerPanel.scope();
   beginWrite();
   try {
     await deleteScheduledTask(taskId);
-    patch({
-      tasks: state.tasks.filter((task) => task.id !== taskId),
-      pages: schedulerPagesAfterDelete(),
+    scope.patch({
+      tasks: scope.get().tasks.filter((task) => task.id !== taskId),
       selectedTaskId: null,
       runsVisible: false,
     });
+    schedulerPanel.resetPages();
   } finally {
     endWrite();
   }
 }
 
 export async function triggerSchedulerTaskNow(taskId: string): Promise<boolean> {
-  if (state.triggering) return false;
-  patch({ triggering: true });
+  const scope = schedulerPanel.scope();
+  if (scope.get().triggering) return false;
+  scope.patch({ triggering: true });
   beginWrite();
   try {
     await triggerScheduledTask(taskId);
-    await reloadSchedulerTasks();
+    schedulerPanel.reload();
     return true;
   } finally {
-    patch({ triggering: false });
+    scope.patch({ triggering: false });
     endWrite();
   }
+}
+
+const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void, string> = {
+  kind: "scheduler",
+  initial: INITIAL,
+  rootPage: ROOT_PAGE,
+  loadPolicy: "on-open",
+  key: () => "scheduler",
+  async load(_key, { patch }) {
+    patch({ loading: true, loadError: null });
+    void fetchSchedulerModelMeta()
+      .then((meta) => patch({ meta }))
+      .catch(() => {});
+    try {
+      const tasks = await fetchScheduledTasks();
+      patch({ loading: false, loaded: true, tasks, loadError: null });
+    } catch (e) {
+      patch({ loading: false, loadError: errorMessage(e) });
+    }
+  },
+  start(writer) {
+    pollWriter = writer;
+    polling = true;
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+    unsubscribeIconPreferences = subscribeModelIconPreferences((modelIconPreferences) => {
+      const meta = writer.get().meta;
+      if (!meta) return;
+      writer.patch({ meta: { ...meta, modelIconPreferences } });
+    });
+    void poll();
+  },
+  stop() {
+    clearPollingResources();
+  },
+  release() {
+    clearPollingResources();
+  },
+  guard(state): PanelViewCloseGuard | null {
+    const confirm = selectSchedulerCloseConfirm({
+      dirty: isSchedulerFormDirty(state.form, state.formBaseline),
+    });
+    if (!confirm) return null;
+    return { ...confirm, discard: () => {} };
+  },
+  status(state) {
+    return state.tasks.some((task) => task.lastRunStatus === "running");
+  },
+  isRootPage(pages) {
+    return pages.length <= 1;
+  },
+  isSiblingPage(next, current) {
+    return next.kind === "detail" && current.kind === "detail";
+  },
+};
+
+export const schedulerPanel: PanelViewStore<SchedulerViewState, SchedulerPage, void> =
+  createPanelViewStore(schedulerAdapter);
+
+export const schedulerBackPanel = {
+  useSnapshot: schedulerPanel.useSnapshot,
+  back: schedulerBack,
+};
+
+export function useSchedulerPanel() {
+  return schedulerPanel.useSnapshot();
+}
+
+export function useSchedulerRunning(): boolean {
+  return schedulerPanel.useStatus() === true;
 }
