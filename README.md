@@ -59,7 +59,7 @@ PI_WORK_AUTH_DISABLED=true docker compose up -d
 - 按工作目录浏览和搜索 pi 会话
 - SSE 实时对话、引导、追加和中止
 - 会话内分支、分支导航和会话树
-- 模型、思考级别和工具选择
+- 模型、推理强度和工具选择
 - 长会话压缩、会话回放、导出 HTML 和自动命名
 - 项目文件浏览、搜索、编辑、重命名、删除和实时监听
 - Markdown、代码、Mermaid、SVG、ECharts、图片、音频、视频和 PDF 查看

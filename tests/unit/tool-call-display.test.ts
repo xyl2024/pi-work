@@ -29,6 +29,13 @@ function assistantWithCalls(
   };
 }
 
+function imageBlock(data: string) {
+  return {
+    type: "image" as const,
+    source: { type: "base64" as const, media_type: "image/png", data },
+  };
+}
+
 function textResult(
   toolCallId: string,
   text: string,
@@ -128,6 +135,19 @@ describe("isToolResultEmpty", () => {
     expect(isToolResultEmpty(textResult("t1", "   \n  "))).toBe(true);
     expect(isToolResultEmpty(textResult("t1", "(no output)"))).toBe(true);
     expect(isToolResultEmpty(textResult("t1", "  (no output) \n"))).toBe(true);
+  });
+
+  it("is false when the result carries images but no text", () => {
+    expect(
+      isToolResultEmpty({ role: "toolResult", toolCallId: "t1", content: [imageBlock("AAAA")] }),
+    ).toBe(false);
+    expect(
+      isToolResultEmpty({
+        role: "toolResult",
+        toolCallId: "t1",
+        content: [imageBlock("AAAA"), imageBlock("BBBB")],
+      }),
+    ).toBe(false);
   });
 
   it("is false when the result carries text and true with no text blocks", () => {
@@ -259,3 +279,4 @@ describe("summarizeTurn", () => {
     expect(summary.diffStats).toEqual({ additions: 1, deletions: 0 });
   });
 });
+

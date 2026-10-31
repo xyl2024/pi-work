@@ -245,6 +245,8 @@ export const chat = {
   "Compacted context": "上下文已压缩",
   "Compacted from {n} tokens": "已从 {n} tokens 压缩",
   "Context compacted": "上下文已压缩",
+  "Model changed to {model}": "模型变更为 {model}",
+  "Thinking level changed to {level}": "推理强度变为 {level}",
   "View summary": "查看摘要",
   "Estimated tokens while streaming": "预估 token 数（流式接收中）",
   "Model call failed": "模型调用失败",
@@ -265,6 +267,9 @@ export const chat = {
   "Expand last {n}": "展开最后 {n} 条",
   "Expand next {n}": "再展开 {n} 条",
   "Expand remaining {n}": "展开剩余 {n} 条",
+
+  "timeout={timeout}s": "timeout={timeout}s",
+  "duration={duration}": "duration={duration}",
 
   "Message from channel {channel}": "来自频道 {channel}",
   "Message from scheduled task {task}": "来自定时任务 {task}",

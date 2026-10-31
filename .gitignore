@@ -55,3 +55,6 @@ third
 
 # local specs and tickets
 /.scratch/
+
+# JetBrains IDE
+/.idea/

@@ -10,10 +10,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
-import { extractMessageText } from "@/lib/shared/message-content";
+import { extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
+import { formatToolAnnotation, formatToolDuration } from "@/lib/shared/tool-duration";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { useCollapseNonce } from "./context";
-import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
+import type { AssistantContentBlock, ImageContent, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
 export function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick, cwd }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void; cwd?: string | null }) {
   if (block.type === "text") {
@@ -22,12 +26,36 @@ export function BlockView({ block, toolResults, isStreaming, isLast, keywords, i
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isLast && isStreaming} onImageClick={onImageClick} />;
   }
+  if (block.type === "image") {
+    return <ImageBlock block={block as ImageContent} onImageClick={onImageClick} />;
+  }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     return <ToolCallBlock block={tc} result={result} cwd={cwd} />;
   }
   return null;
+}
+
+function ImageBlock({ block, onImageClick }: { block: ImageContent; onImageClick?: (src: string) => void }) {
+  const { t } = useI18n();
+  const src = imageContentSrc(block);
+  if (!src) return null;
+  return (
+    <Tooltip content={t("Click to expand")}>
+      <span
+        onClick={onImageClick ? () => onImageClick(src) : undefined}
+        style={{ display: "inline-flex", cursor: onImageClick ? "zoom-in" : "default" }}
+      >
+        <SmartImage
+          src={src}
+          alt=""
+          loaderSize={96}
+          style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+        />
+      </span>
+    </Tooltip>
+  );
 }
 
 function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
@@ -145,6 +173,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 }
 
 function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
+  const { t } = useI18n();
   const { isDark } = useTheme();
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
@@ -152,9 +181,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const isCodemode = toolKind === "codemode";
   const isSpecialized = isBash || isFileMutation;
   const isCollapsedByDefault = !isSpecialized;
-  const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
-    ? String(block.input.timeout)
-    : null;
   const [expanded, setExpanded] = useState(!isCollapsedByDefault);
   const collapseNonce = useCollapseNonce();
   useEffect(() => {
@@ -163,16 +189,22 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const inputStr = JSON.stringify(block.input, null, 2);
 
-  const resultText = result ? extractMessageText(result) : null;
+  const resultContent = extractToolResultContent(result);
+  const resultText = result ? resultContent.text : null;
+  const resultImages = resultContent.images;
   const resultIsEmpty = isToolResultEmpty(result);
   const isError = result?.isError ?? false;
+
+  useEffect(() => {
+    if (resultImages.length > 0) setExpanded(true);
+  }, [resultImages.length]);
 
   const diffStats = useMemo(
     () => (isFileMutation ? toolCallDiffStats(block, result) : null),
     [isFileMutation, block, result],
   );
 
-  const header = (
+  const renderHeader = () => (
     <div
       role="button"
       tabIndex={0}
@@ -183,29 +215,11 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           setExpanded((value) => !value);
         }
       }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 7,
-        width: "100%",
-        padding: "6px 10px",
-        background: "none",
-        border: "none",
-        color: "var(--text-muted)",
-        cursor: "pointer",
-        fontSize: 12,
-        textAlign: "left",
-        minWidth: 0,
-      }}
+      style={{ ...TOOL_HEADER_STYLE, cursor: "pointer" }}
     >
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
-        {timeout !== null && (
-          <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, flexShrink: 0 }}>
-            timeout={timeout}s
-          </span>
-        )}
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {getToolPreview(block)}
         </span>
@@ -215,6 +229,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
             {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
           </span>
         )}
+        <ToolDuration ms={result?.durationMs} />
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
@@ -232,7 +247,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout: block.input.timeout, durationMs: result?.durationMs }, t)} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -248,7 +263,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs }, t)} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -263,12 +278,12 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
       }}
     >
-      {header}
+      {renderHeader()}
 
       <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>
           {expanded && isFileMutation ? (
-            <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+            <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
           ) : expanded && (
             <>
               <pre
@@ -289,7 +304,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
               >
                 {inputStr}
               </pre>
-              {result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />}
+              {result && <PairedResult text={resultText ?? ""} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
             </>
           )}
         </div>
@@ -297,6 +312,29 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     </div>
   );
 }
+
+function ToolDuration({ ms }: { ms?: number }) {
+  const text = formatToolDuration(ms);
+  if (!text) return null;
+  return (
+    <span style={{ flexShrink: 0, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+      {text}
+    </span>
+  );
+}
+
+const TOOL_HEADER_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "6px 10px",
+  background: "none",
+  border: "none",
+  color: "var(--text-muted)",
+  fontSize: 12,
+  textAlign: "left",
+  minWidth: 0,
+};
 
 interface DiffLine {
   kind: "added" | "removed";
@@ -324,10 +362,11 @@ function buildDiffLines(toolName: string, input: Record<string, unknown>): DiffL
   return lines;
 }
 
-function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isError, isDark }: {
+function DiffToolCallContent({ toolName, input, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   toolName: string;
   input: Record<string, unknown>;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
@@ -370,24 +409,28 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
           )}
         </div>
       </div>
-      {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+      {resultText !== null && <PairedResult text={resultText} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
     </div>
   );
 }
 
 const BASH_DETAIL_MAX_HEIGHT = 200;
 
-function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty, isError, isDark }: {
+function BashToolCallContent({ command, annotation, cwd, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   command: string;
-  timeout: string | null;
+  annotation: string | null;
   cwd?: string | null;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
 }) {
   const { t } = useI18n();
   const [expandedAll, setExpandedAll] = useState(false);
+  useEffect(() => {
+    if (resultImages.length > 0) setExpandedAll(true);
+  }, [resultImages.length]);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const showMask = contentHeight !== null && contentHeight > BASH_DETAIL_MAX_HEIGHT && !expandedAll;
   const cwdBase = cwd?.replace(/\\/g, "/").split("/").pop() || "";
@@ -418,8 +461,8 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
         whiteSpace: "pre-wrap",
       }}
     >
-      {timeout !== null && (
-        <div style={{ color: dimFg }}>(timeout={timeout}s)</div>
+      {annotation !== null && (
+        <div style={{ color: dimFg }}>{annotation}</div>
       )}
       <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
       <SyntaxHighlighter
@@ -431,7 +474,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
       >
         {command}
       </SyntaxHighlighter>
-      {resultText !== null && (
+      {resultText !== null && (resultText.trim() !== "" || resultImages.length === 0) && (
         resultIsEmpty ? (
           <pre
             style={{
@@ -474,6 +517,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
           </SyntaxHighlighter>
         )
       )}
+      <ToolResultImages images={resultImages} />
     </div>
 
     {!expandedAll && showMask && (
@@ -516,18 +560,24 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
 
 const CODEMODE_DETAIL_MAX_HEIGHT = 300;
 
-function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isDark }: {
+function CodemodeToolCallContent({ code, annotation, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   code: string;
+  annotation: string | null;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
 }) {
   const { t } = useI18n();
   const [expandedAll, setExpandedAll] = useState(false);
+  useEffect(() => {
+    if (resultImages.length > 0) setExpandedAll(true);
+  }, [resultImages.length]);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const showMask = contentHeight !== null && contentHeight > CODEMODE_DETAIL_MAX_HEIGHT && !expandedAll;
   const codeBg = isDark ? "#1e1e1e" : "#f7f7f7";
+  const dimFg = isDark ? "#9ca3af" : "#6b7280";
   return (
     <div
       style={{
@@ -540,6 +590,9 @@ function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isD
       }}
     >
       <div ref={contentRef} data-scroll-inset style={{ background: codeBg }}>
+        {annotation !== null && (
+          <div style={{ color: dimFg, fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 10px 0" }}>{annotation}</div>
+        )}
         <SyntaxHighlighter
           language="javascript"
           style={isDark ? vscDarkPlus : vs}
@@ -549,7 +602,7 @@ function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isD
         >
           {code}
         </SyntaxHighlighter>
-        {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+        {resultText !== null && <PairedResult text={resultText} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
       </div>
 
       {!expandedAll && showMask && (
@@ -590,12 +643,41 @@ function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isD
   );
 }
 
-function PairedResult({ text, isEmpty, isError }: {
+function ToolResultImages({ images }: { images: ImageContent[] }) {
+  const { t } = useI18n();
+  const gallery = useMemo(
+    () => images.map((image) => ({ alt: "", src: imageContentSrc(image) })).filter((item) => item.src),
+    [images],
+  );
+  const lightbox = useImageLightbox(gallery);
+  if (gallery.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 10px" }}>
+      {gallery.map((item, index) => (
+        <Tooltip key={index} content={t("Click to expand")}>
+          <span onClick={() => lightbox.openAt(item.src)} style={{ display: "inline-flex", cursor: "zoom-in" }}>
+            <SmartImage
+              src={item.src}
+              alt=""
+              loaderSize={96}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+            />
+          </span>
+        </Tooltip>
+      ))}
+      {lightbox.lightbox}
+    </div>
+  );
+}
+
+function PairedResult({ text, images, isEmpty, isError }: {
   text: string;
+  images: ImageContent[];
   isEmpty: boolean;
   isError: boolean;
 }) {
   const { t } = useI18n();
+  const showText = text.trim() !== "" || images.length === 0;
   return (
     <div
       style={{
@@ -603,7 +685,8 @@ function PairedResult({ text, isEmpty, isError }: {
         background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
-      <pre
+      <ToolResultImages images={images} />
+      {showText && <pre
         data-scroll-inset
         style={{
           margin: 0,
@@ -622,7 +705,7 @@ function PairedResult({ text, isEmpty, isError }: {
         }}
       >
         {isEmpty ? `(${t("No output")})` : text}
-      </pre>
+      </pre>}
     </div>
   );
 }

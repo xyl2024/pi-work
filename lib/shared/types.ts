@@ -59,6 +59,7 @@ export interface AssistantMessage {
   stopReason?: string;
   errorMessage?: string;
   timestamp?: number;
+  durationMs?: number;
   usage?: {
     input: number;
     output: number;
@@ -82,6 +83,7 @@ export interface ToolResultMessage {
   details?: unknown;
   isError?: boolean;
   timestamp?: number;
+  durationMs?: number;
 }
 
 export type ToolExposure = "direct" | "model-only" | "codemode" | "deferred" | "hidden";
@@ -264,6 +266,7 @@ export interface SessionContext {
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
   compactionPoints?: CompactionPoint[];
+  changeMarkers?: ChangeMarker[];
 }
 
 export interface CompactionPoint {
@@ -273,6 +276,25 @@ export interface CompactionPoint {
   beforeMessageEntryId?: string;
   timestamp?: string;
 }
+
+export type ModelChangeMarker = {
+  entryId: string;
+  kind: "model";
+  provider: string;
+  modelId: string;
+  beforeMessageEntryId?: string;
+  timestamp?: string;
+};
+
+export type ThinkingLevelChangeMarker = {
+  entryId: string;
+  kind: "thinking_level";
+  thinkingLevel: string;
+  beforeMessageEntryId?: string;
+  timestamp?: string;
+};
+
+export type ChangeMarker = ModelChangeMarker | ThinkingLevelChangeMarker;
 
 export interface SessionSearchResult {
   id: string;

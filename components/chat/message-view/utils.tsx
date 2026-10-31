@@ -9,6 +9,7 @@ import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { resolveFileLink } from "@/lib/shared/file-link";
+import { formatToolDuration } from "@/lib/shared/tool-duration";
 import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "@/lib/shared/subagent";
 import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
 import { useFileLinkHandler } from "./context";
@@ -221,6 +222,7 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
 
 export interface UsageIconsProps {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } | null;
+  durationMs?: number;
 }
 
 function formatTtft(ms: number): string {
@@ -233,7 +235,7 @@ function formatTps(tps: number): string {
   return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
-export function UsageIcons({ usage }: UsageIconsProps) {
+export function UsageIcons({ usage, durationMs }: UsageIconsProps) {
   const { formatCost, currency } = useFormatCurrency();
   const inputDenom = usage ? usage.input + usage.cacheRead : 0;
   const cacheHitRate = inputDenom > 0 ? ((usage?.cacheRead ?? 0) / inputDenom) * 100 : 0;
@@ -292,6 +294,11 @@ export function UsageIcons({ usage }: UsageIconsProps) {
     });
   }
   if (items.length === 0) return null;
+  const duration = formatToolDuration(durationMs);
+  if (duration) {
+    const target = items.find((item) => item.key === "out") ?? items[items.length - 1];
+    target.label = `${target.label} · ${duration}`;
+  }
   return (
     <>
       {items.map((item) => (

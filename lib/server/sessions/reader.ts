@@ -9,6 +9,7 @@ import {
 import type {
   AgentMessage,
   AssistantMessage,
+  ChangeMarker,
   CompactionEntry,
   CompactionPoint,
   SessionContext,
@@ -395,12 +396,12 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
 
   let targetLeaf: SessionEntry | undefined;
   if (leafId === null) {
-    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [], changeMarkers: [] };
   }
   if (leafId) targetLeaf = byId.get(leafId);
   if (!targetLeaf) targetLeaf = entries[entries.length - 1];
   if (!targetLeaf) {
-    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [], changeMarkers: [] };
   }
 
   const path: SessionEntry[] = [];
@@ -484,6 +485,36 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     });
   }
 
+  const changeMarkers: ChangeMarker[] = [];
+  for (let i = 0; i < path.length; i++) {
+    const e = path[i];
+    if (e.type !== "model_change" && e.type !== "thinking_level_change") continue;
+    let afterId: string | undefined;
+    for (let j = i + 1; j < path.length; j++) {
+      if (visibleEntryIds.has(path[j].id)) {
+        afterId = path[j].id;
+        break;
+      }
+    }
+    const marker = e.type === "model_change"
+      ? {
+          entryId: e.id,
+          kind: "model" as const,
+          provider: e.provider,
+          modelId: e.modelId,
+          beforeMessageEntryId: afterId,
+          timestamp: e.timestamp,
+        }
+      : {
+          entryId: e.id,
+          kind: "thinking_level" as const,
+          thinkingLevel: e.thinkingLevel,
+          beforeMessageEntryId: afterId,
+          timestamp: e.timestamp,
+        };
+    changeMarkers.push(marker);
+  }
+
   return {
     messages,
     entryIds,
@@ -491,6 +522,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     thinkingLevel: piCtx.thinkingLevel,
     model: piCtx.model,
     compactionPoints,
+    changeMarkers,
   };
 }
 

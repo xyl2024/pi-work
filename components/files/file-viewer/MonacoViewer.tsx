@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
@@ -9,7 +9,7 @@ import { PI_WORK_DARK_THEME_NAME } from "@/lib/client/monaco-theme";
 import { encodeFilePathForApi, getFileName } from "@/lib/shared/file-paths";
 import { getFileLanguage } from "@/lib/shared/monaco-language-map";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { formatSize, type FileViewerProps } from "./utils";
+import { formatSize, toggleBtnStyle, type FileViewerProps } from "./utils";
 
 const FILE_SIZE_WARN_BYTES = 5 * 1024 * 1024;
 const FILE_SIZE_DEGRADE_BYTES = 50 * 1024 * 1024;
@@ -23,10 +23,15 @@ interface FileContent {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export function MonacoViewer({
+export interface MonacoViewerHandle {
+	save: () => Promise<boolean>;
+}
+
+export const MonacoViewer = forwardRef<MonacoViewerHandle, FileViewerProps>(function MonacoViewer({
 	filePath,
 	rightPanelState = "normal",
-}: FileViewerProps) {
+	initialEditMode = false,
+}, ref) {
 	const { isDark } = useTheme();
 	const { t } = useI18n();
 	const fileName = getFileName(filePath);
@@ -41,7 +46,7 @@ export function MonacoViewer({
 	const [error, setError] = useState<string | null>(null);
 	const [reloadKey, setReloadKey] = useState(0);
 
-	const [editMode, setEditMode] = useState(false);
+	const [editMode, setEditMode] = useState(initialEditMode);
 	const [wrapLines, setWrapLines] = useState(false);
 	const [dirty, setDirty] = useState(false);
 	const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -74,7 +79,7 @@ export function MonacoViewer({
 		setContent(null);
 		setSize(0);
 		setLineCount(0);
-		setEditMode(false);
+		setEditMode(initialEditMode);
 		setWrapLines(false);
 		setDirty(false);
 		setSaveState("idle");
@@ -82,6 +87,7 @@ export function MonacoViewer({
 		setLargeWarned(false);
 		setDegraded(false);
 		setReloadKey((k) => k + 1);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [filePath]);
 
 	useEffect(() => {
@@ -203,9 +209,10 @@ useEffect(() => {
 		});
 	}
 
-	const save = useCallback(async () => {
-		if (!monaco || !sourceEditorRef.current || !modelRef.current) return;
+	const save = useCallback(async (): Promise<boolean> => {
+		if (!monaco || !sourceEditorRef.current || !modelRef.current) return false;
 		const value = modelRef.current.getValue();
+		if (value === (baselineRef.current ?? "")) return true;
 		setSaveState("saving");
 		setSaveErrorMsg(null);
 		try {
@@ -226,11 +233,15 @@ useEffect(() => {
 			recentlySavedTimerRef.current = setTimeout(() => {
 				setSaveState("idle");
 			}, 1500);
+			return true;
 		} catch (e: unknown) {
 			setSaveState("error");
 			setSaveErrorMsg(e instanceof Error ? e.message : String(e));
+			return false;
 		}
 	}, [monaco, filePath]);
+
+	useImperativeHandle(ref, () => ({ save }), [save]);
 
 	if (monacoLoading || (loading && !content)) {
 		return (
@@ -399,19 +410,7 @@ useEffect(() => {
 			/>
 		</div>
 	);
-}
-
-function toggleBtnStyle(active: boolean): React.CSSProperties {
-	return {
-		padding: "2px 8px",
-		fontSize: 11,
-		border: "none",
-		cursor: "pointer",
-		background: active ? "var(--bg-selected)" : "var(--bg-hover)",
-		color: active ? "var(--text)" : "var(--text-muted)",
-		fontWeight: active ? 600 : 400,
-	};
-}
+})
 
 function SaveButton({
 	state,

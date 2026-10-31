@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
+import type { AgentMessage, ChangeMarker, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
 import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
@@ -107,6 +107,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [entryTimestamps, setEntryTimestamps] = useState<(number | undefined)[]>([]);
   const [compactionPoints, setCompactionPoints] = useState<CompactionPoint[]>([]);
+  const [changeMarkers, setChangeMarkers] = useState<ChangeMarker[]>([]);
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const subagentRefreshTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const scheduledSubagentRefreshIdsRef = useRef<Set<string>>(new Set());
@@ -259,6 +260,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     setEntryIds,
     setEntryTimestamps,
     setCompactionPoints,
+    setChangeMarkers,
     setCurrentModelOverride,
     setThinkingLevel,
     applyRuntimeInput: (input) => applyRuntimeInputRef.current(input),
@@ -486,11 +488,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
         } catch {
         }
       }
+      await loadSession(sid);
     } catch (e) {
       console.error("Failed to set model:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to switch model") });
     }
-  }, [isNew, modelThinkingLevels, runtimeState.thinkingLevel, setNewSessionModel, setThinkingLevel, showToast, t]);
+  }, [isNew, loadSession, modelThinkingLevels, runtimeState.thinkingLevel, setNewSessionModel, setThinkingLevel, showToast, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     const model = isNew ? newSessionModel : currentModel;
@@ -504,11 +507,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     if (!sid) return;
     try {
       await sendAgentCommand(sid, { type: "set_thinking_level", level: effective });
+      await loadSession(sid);
     } catch (e) {
       console.error("Failed to set thinking level:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change thinking level") });
     }
-  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, setThinkingLevel, showToast, t]);
+  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, loadSession, setThinkingLevel, showToast, t]);
 
   const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
     const sid = sessionIdRef.current;
@@ -721,7 +725,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   }, []);
 
   return {
-    data, loading, error, entryIds, entryTimestamps, compactionPoints, inFlightToolResults, streamState,
+    data, loading, error, entryIds, entryTimestamps, compactionPoints, changeMarkers, inFlightToolResults, streamState,
     runtimeError: runtimeState.runtimeError,
     activeLeafId: runtimeState.activeLeafId,
     messages: runtimeState.messages,

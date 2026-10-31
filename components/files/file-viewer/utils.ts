@@ -1,9 +1,11 @@
+import type React from "react";
 import { getFileName } from "@/lib/shared/file-paths";
 
 export interface FileViewerProps {
 	filePath: string;
 	cwd?: string;
 	rightPanelState?: "closed" | "normal" | "expanded";
+	initialEditMode?: boolean;
 }
 
 export const IMAGE_EXTS = new Set([
@@ -16,6 +18,7 @@ export const VIDEO_EXTS = new Set([
 	"mp4", "m4v", "mov", "webm", "ogv", "mkv",
 ]);
 export const PDF_EXTS = new Set(["pdf"]);
+export const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 
 export function isImagePath(filePath: string): boolean {
 	const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -35,6 +38,25 @@ export function isVideoPath(filePath: string): boolean {
 export function isPdfPath(filePath: string): boolean {
 	const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
 	return PDF_EXTS.has(ext);
+}
+
+export function isMarkdownPath(filePath: string): boolean {
+	const name = getFileName(filePath).toLowerCase();
+	const dot = name.lastIndexOf(".");
+	if (dot === -1) return false;
+	return MARKDOWN_EXTS.has(name.slice(dot + 1));
+}
+
+export function toggleBtnStyle(active: boolean): React.CSSProperties {
+	return {
+		padding: "2px 8px",
+		fontSize: 11,
+		border: "none",
+		cursor: "pointer",
+		background: active ? "var(--bg-selected)" : "var(--bg-hover)",
+		color: active ? "var(--text)" : "var(--text-muted)",
+		fontWeight: active ? 600 : 400,
+	};
 }
 
 export function formatSize(bytes: number): string {

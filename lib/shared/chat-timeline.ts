@@ -1,6 +1,8 @@
 import type {
   AgentMessage,
   AssistantMessage,
+  ChangeMarker,
+  CompactionPoint,
   ToolCallContent,
   ToolResultMessage,
 } from "./types";
@@ -90,6 +92,113 @@ export function buildChatTimeline(input: ChatTimelineInput): ChatTimeline {
       };
     },
   };
+}
+
+export type ChatTimelineDivider =
+  | { kind: "compaction"; point: CompactionPoint }
+  | { kind: "change"; marker: ChangeMarker };
+
+export interface TimelineDividerInput {
+  timeline: ChatTimeline;
+  entryIds: readonly string[];
+  compactionPoints?: readonly CompactionPoint[];
+  changeMarkers?: readonly ChangeMarker[];
+}
+
+export interface TimelineDividers {
+  beforeVisible: ReadonlyMap<number, readonly ChatTimelineDivider[]>;
+  beforeEntryId: ReadonlyMap<string, readonly ChatTimelineDivider[]>;
+  trailingCompactionPoints: readonly CompactionPoint[];
+  trailingChangeMarkers: readonly ChangeMarker[];
+}
+
+type DividerPlacement = "unanchored" | "unrendered" | "placed";
+
+type ChangeAnchor =
+  | { kind: "trailing" }
+  | { kind: "visible"; index: number };
+
+function changeAnchorKey(markerKind: ChangeMarker["kind"], anchor: ChangeAnchor): string {
+  return anchor.kind === "trailing" ? `${markerKind}:trailing` : `${markerKind}:visible:${anchor.index}`;
+}
+
+const DIVIDER_ORDER: Record<ChatTimelineDivider["kind"], number> = {
+  compaction: 0,
+  change: 1,
+};
+
+export function buildTimelineDividers(input: TimelineDividerInput): TimelineDividers {
+  const renderedEntryIds = new Set(input.entryIds);
+  const beforeVisible = new Map<number, ChatTimelineDivider[]>();
+  const beforeEntryId = new Map<string, ChatTimelineDivider[]>();
+  const trailingCompactionPoints: CompactionPoint[] = [];
+  const trailingChangeMarkers: ChangeMarker[] = [];
+
+  const entryIdAtVisibleIndex = (visibleIndex: number): string | null => {
+    const sessionIndex = input.timeline.sessionIndexOfVisible(visibleIndex);
+    if (sessionIndex === null) return null;
+    return input.entryIds[sessionIndex] ?? null;
+  };
+
+  const place = (entryId: string | undefined, divider: ChatTimelineDivider): DividerPlacement => {
+    if (!entryId) return "unanchored";
+    if (!renderedEntryIds.has(entryId)) return "unrendered";
+    const visibleIndex = input.timeline.visibleIndexOfEntry(entryId);
+    if (visibleIndex === null) return "unrendered";
+    const targetEntryId = entryIdAtVisibleIndex(visibleIndex);
+    if (!targetEntryId) return "unanchored";
+    let dividers = beforeVisible.get(visibleIndex);
+    if (!dividers) {
+      dividers = [];
+      beforeVisible.set(visibleIndex, dividers);
+    }
+    dividers.push(divider);
+    beforeEntryId.set(targetEntryId, dividers);
+    return "placed";
+  };
+
+  for (const point of input.compactionPoints ?? []) {
+    if (place(point.beforeMessageEntryId, { kind: "compaction", point }) === "unanchored") {
+      trailingCompactionPoints.push(point);
+    }
+  }
+
+  const firstVisibleUserIndex = input.timeline.visibleMessages.findIndex(
+    (message) => message.role === "user",
+  );
+  const retainedMarkers: ChangeMarker[] = [];
+  if (firstVisibleUserIndex !== -1) {
+    const seenAnchors = new Set<string>();
+    const changeMarkers = input.changeMarkers ?? [];
+    for (let index = changeMarkers.length - 1; index >= 0; index--) {
+      const marker = changeMarkers[index];
+      let anchor: ChangeAnchor;
+      if (!marker.beforeMessageEntryId) {
+        anchor = { kind: "trailing" };
+      } else {
+        const visibleIndex = input.timeline.visibleIndexOfEntry(marker.beforeMessageEntryId);
+        if (visibleIndex === null || visibleIndex <= firstVisibleUserIndex) continue;
+        anchor = { kind: "visible", index: visibleIndex };
+      }
+      const anchorKey = changeAnchorKey(marker.kind, anchor);
+      if (seenAnchors.has(anchorKey)) continue;
+      seenAnchors.add(anchorKey);
+      retainedMarkers.push(marker);
+    }
+    retainedMarkers.reverse();
+  }
+
+  for (const marker of retainedMarkers) {
+    if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
+      trailingChangeMarkers.push(marker);
+    }
+  }
+
+  for (const dividers of beforeVisible.values()) {
+    dividers.sort((a, b) => DIVIDER_ORDER[a.kind] - DIVIDER_ORDER[b.kind]);
+  }
+
+  return { beforeVisible, beforeEntryId, trailingCompactionPoints, trailingChangeMarkers };
 }
 
 export type SearchJumpDecision =
