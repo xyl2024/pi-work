@@ -58,6 +58,8 @@ MCP 服务器配置（两份 `mcp.json`：全局 `~/.pi/agent/mcp.json` 与工�
 - 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/mcp-drafts.ts`（按 cwd 分桶、park / restore、任一 dirty）、`lib/shared/mcp-pages.ts`（页栈 push / back / 保存与删除后的收敛）、`lib/shared/mcp-close.ts`（关标签确认与重开是否重读盘）；既有的 `lib/shared/mcp-draft.ts`（草稿、dirty、校验问题、待提交载荷）规则不变，只补它的分桶外壳。面板内的视觉布局、窄栏下两节列表与原始 JSON 编辑器的高度、`autoEnableCodemode` 开关在窄栏里的排布、空态与加载态文案，以及「原始 JSON 编辑到一半切走再回来内容还在」的 smoke test，仍属人工清单（ADR-0003 规则 3）。
 - 聊天输入栏、会话工具选择器里与 MCP 工具相关的一切完全不动——那是「这个会话用哪些工具」，与「管理 MCP 服务器」是两件事。
 
+**参见**：ADR-0024「面板视图的生命周期是一个 module」——本文的面板视图状态（保活、释放、页栈与关闭确认）由那一个 module 拥有，本文只提供 adapter，Decision 不变。
+
 **参见**：ADR-0010「Pi Work 自己读写 pi 的 mcp.json，而不是调 SDK 的配置写入接口」（保存语义，本文不动）、ADR-0012「模型配置是面板视图而不是模态框」（容器那条路）、ADR-0014「技能是面板视图，且它是即时生效项」（同一个参照对象，保存语义相反）、ADR-0009（保存语义按输入形态分档）、ADR-0002（标签条状态机）。
 
 ## 修订 2026-10-18（加载、简化与遮蔽条目 #155）
