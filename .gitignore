@@ -51,6 +51,7 @@ third
 /.playwright-cli/
 
 # local agent tooling
+/.openidea/
 /.qoder/
 
 # local specs and tickets
