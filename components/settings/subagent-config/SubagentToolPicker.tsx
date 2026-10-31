@@ -8,6 +8,7 @@ import {
   buildToolChecklistRows,
   expandToolPatterns,
   isToolChecklistRowChecked,
+  summarizeToolSelection,
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
 
@@ -39,7 +40,7 @@ export function SubagentToolPicker({
         const response = await fetch("/api/agent/tools", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cwd: cwdData.cwd }),
+          body: JSON.stringify({ cwd: cwdData.cwd, source: "subagent" }),
         });
         const data = await response.json() as { data?: { available?: ToolCatalogEntry[] } };
         if (!cancelled) setTools(data.data?.available ?? []);
@@ -57,12 +58,26 @@ export function SubagentToolPicker({
     () => buildToolChecklistRows(tools, (count) => t("Bound tool family — toggled together ({count} tools)", { count })),
     [tools, t],
   );
+  const selectedSet = useMemo(() => new Set(value), [value]);
+  const summary = useMemo(
+    () => summarizeToolSelection(value, allNames, rows, selectedSet),
+    [value, allNames, rows, selectedSet],
+  );
+  const unlistedRows = useMemo(
+    () => summary.unlisted.map((name) => ({
+      key: `unlisted:${name}`,
+      name,
+      group: null,
+      memberCount: 0,
+      description: null,
+    })),
+    [summary.unlisted],
+  );
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? rows.filter((row) => `${row.name} ${row.description ?? ""}`.toLowerCase().includes(q)) : rows;
-  }, [query, rows]);
-
-  const selectedSet = useMemo(() => new Set(value), [value]);
+    const displayRows = [...rows, ...unlistedRows];
+    return q ? displayRows.filter((row) => `${row.name} ${row.description ?? ""}`.toLowerCase().includes(q)) : displayRows;
+  }, [query, rows, unlistedRows]);
 
   const toggleTool = (name: string, checked: boolean) => {
     const next = toggleSelectionEntry(value, name, checked, allNames);
@@ -86,13 +101,13 @@ export function SubagentToolPicker({
           spellCheck={false}
           style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12 }}
         />
-        <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{selectedSet.size}/{tools.length}</span>
+        <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{summary.selected}/{summary.total}</span>
       </div>
 
       <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 6 }} data-hide-v-scrollbar>
         {filteredRows.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
-            {tools.length ? t("No matches") : t("No tools available")}
+            {tools.length || unlistedRows.length ? t("No matches") : t("No tools available")}
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 5 }}>

@@ -133,6 +133,10 @@ _Avoid_: 把它当作「自动保存」（那是同一个动作的另一种说�
 改动先停在本地、需要显式保存的设置项，即自由文本与密钥。
 _Avoid_: 把它当作草稿
 
+**密钥回退顺序（Key fallback order）**：
+服务端读取联网工具密钥时按固定顺序取来源：Pi Work 数据目录下 `deepseek/api-key`（界面保存、0600 权限）优先，其次回退到服务进程的 `DEEPSEEK_API_KEY` 环境变量；端点可用 `DEEPSEEK_BASE_URL` 覆盖。设置分区只展示来源与掩码，不回传完整密钥。
+_Avoid_: 把它当成「环境变量优先」；把密钥存进 `config.yaml` 或写进日志
+
 **未保存改动（Unsaved change）**：
 待保存项相对其已落盘值的差异；设置弹窗用它决定关闭前是否确认，也决定**离开**一个有未保存改动的设置分区前是否确认（同一个确认弹窗；点当前分区不算切换）。切页确认问的是被离开的那一页，因为它的草稿会随卸载丢弃。
 _Avoid_: 草稿（已用于会话标签页）
@@ -218,7 +222,7 @@ _Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
 **子代理档案（Subagent profile）**：
-一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`subagent` 工具 `spawn` 动作的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、危险命令的**无人值守档位**、Pi Bot 形象与运行超时。三个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）与 `implementer`（小任务实现）在首次初始化时写入表中，之后同样可改可删（`builtin` 只是 seed 标记，不是锁）；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode。
+一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`subagent` 工具 `spawn` 动作的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、危险命令的**无人值守档位**、Pi Bot 形象与运行超时。四个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）、`implementer`（小任务实现）与 `web_searcher`（网络检索与带来源的汇报）在首次初始化时写入表中，之后同样可改可删（`builtin` 只是 seed 标记，不是锁）；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode；`web_searcher` 的工具为 web_search/web_fetch/bash/read/write/edit，种子版本升到 2 后为既有安装补插，已有档案不被覆盖。
 _Avoid_: 把「子代理档案」说成「子代理类型」；把它与某次调用（子代理任务）混为一谈
 
 **子代理任务（Subagent task）**：
@@ -288,6 +292,10 @@ _Avoid_: 用「工具」指代工具集
 **自定义工具（Custom Tool）**：
 在 Pi Work 代码中实现、暴露给 pi agent 的工具。
 _Avoid_: 把它当成历史遗留命名
+
+**子代理专用工具（Subagent-only tool）**：
+仅子代理会话可选择和使用的工具，对所有子代理档案开放选择；普通会话与定时任务会话不可启用。
+_Avoid_: 把它当作某个子代理档案独占的工具；把普通会话界面隐藏当作使用范围限制
 
 **交互闸门（Interaction gate）**：
 agent 的一步停下来等用户做一个决定的那个状态，有**权限确认**（一次危险命令）与**提问**（一批结构化问题）两种形态；两种形态共用一张挂起表、一份重播契约与一份会话级备忘。被回答、被取消、超时或会话销毁都会让闸门作废。

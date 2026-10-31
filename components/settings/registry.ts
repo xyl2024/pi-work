@@ -16,6 +16,7 @@ export type SettingsSectionId =
   | "subagent"
   | "retry"
   | "network-proxy"
+  | "deepseek-key"
   | "toast-test"
   | "about";
 
@@ -53,6 +54,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "retry", labelKey: "Agent retry", group: "agent" },
 
   { id: "network-proxy", labelKey: "Network proxy", group: "integrations" },
+  { id: "deepseek-key", labelKey: "DeepSeek API Key", group: "integrations" },
 
   { id: "toast-test", labelKey: "Toast Test", group: "developer" },
   { id: "about", labelKey: "About Pi Work", group: "developer" },

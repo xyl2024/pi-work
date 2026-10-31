@@ -101,3 +101,52 @@ describe("agent get_tools schema (API)", () => {
     }
   }, 60_000);
 });
+
+describe("agent tool catalog source probe (API)", () => {
+  const catalogNames = async (payload: Record<string, unknown>): Promise<string[]> => {
+    const { status, body } = await api("/api/agent/tools", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    expectOk(status, body);
+    return namesOf((body.data as { available: Array<{ name: string }> }).available);
+  };
+
+  it("lists the subagent-only web tools only for the subagent source", async () => {
+    const cwd = process.cwd();
+    const subagent = await catalogNames({ cwd, source: "subagent" });
+    expect(subagent).toContain("web_search");
+    expect(subagent).toContain("web_fetch");
+
+    for (const names of [
+      await catalogNames({ cwd }),
+      await catalogNames({ cwd, source: "user" }),
+      await catalogNames({ cwd, source: "scheduled" }),
+    ]) {
+      expect(names).not.toContain("web_search");
+      expect(names).not.toContain("web_fetch");
+    }
+  }, 180_000);
+
+  it("falls back to the user source for an unknown source value", async () => {
+    const names = await catalogNames({ cwd: process.cwd(), source: "unknown" });
+    expect(names).not.toContain("web_search");
+    expect(names).not.toContain("web_fetch");
+  }, 120_000);
+
+  it("keeps the existing validation errors for a missing or unknown cwd", async () => {
+    const missing = await api("/api/agent/tools", {
+      method: "POST",
+      body: JSON.stringify({ source: "subagent" }),
+    });
+    expect(missing.status).toBe(400);
+    expect(missing.body.error).toBe("cwd is required");
+
+    const nonexistent = await api("/api/agent/tools", {
+      method: "POST",
+      body: JSON.stringify({ cwd: "/definitely/not/a/real/directory", source: "subagent" }),
+    });
+    expect(nonexistent.status).toBe(400);
+    expect(String(nonexistent.body.error)).toContain("Directory does not exist");
+  });
+});

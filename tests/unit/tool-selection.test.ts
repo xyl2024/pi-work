@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildToolChecklistRows,
   declarableToolNames,
   expandToolPatterns,
   isDeclarableTool,
+  summarizeToolSelection,
 } from "@/lib/shared/tool-selection";
 import type { ToolExposure } from "@/lib/shared/types";
 
@@ -42,5 +44,41 @@ describe("tool-selection: declarable tools", () => {
     ]));
 
     expect(expandToolPatterns(["mcp__*"], all).filter((name) => declarable.has(name))).toEqual(["mcp__gh__get"]);
+  });
+});
+
+describe("tool-selection: selection summary", () => {
+  const rowsOf = (tools: Array<{ name: string; description?: string | null }>) =>
+    buildToolChecklistRows(tools, (count) => `${count} tools`);
+
+  it("counts selected names that are missing from the catalog", () => {
+    const rows = rowsOf([{ name: "read" }, { name: "bash" }]);
+    const summary = summarizeToolSelection(
+      ["read", "web_search"],
+      ["read", "bash"],
+      rows,
+      new Set(["read", "web_search"]),
+    );
+
+    expect(summary).toEqual({ selected: 2, total: 3, unlisted: ["web_search"] });
+  });
+
+  it("keeps the fraction coherent when nothing is selected", () => {
+    const rows = rowsOf([{ name: "read" }, { name: "bash" }]);
+    const summary = summarizeToolSelection([], ["read", "bash"], rows, new Set());
+
+    expect(summary).toEqual({ selected: 0, total: 2, unlisted: [] });
+  });
+
+  it("does not double-count unlisted names repeated in the selection", () => {
+    const rows = rowsOf([{ name: "read" }]);
+    const summary = summarizeToolSelection(
+      ["legacy_tool", "legacy_tool"],
+      ["read"],
+      rows,
+      new Set(["legacy_tool"]),
+    );
+
+    expect(summary).toEqual({ selected: 1, total: 2, unlisted: ["legacy_tool"] });
   });
 });
