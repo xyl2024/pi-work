@@ -268,6 +268,9 @@ export const chat = {
   "Expand next {n}": "再展开 {n} 条",
   "Expand remaining {n}": "展开剩余 {n} 条",
 
+  "timeout={timeout}s": "timeout={timeout}s",
+  "duration={duration}": "duration={duration}",
+
   "Message from channel {channel}": "来自频道 {channel}",
   "Message from scheduled task {task}": "来自定时任务 {task}",
   "Message from session {session}": "来自会话 {session}",

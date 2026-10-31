@@ -173,6 +173,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 }
 
 function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
+  const { t } = useI18n();
   const { isDark } = useTheme();
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
@@ -180,9 +181,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const isCodemode = toolKind === "codemode";
   const isSpecialized = isBash || isFileMutation;
   const isCollapsedByDefault = !isSpecialized;
-  const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
-    ? String(block.input.timeout)
-    : null;
   const [expanded, setExpanded] = useState(!isCollapsedByDefault);
   const collapseNonce = useCollapseNonce();
   useEffect(() => {
@@ -206,7 +204,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     [isFileMutation, block, result],
   );
 
-  const header = (
+  const renderHeader = () => (
     <div
       role="button"
       tabIndex={0}
@@ -222,11 +220,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
-        {timeout !== null && (
-          <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, flexShrink: 0 }}>
-            timeout={timeout}s
-          </span>
-        )}
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {getToolPreview(block)}
         </span>
@@ -254,7 +247,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout, durationMs: result?.durationMs })} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout: block.input.timeout, durationMs: result?.durationMs }, t)} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -270,7 +263,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs })} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs }, t)} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -285,7 +278,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
       }}
     >
-      {header}
+      {renderHeader()}
 
       <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>

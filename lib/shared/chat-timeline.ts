@@ -114,6 +114,14 @@ export interface TimelineDividers {
 
 type DividerPlacement = "unanchored" | "unrendered" | "placed";
 
+type ChangeAnchor =
+  | { kind: "trailing" }
+  | { kind: "visible"; index: number };
+
+function changeAnchorKey(markerKind: ChangeMarker["kind"], anchor: ChangeAnchor): string {
+  return anchor.kind === "trailing" ? `${markerKind}:trailing` : `${markerKind}:visible:${anchor.index}`;
+}
+
 const DIVIDER_ORDER: Record<ChatTimelineDivider["kind"], number> = {
   compaction: 0,
   change: 1,
@@ -158,29 +166,33 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
   const firstVisibleUserIndex = input.timeline.visibleMessages.findIndex(
     (message) => message.role === "user",
   );
-  const changeAnchors: { marker: ChangeMarker; anchorKey: string }[] = [];
+  const retainedMarkers: ChangeMarker[] = [];
   if (firstVisibleUserIndex !== -1) {
-    for (const marker of input.changeMarkers ?? []) {
+    const seenAnchors = new Set<string>();
+    const changeMarkers = input.changeMarkers ?? [];
+    for (let index = changeMarkers.length - 1; index >= 0; index--) {
+      const marker = changeMarkers[index];
+      let anchor: ChangeAnchor;
       if (!marker.beforeMessageEntryId) {
-        changeAnchors.push({ marker, anchorKey: "trailing" });
-        continue;
+        anchor = { kind: "trailing" };
+      } else {
+        const visibleIndex = input.timeline.visibleIndexOfEntry(marker.beforeMessageEntryId);
+        if (visibleIndex === null || visibleIndex <= firstVisibleUserIndex) continue;
+        anchor = { kind: "visible", index: visibleIndex };
       }
-      const visibleIndex = input.timeline.visibleIndexOfEntry(marker.beforeMessageEntryId);
-      if (visibleIndex === null || visibleIndex <= firstVisibleUserIndex) continue;
-      changeAnchors.push({ marker, anchorKey: `visible:${visibleIndex}` });
+      const anchorKey = changeAnchorKey(marker.kind, anchor);
+      if (seenAnchors.has(anchorKey)) continue;
+      seenAnchors.add(anchorKey);
+      retainedMarkers.push(marker);
     }
+    retainedMarkers.reverse();
   }
 
-  const lastChangeAtAnchor = new Map<string, number>();
-  changeAnchors.forEach(({ marker, anchorKey }, index) => {
-    lastChangeAtAnchor.set(`${marker.kind}:${anchorKey}`, index);
-  });
-  changeAnchors.forEach(({ marker, anchorKey }, index) => {
-    if (lastChangeAtAnchor.get(`${marker.kind}:${anchorKey}`) !== index) return;
+  for (const marker of retainedMarkers) {
     if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
       trailingChangeMarkers.push(marker);
     }
-  });
+  }
 
   for (const dividers of beforeVisible.values()) {
     dividers.sort((a, b) => DIVIDER_ORDER[a.kind] - DIVIDER_ORDER[b.kind]);

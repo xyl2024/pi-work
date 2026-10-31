@@ -531,3 +531,44 @@ describe("buildTimelineDividers change marker suppression and folding", () => {
     ]);
   });
 });
+
+describe("buildTimelineDividers replay crop consistency", () => {
+  const messages: AgentMessage[] = [
+    assistant([{ type: "text", text: "warmup" }]),
+    user("one"),
+    assistant([{ type: "text", text: "first" }]),
+    user("two"),
+    assistant([{ type: "text", text: "second" }]),
+    user("three"),
+  ];
+  const entryIds = ["e0", "e1", "e2", "e3", "e4", "e5"];
+  const timeline = timelineOf(messages, entryIds);
+  const modelChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "model",
+    provider: "anthropic",
+    modelId: "claude-x",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:01.000Z",
+  });
+
+  it("drops cropped anchors and keeps the ones still inside the replay slice", () => {
+    const slice = timeline.sliceForReplay(4);
+    expect(slice.entryIds).toEqual(["e0", "e1", "e2", "e3"]);
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds: slice.entryIds,
+      changeMarkers: [
+        modelChange("before-user", "e1"),
+        modelChange("kept", "e3"),
+        modelChange("cropped", "e5"),
+      ],
+    });
+    expect(dividers.beforeVisible.size).toBe(1);
+    expect(
+      (dividers.beforeVisible.get(3) ?? []).map((d) => (d.kind === "change" ? d.marker.entryId : d.kind)),
+    ).toEqual(["kept"]);
+    expect([...dividers.beforeEntryId.keys()]).toEqual(["e3"]);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
+  });
+});

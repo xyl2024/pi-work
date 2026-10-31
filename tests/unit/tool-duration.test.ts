@@ -42,6 +42,24 @@ describe("formatToolAnnotation", () => {
     expect(formatToolAnnotation({ timeout: "10", durationMs: 1200 })).toBe("(timeout=10s, duration=1.2s)");
   });
 
+  it("accepts a numeric timeout and skips an empty or invalid one", () => {
+    expect(formatToolAnnotation({ timeout: 10, durationMs: 1200 })).toBe("(timeout=10s, duration=1.2s)");
+    expect(formatToolAnnotation({ timeout: 0 })).toBe("(timeout=0s)");
+    expect(formatToolAnnotation({ timeout: "", durationMs: 320 })).toBe("(duration=320ms)");
+    expect(formatToolAnnotation({ timeout: "   " })).toBeNull();
+    expect(formatToolAnnotation({ timeout: Number.NaN })).toBeNull();
+    expect(formatToolAnnotation({ timeout: undefined })).toBeNull();
+  });
+
+  it("builds each label through the translator", () => {
+    const translate = (key: string, values?: Record<string, string | number>) => {
+      if (key === "timeout={timeout}s") return `T=${values?.timeout}`;
+      if (key === "duration={duration}") return `D=${values?.duration}`;
+      return key;
+    };
+    expect(formatToolAnnotation({ timeout: 10, durationMs: 1200 }, translate)).toBe("(T=10, D=1.2s)");
+  });
+
   it("shows only the timeout when the duration is missing", () => {
     expect(formatToolAnnotation({ timeout: "10" })).toBe("(timeout=10s)");
   });
