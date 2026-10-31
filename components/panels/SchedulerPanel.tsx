@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { escapeScheduler, schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
+import { schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
 import { SchedulerRootPage } from "./scheduler/SchedulerRootPage";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
@@ -31,7 +31,7 @@ export function SchedulerPanel({
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (escapeScheduler().closePanel) onCloseTab?.();
+    if (schedulerPanel.back().closePanel) onCloseTab?.();
   });
 
   return (

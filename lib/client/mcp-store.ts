@@ -79,34 +79,33 @@ function reconcilePages(pages: readonly McpPage[], entryUids: readonly string[])
 let nextLoadIsForeground = false;
 
 function mirrorPages(pages: readonly McpPage[]): void {
-  const current = baseStore.currentPage();
+  const current = mcpPanel.currentPage();
   const target = pages[pages.length - 1] ?? MCP_LIST_PAGE;
   if (target.kind === "list") {
-    if (current.kind !== "list") baseStore.resetPages();
+    if (current.kind !== "list") mcpPanel.resetPages();
     return;
   }
   if (current.kind === "entry" && current.uid === target.uid) return;
-  if (current.kind === "entry") baseStore.resetPages();
-  baseStore.openPage(target);
+  if (current.kind === "entry") mcpPanel.resetPages();
+  mcpPanel.openPage(target);
 }
 
 function commitPages(pages: readonly McpPage[]): void {
-  const state = baseStore.get();
+  const state = mcpPanel.get();
   if (state.currentCwd === null) return;
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);
   if (!bucket || pagesEqual(bucket.pages, pages)) return;
-  baseStore.patch({
+  mcpPanel.patch({
     buckets: withMcpBucket(state.buckets, { ...bucket, pages: [...pages] }),
   });
 }
 
 async function loadMcp(
-  key: string,
+  cwd: string | null,
   { get, patch, signal }: PanelViewLoadContext<McpStoreState>,
 ): Promise<void> {
   const foreground = nextLoadIsForeground;
   nextLoadIsForeground = false;
-  const cwd = key === "" ? null : key;
 
   if (cwd === null) {
     patch({ currentCwd: null, loadingCwd: null, loadError: null, loadErrorCwd: null });
@@ -188,15 +187,18 @@ async function loadMcp(
   }
 }
 
-const mcpAdapter: PanelViewAdapter<McpStoreState, McpPage, string | null, string> = {
+const mcpAdapter: PanelViewAdapter<McpStoreState, McpPage, string | null, string | null> = {
   kind: "mcp",
   initial: INITIAL,
   rootPage: MCP_LIST_PAGE,
   loadPolicy: "on-visible",
-  key: (cwd) => cwd ?? "",
+  key: (cwd) => cwd,
   load: loadMcp,
   release() {
     nextLoadIsForeground = false;
+  },
+  afterPages({ pages }) {
+    commitPages(pages);
   },
   guard(state): PanelViewCloseGuard | null {
     const confirm = selectMcpCloseConfirm({ dirty: hasDirtyMcpBucket(state.buckets) });
@@ -219,24 +221,8 @@ const mcpAdapter: PanelViewAdapter<McpStoreState, McpPage, string | null, string
   },
 };
 
-const baseStore = createPanelViewStore(mcpAdapter);
-
-export const mcpPanel: PanelViewStore<McpStoreState, McpPage, string | null> = {
-  ...baseStore,
-  openPage(page) {
-    baseStore.openPage(page);
-    commitPages(baseStore.pages());
-  },
-  resetPages() {
-    baseStore.resetPages();
-    commitPages(baseStore.pages());
-  },
-  back() {
-    const result = baseStore.back();
-    if (!result.closePanel) commitPages(baseStore.pages());
-    return result;
-  },
-};
+export const mcpPanel: PanelViewStore<McpStoreState, McpPage, string | null> =
+  createPanelViewStore(mcpAdapter);
 
 export function useMcpPanel() {
   return mcpPanel.useSnapshot();

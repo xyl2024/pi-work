@@ -2,8 +2,8 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { OAuthDetail } from "@/components/settings/models-config/OAuthDetail";
-import { reloadModelsConfigOAuthProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
-import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
+import { modelsConfigPanel, reloadModelsConfigOAuthProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
+import { PanelBackButton } from "../PanelBackButton";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
@@ -15,7 +15,7 @@ export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <ModelsConfigBackButton />
+        <PanelBackButton panel={modelsConfigPanel} />
         <span style={titleStyle}>{provider?.name ?? providerId}</span>
       </div>
       {provider ? (

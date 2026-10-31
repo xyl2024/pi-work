@@ -10,8 +10,7 @@ import { listToolsForCwd } from "@/lib/client/agent-client";
 import { fetchWechatChannels, type SchedulerChannel } from "@/lib/client/scheduler-io";
 import {
   saveSchedulerForm,
-  schedulerBack,
-  schedulerBackPanel,
+  schedulerPanel,
   updateSchedulerForm,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
@@ -126,7 +125,7 @@ export function SchedulerFormPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
-        <PanelBackButton panel={schedulerBackPanel} />
+        <PanelBackButton panel={schedulerPanel} />
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
           {formTaskId ? t("Edit task") : t("New task")}
         </span>
@@ -245,7 +244,7 @@ export function SchedulerFormPage() {
           </span>
         )}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-          <button type="button" onClick={schedulerBack} disabled={saving} style={btnGhost}>
+          <button type="button" onClick={() => schedulerPanel.back()} disabled={saving} style={btnGhost}>
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>

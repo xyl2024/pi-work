@@ -53,8 +53,6 @@ const INITIAL: SkillsViewState = {
 
 const ROOT_PAGE: SkillsPage = { kind: "root" };
 
-const NO_CWD_KEY = "";
-
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
@@ -163,25 +161,25 @@ export function openSkillsAdd(): void {
   skillsPanel.openPage({ kind: "add" });
 }
 
-const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null, string> = {
+const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null, string | null> = {
   kind: "skills",
   initial: INITIAL,
   rootPage: ROOT_PAGE,
   loadPolicy: "once",
-  key: (cwd) => cwd ?? NO_CWD_KEY,
-  async load(key, { get, patch, signal }) {
-    if (key === NO_CWD_KEY) {
+  key: (cwd) => cwd,
+  async load(cwd, { get, patch, signal }) {
+    if (cwd === null) {
       skillsPanel.resetPages();
       patch({ cwd: null, loading: false, loaded: false, loadError: null, skills: [], toggleBusy: [] });
       return;
     }
-    if (get().cwd !== key) {
+    if (get().cwd !== cwd) {
       skillsPanel.resetPages();
       patch({ toggleBusy: [] });
     }
-    patch({ cwd: key, loading: true, loaded: false, loadError: null, skills: [] });
+    patch({ cwd, loading: true, loaded: false, loadError: null, skills: [] });
     try {
-      const skills = await fetchSkills(key, signal);
+      const skills = await fetchSkills(cwd, signal);
       patch({ loading: false, loaded: true, skills });
     } catch (e) {
       patch({ loading: false, loaded: false, loadError: errorMessage(e) });
