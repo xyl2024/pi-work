@@ -11,7 +11,7 @@ import type { SettingsSectionId } from "./registry";
 
 export type StagedSettingsKey = Extract<
   SettingsSectionId,
-  "profile" | "append-system" | "network-proxy" | "dangerous-commands"
+  "profile" | "append-system" | "network-proxy" | "deepseek-key" | "dangerous-commands"
 >;
 
 export function useUnsavedChanges() {

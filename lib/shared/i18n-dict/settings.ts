@@ -184,4 +184,20 @@ export const settings = {
   "unknown error": "未知错误",
   "The connection test sends one request to {url} through the proxy. Only http:// and https:// proxies are supported.":
     "测试连接会通过该代理向 {url} 发一次真实请求。仅支持 http:// 与 https:// 代理。",
+
+  "DeepSeek API Key": "DeepSeek API Key",
+  "DeepSeek API Key not configured": "尚未配置 DeepSeek API Key",
+  "Saved in Pi Work — {masked}": "已保存在 Pi Work — {masked}",
+  "Using DEEPSEEK_API_KEY environment variable — {masked}":
+    "正在使用 DEEPSEEK_API_KEY 环境变量 — {masked}",
+  "API Key configured; enter a new key to replace": "API Key 已配置，输入新密钥可替换",
+  "Enter the DeepSeek API Key": "填写 DeepSeek API Key",
+  "API key saved": "API Key 已保存",
+  "API key removed": "API Key 已清除",
+  "Failed to load API key status": "读取 API Key 状态失败",
+  "Failed to save API key": "保存 API Key 失败",
+  "Failed to clear API key": "清除 API Key 失败",
+  "Clearing...": "正在清除...",
+  "The key is stored in the Pi Work data directory with 0600 permissions and takes priority over the DEEPSEEK_API_KEY environment variable.":
+    "密钥保存在 Pi Work 数据目录，权限为 0600，并优先于 DEEPSEEK_API_KEY 环境变量。",
 } as const;
