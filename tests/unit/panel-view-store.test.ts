@@ -19,13 +19,14 @@ interface FakeContext {
 }
 
 interface PendingLoad {
-  key: string;
+  key: string | null;
   signal: AbortSignal;
   resolve(data: string): void;
 }
 
 interface HarnessOptions {
   policy?: PanelViewLoadPolicy;
+  key?(context: FakeContext): string | null;
   guard?(view: FakeView): PanelViewCloseGuard | null;
   onRelease?(store: FakeStore): void;
 }
@@ -37,12 +38,12 @@ function createHarness(options: HarnessOptions = {}) {
   const log: string[] = [];
   const ref: { current: FakeStore | null } = { current: null };
 
-  const adapter: PanelViewAdapter<FakeView, FakePage, FakeContext, string> = {
+  const adapter: PanelViewAdapter<FakeView, FakePage, FakeContext, string | null> = {
     kind: "fake",
     initial: { data: null, draft: "" },
     rootPage: { kind: "root" },
     loadPolicy: options.policy ?? "once",
-    key: (context) => context.cwd,
+    key: options.key ?? ((context) => context.cwd),
     load: (key, context) =>
       new Promise<void>((resolve) => {
         loads.push({
@@ -57,6 +58,13 @@ function createHarness(options: HarnessOptions = {}) {
     release: () => {
       log.push("release");
       if (options.onRelease && ref.current) options.onRelease(ref.current);
+    },
+    afterPages: (event) => {
+      log.push(`pages:${event.pages.length}`);
+    },
+    afterBack: (event) => {
+      log.push(`back:${event.popped === null ? "root" : event.popped.kind}`);
+      event.writer.patch({ draft: "" });
     },
     guard: (view) => (options.guard ? options.guard(view) : null),
     status: (view) => view.data,
@@ -116,6 +124,18 @@ describe("page stack", () => {
     expect(store.pages()).toEqual([{ kind: "root" }]);
     expect(store.back()).toEqual({ closePanel: true });
     expect(store.pages()).toEqual([{ kind: "root" }]);
+  });
+
+  it("lets the adapter observe page changes and the popped page", () => {
+    const { store, log } = createHarness();
+    store.openPage(detail("a"));
+    store.openPage(detail("b"));
+    store.back();
+    store.resetPages();
+    store.back();
+
+    expect(log).toEqual(["pages:2", "pages:2", "pages:1", "back:detail", "pages:1", "back:root"]);
+    expect(store.get().draft).toBe("");
   });
 });
 
@@ -205,6 +225,22 @@ describe("loading", () => {
     await flush();
 
     expect(store.get().data).toBe("fresh");
+  });
+
+  it("treats a null key as loaded instead of unloaded", async () => {
+    const { store, loads } = createHarness({ key: () => null });
+    store.open({ cwd: "a" });
+    loads[0].resolve("disk");
+    await flush();
+
+    store.open({ cwd: "a" });
+    store.reload();
+    expect(loads).toHaveLength(2);
+
+    loads[1].resolve("disk2");
+    await flush();
+    store.open({ cwd: "a" });
+    expect(loads).toHaveLength(2);
   });
 
   it("reuses a loaded once-policy key", async () => {

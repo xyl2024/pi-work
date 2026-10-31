@@ -245,6 +245,9 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
   release() {
     cancelActiveOAuthLogins();
   },
+  afterBack({ writer }) {
+    writer.patch({ rawEdit: null });
+  },
   guard(state): PanelViewCloseGuard | null {
     const confirm = selectModelsConfigCloseConfirm({
       dirty: selectModelsConfigDirty(state),
@@ -384,11 +387,6 @@ export function openModelsConfigFillModel(providerName: string, index: number): 
   modelsConfigPanel.patch({ rawEdit: null });
 }
 
-export function modelsConfigBack(): void {
-  modelsConfigPanel.back();
-  modelsConfigPanel.patch({ rawEdit: null });
-}
-
 export function addModelsConfigCustomProvider(): void {
   const { config, name } = withCustomProvider(modelsConfigPanel.get().config);
   modelsConfigPanel.patch({ config });
@@ -454,7 +452,6 @@ export function fillModelsConfigModelFromCatalog(
     config: withModel(state.config, providerName, index, cloneModelFromCatalog(source)),
   });
   modelsConfigPanel.back();
-  modelsConfigPanel.patch({ rawEdit: null });
 }
 
 export function removeModelsConfigModel(providerName: string, index: number): void {

@@ -202,22 +202,6 @@ export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null
   });
 }
 
-export function schedulerBack(): { closePanel: boolean } {
-  const leavingForm = schedulerPanel.currentPage().kind === "form";
-  if (leavingForm) {
-    schedulerPanel.patch({ form: null, formTaskId: null, formBaseline: null, saveError: null });
-  }
-  const result = schedulerPanel.back();
-  schedulerPanel.patch({ runsVisible: false });
-  return result;
-}
-
-export function escapeScheduler(): { closePanel: boolean } {
-  if (schedulerPanel.pageDepth() <= 1) return { closePanel: true };
-  schedulerBack();
-  return { closePanel: false };
-}
-
 export function updateSchedulerForm(partial: Partial<SchedulerTaskForm>): void {
   const form = schedulerPanel.get().form;
   if (form === null) return;
@@ -367,6 +351,12 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
   release() {
     clearPollingResources();
   },
+  afterBack({ popped, writer }) {
+    if (popped?.kind === "form") {
+      writer.patch({ form: null, formTaskId: null, formBaseline: null, saveError: null });
+    }
+    writer.patch({ runsVisible: false });
+  },
   guard(state): PanelViewCloseGuard | null {
     const confirm = selectSchedulerCloseConfirm({
       dirty: isSchedulerFormDirty(state.form, state.formBaseline),
@@ -388,15 +378,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
 export const schedulerPanel: PanelViewStore<SchedulerViewState, SchedulerPage, void> =
   createPanelViewStore(schedulerAdapter);
 
-export const schedulerBackPanel = {
-  useSnapshot: schedulerPanel.useSnapshot,
-  back: schedulerBack,
-};
-
 export function useSchedulerPanel() {
   return schedulerPanel.useSnapshot();
-}
-
-export function useSchedulerRunning(): boolean {
-  return schedulerPanel.useStatus() === true;
 }

@@ -10,7 +10,7 @@ MCP 服务器配置（两份 `mcp.json`：全局 `~/.pi/agent/mcp.json` 与工�
 - 面板内部是**两级页栈**：列表页（两份文件各一节，各自带文件级开关 `autoEnableCodemode` 与文件级解析错误）→ 条目页（表单 / 原始 JSON 双模式，新条目多一个作用域选择器）。每级全宽加返回控件，Esc 退一级，退到列表页再按才走面板标签的关闭规则。「+ 添加服务器」把新草稿追加进列表并直接进条目页，不新开独立页面。
 - 面板底部固定一条保存栏（保存 / 保存中 / 已保存 / 错误），加上原有的 `mcp.applyHint` 与「新建会话」动作，不再需要滚到底找按钮。
 - 保存前的那张确认（逐条列出将删除的条目、以及下个会话会以你的权限执行的命令）**保留为应用级对话框**，不降级成页面内提示：它是「一次不可逆写入前的最后一道闸」，塞进窄栏会丢掉「屏幕被遮住所以必须停下来读」的重量，而它要说的两件事（删条目、spawn 命令）恰好是面板里最危险的动作。
-- 草稿、页栈位置与已读到的文件快照活在面板视图之外的模块级 store（`lib/client/mcp-store.ts`）：收起面板、切标签都不算离开；只有关闭该面板标签时才可能丢弃，dirty 时先确认。右栏 descriptor 的 badge 钩子接上未保存改动角标，面板收起时仍然可见。
+- 草稿、页栈位置与已读到的文件快照活在面板视图之外的模块级 store（`lib/client/mcp-store.ts`，迁移后是 `createPanelViewStore` 的一个 adapter）：收起面板、切标签都不算离开；只有关闭该面板标签时才可能丢弃，dirty 时先确认。右栏 descriptor 的 badge 钩子接上未保存改动角标，面板收起时仍然可见。
 
 **这次只换容器、不改保存语义。** 这批字段继续走 ADR-0010：一次提交 = 对每个受影响的 `mcp.json` 做一次保留式读-改-写，先整批校验再落盘，任何一条不合格就一条都不写；`~/.pi/agent/` 的写口仍然只有那个专用路由，不经过 `lib/server/file-access.ts` 的允许根。唯一的信号变化是「新建会话使用新的 MCP 配置」从「模态关闭」这件事上摘掉——模态不存在了，落点改为保存成功。
 
@@ -34,7 +34,7 @@ MCP 服务器配置（两份 `mcp.json`：全局 `~/.pi/agent/mcp.json` 与工�
 
 ### 二、为什么干净时重开要重读盘
 
-房子的既有规矩是 reuse：模型配置的草稿活在模块 store 里，只有**关标签**才释放，下次打开才重读磁盘（`selectModelsConfigOpenAction`）；技能靠 list 缓存做到「不闪 loading」。MCP 有一条它们没有的事实——ADR-0010 白纸黑字写着这个文件**不止一个写者**（pi CLI / TUI、用户手改），而且每次保存都是**以磁盘当前内容为基底**的读-改-写，从不假设自己的快照是最新的。写路径已经承认「我看到的可能不是最新的」，显示层却假设「我看到的就是最新的」，这两半自相矛盾。
+房子的既有规矩是 reuse：模型配置的草稿活在模块 store 里，只有**关标签**才释放，下次打开才重读磁盘（模型配置的 `loadPolicy: "once"`；原 `selectModelsConfigOpenAction` 已删除）；技能靠 list 缓存做到「不闪 loading」。MCP 有一条它们没有的事实——ADR-0010 白纸黑字写着这个文件**不止一个写者**（pi CLI / TUI、用户手改），而且每次保存都是**以磁盘当前内容为基底**的读-改-写，从不假设自己的快照是最新的。写路径已经承认「我看到的可能不是最新的」，显示层却假设「我看到的就是最新的」，这两半自相矛盾。
 
 所以 MCP 的规则是：面板没有 dirty 草稿时，每次重新可见都重拉一次 `/api/mcp?cwd=`；dirty 时保留草稿不重读（`lib/shared/mcp-close.ts` 的 `selectMcpOpenAction`）。代价只是本地一次文件读取和一次可能的 loading 闪动；换来的是「面板不会拿一份可能是昨天的手改内容骗你」，而且不需要新增「刷新」按钮——house rule 下想刷新就得关标签重开，很反直觉。
 
@@ -55,7 +55,7 @@ MCP 服务器配置（两份 `mcp.json`：全局 `~/.pi/agent/mcp.json` 与工�
 - 角标钩子被第四次使用（模型配置是未保存改动、技能是安装进行中、定时任务是有运行在跑、MCP 是未保存改动且跨 cwd），四处共用同一个钩子、只换判据，不各存一份。
 - `PanelBodyCtx` 需要新增一个「新建会话」回调（底部栏的 `mcp.newSession` 要用），这是本次唯一的 shell 接口变化。
 - 服务端 MCP 实现一行未改：`lib/server/mcp-config.ts` 的镜像 loader / 校验器、`lib/server/mcp-entries.ts` 的第二读取器与读-改-写、`app/api/mcp` 的 GET / PUT、`lib/server/config.ts` 的 `mcp.project_servers` 全部不动。CHANGELOG 意义上「容器换了、写盘规则没换」就是本文与 ADR-0010 的关系。
-- 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/mcp-drafts.ts`（按 cwd 分桶、park / restore、任一 dirty）、`lib/shared/mcp-pages.ts`（页栈 push / back / 保存与删除后的收敛）、`lib/shared/mcp-close.ts`（关标签确认与重开是否重读盘）；既有的 `lib/shared/mcp-draft.ts`（草稿、dirty、校验问题、待提交载荷）规则不变，只补它的分桶外壳。面板内的视觉布局、窄栏下两节列表与原始 JSON 编辑器的高度、`autoEnableCodemode` 开关在窄栏里的排布、空态与加载态文案，以及「原始 JSON 编辑到一半切走再回来内容还在」的 smoke test，仍属人工清单（ADR-0003 规则 3）。
+- 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/mcp-drafts.ts`（按 cwd 分桶、park / restore、任一 dirty）、页栈 push / back / 保存与删除后的收敛（原 `lib/shared/mcp-pages.ts` 已删除，改由 `lib/client/panel-view-store.ts` 拥有页栈、adapter 的 `afterPages` 把页栈写回按 cwd 分桶）、`lib/shared/mcp-close.ts`（关标签确认与重开是否重读盘）；既有的 `lib/shared/mcp-draft.ts`（草稿、dirty、校验问题、待提交载荷）规则不变，只补它的分桶外壳。面板内的视觉布局、窄栏下两节列表与原始 JSON 编辑器的高度、`autoEnableCodemode` 开关在窄栏里的排布、空态与加载态文案，以及「原始 JSON 编辑到一半切走再回来内容还在」的 smoke test，仍属人工清单（ADR-0003 规则 3）。
 - 聊天输入栏、会话工具选择器里与 MCP 工具相关的一切完全不动——那是「这个会话用哪些工具」，与「管理 MCP 服务器」是两件事。
 
 **参见**：ADR-0024「面板视图的生命周期是一个 module」——本文的面板视图状态（保活、释放、页栈与关闭确认）由那一个 module 拥有，本文只提供 adapter，Decision 不变。
