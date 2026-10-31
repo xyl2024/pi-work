@@ -121,6 +121,7 @@ describe("agent tool catalog source probe (API)", () => {
     for (const names of [
       await catalogNames({ cwd }),
       await catalogNames({ cwd, source: "user" }),
+      await catalogNames({ cwd, source: "scheduled" }),
     ]) {
       expect(names).not.toContain("web_search");
       expect(names).not.toContain("web_fetch");

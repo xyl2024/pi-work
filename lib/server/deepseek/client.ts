@@ -1,4 +1,5 @@
 import {
+  clampInteger,
   WEB_FETCH_DEFAULT_MAX_CHARS,
   WEB_FETCH_MAX_CHARS,
   WEB_SEARCH_DEFAULT_COUNT,
@@ -84,11 +85,6 @@ function optionalNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
-  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback;
-  return Math.min(Math.max(numeric, min), max);
-}
-
 function truncateWithMarker(value: string, max: number): { text: string; truncated: boolean } {
   if (value.length <= max) return { text: value, truncated: false };
   return {
@@ -107,8 +103,11 @@ function errorBodySummary(body: string): string {
 
 function mapFetchError(error: unknown, timeoutMs: number): string {
   if (error instanceof Error) {
-    if (error.name === "TimeoutError" || error.name === "AbortError") {
+    if (error.name === "TimeoutError") {
       return `DeepSeek API request timed out after ${timeoutMs}ms.`;
+    }
+    if (error.name === "AbortError") {
+      return "DeepSeek API request was aborted.";
     }
     return `DeepSeek API request failed: ${error.message}`;
   }

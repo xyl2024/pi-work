@@ -8,11 +8,11 @@ ADR-0013 删掉了 `web_search` / `fetch_content` 与整条本地抓取链之后
 
 新增 `web_search` 与 `web_fetch` 两个自定义工具（`lib/server/web-tools.ts` 的 `createWebSearchTool` / `createWebFetchTool`）。专用语义落在服务端注册层，而不是界面隐藏或提示词劝阻：`lib/server/rpc-manager.ts` 创建会话时用 `subagentWebTools(capturedSource)` 决定是否把这两个工具放进 `customTools`，`user` 与 `scheduled` 源拿到空数组。SDK 的工具 allowlist 与既有的可声明名单收敛照常生效，因此存量选择或 API 直接写入这两个名字的普通会话 / 定时任务会话也启不了它们——展开后没有匹配工具，等价于不选，与 ADR-0011 / ADR-0013 的遗留名称处置一致。
 
-工具目录探测多一个可选的 `source` 参数（`app/api/agent/tools/route.ts` 的 `catalogSource`，缺省与未知值都落回 `user`），子代理档案编辑器以 `source: "subagent"` 起一次临时会话列目录（`components/settings/subagent-config/SubagentToolPicker.tsx`），普通会话的目录仍然看不到这两个名字。两个工具对所有子代理档案开放，不是某个档案的独占配置。
+工具目录探测多一个可选的 `source` 参数（`lib/shared/web-tools.ts` 的 `normalizeProbeSource`，缺省与未知值都落回 `user`），子代理档案编辑器以 `source: "subagent"` 起一次临时会话列目录（`components/settings/subagent-config/SubagentToolPicker.tsx`），普通会话的目录仍然看不到这两个名字。两个工具对所有子代理档案开放，不是某个档案的独占配置。
 
 ## 后端：DeepSeek Search / Fetch，不重建本地抓取链
 
-搜索与抓取都走 DeepSeek API（`lib/server/deepseek/client.ts` 的 `createDeepSeekClient`）：`POST /v1/tools/search` 收 `query`、`count`、`need_content`，返回每条结果的标题、链接、摘要与可信度字段（`score` / `authority`）；`POST /v1/tools/fetch` 收 `url`，返回页面标题与 Markdown 正文。接口形状与本地 `web-search` 技能一致。请求超时（30 秒）、响应体上限（2 MB）、错误体摘要与输出截断都在客户端侧完成：`web_fetch` 的 `max_chars` 只用于本地截断 Markdown，不发给服务端。
+搜索与抓取都走 DeepSeek API（`lib/server/deepseek/client.ts` 的 `createDeepSeekClient`）：`POST /v1/tools/search` 收 `query`、`count`、`need_content`，返回每条结果的标题、链接、摘要与可信度字段（`score` / `authority`）；`POST /v1/tools/fetch` 收 `url`，返回页面标题与 Markdown 正文。接口形状与本地 `web-search` 技能一致。请求超时（30 秒）、响应体上限（2 MB）、错误体摘要与输出截断都在客户端侧完成（搜索结果按单条字段上限与整段输出上限截断，`web_fetch` 由 `max_chars` 截断）：`web_fetch` 的 `max_chars` 只用于本地截断 Markdown，不发给服务端。
 
 这意味着产品不再替用户取任意 URL，出站目标只剩 DeepSeek API。ADR-0013 删掉的本地 HTML 解析依赖（`readability` / `linkedom` / `turndown`）与 `ssrf.ts` 都不恢复：抓取安全、重定向与页面解析由 DeepSeek 服务端负责，本地不需要再造一道 SSRF 闸门，也不需要为它维护一份允许/拒绝规则。请求走进程的全局 `fetch`，不另建代理客户端，因此跟随 `network_proxy` 已安装的全局 dispatcher（`lib/server/network-proxy.ts`）。
 

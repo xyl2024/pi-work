@@ -53,6 +53,7 @@ import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   type SubagentTaskConfigSnapshot,
 } from "@/lib/shared/subagent";
+import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from "@/lib/shared/web-tools";
 
 let root: string;
 let agentDir: string;
@@ -382,7 +383,7 @@ describe("after a restart", () => {
       description: "worker",
       systemPrompt: "Work only.",
       inheritSystemPrompt: false,
-      tools: ["read", "edit"],
+      tools: ["read", "edit", WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME],
       model: { provider: "p", modelId: "m-profile" },
       thinkingLevel: "low",
       bot: DEFAULT_SUBAGENT_BOT,
@@ -422,9 +423,17 @@ describe("after a restart", () => {
     );
     expect(persisted).toMatchObject({
       subagentName: "restart-worker",
-      tools: ["read", "edit"],
+      tools: ["read", "edit", WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME],
       systemPrompt: { kind: "prefix", text: "Work only.\n\nYour current working directory is /tmp/work" },
     });
+    expect(persisted).not.toBeNull();
+    if (!persisted) return;
+    expect(subagentChildSessionStartOptions(persisted, parent).allowedToolNames).toEqual([
+      "read",
+      "edit",
+      WEB_SEARCH_TOOL_NAME,
+      WEB_FETCH_TOOL_NAME,
+    ]);
     await restarted.runner.turns[0].acquire();
     await settle(restarted.runner.turns[0], child, "second answer");
     await restarted.manager.idle();

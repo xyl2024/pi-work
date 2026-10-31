@@ -58,16 +58,26 @@ export function SubagentToolPicker({
     () => buildToolChecklistRows(tools, (count) => t("Bound tool family — toggled together ({count} tools)", { count })),
     [tools, t],
   );
-  const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? rows.filter((row) => `${row.name} ${row.description ?? ""}`.toLowerCase().includes(q)) : rows;
-  }, [query, rows]);
-
   const selectedSet = useMemo(() => new Set(value), [value]);
   const summary = useMemo(
     () => summarizeToolSelection(value, allNames, rows, selectedSet),
     [value, allNames, rows, selectedSet],
   );
+  const unlistedRows = useMemo(
+    () => summary.unlisted.map((name) => ({
+      key: `unlisted:${name}`,
+      name,
+      group: null,
+      memberCount: 0,
+      description: null,
+    })),
+    [summary.unlisted],
+  );
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const displayRows = [...rows, ...unlistedRows];
+    return q ? displayRows.filter((row) => `${row.name} ${row.description ?? ""}`.toLowerCase().includes(q)) : displayRows;
+  }, [query, rows, unlistedRows]);
 
   const toggleTool = (name: string, checked: boolean) => {
     const next = toggleSelectionEntry(value, name, checked, allNames);
@@ -97,7 +107,7 @@ export function SubagentToolPicker({
       <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 6 }} data-hide-v-scrollbar>
         {filteredRows.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
-            {tools.length ? t("No matches") : t("No tools available")}
+            {tools.length || unlistedRows.length ? t("No matches") : t("No tools available")}
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 5 }}>

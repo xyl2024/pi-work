@@ -2,21 +2,16 @@ import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { normalizeProbeSource } from "@/lib/shared/web-tools";
 
 const log = createLogger("api/agent/tools");
-
-type ToolCatalogSource = "user" | "scheduled" | "subagent";
-
-function catalogSource(value: unknown): ToolCatalogSource {
-  return value === "subagent" || value === "scheduled" ? value : "user";
-}
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
     const body = (await req.json().catch(() => ({}))) as { cwd?: unknown; source?: unknown };
     const cwd = typeof body.cwd === "string" ? body.cwd : "";
-    const source = catalogSource(body.source);
+    const source = normalizeProbeSource(body.source);
     if (!cwd) {
       return NextResponse.json({ error: "cwd is required" }, { status: 400 });
     }
