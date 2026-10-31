@@ -2,8 +2,8 @@
 
 import type { McpPanelChange, McpPanelData } from "@/lib/shared/mcp-panel";
 
-export async function fetchMcpPanelData(cwd: string): Promise<McpPanelData> {
-  const res = await fetch(`/api/mcp?cwd=${encodeURIComponent(cwd)}`, { cache: "no-store" });
+export async function fetchMcpPanelData(cwd: string, signal?: AbortSignal): Promise<McpPanelData> {
+  const res = await fetch(`/api/mcp?cwd=${encodeURIComponent(cwd)}`, { cache: "no-store", signal });
   const payload = (await res.json()) as McpPanelData & { error?: string };
   if (!res.ok || payload.error) throw new Error(payload.error ?? `HTTP ${res.status}`);
   return payload;

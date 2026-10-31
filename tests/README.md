@@ -20,6 +20,12 @@
   （`electron-shell/lifecycle.js`：关窗是隐藏还是真关、应用是否比窗口活得久、托盘菜单
   有什么）同理（`electron-shell-lifecycle.test.ts`），其中「托盘标签与动作不许各说各话」
   与「结束服务端的调用点只有两处」是源码守卫：Electron 主进程无法被 vitest 驱动。
+- **client 模块契约测试**：直接 import `lib/client` 里的无渲染 module，用假 adapter
+  驱动它的 external interface，如 `panel-view-store.test.ts` 驱动
+  `createPanelViewStore` 的页栈、保活 / 释放、加载策略与关闭确认。这类测试不渲染
+  React、不依赖 DOM；即使 module 源文件 import 了 `useSyncExternalStore`，测试也只调用
+  `open` / `setVisible` / `openPage` / `release` 这类非 hook 接口。这类 seam 由 ADR-0024
+  明确认可，新增面板生命周期契约测试照此办理，不要回头去测五个面板的页栈拷贝。
 - **服务端模块测试**：直接 import 服务端模块本身，用真实的 `Request` /
   `NextRequest` 驱动它，如 `auth-proxy.test.ts`（`proxy.ts`）、
   `auth-desktop.test.ts`（三个 auth session route handler 与 `lib/server/auth.ts`）。

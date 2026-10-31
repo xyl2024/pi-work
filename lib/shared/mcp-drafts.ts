@@ -1,6 +1,7 @@
 import type { McpDraft } from "./mcp-draft";
-import type { McpPanelData } from "./mcp-panel";
-import type { McpPage } from "./mcp-pages";
+import type { McpPage, McpPanelData } from "./mcp-panel";
+
+export const MCP_LIST_PAGE: McpPage = { kind: "list" };
 
 export interface McpDraftBucket {
   cwd: string;

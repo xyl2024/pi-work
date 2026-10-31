@@ -190,7 +190,7 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     tabId: SKILLS_TAB_ID,
     labelKey: "Skills",
     defaultMode: "normal",
-    sessionBound: true,
+    sessionBound: false,
     commands: [
       {
         labelKey: "Open skills",

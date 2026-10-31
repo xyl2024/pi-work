@@ -23,11 +23,13 @@
 ## Consequences
 
 - 新增面板视图仍然是 ADR-0002 的「注册表一条 + 表现一条 + body 一条」，模型配置落进去没有多出第四处；命令面板条目也由注册表声明生成，不再手写。
-- 这是本次唯一被迫的架构后果：面板卡片只渲染当前激活标签的 body，切走标签会卸载视图，所以草稿、页栈、OAuth 登录流与 provider 列表必须提升到一个 shell 级模块 store（`lib/client/models-config-store.ts`）。若将来面板改为保留已打开视图的挂载状态，这部分责任可以回收，但不要现在赌。
+- 这是本次唯一被迫的架构后果：面板卡片只渲染当前激活标签的 body，切走标签会卸载视图，所以草稿、页栈、OAuth 登录流与 provider 列表必须提升到一个 shell 级模块 store（`lib/client/models-config-panel.ts`，迁移后为 `createPanelViewStore` 的一个 adapter）。若将来面板改为保留已打开视图的挂载状态，这部分责任可以回收，但不要现在赌。
 - 右栏 descriptor 的 badge 钩子从「声明了但没人读」变成「dirty 就看得到」，角标与 store 共用同一个 dirty 判定，不另存一份。
 - 删除模态框路径后只剩一条实现（外壳、底栏、遮罩、`useModalAnimation` 用法一并删除）；与它同构的 Skills / Prompts / MCP / 设置弹窗这次不动，交互与语义一点不变。
 - 聊天输入区选当前模型的弹层完全不动：那是「这个会话用哪个模型」，与 `~/.pi/agent/models.json`（有哪些 provider / 模型、怎么接）是两件事。
-- 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/models-config-draft.ts`（服务端载荷 → 草稿、dirty 判定、阻止保存的问题、保存提交的载荷）、`models-config-pages.ts`（页栈 push / back / 删除与保存后的收敛）、`models-config-close.ts`（关标签确认与重开是否重读盘）。面板内的视觉布局、角标渲染位置、OAuth 与 HTTP 胶水仍属人工清单（ADR-0003 规则 3）。
+- 判定被推到纯模块，在 `tests/unit` 里直接驱动：`lib/shared/models-config-draft.ts`（服务端载荷 → 草稿、dirty 判定、阻止保存的问题、保存提交的载荷）、页栈 push / back 与删除、保存后的收敛（原 `models-config-pages.ts` 已删除，改由 `lib/client/panel-view-store.ts` 拥有页栈、adapter 的页栈钩子承担收敛）、`models-config-close.ts`（关标签确认与重开是否重读盘）。面板内的视觉布局、角标渲染位置、OAuth 与 HTTP 胶水仍属人工清单（ADR-0003 规则 3）。
+
+**参见**：ADR-0024「面板视图的生命周期是一个 module」——本文的面板视图状态（保活、释放、页栈与关闭确认）由那一个 module 拥有，本文只提供 adapter，Decision 不变。
 
 ## 修订 2026-10-17（技能面板 #121）
 

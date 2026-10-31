@@ -8,14 +8,19 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { CronBuilder } from "@/components/scheduler/CronBuilder";
 import { listToolsForCwd } from "@/lib/client/agent-client";
 import { fetchWechatChannels, type SchedulerChannel } from "@/lib/client/scheduler-io";
-import { saveSchedulerForm, schedulerBack, updateSchedulerForm, useSchedulerStore } from "@/lib/client/scheduler-store";
+import {
+  saveSchedulerForm,
+  schedulerPanel,
+  updateSchedulerForm,
+  useSchedulerPanel,
+} from "@/lib/client/scheduler-panel";
 import {
   Field,
   SchedulerModelSelect,
   SchedulerThinkingSelect,
   SchedulerToolsSelect,
 } from "./SchedulerFormFields";
-import { SchedulerBackButton } from "./SchedulerBackButton";
+import { PanelBackButton } from "../PanelBackButton";
 import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, textareaStyle } from "@/components/scheduler/styles";
 import {
   listTimezones,
@@ -28,7 +33,8 @@ import type { ToolInfo } from "@/lib/shared/types";
 export function SchedulerFormPage() {
   const { t } = useI18n();
   const toast = useToast();
-  const { form, formTaskId, meta, saving, saveError } = useSchedulerStore();
+  const { view } = useSchedulerPanel();
+  const { form, formTaskId, meta, saving, saveError } = view;
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [channels, setChannels] = useState<SchedulerChannel[]>([]);
@@ -119,7 +125,7 @@ export function SchedulerFormPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
-        <SchedulerBackButton />
+        <PanelBackButton panel={schedulerPanel} />
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
           {formTaskId ? t("Edit task") : t("New task")}
         </span>
@@ -238,7 +244,7 @@ export function SchedulerFormPage() {
           </span>
         )}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-          <button type="button" onClick={schedulerBack} disabled={saving} style={btnGhost}>
+          <button type="button" onClick={() => schedulerPanel.back()} disabled={saving} style={btnGhost}>
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>

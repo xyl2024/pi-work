@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/client/clipboard";
-import { selectModelsConfigDirty, useModelsConfigStore } from "@/lib/client/models-config-store";
+import { selectModelsConfigDirty, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import type { ModelConnectionTestResult } from "@/lib/shared/model-connection-test";
 
 export function ModelConnectionTest({ provider, modelId, disabled = false }: {
   provider: string; modelId: string; disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const state = useModelsConfigStore();
+  const { view: state } = useModelsConfigPanel();
   const blocked = disabled || selectModelsConfigDirty(state) || state.saving || !!state.rawEdit;
   const [result, setResult] = useState<ModelConnectionTestResult | null>(null);
   const [error, setError] = useState("");

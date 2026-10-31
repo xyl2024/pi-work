@@ -37,16 +37,3 @@ export function selectModelsConfigCloseConfirm(
   if (oauthInProgress) return MODELS_CONFIG_OAUTH_CLOSE_CONFIRM;
   return null;
 }
-
-export type ModelsConfigOpenAction = "reuse" | "reload";
-
-export interface ModelsConfigOpenState {
-  loaded: boolean;
-  loading: boolean;
-}
-
-export function selectModelsConfigOpenAction(
-  state: ModelsConfigOpenState,
-): ModelsConfigOpenAction {
-  return state.loaded || state.loading ? "reuse" : "reload";
-}

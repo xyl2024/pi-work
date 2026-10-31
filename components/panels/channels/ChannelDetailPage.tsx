@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { fetchChannelStatus, fetchRecentCwds, type ChannelStatusDetail } from "@/lib/client/channels-io";
 import {
+  channelsPanel,
   refreshLoginQr,
   removeChannel,
   renameChannel,
@@ -15,11 +16,11 @@ import {
   startLogin,
   submitLoginCode,
   toggleChannelEnabled,
-  useChannelsStore,
-} from "@/lib/client/channels-store";
+  useChannelsPanel,
+} from "@/lib/client/channels-panel";
 import { loginPhaseLabelKey } from "@/lib/shared/channels-login";
 import { ChannelActivityFeed } from "@/components/channels/ChannelActivityFeed";
-import { ChannelsBackButton } from "./ChannelsBackButton";
+import { PanelBackButton } from "../PanelBackButton";
 import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
 function shortenPath(p: string, max = 36): string {
@@ -44,7 +45,8 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
-  const { channels, busy, login: loginState } = useChannelsStore();
+  const { view } = useChannelsPanel();
+  const { channels, busy, login: loginState } = view;
   const channel = channels.find((item) => item.id === channelId) ?? null;
   const login = loginState.channelId === channelId ? loginState : null;
 
@@ -165,7 +167,7 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
         <div style={{ padding: "10px 14px", flexShrink: 0 }}>
-          <ChannelsBackButton />
+          <PanelBackButton panel={channelsPanel} ariaLabelKey="Back to channels" />
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
           {t("channels.unavailable")}
@@ -190,7 +192,7 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <ChannelsBackButton />
+        <PanelBackButton panel={channelsPanel} ariaLabelKey="Back to channels" />
         {renaming ? (
           <>
             <input

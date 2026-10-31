@@ -14,8 +14,8 @@ import type {
   SkillToggleResponse,
 } from "@/lib/shared/skills";
 
-export async function fetchSkills(cwd: string): Promise<Skill[]> {
-  const res = await fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`);
+export async function fetchSkills(cwd: string, signal?: AbortSignal): Promise<Skill[]> {
+  const res = await fetch(`/api/skills?cwd=${encodeURIComponent(cwd)}`, { signal });
   const body = (await res.json().catch(() => ({}))) as Partial<SkillListResponse> & { error?: string };
   if (!res.ok || body.error) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body.skills ?? [];

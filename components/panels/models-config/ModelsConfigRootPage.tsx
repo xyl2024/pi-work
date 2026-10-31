@@ -9,12 +9,12 @@ import {
   openModelsConfigCatalog,
   openModelsConfigOAuth,
   openModelsConfigProvider,
-  useModelsConfigStore,
-} from "@/lib/client/models-config-store";
+  useModelsConfigPanel,
+} from "@/lib/client/models-config-panel";
 
 export function ModelsConfigRootPage() {
   const { t } = useI18n();
-  const { config, oauthProviders, apiKeyProviders } = useModelsConfigStore();
+  const { config, oauthProviders, apiKeyProviders } = useModelsConfigPanel().view;
 
   const subscriptions = oauthProviders.filter((provider) => provider.loggedIn);
   const apiKeyConfigured = apiKeyProviders.filter((provider) => provider.configured);

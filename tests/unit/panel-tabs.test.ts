@@ -35,6 +35,7 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTOR_BY_ID,
   RIGHT_BAR_DESCRIPTORS,
+  isSessionBoundDescriptor,
   type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
@@ -389,7 +390,7 @@ describe("panelTabs registry", () => {
     expect(skills?.tabId).toBe(SKILLS_TAB_ID);
     expect(skills?.labelKey).toBe("Skills");
     expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
-    expect(skills?.sessionBound).toBe(true);
+    expect(skills?.sessionBound).toBe(false);
     expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
@@ -438,7 +439,7 @@ describe("panelTabs registry", () => {
   it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["context", "conversationTree", "gitDiff", "llmAudit", "mcp", "skills"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit", "mcp"].sort(),
     );
 
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
@@ -599,6 +600,21 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ mcpDirty: true }))).toBeFalsy();
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
+  });
+
+  it("presents skills as a global button alongside models config, scheduled tasks and channels", () => {
+    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
+    if (!descriptor) throw new Error("skills descriptor missing");
+    expect(isSessionBoundDescriptor(descriptor)).toBe(false);
+
+    const globalIds = RIGHT_BAR_BUTTON_IDS.filter((id) => {
+      const candidate = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id);
+      return candidate !== undefined && !isSessionBoundDescriptor(candidate);
+    });
+    expect(globalIds).toEqual(
+      expect.arrayContaining(["skills", "modelsConfig", "scheduler", "channels"]),
+    );
+    expect(globalIds).not.toContain("context");
   });
 
   it("routes the models-config / skills / MCP badges through the one shared corner-dot hook", () => {

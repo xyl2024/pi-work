@@ -201,7 +201,7 @@ components/
   chat/                        对话窗口、输入框、消息渲染和权限交互
   files/                       文件浏览器和文件查看器
   panels/                      右侧工具面板
-  panels/mcp/                  MCP 服务器面板视图的页与表单（按钮与保活 store 在 lib/client/mcp-store.ts）
+  panels/mcp/                  MCP 服务器面板视图的页与表单（按钮与保活 store 在 lib/client/mcp-panel.ts）
   scheduler/                   定时任务面板视图的共享原语（cron 构造器、状态徽标、运行历史分块）
   channels/                    频道活动流组件（频道面板的详情页在 panels/channels/）
   sessions/                   会话侧栏、会话库和分支视图
