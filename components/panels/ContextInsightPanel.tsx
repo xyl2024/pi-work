@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sendAgentCommand, type ToolWithActive } from "@/lib/client/agent-client";
+import { isContextInsightRefreshEvent } from "@/lib/shared/context-insight";
+import type { SessionEvent } from "@/lib/shared/session-events";
 import { splitBaseBlocks, splitSystemPrompt } from "@/lib/shared/system-prompt-segments";
 import { useI18n } from "@/hooks/useI18n";
 import { ChevronDownIcon, ChevronRightIcon } from "../ui/icons/primitives";
@@ -120,6 +122,7 @@ function CollapsibleRow({
 export function ContextInsightPanel({ sessionId }: { sessionId: string | null }) {
   const { t } = useI18n();
   const cacheRef = useRef<Map<string, ContextInsightData>>(new Map());
+  const requestSeqRef = useRef(0);
   const [entry, setEntry] = useState<{ sessionId: string; data: ContextInsightData } | null>(null);
   const [loadingSession, setLoadingSession] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -131,34 +134,47 @@ export function ContextInsightPanel({ sessionId }: { sessionId: string | null })
       : null;
   const loading = loadingSession === sessionId && data === null;
 
+  const load = useCallback(async (id: string) => {
+    const seq = ++requestSeqRef.current;
+    setLoadingSession(id);
+    const [state, tools] = await Promise.all([
+      fetch(`/api/agent/${encodeURIComponent(id)}`)
+        .then((r) => r.json() as Promise<{ state?: { systemPrompt?: string } }>)
+        .catch(() => null),
+      sendAgentCommand<ToolWithActive[]>(id, { type: "get_tools" }).catch(() => null),
+    ]);
+    if (requestSeqRef.current !== seq) return;
+    const next: ContextInsightData = {
+      systemPrompt: state?.state?.systemPrompt ?? null,
+      tools: Array.isArray(tools) ? tools.filter((tool) => tool.active) : [],
+    };
+    cacheRef.current.set(id, next);
+    setEntry({ sessionId: id, data: next });
+    setLoadingSession(null);
+  }, []);
+
   useEffect(() => {
     setExpanded(new Set());
     if (!sessionId) {
       setLoadingSession(null);
       return;
     }
-    let cancelled = false;
-    setLoadingSession(sessionId);
-    void (async () => {
-      const [state, tools] = await Promise.all([
-        fetch(`/api/agent/${encodeURIComponent(sessionId)}`)
-          .then((r) => r.json() as Promise<{ state?: { systemPrompt?: string } }>)
-          .catch(() => null),
-        sendAgentCommand<ToolWithActive[]>(sessionId, { type: "get_tools" }).catch(() => null),
-      ]);
-      if (cancelled) return;
-      const next: ContextInsightData = {
-        systemPrompt: state?.state?.systemPrompt ?? null,
-        tools: Array.isArray(tools) ? tools.filter((tool) => tool.active) : [],
-      };
-      cacheRef.current.set(sessionId, next);
-      setEntry({ sessionId, data: next });
-      setLoadingSession(null);
-    })();
-    return () => {
-      cancelled = true;
+    void load(sessionId);
+    const source = new EventSource(`/api/agent/${encodeURIComponent(sessionId)}/events`);
+    source.onmessage = (message) => {
+      let event: SessionEvent;
+      try {
+        event = JSON.parse(message.data) as SessionEvent;
+      } catch {
+        return;
+      }
+      if (isContextInsightRefreshEvent(event)) void load(sessionId);
     };
-  }, [sessionId]);
+    return () => {
+      requestSeqRef.current += 1;
+      source.close();
+    };
+  }, [sessionId, load]);
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
