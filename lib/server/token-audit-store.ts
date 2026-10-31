@@ -31,6 +31,7 @@ const CALL_PURPOSES = new Set<CallPurpose>([
   "branch-summary",
   "translation",
   "auto-name",
+  "suggested-prompt",
   "unknown",
 ]);
 const CALL_STATUSES = new Set<CallStatus>(["completed", "failed", "cancelled", "unknown"]);

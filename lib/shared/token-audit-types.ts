@@ -17,6 +17,7 @@ export type CallPurpose =
   | "branch-summary"
   | "translation"
   | "auto-name"
+  | "suggested-prompt"
   | "unknown";
 
 export interface ModelCallCommandOptions {
