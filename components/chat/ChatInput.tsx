@@ -17,8 +17,9 @@ import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
+import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
+import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
-import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
 export type { AttachedImage } from "./chat-input/types";
@@ -49,6 +50,7 @@ interface Props {
   permissionMode?: SessionPermissionMode;
   onPermissionModeToggle?: () => void;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
+  suggestedPrompt?: string | null;
   slashResources?: SlashResource[];
   slashResourceKey?: string;
   onSlashAction?: (action: string) => void;
@@ -84,6 +86,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   permissionMode = "confirm", onPermissionModeToggle,
   retryInfo,
+  suggestedPrompt = null,
   slashResources = [], slashResourceKey,
   onSlashAction,
   cwd,
@@ -165,21 +168,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     toggleCustomExpanded,
   } = useToolsDropdown();
 
+  const fillDraft = useCallback((text: string) => {
+    setValue(text);
+    setCursorPosition(text.length);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(text.length, text.length);
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    });
+  }, []);
+
   const fillFromHistory = useCallback(
     (text: string) => {
-      setValue(text);
-      setCursorPosition(text.length);
+      fillDraft(text);
       clearImages();
-      requestAnimationFrame(() => {
-        const ta = textareaRef.current;
-        if (!ta) return;
-        ta.focus();
-        ta.setSelectionRange(text.length, text.length);
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-      });
     },
-    [clearImages],
+    [clearImages, fillDraft],
   );
   const {
     isInHistoryMode,
@@ -272,25 +279,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [selectedSlashResource, setSelectedSlashResource],
   );
 
-  const handleThinkingTabKeyDown = useCallback(
+  const handleSuggestedPromptTab = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (e.key !== "Tab" || e.nativeEvent.isComposing) return false;
-      if (!onThinkingLevelChange) return false;
-      const available = availableThinkingLevels ?? null;
-      const list: readonly ThinkingLevelOption[] = THINKING_LEVEL_ORDER.filter(
-        (lvl) => (available ? available.includes(lvl) : true),
-      );
-      if (list.length === 0) return false;
-      const direction: 1 | -1 = e.shiftKey ? -1 : 1;
-      const current = (thinkingLevel ?? "off") as ThinkingLevelOption;
-      const idx = list.indexOf(current);
-      const nextIdx = ((idx + direction) % list.length + list.length) % list.length;
-      const nextLevel = list[nextIdx];
+      const decision = decideSuggestedPromptTab({ inputText: value, suggestion: suggestedPrompt });
+      if (decision.kind !== "adopt") return false;
       e.preventDefault();
-      if (nextLevel !== current) onThinkingLevelChange(nextLevel);
+      fillDraft(decision.text);
       return true;
     },
-    [thinkingLevel, onThinkingLevelChange, availableThinkingLevels],
+    [value, suggestedPrompt, fillDraft],
   );
 
   const handleSlashEscape = useCallback(
@@ -306,14 +304,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleShiftBackspaceClear(e)) return;
-      if (handleThinkingTabKeyDown(e)) return;
+      if (handleSuggestedPromptTab(e)) return;
       if (handleFileMentionKeyDown(e)) return;
       if (handleSlashKeyDown(e)) return;
       if (handleSlashEscape(e)) return;
       if (handleHistoryKeyDown(e)) return;
       handleEnterAndBuiltin(e);
     },
-    [handleShiftBackspaceClear, handleThinkingTabKeyDown, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
+    [handleShiftBackspaceClear, handleSuggestedPromptTab, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
   );
 
   useImperativeHandle(ref, () => ({
@@ -454,7 +452,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               syncInputMenus(e.currentTarget.value, pos);
             }}
             rows={1}
-            placeholder={t("Type / to select a skill, @ to select a file")}
+            placeholder={selectSuggestedPromptPlaceholder({
+              suggestion: suggestedPrompt,
+              inputText: value,
+              fallback: t("Type / to select a skill, @ to select a file"),
+            })}
             disabled={disabled}
             style={{
               flex: 1,
