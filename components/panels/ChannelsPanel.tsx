@@ -2,24 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { currentChannelsPage } from "@/lib/shared/channels-pages";
-import {
-  ensureChannelsLoaded,
-  escapeChannels,
-  useChannelsStore,
-} from "@/lib/client/channels-store";
+import { channelsPanel, useChannelsPanel } from "@/lib/client/channels-panel";
 import { ChannelsRootPage } from "./channels/ChannelsRootPage";
 import { ChannelDetailPage } from "./channels/ChannelDetailPage";
 
 export function ChannelsPanel({ onCloseTab }: { onCloseTab?: () => void }) {
-  const { pages } = useChannelsStore();
+  useChannelsPanel();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ensureChannelsLoaded();
+    channelsPanel.open();
   }, []);
 
-  const page = currentChannelsPage(pages);
+  const page = channelsPanel.currentPage();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -27,7 +22,7 @@ export function ChannelsPanel({ onCloseTab }: { onCloseTab?: () => void }) {
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (escapeChannels().closePanel) onCloseTab?.();
+    if (channelsPanel.back().closePanel) onCloseTab?.();
   });
 
   return (

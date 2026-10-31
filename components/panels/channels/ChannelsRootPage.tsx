@@ -7,16 +7,16 @@ import {
   openChannelDetail,
   reloadChannels,
   setChannelsNameDraft,
-  useChannelsStore,
-} from "@/lib/client/channels-store";
+  useChannelsPanel,
+} from "@/lib/client/channels-panel";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
 export function ChannelsRootPage() {
   const { t } = useI18n();
   const toast = useToast();
-  const { channels, loaded, loadError, nameDraft, busy, selectedChannelId } =
-    useChannelsStore();
+  const { view } = useChannelsPanel();
+  const { channels, loaded, loadError, nameDraft, busy, selectedChannelId } = view;
 
   async function create() {
     const result = await createChannelInStore();

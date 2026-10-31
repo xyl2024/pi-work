@@ -3,8 +3,8 @@
 import type { ChannelActivity, ChannelRecord } from "@/lib/shared/channels/types";
 import type { LoginPhase } from "@/lib/shared/channels-login";
 
-export async function fetchChannels(): Promise<ChannelRecord[]> {
-  const res = await fetch("/api/channels?provider=wechat", { cache: "no-store" });
+export async function fetchChannels(signal?: AbortSignal): Promise<ChannelRecord[]> {
+  const res = await fetch("/api/channels?provider=wechat", { cache: "no-store", signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { channels?: ChannelRecord[] };
   return data.channels ?? [];

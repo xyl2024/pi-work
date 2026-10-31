@@ -1,15 +1,32 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { channelsBack } from "@/lib/client/channels-store";
 
-export function ChannelsBackButton() {
+export interface PanelBackSource {
+  useSnapshot(): { pages: readonly unknown[] };
+  back(): { closePanel: boolean };
+}
+
+export function PanelBackButton({
+  panel,
+  labelKey = "Back",
+  ariaLabelKey = "Back",
+}: {
+  panel: PanelBackSource;
+  labelKey?: string;
+  ariaLabelKey?: string;
+}) {
   const { t } = useI18n();
+  const { pages } = panel.useSnapshot();
+  const enabled = pages.length > 1;
   return (
     <button
       type="button"
-      onClick={channelsBack}
-      aria-label={t("Back to channels")}
+      onClick={() => {
+        panel.back();
+      }}
+      disabled={!enabled}
+      aria-label={t(ariaLabelKey)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -19,10 +36,11 @@ export function ChannelsBackButton() {
         border: "1px solid var(--border)",
         borderRadius: 5,
         color: "var(--text-muted)",
-        cursor: "pointer",
+        cursor: enabled ? "pointer" : "default",
         fontSize: 12,
         flexShrink: 0,
         fontFamily: "inherit",
+        opacity: enabled ? 1 : 0.5,
       }}
     >
       <svg
@@ -38,7 +56,7 @@ export function ChannelsBackButton() {
       >
         <polyline points="15 6 9 12 15 18" />
       </svg>
-      {t("Back")}
+      {t(labelKey)}
     </button>
   );
 }

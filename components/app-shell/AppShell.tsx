@@ -82,8 +82,11 @@ import {
   releaseSkillsState,
   useSkillInstallRunning,
 } from "@/lib/client/skills-store";
-import { releaseChannelsState, getLoginPhase, stopLogin } from "@/lib/client/channels-store";
-import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
+import { channelsPanel } from "@/lib/client/channels-panel";
+import {
+  usePanelViewLifecycleSync,
+  type PanelViewLifecycleStore,
+} from "@/hooks/usePanelViewLifecycleSync";
 import { getMcpDirty, releaseMcpState, useMcpDirty } from "@/lib/client/mcp-store";
 import { selectMcpCloseConfirm } from "@/lib/shared/mcp-close";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
@@ -181,7 +184,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
-  channels: () => selectChannelsCloseConfirm({ phase: getLoginPhase() }),
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
@@ -190,10 +192,18 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
     if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
   },
   skills: () => cancelSkillInstall(),
-  channels: () => stopLogin(),
 };
 
-const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_CLOSE_GUARDS) as PanelViewKind[];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel];
+
+const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
+  channels: channelsPanel,
+};
+
+const PANEL_KINDS_WITH_CLOSE_GUARD = [
+  ...(Object.keys(PANEL_CLOSE_GUARDS) as PanelViewKind[]),
+  ...(Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[]),
+];
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   const closing = new Set(tabs.map((tab) => tab.kind));
@@ -430,10 +440,7 @@ export function AppShell() {
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
-  const channelsTabOpen = selectTabByKind(panelTabsState, "channels") !== null;
-  useEffect(() => {
-    if (!channelsTabOpen) releaseChannelsState();
-  }, [channelsTabOpen]);
+  usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
   const mcpDirty = useMcpDirty();
   const mcpTabOpen = selectTabByKind(panelTabsState, "mcp") !== null;
   useEffect(() => {
@@ -801,26 +808,43 @@ export function AppShell() {
     setPanelMode("expanded");
   }, [setPanelMode]);
 
+  const askPanelClose = useCallback(
+    async (guard: {
+      titleKey: string;
+      descriptionKey: string;
+      confirmLabelKey: string;
+    }): Promise<boolean> =>
+      confirm({
+        title: t(guard.titleKey),
+        description: t(guard.descriptionKey),
+        confirmLabel: t(guard.confirmLabelKey),
+        cancelLabel: t("Cancel"),
+        destructive: true,
+      }),
+    [confirm, t],
+  );
+
   const confirmDropPanelTabs = useCallback(
     async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
-      const confirmed: PanelViewKind[] = [];
+      const closingStores: PanelViewLifecycleStore[] = [];
+      const confirmedKinds: PanelViewKind[] = [];
       for (const kind of kinds) {
+        const store = PANEL_VIEW_STORE_BY_KIND[kind];
+        if (store) {
+          const guard = store.guard();
+          if (guard && !(await askPanelClose(guard))) return false;
+          closingStores.push(store);
+          continue;
+        }
         const guard = PANEL_CLOSE_GUARDS[kind]?.();
-        if (!guard) continue;
-        const ok = await confirm({
-          title: t(guard.titleKey),
-          description: t(guard.descriptionKey),
-          confirmLabel: t(guard.confirmLabelKey),
-          cancelLabel: t("Cancel"),
-          destructive: true,
-        });
-        if (!ok) return false;
-        confirmed.push(kind);
+        if (guard && !(await askPanelClose(guard))) return false;
+        confirmedKinds.push(kind);
       }
-      for (const kind of confirmed) PANEL_CLOSE_SIDE_EFFECTS[kind]?.();
+      for (const store of closingStores) await store.requestClose(() => true);
+      for (const kind of confirmedKinds) PANEL_CLOSE_SIDE_EFFECTS[kind]?.();
       return true;
     },
-    [confirm, t],
+    [askPanelClose],
   );
 
   const handleCloseFileTab = useCallback(async (tabId: string) => {
