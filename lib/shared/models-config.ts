@@ -1,3 +1,14 @@
+export type ModelsConfigPage =
+  | { kind: "root" }
+  | { kind: "provider"; name: string }
+  | { kind: "model"; providerName: string; index: number }
+  | { kind: "oauth"; providerId: string }
+  | { kind: "apikey"; providerId: string }
+  | { kind: "catalog" }
+  | { kind: "addProvider" }
+  | { kind: "addModelName"; providerName: string }
+  | { kind: "fillModel"; providerName: string; index: number };
+
 export interface OAuthProvider {
   id: string;
   name: string;

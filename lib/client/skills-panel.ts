@@ -7,13 +7,14 @@ import {
   type PanelViewStore,
 } from "./panel-view-store";
 import { fetchSkills, installSkill, patchSkillInvocation } from "./skills-io";
+import { errorMessage } from "@/lib/shared/error-message";
 import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
-import type { Skill, SkillInstallPhase, SkillInstallRequest } from "@/lib/shared/skills";
-
-export type SkillsPage =
-  | { kind: "root" }
-  | { kind: "detail"; filePath: string }
-  | { kind: "add" };
+import type {
+  Skill,
+  SkillInstallPhase,
+  SkillInstallRequest,
+  SkillsPage,
+} from "@/lib/shared/skills";
 
 export interface SkillsInstallState {
   phase: SkillInstallPhase;
@@ -52,10 +53,6 @@ const INITIAL: SkillsViewState = {
 };
 
 const ROOT_PAGE: SkillsPage = { kind: "root" };
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 let installAbort: AbortController | null = null;
 let installGeneration = 0;
@@ -197,9 +194,6 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
   },
   status(state) {
     return state.install.phase === "running";
-  },
-  isRootPage(pages) {
-    return pages.length <= 1;
   },
   isSiblingPage(next, current) {
     return next.kind !== "root" && current.kind !== "root";

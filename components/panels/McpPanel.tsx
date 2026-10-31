@@ -19,7 +19,7 @@ import {
   reloadMcp,
   saveMcpChanges,
   useMcpPanel,
-} from "@/lib/client/mcp-store";
+} from "@/lib/client/mcp-panel";
 import { isMcpBucketVerifying, selectMcpBucket } from "@/lib/shared/mcp-drafts";
 import { McpListPage } from "./mcp/McpListPage";
 import { McpEntryPage } from "./mcp/McpEntryPage";

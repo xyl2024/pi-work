@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { McpPanelData } from "@/lib/shared/mcp-panel";
-import { MCP_LIST_PAGE, type McpPage } from "@/lib/shared/mcp-drafts";
-import { mcpPanel, openMcpEntry, setMcpEntryName } from "@/lib/client/mcp-store";
+import { MCP_LIST_PAGE } from "@/lib/shared/mcp-drafts";
+import type { McpPage, McpPanelData } from "@/lib/shared/mcp-panel";
+import { mcpPanel, openMcpEntry, setMcpEntryName } from "@/lib/client/mcp-panel";
 
 const mocks = vi.hoisted(() => ({
   fetchMcpPanelData: vi.fn<(cwd: string, signal?: AbortSignal) => Promise<McpPanelData>>(),

@@ -1,3 +1,8 @@
+export type SkillsPage =
+  | { kind: "root" }
+  | { kind: "detail"; filePath: string }
+  | { kind: "add" };
+
 export interface Skill {
   name: string;
   description: string;

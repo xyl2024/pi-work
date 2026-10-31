@@ -1,3 +1,5 @@
+export type ChannelsPage = { kind: "root" } | { kind: "detail"; channelId: string };
+
 export type ChannelProvider = "wechat";
 export type ChannelStatus = "pending" | "connected" | "disabled" | "expired";
 
