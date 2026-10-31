@@ -28,7 +28,7 @@ import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
 import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent, useStreamingToolCall } from "@/hooks/useStreamingMessage";
-import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { ChatInput, type AttachedImage, type ChatInputHandle } from "./ChatInput";
 import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
@@ -53,6 +53,7 @@ import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFin
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
+import { useSuggestedPrompt } from "./chat-window/hooks/useSuggestedPrompt";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
@@ -112,6 +113,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     autoNameReadyRef.current();
   }, []);
 
+  const suggestedPromptAgentEndRef = useRef<() => void>(() => {});
+  const handleAgentEnd = useCallback(() => {
+    onAgentEnd?.();
+    suggestedPromptAgentEndRef.current();
+  }, [onAgentEnd]);
+
   const entryNavigatedRef = useRef<() => void>(() => {});
   const handleEntryNavigated = useCallback(() => {
     entryNavigatedRef.current();
@@ -137,13 +144,27 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     activeLeafId, currentSessionId,
     inFlightToolResults,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
+    session, newSessionCwd, onAgentEnd: handleAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     modelsRefreshKey,
     scrollToEntryId,
     onEntryNavigated: handleEntryNavigated,
     isActive,
     controllerId: tabId,
   });
+
+  const {
+    suggestion: suggestedPromptText,
+    handleAgentEnd: handleSuggestedPromptAgentEnd,
+    handleTurnStarted: handleSuggestedPromptTurnStarted,
+  } = useSuggestedPrompt({ sessionId: currentSessionId, leafId: activeLeafId });
+  useEffect(() => {
+    suggestedPromptAgentEndRef.current = handleSuggestedPromptAgentEnd;
+  }, [handleSuggestedPromptAgentEnd]);
+
+  const handleSendWithSuggestedPromptReset = useCallback((message: string, images?: AttachedImage[]) => {
+    handleSuggestedPromptTurnStarted();
+    void handleSend(message, images);
+  }, [handleSuggestedPromptTurnStarted, handleSend]);
 
   const { pickedChannelId, setPickedChannelId, boundChannelId, setNotifyChannel } = useSessionNotifyBinding({
     sessionId: session?.id ?? null,
@@ -595,7 +616,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     <>
       <ChatInput
         ref={chatInputRef}
-        onSend={handleSend}
+        onSend={handleSendWithSuggestedPromptReset}
         onAbort={handleAbort}
         isStreaming={agentRunning}
         sessionBusy={agentRunning}
@@ -622,6 +643,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         availableThinkingLevels={availableThinkingLevels}
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}
+        suggestedPrompt={suggestedPromptText}
         slashResources={slashResources}
         slashResourceKey={slashResourceKey}
         onSlashAction={(action) => {
