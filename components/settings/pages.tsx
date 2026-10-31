@@ -13,6 +13,7 @@ import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
 import { NetworkProxySection } from "./sections/NetworkProxySection";
+import { DeepSeekKeySection } from "./sections/DeepSeekKeySection";
 import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
@@ -54,6 +55,9 @@ export const SETTINGS_PAGES = {
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,
   "network-proxy": ({ config, apply, reportDirty }) => (
     <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
+  ),
+  "deepseek-key": ({ reportDirty }) => (
+    <DeepSeekKeySection onDirtyChange={reportDirty} />
   ),
   "toast-test": () => <ToastTestSection />,
   about: () => <AboutSection />,
