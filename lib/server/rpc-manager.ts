@@ -121,6 +121,20 @@ export class AgentSessionWrapper {
     }
   }
 
+  applyActiveTools(): void {
+    const allNames = this.inner.getAllTools().map((tool) => tool.name);
+    const declarableSet = new Set(declarableToolNames(this.inner.getAllTools()));
+    if (this._toolSelection === "all") {
+      this.inner.setActiveToolsByName([...declarableSet]);
+      return;
+    }
+    this.inner.setActiveToolsByName(
+      (expandToolSelection(this._toolSelection, allNames) as string[]).filter((name) =>
+        declarableSet.has(name),
+      ),
+    );
+  }
+
   get permissionMode(): PermissionMode {
     return this._permissionMode;
   }
@@ -523,7 +537,10 @@ export class AgentSessionWrapper {
       }
       case "navigate_tree": {
         const result = await this.inner.navigateTree(command.targetId as string, {});
-        if (!result.cancelled) this.scheduleContextCompositionRefresh();
+        if (!result.cancelled) {
+          this.applyActiveTools();
+          this.scheduleContextCompositionRefresh();
+        }
         log.info("navigate tree completed", {
           sessionId: this.sessionId,
           targetId: command.targetId,
@@ -567,18 +584,8 @@ export class AgentSessionWrapper {
 
       case "set_tools": {
         const toolNames = command.toolNames as ToolSelection;
-        const declarableSet = new Set(declarableToolNames(this.inner.getAllTools()));
-        if (toolNames === "all") {
-          this.inner.setActiveToolsByName([...declarableSet]);
-        } else if (Array.isArray(toolNames)) {
-          const allNames = this.inner.getAllTools().map((t) => t.name);
-          this.inner.setActiveToolsByName(
-            (expandToolSelection(toolNames, allNames) as string[]).filter((name) =>
-              declarableSet.has(name),
-            ),
-          );
-        }
         this.setToolSelection(toolNames);
+        this.applyActiveTools();
         if (!writeSessionToolSelection(this.sessionId, toolNames)) {
           log.warn("failed to persist session tool selection", { sessionId: this.sessionId });
         }
