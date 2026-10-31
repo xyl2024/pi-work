@@ -7,9 +7,14 @@ import {
   type SuggestedPromptState,
 } from "@/lib/client/suggested-prompt-state";
 
+const sessionA = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+  type: "session_changed",
+  sessionId: "session-a",
+});
+
 const settledState: SuggestedPromptState = reduceSuggestedPrompt(
-  reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, { type: "request_started" }),
-  { type: "request_settled", turn: 0, suggestion: "那错误处理呢？" },
+  reduceSuggestedPrompt(sessionA, { type: "request_started", sessionId: "session-a" }),
+  { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "那错误处理呢？" },
 );
 
 describe("decideSuggestedPromptRequest", () => {
@@ -55,22 +60,22 @@ describe("reduceSuggestedPrompt", () => {
     const state = reduceSuggestedPrompt(settledState, { type: "turn_started" });
     expect(state.suggestion).toBeNull();
     expect(state.turn).toBe(1);
-    expect(state.inFlightTurn).toBeNull();
+    expect(state.inFlight).toBeNull();
   });
 
   it("replaces the suggestion when the new turn ends", () => {
     const state = reduceSuggestedPrompt(
       reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", turn: 1, suggestion: "改成并发版本？" },
+      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "改成并发版本？" },
     );
     expect(state.suggestion).toBe("改成并发版本？");
-    expect(state.inFlightTurn).toBeNull();
+    expect(state.inFlight).toBeNull();
   });
 
   it("settles an empty suggestion to none", () => {
     const state = reduceSuggestedPrompt(
       reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", turn: 1, suggestion: "   " },
+      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "   " },
     );
     expect(state.suggestion).toBeNull();
   });
@@ -78,7 +83,7 @@ describe("reduceSuggestedPrompt", () => {
   it("ignores a suggestion that arrives for an older turn", () => {
     const state = reduceSuggestedPrompt(
       reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", turn: 0, suggestion: "过期的建议" },
+      { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "过期的建议" },
     );
     expect(state.suggestion).toBeNull();
   });
@@ -93,5 +98,67 @@ describe("selectSuggestedPromptPlaceholder", () => {
         fallback: "static hint",
       }),
     ).toBe("static hint");
+  });
+});
+
+describe("cross-session and late responses", () => {
+  it("drops a late suggestion from a session the tab has since switched away from", () => {
+    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+      type: "session_changed",
+      sessionId: "session-a",
+    });
+    const inFlight = reduceSuggestedPrompt(started, {
+      type: "request_started",
+      sessionId: "session-a",
+    });
+    const switched = reduceSuggestedPrompt(inFlight, {
+      type: "session_changed",
+      sessionId: "session-b",
+    });
+
+    const settled = reduceSuggestedPrompt(switched, {
+      type: "request_settled",
+      sessionId: "session-a",
+      turn: 0,
+      suggestion: "旧会话的建议",
+    });
+
+    expect(settled.suggestion).toBeNull();
+    expect(settled.inFlight).toBeNull();
+  });
+
+  it("drops a late suggestion for an older turn within the same session", () => {
+    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+      type: "session_changed",
+      sessionId: "session-a",
+    });
+    const inFlight = reduceSuggestedPrompt(started, {
+      type: "request_started",
+      sessionId: "session-a",
+    });
+    const nextTurn = reduceSuggestedPrompt(inFlight, { type: "turn_started" });
+
+    const settled = reduceSuggestedPrompt(nextTurn, {
+      type: "request_settled",
+      sessionId: "session-a",
+      turn: 0,
+      suggestion: "上一轮的建议",
+    });
+
+    expect(settled.suggestion).toBeNull();
+    expect(settled.turn).toBe(1);
+  });
+
+  it("keeps showing the suggestion of the session it was generated for", () => {
+    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+      type: "session_changed",
+      sessionId: "session-a",
+    });
+    const settled = reduceSuggestedPrompt(
+      reduceSuggestedPrompt(started, { type: "request_started", sessionId: "session-a" }),
+      { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "那错误处理呢？" },
+    );
+
+    expect(settled.suggestion).toBe("那错误处理呢？");
   });
 });
