@@ -46,6 +46,11 @@ _Avoid_: 用「面板」指代其中的某个视图
 面板标签页所承载的单个工具界面，如翻译、Token 审计、模型配置。
 _Avoid_: 用「面板」指代它
 
+**上下文洞察（Context insight）**：
+右栏面板里的一个面板视图，展示绑定会话的真值上下文：系统提示词分段与工具集（含工具 schema）。它读的是会话运行时快照，不展示 token 用量。
+界面英文标签即「Context」，中文称「上下文洞察」；正文里不要用裸 Context 指它（聊天底栏的 Context 指 token 用量）。
+_Avoid_: 与「上下文窗口」混用（那是送入模型的上下文内容与容量）；与「上下文构成」混用（那是上下文窗口的来源占比，token 用量归它）
+
 **模型配置（Models config）**：
 右侧面板里的一个面板视图，用来编辑用户 `~/.pi/agent/models.json`：有哪些 provider、各自怎么接（Base URL、API Key、OAuth），以及每个 provider 下的模型条目。
 _Avoid_: 与「会话内选当前模型」混用（那是「这个会话用哪个模型」，这是磁盘上有哪些 provider / 模型）；用「Models」指代它
@@ -148,7 +153,7 @@ _Avoid_: 思考级别、思考强度（历史叫法，已统一废弃）
 
 **上下文窗口（Context Window）**：
 会话当前送入模型的上下文内容与容量；压缩（compact）是对它的操作。
-_Avoid_: context、Context 面板视图、React Context
+_Avoid_: context、上下文洞察面板（那只是它的一个面板视图）、React Context
 
 **上下文构成（Context Composition）**：
 一个上下文窗口由哪些来源组成、各占多少；来源分为基础系统提示、项目上下文文件、Skills、系统工具定义与各类消息。

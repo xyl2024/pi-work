@@ -94,6 +94,19 @@ export function buildChatTimeline(input: ChatTimelineInput): ChatTimeline {
   };
 }
 
+export function branchAnchorEntryId(
+  messages: readonly AgentMessage[],
+  entryIds: readonly string[],
+  index: number,
+): string | null {
+  if (messages[index]?.role !== "user") return null;
+  for (let i = Math.min(index, entryIds.length) - 1; i >= 0; i--) {
+    const entryId = entryIds[i];
+    if (entryId) return entryId;
+  }
+  return null;
+}
+
 export type ChatTimelineDivider =
   | { kind: "compaction"; point: CompactionPoint }
   | { kind: "change"; marker: ChangeMarker };

@@ -554,6 +554,7 @@ export class AgentSessionWrapper {
           description: t.description,
           active: active.has(t.name),
           exposure: t.exposure,
+          parameters: t.parameters,
         }));
       }
 

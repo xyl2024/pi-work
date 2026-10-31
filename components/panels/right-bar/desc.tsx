@@ -10,7 +10,7 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import {
-  Bot,
+  Eye,
   ChartColumn,
   ChartSpline,
   Clock,
@@ -114,8 +114,8 @@ function panelButton(
 
 const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   context: panelButton("context", {
-    labelKey: "Context",
-    icon: ({ size }) => <Bot size={size} />,
+    labelKey: "Context insight",
+    icon: ({ size }) => <Eye size={size} />,
   }),
   translate: panelButton("translate", {
     labelKey: "Open translate",

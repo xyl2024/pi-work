@@ -23,6 +23,7 @@ export async function POST(req: Request) {
       const tools = (await session.send({ type: "get_tools" })) as Array<{
         name: string;
         description: string;
+        parameters?: unknown;
       }>;
       log.info("ephemeral tools listed", {
         cwd,

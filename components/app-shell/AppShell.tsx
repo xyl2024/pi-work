@@ -26,9 +26,9 @@ import { SchedulerPanel } from "../panels/SchedulerPanel";
 import { ChannelsPanel } from "../panels/ChannelsPanel";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
+import { ContextInsightPanel } from "../panels/ContextInsightPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
-import { splitBaseBlocks, splitSystemPrompt, type SystemPromptSegment } from "@/lib/shared/system-prompt-segments";
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
 import { useI18n } from "@/hooks/useI18n";
@@ -63,7 +63,6 @@ import {
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
 import type { ChatInputHandle } from "../chat/ChatInput";
-import { sendAgentCommand } from "@/lib/client/agent-client";
 import { buildCommands, type Command, type CommandContext } from "@/lib/client/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
@@ -104,12 +103,6 @@ import {
   type SessionWorkspaceState,
 } from "@/hooks/sessionWorkspaceStore";
 
-interface ToolInfo {
-  name: string;
-  description: string;
-  active: boolean;
-}
-
 interface PanelBodyCtx {
   rightPanelState: PanelMode;
   selectedSessionId: string | null;
@@ -117,8 +110,6 @@ interface PanelBodyCtx {
   favoriteIds: string[];
   onSelectSession: (session: SessionInfo) => void;
   onToggleFavorite: (sessionId: string) => void;
-  systemPrompt: string | null;
-  tools: ToolInfo[];
   currentModel: { provider: string; modelId: string } | null;
   thinkingLevel: string;
   isStreaming: boolean;
@@ -142,7 +133,9 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   translate: () => <TranslatePanel />,
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
-  context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
+  context: (ctx) => (
+    <ContextInsightPanel sessionId={ctx.selectedSessionId} visible={ctx.rightPanelState !== "closed"} />
+  ),
   gitDiff: (ctx) => (
     <GitPanel
       cwd={ctx.cwd}
@@ -255,37 +248,6 @@ function findDeepestLeafEntryId(
     }
   }
   return deepest.entry.id;
-}
-
-const AGENTS_SEGMENT_COLORS = [
-  "#3b82f6",
-  "#a855f7",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#06b6d4",
-];
-
-const BASE_PROMPT_HIGHLIGHT_RE =
-  /<name>[\s\S]*?<\/name>|Pi documentation/g;
-
-function highlightBasePrompt(text: string, keyPrefix: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let last = 0;
-  let i = 0;
-  BASE_PROMPT_HIGHLIGHT_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = BASE_PROMPT_HIGHLIGHT_RE.exec(text)) !== null) {
-    if (m.index > last) nodes.push(text.slice(last, m.index));
-    nodes.push(
-      <span key={`${keyPrefix}-${i++}`} style={{ color: "var(--accent)" }}>
-        {m[0]}
-      </span>,
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) nodes.push(text.slice(last));
-  return nodes;
 }
 
 interface WorkspaceChatTabProps {
@@ -491,29 +453,8 @@ export function AppShell() {
   }, []);
   const closeTopPanel = useCallback(() => {}, []);
 
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
-  const [toolsBySession, setToolsBySession] = useState<Record<string, ToolInfo[]>>({});
-  const toolsFetchedRef = useRef<Set<string>>(new Set());
-  const tools = selectedSession ? toolsBySession[selectedSession.id] ?? [] : [];
-
-  const fetchTools = useCallback(async (sessionId: string) => {
-    if (toolsFetchedRef.current.has(sessionId)) return;
-    toolsFetchedRef.current.add(sessionId);
-    try {
-      const result = await sendAgentCommand<ToolInfo[]>(sessionId, { type: "get_tools" });
-      setToolsBySession((prev) => ({ ...prev, [sessionId]: result ?? [] }));
-    } catch {
-      setToolsBySession((prev) => ({ ...prev, [sessionId]: [] }));
-    }
-  }, []);
-
-  useEffect(() => {
-    for (const tabId of workspace.tabOrder) {
-      const tab = workspace.tabs[tabId];
-      if (tab?.sessionId) void fetchTools(tab.sessionId);
-    }
-  }, [workspace.tabOrder, workspace.tabs, fetchTools]);
 
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   useEffect(() => {
@@ -605,9 +546,8 @@ export function AppShell() {
       const tabId = knownTab?.tabId ?? `session:${session.id}`;
       setPendingScrollEntryIds((prev) => ({ ...prev, [tabId]: targetScrollEntryId }));
     }
-    void fetchTools(session.id);
     closeTopPanel();
-  }, [closeTopPanel, fetchTools]);
+  }, [closeTopPanel]);
 
   const handleSelectSearchResult = useCallback((result: SessionSearchResult) => {
     const sessionInfo: SessionInfo = {
@@ -653,8 +593,7 @@ export function AppShell() {
 
   const handleSessionCreated = useCallback((tabId: string, session: SessionInfo) => {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
-    void fetchTools(session.id);
-  }, [fetchTools]);
+  }, []);
 
   const handleOpenScheduledSession = useCallback((sessionId: string) => {
     dispatchWorkspace({ type: "open_session_by_id", sessionId });
@@ -1023,8 +962,6 @@ export function AppShell() {
     favoriteIds,
     onSelectSession: handleSelectSession,
     onToggleFavorite: toggleSessionFavorite,
-    systemPrompt,
-    tools,
     currentModel,
     thinkingLevel,
     isStreaming,
@@ -1564,173 +1501,5 @@ export function AppShell() {
     />
     <TranslateBubble />
     </>
-  );
-}
-
-function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; tools: ToolInfo[] }) {
-  const { t } = useI18n();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [jumpOpen, setJumpOpen] = useState(false);
-  const [hoveredJumpId, setHoveredJumpId] = useState<string | null>(null);
-  const jumpCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelJumpClose = useCallback(() => {
-    if (jumpCloseTimerRef.current !== null) {
-      clearTimeout(jumpCloseTimerRef.current);
-      jumpCloseTimerRef.current = null;
-    }
-  }, []);
-  const scheduleJumpClose = useCallback(() => {
-    cancelJumpClose();
-    jumpCloseTimerRef.current = setTimeout(() => setJumpOpen(false), 150);
-  }, [cancelJumpClose]);
-  useEffect(() => () => { if (jumpCloseTimerRef.current !== null) clearTimeout(jumpCloseTimerRef.current); }, []);
-  const segments = useMemo(() => splitSystemPrompt(systemPrompt ?? ""), [systemPrompt]);
-  const pathColor = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const seg of segments) {
-      if (seg.kind === "agents" && !map.has(seg.path)) {
-        map.set(seg.path, AGENTS_SEGMENT_COLORS[map.size % AGENTS_SEGMENT_COLORS.length]);
-      }
-    }
-    return map;
-  }, [segments]);
-  const agentsSegments = useMemo(
-    () => segments.filter((seg): seg is Extract<SystemPromptSegment, { kind: "agents" }> => seg.kind === "agents"),
-    [segments],
-  );
-  const sortedTools = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
-  const jumpTo = useCallback((id: string) => {
-    scrollRef.current?.querySelector<HTMLElement>(`[data-context-anchor="${id}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-  const baseBlocks = useMemo(
-    () => segments.flatMap((seg) => (seg.kind === "base" ? splitBaseBlocks(seg.text) : [])),
-    [segments],
-  );
-  const baseAnchors = useMemo(() => {
-    const present = new Set(baseBlocks.map((b) => b.anchor).filter((a): a is string => a !== null));
-    const items: { id: string; label: string; color: string }[] = [];
-    if (systemPrompt) items.push({ id: "base", label: t("Pi base + Append"), color: "var(--text-dim)" });
-    if (present.has("available-tools")) items.push({ id: "available-tools", label: t("Available tools"), color: "var(--text-dim)" });
-    if (present.has("guidelines")) items.push({ id: "guidelines", label: t("Guidelines"), color: "var(--text-dim)" });
-    if (present.has("pi-docs")) items.push({ id: "pi-docs", label: t("Pi documentation"), color: "var(--text-dim)" });
-    if (present.has("append")) items.push({ id: "append", label: t("Append"), color: "var(--text-dim)" });
-    if (present.has("skills")) items.push({ id: "skills", label: t("Skills"), color: "var(--accent)" });
-    return items;
-  }, [systemPrompt, baseBlocks, t]);
-  const jumpGroups = useMemo(
-    () =>
-      [
-        ...(baseAnchors.length > 0 ? [{ label: null, items: baseAnchors }] : []),
-        ...(agentsSegments.length > 0
-          ? [{
-              label: t("AGENTS.md"),
-              items: agentsSegments.map((seg, idx) => ({ id: `agents-${idx}`, label: seg.path, color: pathColor.get(seg.path)! })),
-            }]
-          : []),
-        { label: null, items: [{ id: "tools", label: t("Tools"), color: "var(--accent)" }] },
-      ].filter((group) => group.items.length > 0),
-    [baseAnchors, agentsSegments, pathColor, t],
-  );
-
-  return (
-    <div ref={scrollRef} style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-      <div style={{ position: "sticky", top: 0, height: 0, zIndex: 3 }} onMouseLeave={scheduleJumpClose}>
-        <div style={{ position: "absolute", top: 8, right: 8 }} onMouseEnter={() => { cancelJumpClose(); setJumpOpen(true); }}>
-          <button
-            type="button"
-            aria-label={t("Quick jump")}
-            aria-expanded={jumpOpen}
-            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 6, background: jumpOpen ? "var(--bg-hover)" : "var(--bg-panel)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
-          </button>
-          {jumpOpen && (
-            <div
-              onMouseEnter={cancelJumpClose}
-              style={{ position: "absolute", top: "calc(100% + 2px)", right: 0, width: 244, maxHeight: 340, overflowY: "auto", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 28px rgba(0,0,0,0.25)", padding: 6, zIndex: 4 }}
-            >
-              {jumpGroups.map((group, gi) => (
-                <div key={gi} style={{ padding: "2px 0" }}>
-                  {group.label && <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 8px 2px" }}>{group.label}</div>}
-                  {group.items.map((item) => {
-                    const hovered = hoveredJumpId === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => { jumpTo(item.id); cancelJumpClose(); setJumpOpen(false); }}
-                        onMouseEnter={() => setHoveredJumpId(item.id)}
-                        onMouseLeave={() => setHoveredJumpId(null)}
-                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "5px 8px", borderRadius: 5, border: "none", background: hovered ? "var(--bg-hover)" : "transparent", color: "var(--text-muted)", font: "inherit", fontSize: 11, textAlign: "left", cursor: "pointer" }}
-                      >
-                        <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: item.color }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: item.id.startsWith("agents-") ? "var(--font-mono)" : "inherit" }}>{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <section data-context-anchor="base" style={{ scrollMarginTop: 42, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("System Prompts")}</div>
-        {systemPrompt ? (
-          <div>
-            {agentsSegments.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 10, fontSize: 11, color: "var(--text-muted)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--text-dim)" }} /><span>{t("Pi base + Append")}</span></div>
-                {agentsSegments.map((seg) => <div key={seg.path} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: pathColor.get(seg.path)! }} /><span style={{ fontFamily: "var(--font-mono)", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</span></div>)}
-              </div>
-            )}
-            <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-              {segments.map((seg, idx) => {
-                if (seg.kind === "base") {
-                  const blocks = splitBaseBlocks(seg.text);
-                  return (
-                    <span key={`base-${idx}`}>
-                      {blocks.map((block, bi) => (
-                        <span
-                          key={bi}
-                          data-context-anchor={block.anchor ?? undefined}
-                          style={block.anchor ? { display: "block", scrollMarginTop: 44 } : undefined}
-                        >
-                          {highlightBasePrompt(block.text, `base-${idx}-${bi}`)}
-                        </span>
-                      ))}
-                    </span>
-                  );
-                }
-                const color = pathColor.get(seg.path)!;
-                return <span key={`agents-${idx}-${seg.path}`} data-context-anchor={`agents-${agentsSegments.indexOf(seg)}`} style={{ scrollMarginTop: 44, display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}><div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</div>{seg.text}</span>;
-              })}
-            </div>
-          </div>
-        ) : <div style={{ fontStyle: "italic" }}>{t("System prompt is empty (tools are disabled)")}</div>}
-      </section>
-      <section data-context-anchor="tools" style={{ scrollMarginTop: 42, padding: "12px 16px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("Tools")}</div>
-        {sortedTools.length === 0 ? (
-          <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div>
-        ) : (
-          <div>
-            {sortedTools.map((tool) => {
-              const enabled = tool.active === true;
-              return (
-                <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)", opacity: enabled ? 1 : 0.5 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: enabled ? "var(--accent)" : "var(--text-dim)", flexShrink: 0, marginTop: 4 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: enabled ? "var(--text)" : "var(--text-dim)", fontWeight: enabled ? 500 : 400, fontFamily: "var(--font-mono)" }}>{tool.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>{tool.description || t("No description")}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </div>
   );
 }

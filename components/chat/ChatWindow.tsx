@@ -11,7 +11,7 @@ import {
   getChatBottomFrostMaskStyle,
   isChatBottomFrostMaskVisible,
 } from "@/lib/shared/chatBottomFrostMask";
-import { buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
+import { branchAnchorEntryId, buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { modelDisplayName } from "@/lib/shared/model-display";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
@@ -756,10 +756,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 } = {},
               ): React.ReactNode => {
                 const msg = opts.messageOverride ?? renderMessages[idx];
-                const prevAssistantEntryId =
-                  msg.role === "user" && idx > 0 && renderMessages[idx - 1].role === "assistant"
-                    ? renderEntryIds[idx - 1]
-                    : undefined;
+                const anchorEntryId = branchAnchorEntryId(renderMessages, renderEntryIds, idx) ?? undefined;
                 const isVisible = isVisibleChatMessage(msg);
                 const currentRefIdx =
                   isVisible && opts.attachRef !== false ? timeline.visibleIndexOfSession(idx) : -1;
@@ -789,7 +786,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     modelIconPreferences={modelIconPreferences}
                     entryId={renderEntryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
-                    prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
+                    branchAnchorEntryId={agentRunning ? undefined : anchorEntryId}
                     onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
                     showTimestamp={showTimestamp}
                     keywords={search.keywords}

@@ -34,11 +34,11 @@ const ORIGIN_ICON_COMPONENTS = {
 } as const;
 const BUBBLE_VERTICAL_EXTRA = 18;
 
-function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
+function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntryId, onEditContent, keywords, isSearchMatch }: {
   message: UserMessage;
   isFocused?: boolean;
   onNavigate?: (entryId: string) => void;
-  prevAssistantEntryId?: string;
+  branchAnchorEntryId?: string;
   onEditContent?: (content: string) => void;
   keywords?: string[];
   isSearchMatch?: boolean;
@@ -82,7 +82,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   const time = formatTime(message.timestamp);
   const originDisplay = messageOriginDisplay(message.origin);
   const OriginIcon = originDisplay.icon !== undefined ? ORIGIN_ICON_COMPONENTS[originDisplay.icon as keyof typeof ORIGIN_ICON_COMPONENTS] : undefined;
-  const canNavigate = !!prevAssistantEntryId && !!onNavigate;
+  const canNavigate = !!branchAnchorEntryId && !!onNavigate;
   const hasMetadata = !!time || canNavigate || !!content;
 
   const copyContent = () => {
@@ -334,7 +334,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
             <div style={{ display: "flex", gap: 3 }}>
               <Tooltip content={t("Start a new session branch from this message")}>
                 <button
-                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(content); }}
+                  onClick={() => { onNavigate!(branchAnchorEntryId!); onEditContent?.(content); }}
                   style={{
                     display: "flex",
                     alignItems: "center",

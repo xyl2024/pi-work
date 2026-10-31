@@ -90,7 +90,7 @@ export const PANEL_TAB_SPEC_BY_KIND = {
   context: {
     kind: "context",
     tabId: CONTEXT_TAB_ID,
-    labelKey: "Context",
+    labelKey: "Context insight",
     defaultMode: "normal",
     sessionBound: true,
   },
