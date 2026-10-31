@@ -114,7 +114,7 @@ function panelButton(
 
 const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   context: panelButton("context", {
-    labelKey: "Context",
+    labelKey: "Context insight",
     icon: ({ size }) => <Bot size={size} />,
   }),
   translate: panelButton("translate", {

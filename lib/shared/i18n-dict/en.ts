@@ -1,4 +1,5 @@
 export const EN_TRANSLATIONS = {
+  "Context insight": "Context",
   "Set default tools": "Set default tools",
   "Default tools for this project": "Default tools for this project",
   "SubAgent": "SubAgent",

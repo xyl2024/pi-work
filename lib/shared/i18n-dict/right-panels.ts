@@ -17,6 +17,7 @@ export const rightPanels = {
   "No unstaged changes": "没有未暂存的变更",
   "Diff truncated": "变更内容过大，已截断",
   "Open a session first": "请先打开一个会话",
+  "Context insight": "上下文洞察",
   "{n} files changed": "共 {n} 个文件变更",
 
   "Diff": "变更",
