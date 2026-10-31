@@ -1,4 +1,5 @@
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { readConfig } from "./config";
 import { directPrompt, type ThinkingLevel } from "./llm-direct";
 import { runWithLlmAuditContext } from "./llm-audit";
 import { createLogger, elapsedMs } from "./logger";
@@ -54,6 +55,7 @@ export type SuggestedPromptGenerator = (
 ) => Promise<string>;
 
 export type SuggestedPromptSkipReason =
+  | "disabled"
   | "session-not-found"
   | "subagent-session"
   | "scheduled-session"
@@ -71,8 +73,6 @@ export type SuggestedPromptOutcome =
 export interface SuggestForSessionInput {
   sessionId: string;
   leafId?: string | null;
-  provider?: string | null;
-  modelId?: string | null;
   generate?: SuggestedPromptGenerator;
 }
 
@@ -96,6 +96,7 @@ export async function suggestForSession(
   input: SuggestForSessionInput,
 ): Promise<SuggestedPromptOutcome> {
   const startedAt = Date.now();
+  const settings = readConfig().suggested_prompt;
 
   const filePath = await resolveSessionPath(input.sessionId);
   if (!filePath) {
@@ -104,6 +105,14 @@ export async function suggestForSession(
       reason: "session-not-found",
     });
     return { kind: "none", reason: "session-not-found" };
+  }
+
+  if (!settings.enabled) {
+    log.debug("suggested prompt skipped", {
+      sessionId: input.sessionId,
+      reason: "disabled",
+    });
+    return { kind: "none", reason: "disabled" };
   }
 
   const identity = resolveIdentityEligibility(input.sessionId);
@@ -131,8 +140,8 @@ export async function suggestForSession(
   }
 
   const context = extractSuggestedPromptContext(path);
-  const provider = input.provider ?? undefined;
-  const modelId = input.modelId ?? undefined;
+  const provider = settings.model?.provider;
+  const modelId = settings.model?.modelId;
   const generate = input.generate ?? directPrompt;
   const options: SuggestedPromptGenerationOptions = {
     systemPrompt: SUGGESTED_PROMPT_SYSTEM_PROMPT,

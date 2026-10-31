@@ -10,6 +10,8 @@ import {
 } from "@/lib/server/suggested-prompt";
 import { createSubagentTask, markSubagentRunning } from "@/lib/server/subagent-store";
 import { createTask, recordRunEnd, recordRunStart } from "@/lib/server/scheduler/store";
+import { readConfig, writeConfig } from "@/lib/server/config";
+import type { SuggestedPromptConfig } from "@/lib/shared/config-types";
 import { POST as suggestRoute } from "@/app/api/sessions/[id]/suggest/route";
 
 const created: string[] = [];
@@ -115,8 +117,16 @@ function recordingGenerator(answer: string | (() => Promise<string>)): {
   return { generator, calls };
 }
 
+function setSuggestedPromptConfig(patch: Partial<SuggestedPromptConfig>): void {
+  writeConfig({
+    ...readConfig(),
+    suggested_prompt: { enabled: true, model: null, ...patch },
+  });
+}
+
 function clearCaches(): void {
   const g = globalThis as Record<string, unknown>;
+  delete g.__piWorkConfigCache;
   delete g.__piSessionPathCache;
   delete g.__piSessionListCache;
   delete g.__piSessionListHeaderCache;
@@ -338,6 +348,46 @@ describe("suggestForSession", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("generates nothing when the feature is disabled in settings", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-11");
+    setSuggestedPromptConfig({ enabled: false });
+    const { generator, calls } = recordingGenerator("不该出现");
+
+    await expect(
+      suggestForSession({ sessionId: "session-11", generate: generator }),
+    ).resolves.toEqual({ kind: "none", reason: "disabled" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("uses the configured generation model", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-12");
+    setSuggestedPromptConfig({
+      model: { provider: "cheap-provider", modelId: "cheap-model" },
+    });
+    const { generator, calls } = recordingGenerator("那退避策略呢？");
+
+    await suggestForSession({ sessionId: "session-12", generate: generator });
+
+    expect(calls[0].options).toMatchObject({
+      provider: "cheap-provider",
+      modelId: "cheap-model",
+    });
+  });
+
+  it("falls back to the global default model when none is configured", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-13");
+    setSuggestedPromptConfig({ model: null });
+    const { generator, calls } = recordingGenerator("那退避策略呢？");
+
+    await suggestForSession({ sessionId: "session-13", generate: generator });
+
+    expect(calls[0].options).not.toHaveProperty("provider");
+    expect(calls[0].options).not.toHaveProperty("modelId");
   });
 
   it("tags the generation call with the direct audit source and its own purpose", async () => {
