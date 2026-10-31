@@ -16,7 +16,7 @@ interface Props {
   modelIconPreferences?: Record<string, string>;
   entryId?: string;
   onNavigate?: (entryId: string) => void;
-  prevAssistantEntryId?: string;
+  branchAnchorEntryId?: string;
   onEditContent?: (content: string) => void;
   showTimestamp?: boolean;
   keywords?: string[];
@@ -31,7 +31,7 @@ interface Props {
   sessionId?: string | null;
 }
 
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, branchAnchorEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
   const fileLinkHandler = useMemo(
     () => (onOpenFile ? { openFile: onOpenFile, cwd } : null),
@@ -41,7 +41,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
   if (message.role === "user") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <UserMessageView message={message} isFocused={isFocused} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} keywords={keywords} isSearchMatch={isSearchMatch} />
+        <UserMessageView message={message} isFocused={isFocused} onNavigate={onNavigate} branchAnchorEntryId={branchAnchorEntryId} onEditContent={onEditContent} keywords={keywords} isSearchMatch={isSearchMatch} />
       </div>
     );
   }
