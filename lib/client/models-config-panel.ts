@@ -190,7 +190,7 @@ function errorMessage(e: unknown): string {
 let unsubscribeOAuth: (() => void) | null = null;
 let unsubscribeModelIcons: (() => void) | null = null;
 
-function patchOAuthPhase(writer: PanelViewWriter<ModelsConfigViewState>): void {
+function patchOAuthPhase(writer: PanelViewWriter<ModelsConfigViewState, ModelsConfigPage>): void {
   const providerId = writer.get().oauthProviderId;
   writer.patch({
     oauthInProgress: hasActiveOAuthLogin(),

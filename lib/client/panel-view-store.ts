@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { PanelViewKind } from "@/lib/shared/panelTabs";
 import { isContentEqual } from "./shallowEqual";
 
 export type PanelViewLoadPolicy = "once" | "on-open" | "on-visible";
@@ -16,12 +17,14 @@ export type PanelViewConfirm = (guard: PanelViewCloseGuard) => boolean | Promise
 
 export type PanelViewStatus = string | number | boolean | null;
 
-export interface PanelViewWriter<S> {
+export interface PanelViewWriter<S, P> {
   get(): S;
   patch(partial: Partial<S>): void;
+  openPage(page: P): void;
+  resetPages(): void;
 }
 
-export interface PanelViewLoadContext<S> extends PanelViewWriter<S> {
+export interface PanelViewLoadContext<S, P> extends PanelViewWriter<S, P> {
   signal: AbortSignal;
 }
 
@@ -29,29 +32,29 @@ export interface PanelViewBackEvent<S, P> {
   pages: readonly P[];
   popped: P | null;
   closePanel: boolean;
-  writer: PanelViewWriter<S>;
+  writer: PanelViewWriter<S, P>;
 }
 
 export interface PanelViewPagesEvent<S, P> {
   pages: readonly P[];
-  writer: PanelViewWriter<S>;
+  writer: PanelViewWriter<S, P>;
 }
 
 export interface PanelViewAdapter<S, P, C, K> {
-  kind: string;
+  kind: PanelViewKind;
   initial: S;
   rootPage: P;
   loadPolicy: PanelViewLoadPolicy;
   key(context: C, state: S): K;
-  load(key: K, context: PanelViewLoadContext<S>): Promise<void> | void;
-  start?(context: PanelViewWriter<S>): void;
-  stop?(context: PanelViewWriter<S>): void;
-  release(context: PanelViewWriter<S>): void;
+  load(key: K, context: PanelViewLoadContext<S, P>): Promise<void> | void;
+  start?(context: PanelViewWriter<S, P>): void;
+  stop?(context: PanelViewWriter<S, P>): void;
+  release(context: PanelViewWriter<S, P>): void;
   afterPages?(event: PanelViewPagesEvent<S, P>): void;
   afterBack?(event: PanelViewBackEvent<S, P>): void;
   guard(state: S): PanelViewCloseGuard | null;
   status(state: S): PanelViewStatus;
-  isRootPage(pages: readonly P[]): boolean;
+  isRootPage?(pages: readonly P[]): boolean;
   isSiblingPage(next: P, current: P): boolean;
 }
 
@@ -65,10 +68,10 @@ export interface PanelViewBackResult {
 }
 
 export interface PanelViewStore<S, P, C = void> {
-  readonly kind: string;
+  readonly kind: PanelViewKind;
   get(): S;
   patch(partial: Partial<S>): void;
-  scope(): PanelViewWriter<S>;
+  scope(): PanelViewWriter<S, P>;
   getSnapshot(): PanelViewSnapshot<S, P>;
   subscribe(listener: () => void): () => void;
   useSnapshot(): PanelViewSnapshot<S, P>;
@@ -129,25 +132,31 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     emit();
   }
 
-  function scopedWriter(): PanelViewWriter<S> {
-    const captured = epoch;
+  function makeWriter(accept: () => boolean): PanelViewWriter<S, P> {
     return {
       get: () => snapshot.view,
       patch: (partial) => {
-        if (captured !== epoch) return;
+        if (!accept()) return;
         patch(partial);
+      },
+      openPage: (page) => {
+        if (!accept()) return;
+        openPage(page);
+      },
+      resetPages: () => {
+        if (!accept()) return;
+        resetPages();
       },
     };
   }
 
-  function loadWriter(generation: number, captured: number): PanelViewWriter<S> {
-    return {
-      get: () => snapshot.view,
-      patch: (partial) => {
-        if (generation !== loadGeneration || captured !== epoch) return;
-        patch(partial);
-      },
-    };
+  function scopedWriter(): PanelViewWriter<S, P> {
+    const captured = epoch;
+    return makeWriter(() => captured === epoch);
+  }
+
+  function loadWriter(generation: number, captured: number): PanelViewWriter<S, P> {
+    return makeWriter(() => generation === loadGeneration && captured === epoch);
   }
 
   function isKey(candidate: { key: K } | null, key: K): boolean {
@@ -216,7 +225,8 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     visible = next;
     if (!next || currentKey === null) return;
     if (adapter.loadPolicy !== "on-visible") return;
-    if (shouldLoad(currentKey.key, false)) startLoad(currentKey.key);
+    if (isKey(loadingKey, currentKey.key)) return;
+    startLoad(currentKey.key);
   }
 
   function reload(): void {
@@ -250,9 +260,13 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     notifyPages(next);
   }
 
+  function isRootPage(pages: readonly P[]): boolean {
+    return adapter.isRootPage ? adapter.isRootPage(pages) : pages.length <= 1;
+  }
+
   function back(): PanelViewBackResult {
     const pages = snapshot.pages;
-    if (adapter.isRootPage(pages)) {
+    if (isRootPage(pages)) {
       adapter.afterBack?.({ pages, popped: null, closePanel: true, writer: scopedWriter() });
       return { closePanel: true };
     }

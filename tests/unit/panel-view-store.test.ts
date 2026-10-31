@@ -22,6 +22,8 @@ interface PendingLoad {
   key: string | null;
   signal: AbortSignal;
   resolve(data: string): void;
+  openPage(page: FakePage): void;
+  resetPages(): void;
 }
 
 interface HarnessOptions {
@@ -39,7 +41,7 @@ function createHarness(options: HarnessOptions = {}) {
   const ref: { current: FakeStore | null } = { current: null };
 
   const adapter: PanelViewAdapter<FakeView, FakePage, FakeContext, string | null> = {
-    kind: "fake",
+    kind: "skills",
     initial: { data: null, draft: "" },
     rootPage: { kind: "root" },
     loadPolicy: options.policy ?? "once",
@@ -53,6 +55,8 @@ function createHarness(options: HarnessOptions = {}) {
             context.patch({ data });
             resolve();
           },
+          openPage: (page) => context.openPage(page),
+          resetPages: () => context.resetPages(),
         });
       }),
     release: () => {
@@ -68,7 +72,6 @@ function createHarness(options: HarnessOptions = {}) {
     },
     guard: (view) => (options.guard ? options.guard(view) : null),
     status: (view) => view.data,
-    isRootPage: (pages) => pages.length <= 1,
     isSiblingPage: (next, current) =>
       next.kind === "detail" && current.kind === "detail",
   };
@@ -191,6 +194,21 @@ describe("release", () => {
     expect(log.filter((entry) => entry === "release")).toHaveLength(1);
   });
 
+  it("drops page-stack writes from a load that finishes after release", () => {
+    const { store, loads } = createHarness();
+    store.open({ cwd: "a" });
+
+    loads[0].openPage(detail("live"));
+    expect(store.currentPage()).toEqual(detail("live"));
+
+    store.release();
+    store.open({ cwd: "b" });
+    loads[0].openPage(detail("stale"));
+    loads[0].resetPages();
+
+    expect(store.pages()).toEqual([{ kind: "root" }]);
+  });
+
   it("reopens with fresh state, never the stale one", async () => {
     const { store, loads } = createHarness({
       onRelease: (reopening) => reopening.open({ cwd: "b" }),
@@ -267,6 +285,37 @@ describe("loading", () => {
     expect(loads).toHaveLength(0);
 
     store.setVisible(true);
+    expect(loads).toHaveLength(1);
+  });
+
+  it("loads again on every invisible-to-visible transition for an on-visible policy", async () => {
+    const { store, loads } = createHarness({ policy: "on-visible" });
+    store.open({ cwd: "a" });
+    loads[0].resolve("disk");
+    await flush();
+
+    store.setVisible(false);
+    store.setVisible(true);
+    expect(loads).toHaveLength(2);
+
+    loads[1].resolve("disk-2");
+    await flush();
+    store.setVisible(false);
+    store.setVisible(true);
+    expect(loads).toHaveLength(3);
+  });
+
+  it("does not load again when an on-visible panel is opened while it stays visible", async () => {
+    const { store, loads } = createHarness({ policy: "on-visible" });
+    store.open({ cwd: "a" });
+    loads[0].resolve("disk");
+    await flush();
+
+    store.open({ cwd: "a" });
+    expect(loads).toHaveLength(1);
+
+    store.setVisible(false);
+    store.open({ cwd: "a" });
     expect(loads).toHaveLength(1);
   });
 

@@ -5,7 +5,7 @@ import { selectTabByKind, type PanelTabsState, type PanelViewKind } from "@/lib/
 import type { PanelViewCloseGuard } from "@/lib/client/panel-view-store";
 
 export interface PanelViewLifecycleStore {
-  readonly kind: string;
+  readonly kind: PanelViewKind;
   guard(): PanelViewCloseGuard | null;
   requestClose(confirm: () => boolean): Promise<boolean>;
   release(): void;
@@ -17,7 +17,7 @@ export function usePanelViewLifecycleSync(
 ): void {
   useEffect(() => {
     for (const store of stores) {
-      if (selectTabByKind(panelTabsState, store.kind as PanelViewKind) === null) store.release();
+      if (selectTabByKind(panelTabsState, store.kind) === null) store.release();
     }
   }, [panelTabsState, stores]);
 }

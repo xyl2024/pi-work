@@ -102,7 +102,7 @@ function commitPages(pages: readonly McpPage[]): void {
 
 async function loadMcp(
   cwd: string | null,
-  { get, patch, signal }: PanelViewLoadContext<McpStoreState>,
+  { get, patch, signal }: PanelViewLoadContext<McpStoreState, McpPage>,
 ): Promise<void> {
   const foreground = nextLoadIsForeground;
   nextLoadIsForeground = false;

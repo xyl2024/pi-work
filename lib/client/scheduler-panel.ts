@@ -91,7 +91,7 @@ function errorMessage(e: unknown): string {
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let polling = false;
-let pollWriter: PanelViewWriter<SchedulerViewState> | null = null;
+let pollWriter: PanelViewWriter<SchedulerViewState, SchedulerPage> | null = null;
 let unsubscribeIconPreferences: (() => void) | null = null;
 let writeGeneration = 0;
 let writesInFlight = 0;
