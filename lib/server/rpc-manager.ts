@@ -30,6 +30,13 @@ import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
+import { subagentWebTools } from "./web-tools";
+import {
+  composeAppendSystemPrompt,
+  composeOverrideSystemPrompt,
+  webToolGuidanceBlocks,
+  type SystemPromptAppendMode,
+} from "./web-tool-guidance";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { subagentTool, buildSubagentSystemPromptBlock } from "./subagent-tool";
 import { stopAllSubagentTasksForParent, SUBAGENT_PARENT_STOPPED } from "./subagent-tasks";
@@ -819,6 +826,18 @@ export async function startRpcSession(
     }
     const mcpEnabled = options.mcp
       ?? (source === "user" && !options.systemPromptPrefix && !options.systemPromptOverride);
+    const promptAppendMode: SystemPromptAppendMode = options.systemPromptOverride
+      ? "override"
+      : options.systemPromptPrefix
+        ? "prefix"
+        : "default";
+    const sessionHasTool = (name: string): boolean =>
+      (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
+      (effectiveToolNames === "all" ||
+        effectiveToolNames.some((entry) =>
+          entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
+        ));
+    const webPromptBlocks = source === "subagent" ? webToolGuidanceBlocks(sessionHasTool) : [];
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
@@ -826,19 +845,19 @@ export async function startRpcSession(
         ? { appendSystemPrompt: appendSystemPromptLoaderOption }
         : {}),
       appendSystemPromptOverride: (baseAppend) => {
-        if (options.systemPromptPrefix || options.systemPromptOverride) return [];
-        const sessionHasTool = (name: string): boolean =>
-          (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
-          (effectiveToolNames === "all" ||
-            effectiveToolNames.some((entry) =>
-              entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
-            ));
-        const blocks: string[] = [];
-        if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool(SUBAGENT_TOOL_NAME) || sessionHasTool(LEGACY_SPAWN_SUBAGENT_TOOL_NAME)) {
-          blocks.push(buildSubagentSystemPromptBlock());
+        const sessionBlocks: string[] = [];
+        if (promptAppendMode === "default") {
+          if (sessionHasTool("ask_user_questions")) sessionBlocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
+          if (sessionHasTool(SUBAGENT_TOOL_NAME) || sessionHasTool(LEGACY_SPAWN_SUBAGENT_TOOL_NAME)) {
+            sessionBlocks.push(buildSubagentSystemPromptBlock());
+          }
         }
-        return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
+        return composeAppendSystemPrompt({
+          mode: promptAppendMode,
+          baseAppend,
+          sessionBlocks,
+          webBlocks: webPromptBlocks,
+        });
       },
       noSkills: Boolean(options.systemPromptPrefix || options.systemPromptOverride),
       skillsOverride: (base) => ({
@@ -879,7 +898,9 @@ export async function startRpcSession(
           : []),
         ...(options.systemPromptOverride
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
-              pi.on("before_agent_start", () => ({ systemPrompt: options.systemPromptOverride! }));
+              pi.on("before_agent_start", () => ({
+                systemPrompt: composeOverrideSystemPrompt(options.systemPromptOverride!, webPromptBlocks),
+              }));
             }]
           : []),
         ...(piDocsManaged
@@ -1001,6 +1022,7 @@ export async function startRpcSession(
         createPiWorkBashTool(cwd),
         createPiWorkPowerShellTool(cwd),
         ...(capturedSource === "subagent" ? [] : [subagentTool]),
+        ...subagentWebTools(capturedSource),
         ...buildAskUserQuestionsTool({
           requestUserInput: (toolCallId, questions) => {
             const w = requestUserInputRef.current;
