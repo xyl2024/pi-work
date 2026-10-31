@@ -1,7 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createSandbox } from "./sandbox";
 import { getLlmAuditAls } from "@/lib/server/llm-audit";
 import {
   suggestForSession,
@@ -14,19 +15,10 @@ import { readConfig, writeConfig } from "@/lib/server/config";
 import type { SuggestedPromptConfig } from "@/lib/shared/config-types";
 import { POST as suggestRoute } from "@/app/api/sessions/[id]/suggest/route";
 
-const created: string[] = [];
-const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
-const savedDataDir = process.env.PI_WORK_DATA_DIR;
-
 const timestamp = "2026-01-02T03:04:05.000Z";
 
 function sandbox(): { agentDir: string } {
-  const root = mkdtempSync(path.join(tmpdir(), "pi-work-suggested-prompt-"));
-  created.push(root);
-  const agentDir = path.join(root, "agent");
-  mkdirSync(agentDir, { recursive: true });
-  process.env.PI_CODING_AGENT_DIR = agentDir;
-  process.env.PI_WORK_DATA_DIR = path.join(root, "data");
+  const { agentDir } = createSandbox("pi-work-suggested-prompt-");
   return { agentDir };
 }
 
@@ -123,28 +115,6 @@ function setSuggestedPromptConfig(patch: Partial<SuggestedPromptConfig>): void {
     suggested_prompt: { enabled: true, model: null, ...patch },
   });
 }
-
-function clearCaches(): void {
-  const g = globalThis as Record<string, unknown>;
-  delete g.__piWorkConfigCache;
-  delete g.__piSessionPathCache;
-  delete g.__piSessionListCache;
-  delete g.__piSessionListHeaderCache;
-  delete g.__piSessionListInflight;
-  delete g.__piSessionListHeaderInflight;
-  delete g.__piSubagentsDb;
-  delete g.__piSchedulerDb;
-  delete g.__piSchedulerMigrated;
-}
-
-afterEach(() => {
-  for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true });
-  if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-  else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
-  if (savedDataDir === undefined) delete process.env.PI_WORK_DATA_DIR;
-  else process.env.PI_WORK_DATA_DIR = savedDataDir;
-  clearCaches();
-});
 
 const completedTurn = (agentDir: string, id = "session-1"): void => {
   writeSession(agentDir, id, [

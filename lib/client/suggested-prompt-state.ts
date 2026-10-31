@@ -17,21 +17,29 @@ export function decideSuggestedPromptRequest(
   return { kind: "request", sessionId: input.sessionId };
 }
 
+export interface SuggestedPromptInFlight {
+  sessionId: string;
+  turn: number;
+}
+
 export interface SuggestedPromptState {
+  sessionId: string | null;
   suggestion: string | null;
-  inFlightTurn: number | null;
+  inFlight: SuggestedPromptInFlight | null;
   turn: number;
 }
 
 export const INITIAL_SUGGESTED_PROMPT_STATE: SuggestedPromptState = {
+  sessionId: null,
   suggestion: null,
-  inFlightTurn: null,
+  inFlight: null,
   turn: 0,
 };
 
 export type SuggestedPromptAction =
-  | { type: "request_started" }
-  | { type: "request_settled"; turn: number; suggestion: string }
+  | { type: "session_changed"; sessionId: string | null }
+  | { type: "request_started"; sessionId: string }
+  | { type: "request_settled"; sessionId: string; turn: number; suggestion: string }
   | { type: "turn_started" };
 
 export function reduceSuggestedPrompt(
@@ -39,15 +47,26 @@ export function reduceSuggestedPrompt(
   action: SuggestedPromptAction,
 ): SuggestedPromptState {
   switch (action.type) {
+    case "session_changed":
+      if (action.sessionId === state.sessionId) return state;
+      return { sessionId: action.sessionId, suggestion: null, inFlight: null, turn: 0 };
     case "request_started":
-      return state.inFlightTurn === null ? { ...state, inFlightTurn: state.turn } : state;
+      return state.inFlight === null
+        ? { ...state, inFlight: { sessionId: action.sessionId, turn: state.turn } }
+        : state;
     case "turn_started":
-      return { suggestion: null, inFlightTurn: state.inFlightTurn, turn: state.turn + 1 };
+      return { ...state, suggestion: null, turn: state.turn + 1 };
     case "request_settled": {
-      const inFlightTurn = state.inFlightTurn === action.turn ? null : state.inFlightTurn;
-      if (action.turn !== state.turn) return { ...state, inFlightTurn };
+      const ownsInFlight =
+        state.inFlight !== null &&
+        state.inFlight.sessionId === action.sessionId &&
+        state.inFlight.turn === action.turn;
+      const inFlight = ownsInFlight ? null : state.inFlight;
+      if (action.sessionId !== state.sessionId || action.turn !== state.turn) {
+        return { ...state, inFlight };
+      }
       const suggestion = action.suggestion.trim();
-      return { suggestion: suggestion || null, inFlightTurn, turn: state.turn };
+      return { ...state, suggestion: suggestion || null, inFlight };
     }
   }
 }

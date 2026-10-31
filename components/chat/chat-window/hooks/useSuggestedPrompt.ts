@@ -29,25 +29,26 @@ export function useSuggestedPrompt({
   const sessionIdRef = useRef(sessionId);
   const leafIdRef = useRef(leafId);
 
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-    leafIdRef.current = leafId;
-  }, [sessionId, leafId]);
-
   const dispatch = useCallback((action: SuggestedPromptAction) => {
     stateRef.current = reduceSuggestedPrompt(stateRef.current, action);
     setState(stateRef.current);
   }, []);
 
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+    leafIdRef.current = leafId;
+    dispatch({ type: "session_changed", sessionId });
+  }, [dispatch, sessionId, leafId]);
+
   const handleAgentEnd = useCallback(() => {
     const decision = decideSuggestedPromptRequest({
       sessionId: sessionIdRef.current,
-      requestInFlight: stateRef.current.inFlightTurn !== null,
+      requestInFlight: stateRef.current.inFlight !== null,
     });
     if (decision.kind === "skip") return;
 
-    const turn = stateRef.current.turn;
-    dispatch({ type: "request_started" });
+    const { turn } = stateRef.current;
+    dispatch({ type: "request_started", sessionId: decision.sessionId });
     void (async () => {
       let suggestion = "";
       try {
@@ -66,7 +67,7 @@ export function useSuggestedPrompt({
       } catch {
         suggestion = "";
       }
-      dispatch({ type: "request_settled", turn, suggestion });
+      dispatch({ type: "request_settled", sessionId: decision.sessionId, turn, suggestion });
     })();
   }, [dispatch]);
 

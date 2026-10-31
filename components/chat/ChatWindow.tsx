@@ -28,7 +28,7 @@ import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
 import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent, useStreamingToolCall } from "@/hooks/useStreamingMessage";
-import { ChatInput, type AttachedImage, type ChatInputHandle } from "./ChatInput";
+import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
@@ -161,10 +161,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     suggestedPromptAgentEndRef.current = handleSuggestedPromptAgentEnd;
   }, [handleSuggestedPromptAgentEnd]);
 
-  const handleSendWithSuggestedPromptReset = useCallback((message: string, images?: AttachedImage[]) => {
-    handleSuggestedPromptTurnStarted();
-    void handleSend(message, images);
-  }, [handleSuggestedPromptTurnStarted, handleSend]);
+  const suggestedPromptBusyRef = useRef(false);
+  useEffect(() => {
+    const busy = agentRunning && agentPhase?.kind !== "compacting";
+    if (busy && !suggestedPromptBusyRef.current) handleSuggestedPromptTurnStarted();
+    suggestedPromptBusyRef.current = busy;
+  }, [agentRunning, agentPhase, handleSuggestedPromptTurnStarted]);
 
   const { pickedChannelId, setPickedChannelId, boundChannelId, setNotifyChannel } = useSessionNotifyBinding({
     sessionId: session?.id ?? null,
@@ -616,7 +618,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     <>
       <ChatInput
         ref={chatInputRef}
-        onSend={handleSendWithSuggestedPromptReset}
+        onSend={handleSend}
         onAbort={handleAbort}
         isStreaming={agentRunning}
         sessionBusy={agentRunning}
