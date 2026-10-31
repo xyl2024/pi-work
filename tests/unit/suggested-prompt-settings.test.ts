@@ -1,21 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { writeFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
 import { readConfig } from "@/lib/server/config";
 import { GET as getSettings, PUT as putSettings } from "@/app/api/settings/route";
-
-const created: string[] = [];
-const savedDataDir = process.env.PI_WORK_DATA_DIR;
+import { createSandbox } from "./sandbox";
 
 function sandbox(): string {
-  const root = mkdtempSync(path.join(tmpdir(), "pi-work-suggested-prompt-settings-"));
-  created.push(root);
-  const dataDir = path.join(root, "data");
-  mkdirSync(dataDir, { recursive: true });
-  process.env.PI_WORK_DATA_DIR = dataDir;
-  delete globalThis.__piWorkConfigCache;
-  return path.join(dataDir, "config.yaml");
+  return createSandbox("pi-work-suggested-prompt-settings-").configPath;
 }
 
 function put(body: unknown): Promise<Response> {
@@ -27,13 +17,6 @@ function put(body: unknown): Promise<Response> {
     }),
   );
 }
-
-afterEach(() => {
-  for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true });
-  if (savedDataDir === undefined) delete process.env.PI_WORK_DATA_DIR;
-  else process.env.PI_WORK_DATA_DIR = savedDataDir;
-  delete globalThis.__piWorkConfigCache;
-});
 
 describe("suggested prompt settings", () => {
   it("defaults to enabled with no model when the key is absent", () => {
