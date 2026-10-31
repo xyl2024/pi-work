@@ -73,7 +73,7 @@ describe("system prompt block", () => {
     expect(block).not.toContain("spawn_subagent");
   });
 
-  const BLOCK_CHAR_BUDGET = 800;
+  const BLOCK_CHAR_BUDGET = 900;
 
   const builtinProfiles = BUILTIN_SUBAGENT_SEEDS.map(asProfile);
 

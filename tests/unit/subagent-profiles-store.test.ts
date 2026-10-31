@@ -12,6 +12,41 @@ function resetStoreGlobals(): void {
   delete (globalThis as { __piSubagentProfilesSeeded?: unknown }).__piSubagentProfilesSeeded;
 }
 
+function writeProfilesDb(
+  path: string,
+  version: number,
+  rows: ReadonlyArray<{ name: string; description?: string }>,
+): void {
+  const db = new Database(path);
+  db.exec(`
+    CREATE TABLE subagent_profiles (
+      name           TEXT PRIMARY KEY,
+      description    TEXT NOT NULL,
+      system_prompt  TEXT NOT NULL,
+      inherit_system_prompt INTEGER NOT NULL DEFAULT 0,
+      tools          TEXT NOT NULL,
+      model_provider TEXT,
+      model_id       TEXT,
+      thinking_level TEXT NOT NULL,
+      permission_mode TEXT,
+      bot            TEXT NOT NULL,
+      timeout_ms     INTEGER NOT NULL,
+      builtin        INTEGER NOT NULL DEFAULT 0,
+      created_at     INTEGER NOT NULL,
+      updated_at     INTEGER NOT NULL
+    );
+  `);
+  const insert = db.prepare(`
+    INSERT INTO subagent_profiles
+      (name, description, system_prompt, inherit_system_prompt, tools, model_provider, model_id,
+       thinking_level, permission_mode, bot, timeout_ms, builtin, created_at, updated_at)
+    VALUES (?, ?, ?, 0, '["read"]', NULL, NULL, 'off', 'auto_deny', '{}', 30000, 1, 1, 1)
+  `);
+  for (const row of rows) insert.run(row.name, row.description ?? "seed", `${row.name} prompt`);
+  db.pragma(`user_version = ${version}`);
+  db.close();
+}
+
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "pi-work-subagents-"));
   dbPath = join(dir, "subagents.db");
@@ -30,7 +65,7 @@ describe("subagent profile store", () => {
     const { listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
     const profiles = listSubagentProfiles();
     expect(profiles.map((profile) => profile.name).sort()).toEqual([
-      "code_reviewer", "codebase_explorer", "implementer",
+      "code_reviewer", "codebase_explorer", "implementer", "web_searcher",
     ]);
     for (const profile of profiles) {
       expect(profile.builtin).toBe(true);
@@ -50,6 +85,28 @@ describe("subagent profile store", () => {
       thinkingLevel: "off",
       timeoutMs: 30 * 60 * 1000,
     });
+  });
+
+  it("seeds web_searcher with its own web tool set and a sourced reporting prompt", async () => {
+    const { BUILTIN_SUBAGENT_SEEDS } = await import("@/lib/server/subagent-profiles");
+    const { subagentTools } = await import("@/lib/server/subagent-tools");
+    const seed = BUILTIN_SUBAGENT_SEEDS.find((profile) => profile.name === "web_searcher");
+    expect(seed).toBeDefined();
+    expect(seed!.tools).toEqual(["web_search", "web_fetch", "bash", "read", "write", "edit"]);
+    expect(seed!.permissionMode).toBe("auto_deny");
+    expect(seed!.model).toBeNull();
+    expect(seed!.thinkingLevel).toBe("off");
+    expect(seed!.tools).not.toEqual(subagentTools(process.platform));
+    expect(subagentTools(process.platform)).not.toContain("write");
+    expect(subagentTools(process.platform)).not.toContain("edit");
+
+    const prompt = seed!.systemPrompt.toLowerCase();
+    expect(prompt).toContain("search");
+    expect(prompt).toContain("fetch");
+    expect(prompt).toContain("report");
+    expect(prompt).toContain("source link");
+    expect(prompt).toContain("fact");
+    expect(prompt).toContain("inference");
   });
 
   it("adds the implementer built-in when upgrading a pre-versioned database", async () => {
@@ -84,7 +141,9 @@ describe("subagent profile store", () => {
 
     const { getSubagentDb } = await import("@/lib/server/subagent-store");
     const upgraded = listSubagentProfiles();
-    expect(upgraded.map((profile) => profile.name).sort()).toEqual(["codebase_explorer", "implementer"]);
+    expect(upgraded.map((profile) => profile.name).sort()).toEqual([
+      "codebase_explorer", "implementer", "web_searcher",
+    ]);
     expect(upgraded.find((profile) => profile.name === "codebase_explorer")?.permissionMode).toBe("auto_deny");
     const implementer = upgraded.find((profile) => profile.name === "implementer");
     expect(implementer?.inheritSystemPrompt).toBe(true);
@@ -98,6 +157,66 @@ describe("subagent profile store", () => {
     resetStoreGlobals();
     const reloaded = (await import("@/lib/server/subagent-profiles")).listSubagentProfiles();
     expect(reloaded.map((profile) => profile.name)).not.toContain("implementer");
+
+    process.env.PI_WORK_SUBAGENTS_DB = dbPath;
+    resetStoreGlobals();
+  });
+
+  it("adds only web_searcher when upgrading a version 1 database", async () => {
+    const upgradePath = join(dir, "v1-upgrade.db");
+    writeProfilesDb(upgradePath, 1, [
+      { name: "codebase_explorer" }, { name: "code_reviewer" }, { name: "implementer" },
+    ]);
+
+    process.env.PI_WORK_SUBAGENTS_DB = upgradePath;
+    resetStoreGlobals();
+    const { listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+    const { getSubagentDb } = await import("@/lib/server/subagent-store");
+
+    const names = listSubagentProfiles().map((profile) => profile.name).sort();
+    expect(names).toEqual(["code_reviewer", "codebase_explorer", "implementer", "web_searcher"]);
+    expect(getSubagentDb().pragma("user_version", { simple: true })).toBe(2);
+
+    process.env.PI_WORK_SUBAGENTS_DB = dbPath;
+    resetStoreGlobals();
+  });
+
+  it("keeps user-edited built-ins when upgrading to version 2", async () => {
+    const upgradePath = join(dir, "v1-custom.db");
+    writeProfilesDb(upgradePath, 1, [
+      { name: "codebase_explorer", description: "mine" },
+      { name: "implementer", description: "my implementer" },
+    ]);
+
+    process.env.PI_WORK_SUBAGENTS_DB = upgradePath;
+    resetStoreGlobals();
+    const { listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+    const profiles = listSubagentProfiles();
+    expect(profiles.map((profile) => profile.name).sort()).toEqual([
+      "codebase_explorer", "implementer", "web_searcher",
+    ]);
+    expect(profiles.find((profile) => profile.name === "codebase_explorer")?.description).toBe("mine");
+    expect(profiles.find((profile) => profile.name === "implementer")?.description).toBe("my implementer");
+
+    process.env.PI_WORK_SUBAGENTS_DB = dbPath;
+    resetStoreGlobals();
+  });
+
+  it("keeps a deleted web_searcher deleted after upgrading", async () => {
+    const upgradePath = join(dir, "v1-deleted.db");
+    writeProfilesDb(upgradePath, 1, [
+      { name: "codebase_explorer" }, { name: "code_reviewer" }, { name: "implementer" },
+    ]);
+
+    process.env.PI_WORK_SUBAGENTS_DB = upgradePath;
+    resetStoreGlobals();
+    const { deleteSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+    expect(listSubagentProfiles().map((profile) => profile.name)).toContain("web_searcher");
+    expect(deleteSubagentProfile("web_searcher")).toBe(true);
+
+    resetStoreGlobals();
+    const reloaded = listSubagentProfiles();
+    expect(reloaded.map((profile) => profile.name)).not.toContain("web_searcher");
 
     process.env.PI_WORK_SUBAGENTS_DB = dbPath;
     resetStoreGlobals();

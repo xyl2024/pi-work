@@ -10,6 +10,15 @@ export const SUBAGENT_IMPLEMENTER_TOOL_IDS: readonly string[] = [
   "codemode",
 ];
 
+export const SUBAGENT_WEB_SEARCHER_TOOL_IDS: readonly string[] = [
+  "web_search",
+  "web_fetch",
+  "bash",
+  "read",
+  "write",
+  "edit",
+];
+
 export const SUBAGENT_THINKING_LEVELS = [
   "off",
   "minimal",
