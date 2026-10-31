@@ -10,10 +10,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
-import { extractMessageText } from "@/lib/shared/message-content";
+import { extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { useCollapseNonce } from "./context";
-import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
+import type { AssistantContentBlock, ImageContent, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
 export function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick, cwd }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void; cwd?: string | null }) {
   if (block.type === "text") {
@@ -22,12 +25,36 @@ export function BlockView({ block, toolResults, isStreaming, isLast, keywords, i
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isLast && isStreaming} onImageClick={onImageClick} />;
   }
+  if (block.type === "image") {
+    return <ImageBlock block={block as ImageContent} onImageClick={onImageClick} />;
+  }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     return <ToolCallBlock block={tc} result={result} cwd={cwd} />;
   }
   return null;
+}
+
+function ImageBlock({ block, onImageClick }: { block: ImageContent; onImageClick?: (src: string) => void }) {
+  const { t } = useI18n();
+  const src = imageContentSrc(block);
+  if (!src) return null;
+  return (
+    <Tooltip content={t("Click to expand")}>
+      <span
+        onClick={onImageClick ? () => onImageClick(src) : undefined}
+        style={{ display: "inline-flex", cursor: onImageClick ? "zoom-in" : "default" }}
+      >
+        <SmartImage
+          src={src}
+          alt=""
+          loaderSize={96}
+          style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+        />
+      </span>
+    </Tooltip>
+  );
 }
 
 function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
@@ -163,7 +190,9 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const inputStr = JSON.stringify(block.input, null, 2);
 
-  const resultText = result ? extractMessageText(result) : null;
+  const resultContent = extractToolResultContent(result);
+  const resultText = result ? resultContent.text : null;
+  const resultImages = resultContent.images;
   const resultIsEmpty = isToolResultEmpty(result);
   const isError = result?.isError ?? false;
 
@@ -232,7 +261,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -248,7 +277,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -268,7 +297,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
       <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>
           {expanded && isFileMutation ? (
-            <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+            <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
           ) : expanded && (
             <>
               <pre
@@ -289,7 +318,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
               >
                 {inputStr}
               </pre>
-              {result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />}
+              {result && <PairedResult text={resultText ?? ""} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
             </>
           )}
         </div>
@@ -324,10 +353,11 @@ function buildDiffLines(toolName: string, input: Record<string, unknown>): DiffL
   return lines;
 }
 
-function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isError, isDark }: {
+function DiffToolCallContent({ toolName, input, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   toolName: string;
   input: Record<string, unknown>;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
@@ -370,18 +400,19 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
           )}
         </div>
       </div>
-      {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+      {resultText !== null && <PairedResult text={resultText} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
     </div>
   );
 }
 
 const BASH_DETAIL_MAX_HEIGHT = 200;
 
-function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty, isError, isDark }: {
+function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   command: string;
   timeout: string | null;
   cwd?: string | null;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
@@ -431,7 +462,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
       >
         {command}
       </SyntaxHighlighter>
-      {resultText !== null && (
+      {resultText !== null && resultText.trim() !== "" && (
         resultIsEmpty ? (
           <pre
             style={{
@@ -474,6 +505,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
           </SyntaxHighlighter>
         )
       )}
+      <ToolResultImages images={resultImages} />
     </div>
 
     {!expandedAll && showMask && (
@@ -516,9 +548,10 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
 
 const CODEMODE_DETAIL_MAX_HEIGHT = 300;
 
-function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isDark }: {
+function CodemodeToolCallContent({ code, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   code: string;
   resultText: string | null;
+  resultImages: ImageContent[];
   resultIsEmpty: boolean;
   isError: boolean;
   isDark: boolean;
@@ -549,7 +582,7 @@ function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isD
         >
           {code}
         </SyntaxHighlighter>
-        {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+        {resultText !== null && <PairedResult text={resultText} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
       </div>
 
       {!expandedAll && showMask && (
@@ -590,12 +623,41 @@ function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isD
   );
 }
 
-function PairedResult({ text, isEmpty, isError }: {
+function ToolResultImages({ images }: { images: ImageContent[] }) {
+  const { t } = useI18n();
+  const gallery = useMemo(
+    () => images.map((image) => ({ alt: "", src: imageContentSrc(image) })).filter((item) => item.src),
+    [images],
+  );
+  const lightbox = useImageLightbox(gallery);
+  if (gallery.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 10px" }}>
+      {gallery.map((item, index) => (
+        <Tooltip key={index} content={t("Click to expand")}>
+          <span onClick={() => lightbox.openAt(item.src)} style={{ display: "inline-flex", cursor: "zoom-in" }}>
+            <SmartImage
+              src={item.src}
+              alt=""
+              loaderSize={96}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+            />
+          </span>
+        </Tooltip>
+      ))}
+      {lightbox.lightbox}
+    </div>
+  );
+}
+
+function PairedResult({ text, images, isEmpty, isError }: {
   text: string;
+  images: ImageContent[];
   isEmpty: boolean;
   isError: boolean;
 }) {
   const { t } = useI18n();
+  const showText = text.trim() !== "" || images.length === 0;
   return (
     <div
       style={{
@@ -603,7 +665,8 @@ function PairedResult({ text, isEmpty, isError }: {
         background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
-      <pre
+      <ToolResultImages images={images} />
+      {showText && <pre
         data-scroll-inset
         style={{
           margin: 0,
@@ -622,7 +685,7 @@ function PairedResult({ text, isEmpty, isError }: {
         }}
       >
         {isEmpty ? `(${t("No output")})` : text}
-      </pre>
+      </pre>}
     </div>
   );
 }

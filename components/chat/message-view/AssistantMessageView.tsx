@@ -18,7 +18,7 @@ import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/Pr
 import { BlockView } from "./blocks";
 import { CallMetricsBadges, formatTime, TurnDuration, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
-import { countContentChars, extractMessageText } from "@/lib/shared/message-content";
+import { countContentChars, extractMessageText, imageContentSrc } from "@/lib/shared/message-content";
 import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 
 interface AssistantMessageViewProps {
@@ -67,6 +67,11 @@ function AssistantMessageViewInner({
   const gallery = useMemo<ImageItem[]>(() => {
     const out: ImageItem[] = [];
     for (const block of blocks) {
+      if (block.type === "image") {
+        const src = imageContentSrc(block);
+        if (src && !out.some((entry) => entry.src === src)) out.push({ alt: "", src });
+        continue;
+      }
       if (block.type === "text" || block.type === "thinking") {
         const markdown = block.type === "text" ? block.text : block.thinking;
         for (const item of extractImageGallery(markdown)) {
