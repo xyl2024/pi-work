@@ -113,6 +113,7 @@ const snapshot: SubagentTaskConfigSnapshot = {
   cwd: "/tmp/work",
   model: { provider: "p", modelId: "m-snapshot" },
   thinkingLevel: "high",
+  permissionMode: "auto_deny",
   tools: ["read"],
   systemPrompt: { kind: "prefix", text: "Explore only." },
   timeoutMs: 12_345,

@@ -197,6 +197,7 @@ const snapshot: SubagentTaskConfigSnapshot = {
   cwd: "/tmp/work",
   model: { provider: "p", modelId: "m-snapshot" },
   thinkingLevel: "high",
+  permissionMode: "full_access",
   tools: ["read"],
   systemPrompt: { kind: "prefix", text: "Explore only." },
   timeoutMs: 12_345,
@@ -437,6 +438,7 @@ describe("after a restart", () => {
     expect(config).toMatchObject({
       model: snapshot.model,
       thinkingLevel: snapshot.thinkingLevel,
+      permissionMode: "full_access",
       allowedToolNames: ["read"],
       systemPromptPrefix: snapshot.systemPrompt.kind === "prefix" ? snapshot.systemPrompt.text : "",
       stripDefaultSystemPromptSections: true,
@@ -444,6 +446,41 @@ describe("after a restart", () => {
     });
     expect(config.allowedToolNames).not.toContain("subagent");
     expect(config.allowedToolNames).not.toContain("spawn_subagent");
+  });
+});
+
+describe("permission mode in the frozen config", () => {
+  it("reads a snapshot without a permission mode as auto deny and carries it into the start options", () => {
+    const legacySnapshot: Record<string, unknown> = { ...snapshot };
+    delete legacySnapshot.permissionMode;
+    const parsed = parseSubagentConfigSnapshot(JSON.stringify(legacySnapshot));
+    expect(parsed?.permissionMode).toBe("auto_deny");
+    expect(subagentChildSessionStartOptions(parsed!, "parent-legacy-mode").permissionMode).toBe("auto_deny");
+
+    const invalid = parseSubagentConfigSnapshot(JSON.stringify({ ...legacySnapshot, permissionMode: "confirm" }));
+    expect(invalid?.permissionMode).toBe("auto_deny");
+  });
+
+  it("keeps the snapshot mode when a child session is reopened", async () => {
+    const parent = unique("parent-cold-mode");
+    const child = unique("child-cold-mode");
+    createSubagentTask({
+      parentSessionId: parent,
+      childSessionId: child,
+      subagentName: snapshot.subagentName,
+      description: "cold mode",
+      prompt: "first input",
+      configSnapshot: JSON.stringify(snapshot),
+    });
+
+    const reopened = await resolveSubagentChildConfig({
+      parentSessionId: parent,
+      childSessionId: child,
+      subagentName: snapshot.subagentName,
+    });
+    expect(reopened.source).toBe("snapshot");
+    expect(reopened.config.permissionMode).toBe("full_access");
+    expect(subagentChildSessionStartOptions(reopened.config, parent).permissionMode).toBe("full_access");
   });
 });
 
@@ -498,6 +535,7 @@ describe("legacy rows without a configuration snapshot", () => {
       cwd: "/tmp/legacy-project",
       model: { provider: "p", modelId: "m-legacy" },
       thinkingLevel: "low",
+      permissionMode: "auto_deny",
       tools: ["read", "bash"],
       timeoutMs: DEFAULT_SUBAGENT_TIMEOUT_MS,
     });

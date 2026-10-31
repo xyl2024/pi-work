@@ -1,3 +1,9 @@
+import {
+  DEFAULT_BACKGROUND_PERMISSION_MODE,
+  isBackgroundPermissionMode,
+  resolveBackgroundPermissionMode,
+  type BackgroundPermissionMode,
+} from "../shared/permission-mode";
 import { getSubagentDb } from "./subagent-store";
 import { subagentTools } from "./subagent-tools";
 import {
@@ -55,6 +61,7 @@ export const BUILTIN_SUBAGENT_SEEDS: readonly SubagentProfileInput[] = [
     tools: [...subagentTools(process.platform)],
     model: null,
     thinkingLevel: "off",
+    permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
     bot: { ...DEFAULT_SUBAGENT_BOT, stateKey: "searching", shapeId: "blob" },
     timeoutMs: DEFAULT_SUBAGENT_TIMEOUT_MS,
   },
@@ -65,6 +72,7 @@ export const BUILTIN_SUBAGENT_SEEDS: readonly SubagentProfileInput[] = [
     tools: [...subagentTools(process.platform)],
     model: null,
     thinkingLevel: "off",
+    permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
     bot: { ...DEFAULT_SUBAGENT_BOT, stateKey: "thinking", shapeId: "pebble" },
     timeoutMs: DEFAULT_SUBAGENT_TIMEOUT_MS,
   },
@@ -76,6 +84,7 @@ export const BUILTIN_SUBAGENT_SEEDS: readonly SubagentProfileInput[] = [
     tools: [...SUBAGENT_IMPLEMENTER_TOOL_IDS],
     model: null,
     thinkingLevel: "off",
+    permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
     bot: { ...DEFAULT_SUBAGENT_BOT, stateKey: "working", shapeId: "blob" },
     timeoutMs: DEFAULT_SUBAGENT_TIMEOUT_MS,
   },
@@ -93,6 +102,7 @@ interface ProfileRow {
   model_provider: string | null;
   model_id: string | null;
   thinking_level: string;
+  permission_mode: string | null;
   bot: string;
   timeout_ms: number;
   builtin: number;
@@ -150,6 +160,7 @@ function rowToProfile(row: ProfileRow): SubagentProfile {
       ? { provider: row.model_provider, modelId: row.model_id }
       : null,
     thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(row.permission_mode),
     bot: parseBot(row.bot),
     timeoutMs: row.timeout_ms,
     builtin: row.builtin === 1,
@@ -236,6 +247,14 @@ export function normalizeSubagentProfileInput(raw: unknown): NormalizedSubagentP
         return "off" as const;
       })();
 
+  let permissionMode: BackgroundPermissionMode = DEFAULT_BACKGROUND_PERMISSION_MODE;
+  if (obj.permissionMode !== undefined) {
+    if (!isBackgroundPermissionMode(obj.permissionMode)) {
+      throw new SubagentProfileError("permissionMode must be one of: full_access, auto_deny");
+    }
+    permissionMode = obj.permissionMode;
+  }
+
   const timeoutMs = obj.timeoutMs === undefined
     ? DEFAULT_SUBAGENT_TIMEOUT_MS
     : typeof obj.timeoutMs === "number" && Number.isFinite(obj.timeoutMs)
@@ -255,6 +274,7 @@ export function normalizeSubagentProfileInput(raw: unknown): NormalizedSubagentP
     tools,
     model,
     thinkingLevel,
+    permissionMode,
     bot: normalizeBot(obj.bot),
     timeoutMs,
   };
@@ -268,10 +288,10 @@ function seedBuiltinsIfEmpty(): void {
     const insert = db.prepare(`
       INSERT OR IGNORE INTO subagent_profiles
         (name, description, system_prompt, inherit_system_prompt, tools, model_provider, model_id,
-         thinking_level, bot, timeout_ms, builtin, created_at, updated_at)
+         thinking_level, permission_mode, bot, timeout_ms, builtin, created_at, updated_at)
       VALUES
         (@name, @description, @systemPrompt, @inheritSystemPrompt, @tools, NULL, NULL,
-         @thinkingLevel, @bot, @timeoutMs, 1, @now, @now)
+         @thinkingLevel, @permissionMode, @bot, @timeoutMs, 1, @now, @now)
     `);
     const now = Date.now();
     const count = (db.prepare("SELECT COUNT(*) AS count FROM subagent_profiles").get() as { count: number }).count;
@@ -287,6 +307,7 @@ function seedBuiltinsIfEmpty(): void {
           inheritSystemPrompt: seed.inheritSystemPrompt ? 1 : 0,
           tools: JSON.stringify(seed.tools),
           thinkingLevel: seed.thinkingLevel,
+          permissionMode: resolveBackgroundPermissionMode(seed.permissionMode),
           bot: JSON.stringify(seed.bot),
           timeoutMs: seed.timeoutMs,
           now,
@@ -331,10 +352,10 @@ export function createSubagentProfile(input: SubagentProfileInput): SubagentProf
   getSubagentDb().prepare(`
     INSERT INTO subagent_profiles
       (name, description, system_prompt, inherit_system_prompt, tools, model_provider, model_id,
-       thinking_level, bot, timeout_ms, builtin, created_at, updated_at)
+       thinking_level, permission_mode, bot, timeout_ms, builtin, created_at, updated_at)
     VALUES
       (@name, @description, @systemPrompt, @inheritSystemPrompt, @tools, @modelProvider, @modelId,
-       @thinkingLevel, @bot, @timeoutMs, 0, @now, @now)
+       @thinkingLevel, @permissionMode, @bot, @timeoutMs, 0, @now, @now)
   `).run({
     name: input.name,
     description: input.description,
@@ -344,6 +365,7 @@ export function createSubagentProfile(input: SubagentProfileInput): SubagentProf
     modelProvider: input.model?.provider ?? null,
     modelId: input.model?.modelId ?? null,
     thinkingLevel: input.thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(input.permissionMode),
     bot: JSON.stringify(input.bot),
     timeoutMs: input.timeoutMs,
     now,
@@ -365,6 +387,7 @@ export function updateSubagentProfile(input: SubagentProfileInput): SubagentProf
         model_provider = @modelProvider,
         model_id = @modelId,
         thinking_level = @thinkingLevel,
+        permission_mode = @permissionMode,
         bot = @bot,
         timeout_ms = @timeoutMs,
         updated_at = @now
@@ -378,6 +401,7 @@ export function updateSubagentProfile(input: SubagentProfileInput): SubagentProf
     modelProvider: input.model?.provider ?? null,
     modelId: input.model?.modelId ?? null,
     thinkingLevel: input.thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(input.permissionMode),
     bot: JSON.stringify(input.bot),
     timeoutMs: input.timeoutMs,
     now: Date.now(),

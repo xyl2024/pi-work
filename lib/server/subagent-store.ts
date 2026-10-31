@@ -114,6 +114,7 @@ const SCHEMA = `
     model_provider TEXT,
     model_id       TEXT,
     thinking_level TEXT NOT NULL,
+    permission_mode TEXT,
     bot            TEXT NOT NULL,
     timeout_ms     INTEGER NOT NULL,
     builtin        INTEGER NOT NULL DEFAULT 0,
@@ -135,6 +136,9 @@ function migrateProfileColumns(db: Database.Database): void {
     .map((column) => column.name);
   if (!columns.includes("inherit_system_prompt")) {
     db.exec("ALTER TABLE subagent_profiles ADD COLUMN inherit_system_prompt INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!columns.includes("permission_mode")) {
+    db.exec("ALTER TABLE subagent_profiles ADD COLUMN permission_mode TEXT");
   }
 }
 

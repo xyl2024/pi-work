@@ -54,6 +54,7 @@ const profile: SubagentProfile = {
   tools: ["read", "subagent"],
   model: { provider: "p", modelId: "m-profile" },
   thinkingLevel: "low",
+  permissionMode: "full_access",
   bot: { expression: 0, stateKey: "idle", shapeId: "blob", parts: [], accessories: [] },
   timeoutMs: 30 * 60 * 1000,
   builtin: true,
@@ -100,6 +101,7 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     expect(snapshot.subagentName).toBe("codebase_explorer");
     expect(snapshot.model).toEqual({ provider: "p", modelId: "m-profile" });
     expect(snapshot.thinkingLevel).toBe("low");
+    expect(snapshot.permissionMode).toBe("full_access");
     expect(snapshot.timeoutMs).toBe(profile.timeoutMs);
     expect(snapshot.tools).toEqual(["read"]);
 
