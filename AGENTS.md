@@ -27,12 +27,12 @@ pi-work/
 │   ├── chat/           # 聊天、输入、消息渲染、模型/推理强度/工具选择、权限确认、Ask User Questions
 │   ├── sessions/       # 会话侧栏、标签页、搜索、会话库、多 cwd、收藏、Conversation Tree
 │   ├── files/          # 文件浏览、Git 状态与查看器（file-viewer/ 支持文本/代码、图片、音频、视频、PDF）
-│   ├── panels/         # 右侧面板 body 组件（Translate、Tokens、LLM Audit、Models config、MCP、
+│   ├── panels/         # 右侧面板 body 组件（Context、Translate、Tokens、LLM Audit、Models config、MCP、
 │   │                   #   Skills、Scheduler、Channels、Git Diff 含 Git Log、TerminalPanel）；models-config/、
 │   │                   #   mcp/、skills/、scheduler/ 与 channels/ 是模型配置 / MCP / 技能 / 定时任务 / 频道面板视图的页；
 │   │                   #   right-bar/ 是按钮列，
 │   │                   #   desc.tsx 注册描述符（按钮含模型配置、MCP、技能、定时任务、频道；
-│   │                   #   Context、Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
+│   │                   #   Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
 │   ├── settings/       # 设置弹窗与各配置区块（Prompt、Profile、重试、Append System、
 │   │                   #   自定义工具、文件预览、右侧按钮、音效；models-config/ 的模型表单控件
 │   │                   #   仍在此，供面板视图复用）

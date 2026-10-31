@@ -133,7 +133,9 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   translate: () => <TranslatePanel />,
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
-  context: (ctx) => <ContextInsightPanel sessionId={ctx.selectedSessionId} />,
+  context: (ctx) => (
+    <ContextInsightPanel sessionId={ctx.selectedSessionId} visible={ctx.rightPanelState !== "closed"} />
+  ),
   gitDiff: (ctx) => (
     <GitPanel
       cwd={ctx.cwd}

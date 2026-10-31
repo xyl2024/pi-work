@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sendAgentCommand, type ToolWithActive } from "@/lib/client/agent-client";
-import { isContextInsightRefreshEvent } from "@/lib/shared/context-insight";
 import type { SessionEvent } from "@/lib/shared/session-events";
 import { splitBaseBlocks, splitSystemPrompt } from "@/lib/shared/system-prompt-segments";
 import { useI18n } from "@/hooks/useI18n";
@@ -119,7 +118,7 @@ function CollapsibleRow({
   );
 }
 
-export function ContextInsightPanel({ sessionId }: { sessionId: string | null }) {
+export function ContextInsightPanel({ sessionId, visible }: { sessionId: string | null; visible: boolean }) {
   const { t } = useI18n();
   const cacheRef = useRef<Map<string, ContextInsightData>>(new Map());
   const requestSeqRef = useRef(0);
@@ -155,7 +154,10 @@ export function ContextInsightPanel({ sessionId }: { sessionId: string | null })
 
   useEffect(() => {
     setExpanded(new Set());
-    if (!sessionId) {
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!visible || !sessionId) {
       setLoadingSession(null);
       return;
     }
@@ -168,13 +170,13 @@ export function ContextInsightPanel({ sessionId }: { sessionId: string | null })
       } catch {
         return;
       }
-      if (isContextInsightRefreshEvent(event)) void load(sessionId);
+      if (event.type === "agent_settled" || event.type === "compaction_end") void load(sessionId);
     };
     return () => {
       requestSeqRef.current += 1;
       source.close();
     };
-  }, [sessionId, load]);
+  }, [sessionId, visible, load]);
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -210,13 +212,12 @@ export function ContextInsightPanel({ sessionId }: { sessionId: string | null })
         continue;
       }
       for (const block of splitBaseBlocks(seg.text)) {
-        const text = block.text.trim();
-        if (!text) continue;
+        if (!block.text.trim()) continue;
         items.push({
           id: `prompt-${items.length}`,
           label: t(baseBlockLabelKey(block.anchor)),
           color: null,
-          text,
+          text: block.text,
         });
       }
     }

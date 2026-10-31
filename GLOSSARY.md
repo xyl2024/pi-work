@@ -48,7 +48,8 @@ _Avoid_: 用「面板」指代它
 
 **上下文洞察（Context insight）**：
 右栏面板里的一个面板视图，展示绑定会话的真值上下文：系统提示词分段与工具集（含工具 schema）。它读的是会话运行时快照，不展示 token 用量。
-_Avoid_: 与「上下文窗口」混用（那是送入模型的上下文内容与容量）；与「上下文构成」混用（那是上下文窗口的来源占比，token 用量归它）；用「Context」裸指它（聊天底栏的 Context 指 token 用量）
+界面英文标签即「Context」，中文称「上下文洞察」；正文里不要用裸 Context 指它（聊天底栏的 Context 指 token 用量）。
+_Avoid_: 与「上下文窗口」混用（那是送入模型的上下文内容与容量）；与「上下文构成」混用（那是上下文窗口的来源占比，token 用量归它）
 
 **模型配置（Models config）**：
 右侧面板里的一个面板视图，用来编辑用户 `~/.pi/agent/models.json`：有哪些 provider、各自怎么接（Base URL、API Key、OAuth），以及每个 provider 下的模型条目。
