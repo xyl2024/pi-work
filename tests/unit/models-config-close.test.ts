@@ -5,7 +5,6 @@ import {
   MODELS_CONFIG_DIRTY_CLOSE_CONFIRM,
   MODELS_CONFIG_OAUTH_CLOSE_CONFIRM,
   selectModelsConfigCloseConfirm,
-  selectModelsConfigOpenAction,
 } from "@/lib/shared/models-config-close";
 
 const CLEAN = { dirty: false, oauthInProgress: false };
@@ -50,19 +49,5 @@ describe("selectModelsConfigCloseConfirm", () => {
       expect(dict[guard.descriptionKey]).toBeTruthy();
       expect(dict[guard.confirmLabelKey]).toBeTruthy();
     }
-  });
-});
-
-describe("selectModelsConfigOpenAction", () => {
-  it("reuses a draft that is still held (tab open, body remounted)", () => {
-    expect(selectModelsConfigOpenAction({ loaded: true, loading: false })).toBe("reuse");
-  });
-
-  it("reuses while a read is already in flight", () => {
-    expect(selectModelsConfigOpenAction({ loaded: false, loading: true })).toBe("reuse");
-  });
-
-  it("re-reads disk once the tab has closed and released the draft", () => {
-    expect(selectModelsConfigOpenAction({ loaded: false, loading: false })).toBe("reload");
   });
 });

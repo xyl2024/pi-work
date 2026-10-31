@@ -66,11 +66,7 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
-import {
-  schedulerPanel,
-  setSchedulerPanelOpen,
-  useSchedulerRunning,
-} from "@/lib/client/scheduler-panel";
+import { schedulerPanel, setSchedulerPanelOpen } from "@/lib/client/scheduler-panel";
 import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
@@ -159,8 +155,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel, schedulerPanel, mcpPanel, modelsConfigPanel];
-
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   mcp: mcpPanel,
   channels: channelsPanel,
@@ -170,6 +164,8 @@ const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycle
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
+
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = Object.values(PANEL_VIEW_STORE_BY_KIND);
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   const closing = new Set(tabs.map((tab) => tab.kind));
@@ -390,7 +386,7 @@ export function AppShell() {
 
   const modelsConfigDirty = modelsConfigPanel.useStatus() === true;
   const skillsInstalling = skillsPanel.useStatus() === true;
-  const schedulerRunning = useSchedulerRunning();
+  const schedulerRunning = schedulerPanel.useStatus() === true;
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
