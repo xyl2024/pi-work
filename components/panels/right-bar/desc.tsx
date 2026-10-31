@@ -14,14 +14,13 @@ import {
   ChartColumn,
   ChartSpline,
   Clock,
-  GitBranch,
   GitGraph,
   Languages,
   PanelRight,
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -167,7 +166,7 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",
     isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
-    icon: ({ size }) => <GitBranch size={size} />,
+    icon: ({ size }) => <ConversationTreeGlyphIcon size={size} />,
   }),
 };
 

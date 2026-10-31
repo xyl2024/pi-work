@@ -77,7 +77,7 @@ export const McpIcon = (props: IconProps) => (
   </Icon>
 );
 export const JsonIcon = (props: IconProps) => <Icon {...props}><path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 1-2 2v3a2 2 0 0 1-2 2h-2" /></Icon>;
-export const ConversationTreeGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="4" cy="5" r="1.5" /><circle cx="4" cy="19" r="1.5" /><circle cx="20" cy="5" r="1.5" /><path d="M4 6.5v11M20 6.5a10 10 0 0 1-10 10" /></Icon>;
+export const ConversationTreeGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="5" r="2.5" /><circle cx="5.5" cy="19" r="2.5" /><circle cx="18.5" cy="19" r="2.5" /><path d="M12 7.5v3M12 10.5H7.5a2 2 0 0 0-2 2v4M12 10.5h4.5a2 2 0 0 1 2 2v4" /></Icon>;
 export const ExpandLeftIcon = (props: IconProps) => <Icon {...props}><polyline points="13 7 18 12 13 17" /><polyline points="6 7 11 12 6 17" /></Icon>;
 export const MaximizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 3 3 3 8" /><polyline points="16 3 21 3 21 8" /><polyline points="8 21 3 21 3 16" /><polyline points="16 21 21 21 21 16" /><line x1="3" y1="3" x2="8" y2="8" /><line x1="21" y1="3" x2="16" y2="8" /><line x1="3" y1="21" x2="8" y2="16" /><line x1="21" y1="21" x2="16" y2="16" /></Icon>;
 export const MinimizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 8 8 3 8" /><polyline points="16 3 16 8 21 8" /><polyline points="8 21 8 16 3 16" /><polyline points="16 21 16 16 21 16" /></Icon>;
