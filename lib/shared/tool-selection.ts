@@ -102,6 +102,40 @@ export function toggleSelectionEntry(
   return Array.from(next);
 }
 
+export interface ToolSelectionSummary {
+  selected: number;
+  total: number;
+  unlisted: string[];
+}
+
+export function summarizeToolSelection(
+  raw: readonly string[],
+  allToolNames: readonly string[],
+  rows: readonly ToolChecklistRow[],
+  selected: ReadonlySet<string>,
+): ToolSelectionSummary {
+  const covered = new Set<string>();
+  for (const row of rows) {
+    covered.add(row.name);
+    if (row.group) {
+      for (const name of allToolNames) {
+        if (name.startsWith(row.group.prefix)) covered.add(name);
+      }
+    }
+  }
+  const unlisted: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string" || entry.length === 0 || covered.has(entry) || unlisted.includes(entry)) continue;
+    unlisted.push(entry);
+  }
+  const selectedRows = rows.filter((row) => isToolChecklistRowChecked(row, selected, allToolNames)).length;
+  return {
+    selected: selectedRows + unlisted.length,
+    total: rows.length + unlisted.length,
+    unlisted,
+  };
+}
+
 export function isDeclarableTool(tool: { exposure?: string }): boolean {
   return tool.exposure === undefined || tool.exposure === "direct" || tool.exposure === "model-only";
 }

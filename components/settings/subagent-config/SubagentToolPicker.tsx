@@ -8,6 +8,7 @@ import {
   buildToolChecklistRows,
   expandToolPatterns,
   isToolChecklistRowChecked,
+  summarizeToolSelection,
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
 
@@ -39,7 +40,7 @@ export function SubagentToolPicker({
         const response = await fetch("/api/agent/tools", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cwd: cwdData.cwd }),
+          body: JSON.stringify({ cwd: cwdData.cwd, source: "subagent" }),
         });
         const data = await response.json() as { data?: { available?: ToolCatalogEntry[] } };
         if (!cancelled) setTools(data.data?.available ?? []);
@@ -63,6 +64,10 @@ export function SubagentToolPicker({
   }, [query, rows]);
 
   const selectedSet = useMemo(() => new Set(value), [value]);
+  const summary = useMemo(
+    () => summarizeToolSelection(value, allNames, rows, selectedSet),
+    [value, allNames, rows, selectedSet],
+  );
 
   const toggleTool = (name: string, checked: boolean) => {
     const next = toggleSelectionEntry(value, name, checked, allNames);
@@ -86,7 +91,7 @@ export function SubagentToolPicker({
           spellCheck={false}
           style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12 }}
         />
-        <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{selectedSet.size}/{tools.length}</span>
+        <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>{summary.selected}/{summary.total}</span>
       </div>
 
       <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 6 }} data-hide-v-scrollbar>
