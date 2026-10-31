@@ -162,3 +162,41 @@ describe("cross-session and late responses", () => {
     expect(settled.suggestion).toBe("那错误处理呢？");
   });
 });
+
+describe("turn start signal", () => {
+  it("keeps the in-flight guard when a new turn starts so a late response cannot leak", () => {
+    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+      type: "session_changed",
+      sessionId: "session-a",
+    });
+    const inFlight = reduceSuggestedPrompt(started, {
+      type: "request_started",
+      sessionId: "session-a",
+    });
+
+    const nextTurn = reduceSuggestedPrompt(inFlight, { type: "turn_started" });
+
+    expect(nextTurn.inFlight).toEqual({ sessionId: "session-a", turn: 0 });
+  });
+
+  it("counts every turn_started as a new turn, so a turn must signal it exactly once", () => {
+    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
+      type: "session_changed",
+      sessionId: "session-a",
+    });
+    const once = reduceSuggestedPrompt(started, { type: "turn_started" });
+    const twice = reduceSuggestedPrompt(once, { type: "turn_started" });
+
+    const settledOnce = reduceSuggestedPrompt(
+      reduceSuggestedPrompt(once, { type: "request_started", sessionId: "session-a" }),
+      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "这轮的建议" },
+    );
+    const settledTwice = reduceSuggestedPrompt(
+      reduceSuggestedPrompt(twice, { type: "request_started", sessionId: "session-a" }),
+      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "这轮的建议" },
+    );
+
+    expect(settledOnce.suggestion).toBe("这轮的建议");
+    expect(settledTwice.suggestion).toBeNull();
+  });
+});
