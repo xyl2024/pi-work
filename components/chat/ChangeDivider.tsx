@@ -3,15 +3,18 @@
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { formatTime } from "./message-view/utils";
-import type { ModelChangeMarker } from "@/lib/shared/types";
+import type { ModelChangeMarker, ThinkingLevelChangeMarker } from "@/lib/shared/types";
 
-interface Props {
-  marker: ModelChangeMarker;
-  modelName: string;
-}
+type Props =
+  | { marker: ModelChangeMarker; modelName: string }
+  | { marker: ThinkingLevelChangeMarker };
 
-export function ChangeDivider({ marker, modelName }: Props) {
+export function ChangeDivider(props: Props) {
   const { t } = useI18n();
+  const marker = props.marker;
+  const label = "modelName" in props
+    ? t("Model changed to {model}", { model: props.modelName })
+    : t("Thinking level changed to {level}", { level: props.marker.thinkingLevel });
   const timestamp = marker.timestamp ? formatTime(new Date(marker.timestamp).getTime()) : null;
   const line = (
     <div
@@ -27,7 +30,7 @@ export function ChangeDivider({ marker, modelName }: Props) {
       }}
     >
       <span style={{ flex: 1, borderTop: "1px dashed color-mix(in srgb, var(--accent) 45%, transparent)" }} />
-      <span>{t("Model changed to {model}", { model: modelName })}</span>
+      <span>{label}</span>
       <span style={{ flex: 1, borderTop: "1px dashed color-mix(in srgb, var(--accent) 45%, transparent)" }} />
     </div>
   );

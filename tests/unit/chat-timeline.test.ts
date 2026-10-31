@@ -266,6 +266,13 @@ describe("buildTimelineDividers", () => {
     beforeMessageEntryId,
     timestamp: "2026-01-02T03:00:01.000Z",
   });
+  const thinkingChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
+    entryId,
+    kind: "thinking_level",
+    thinkingLevel: "high",
+    beforeMessageEntryId,
+    timestamp: "2026-01-02T03:00:02.000Z",
+  });
 
   it("places a change marker before the visible message it anchors to", () => {
     const dividers = buildTimelineDividers({
@@ -277,6 +284,15 @@ describe("buildTimelineDividers", () => {
     expect(dividers.beforeVisible.get(1)?.[0]).toEqual({ kind: "change", marker: modelChange("mc1", "e1") });
   });
 
+  it("places a thinking-level change marker before the visible message it anchors to", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      changeMarkers: [thinkingChange("tl1", "e3")],
+    });
+    expect(dividers.beforeVisible.get(2)?.[0]).toEqual({ kind: "change", marker: thinkingChange("tl1", "e3") });
+  });
+
   it("orders compaction before change at the same visible index", () => {
     const dividers = buildTimelineDividers({
       timeline,
@@ -285,6 +301,19 @@ describe("buildTimelineDividers", () => {
       changeMarkers: [modelChange("mc1", "e3")],
     });
     expect(dividers.beforeVisible.get(2)?.map((d) => d.kind)).toEqual(["compaction", "change"]);
+  });
+
+  it("keeps both change kinds in order after compaction at the same visible index", () => {
+    const dividers = buildTimelineDividers({
+      timeline,
+      entryIds,
+      compactionPoints: [compaction("c1", "e3")],
+      changeMarkers: [modelChange("mc1", "e3"), thinkingChange("tl1", "e3")],
+    });
+    const markers = dividers.beforeVisible.get(2)?.map((d) =>
+      d.kind === "change" ? d.marker.kind : d.kind,
+    );
+    expect(markers).toEqual(["compaction", "model", "thinking_level"]);
   });
 
   it("keeps anchors that sit in the rendered slice and hides ones cropped away", () => {
@@ -302,10 +331,10 @@ describe("buildTimelineDividers", () => {
       timeline,
       entryIds,
       compactionPoints: [compaction("c1")],
-      changeMarkers: [modelChange("mc1")],
+      changeMarkers: [modelChange("mc1"), thinkingChange("tl1")],
     });
     expect(dividers.trailingCompactionPoints.map((p) => p.entryId)).toEqual(["c1"]);
-    expect(dividers.trailingChangeMarkers.map((m) => m.entryId)).toEqual(["mc1"]);
+    expect(dividers.trailingChangeMarkers.map((m) => m.entryId)).toEqual(["mc1", "tl1"]);
     expect(dividers.beforeVisible.size).toBe(0);
   });
 

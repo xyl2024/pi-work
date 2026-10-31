@@ -304,22 +304,15 @@ export type ModelChangeMarker = {
   timestamp?: string;
 };
 
-export type ChangeMarker =
-  | {
-      entryId: string;
-      kind: "model";
-      provider: string;
-      modelId: string;
-      beforeMessageEntryId?: string;
-      timestamp?: string;
-    }
-  | {
-      entryId: string;
-      kind: "thinking_level";
-      thinkingLevel: string;
-      beforeMessageEntryId?: string;
-      timestamp?: string;
-    };
+export type ThinkingLevelChangeMarker = {
+  entryId: string;
+  kind: "thinking_level";
+  thinkingLevel: string;
+  beforeMessageEntryId?: string;
+  timestamp?: string;
+};
+
+export type ChangeMarker = ModelChangeMarker | ThinkingLevelChangeMarker;
 
 export interface SessionSearchResult {
   id: string;

@@ -225,7 +225,7 @@ export const common = {
   "Failed to connect to session events": "无法连接会话事件流",
   "Failed to stop agent": "停止会话失败",
   "Failed to switch model": "切换模型失败",
-  "Failed to change thinking level": "切换思考级别失败",
+  "Failed to change thinking level": "切换推理强度失败",
   "Failed to change tool preset": "切换工具失败",
   "Session deleted": "会话已删除",
   "Session renamed": "会话已重命名",

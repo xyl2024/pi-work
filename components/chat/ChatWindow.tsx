@@ -5,7 +5,6 @@ import type {
   AgentMessage,
   SessionInfo,
   ReadFileInfo,
-  ModelChangeMarker,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import {
@@ -344,12 +343,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [messages, inFlightToolResults]);
 
   const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
-    const modelMarkers = changeMarkers.filter((marker): marker is ModelChangeMarker => marker.kind === "model");
     return buildTimelineDividers({
       timeline,
       entryIds: renderEntryIds,
       compactionPoints,
-      changeMarkers: modelMarkers,
+      changeMarkers,
     });
   }, [timeline, renderEntryIds, compactionPoints, changeMarkers]);
 
@@ -811,13 +809,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   if (divider.kind === "compaction") {
                     nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
                   } else {
-                    const marker = divider.marker as ModelChangeMarker;
+                    const marker = divider.marker;
                     nodes.push(
-                      <ChangeDivider
-                        key={`change-${marker.entryId}`}
-                        marker={marker}
-                        modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
-                      />,
+                      marker.kind === "model"
+                        ? (
+                          <ChangeDivider
+                            key={`change-${marker.entryId}`}
+                            marker={marker}
+                            modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+                          />
+                        )
+                        : <ChangeDivider key={`change-${marker.entryId}`} marker={marker} />,
                     );
                   }
                 }
@@ -1039,12 +1041,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
             ))}
 
-            {trailingChangeMarkers.filter((marker): marker is ModelChangeMarker => marker.kind === "model").map((marker) => (
-              <ChangeDivider
-                key={`change-tail-${marker.entryId}`}
-                marker={marker}
-                modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
-              />
+            {trailingChangeMarkers.map((marker) => (
+              marker.kind === "model"
+                ? (
+                  <ChangeDivider
+                    key={`change-tail-${marker.entryId}`}
+                    marker={marker}
+                    modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+                  />
+                )
+                : <ChangeDivider key={`change-tail-${marker.entryId}`} marker={marker} />
             ))}
 
             {!liveTurnActive && isStreamingThinking && (
