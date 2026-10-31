@@ -9,7 +9,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
-import { classifyToolCall, isToolResultEmpty, projectNestedCalls, toolCallDiffStats } from "@/lib/shared/tool-call-display";
+import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
 import { formatToolAnnotation, formatToolDuration } from "@/lib/shared/tool-duration";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
@@ -17,7 +17,7 @@ import { SmartImage } from "@/components/ui/SmartImage";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { useCollapseNonce } from "./context";
-import type { AssistantContentBlock, ImageContent, NestedToolCalls, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
+import type { AssistantContentBlock, ImageContent, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
 export function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick, cwd }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void; cwd?: string | null }) {
   if (block.type === "text") {
@@ -255,7 +255,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         }}
       >
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout, durationMs: result?.durationMs })} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
-        <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
     );
   }
@@ -272,7 +271,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         }}
       >
         <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs })} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
-        <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
     );
   }
@@ -318,79 +316,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           )}
         </div>
       </div>
-
-      <NestedCallsSection nestedCalls={result?.nestedCalls} />
-    </div>
-  );
-}
-
-const NESTED_STATUS_COLOR: Record<string, string> = {
-  ok: "#16a34a",
-  error: "#f87171",
-  unfinished: "var(--text-dim)",
-};
-
-function NestedCallsSection({ nestedCalls }: { nestedCalls?: NestedToolCalls }) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const rows = useMemo(() => projectNestedCalls(nestedCalls), [nestedCalls]);
-  if (rows.length === 0) return null;
-  const toggle = () => setExpanded((value) => !value);
-  return (
-    <div style={{ borderTop: "1px solid rgba(148,163,184,0.18)" }}>
-      <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={toggle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggle();
-          }
-        }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "5px 10px",
-          color: "var(--text-dim)",
-          fontSize: 11,
-          cursor: "pointer",
-        }}
-      >
-        <svg width={9} height={9} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="3.5 2 6.5 5 3.5 8" />
-        </svg>
-        <span>{t("Nested calls")}</span>
-        <span style={{ fontFamily: "var(--font-mono)" }}>{rows.length}</span>
-      </div>
-      {expanded && (
-        <div style={{ padding: "0 10px 6px", display: "flex", flexDirection: "column", gap: 2 }}>
-          {rows.map((row) => {
-            const duration = formatToolDuration(row.durationMs);
-            const color = NESTED_STATUS_COLOR[row.status] ?? "var(--text-dim)";
-            return (
-              <div key={row.id} style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, fontSize: 11 }}>
-                  <span style={{ color, fontFamily: "var(--font-mono)", flexShrink: 0 }}>{row.name}</span>
-                  <span style={{ color, flexShrink: 0 }}>
-                    {row.status === "ok" ? t("OK") : row.status === "error" ? t("Failed") : t("Unfinished")}
-                  </span>
-                  {duration && (
-                    <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{duration}</span>
-                  )}
-                </div>
-                {row.error && (
-                  <div style={{ color: "#f87171", fontFamily: "var(--font-mono)", fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {row.error}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
