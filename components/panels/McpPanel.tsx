@@ -44,7 +44,6 @@ export function McpPanel({
   useEffect(() => {
     mcpPanel.setVisible(visible);
     mcpPanel.open(cwd);
-    if (visible && mcpPanel.get().loadErrorCwd === cwd) mcpPanel.reload();
   }, [cwd, visible]);
 
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);

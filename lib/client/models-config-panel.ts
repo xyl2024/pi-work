@@ -160,13 +160,7 @@ function openPanelPage(page: ModelsConfigPage): void {
     modelsConfigPanel.resetPages();
     return;
   }
-  const base = baseStackFor(page);
-  const pages = modelsConfigPanel.pages();
-  if (sameStack(pages.slice(0, base.length), base)) {
-    modelsConfigPanel.openPage(page);
-    return;
-  }
-  replacePages([...base, page]);
+  replacePages([...baseStackFor(page), page]);
 }
 
 function renameProviderPage(

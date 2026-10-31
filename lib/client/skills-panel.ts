@@ -167,14 +167,14 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
   rootPage: ROOT_PAGE,
   loadPolicy: "once",
   key: (cwd) => cwd,
-  async load(cwd, { get, patch, signal }) {
+  async load(cwd, { get, patch, signal, resetPages }) {
     if (cwd === null) {
-      skillsPanel.resetPages();
+      resetPages();
       patch({ cwd: null, loading: false, loaded: false, loadError: null, skills: [], toggleBusy: [] });
       return;
     }
     if (get().cwd !== cwd) {
-      skillsPanel.resetPages();
+      resetPages();
       patch({ toggleBusy: [] });
     }
     patch({ cwd, loading: true, loaded: false, loadError: null, skills: [] });
