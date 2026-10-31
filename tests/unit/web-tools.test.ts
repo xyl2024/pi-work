@@ -7,6 +7,9 @@ import {
 import {
   WEB_FETCH_MAX_CHARS,
   WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_MAX_QUERY_CHARS,
+  WEB_SEARCH_OUTPUT_MAX_CHARS,
+  WEB_SEARCH_RESULT_TEXT_MAX_CHARS,
   WEB_SEARCH_TOOL_NAME,
 } from "@/lib/shared/web-tools";
 
@@ -83,6 +86,53 @@ describe("web tools", () => {
     expect(text).toContain("authority=0.81");
     expect(result.details.ok).toBe(true);
     expect(result.details.resultCount).toBe(1);
+  });
+
+
+  it("caps each search field and the whole search output with truncation markers", async () => {
+    const tool = createWebSearchTool(
+      fakeOptions(async () =>
+        jsonResponse({
+          results: Array.from({ length: 12 }, (_, index) => ({
+            title: `Result ${index}`,
+            url: `https://example.com/${index}`,
+            summary: "S".repeat(WEB_SEARCH_RESULT_TEXT_MAX_CHARS + 50),
+            snippet: "P".repeat(WEB_SEARCH_RESULT_TEXT_MAX_CHARS + 50),
+            content: "C".repeat(WEB_SEARCH_RESULT_TEXT_MAX_CHARS + 50),
+          })),
+        }),
+      ),
+    );
+
+    const result = await run(tool, { query: "pi", include_content: true });
+
+    const text = textOf(result);
+    expect(text).toContain("truncated 50 chars");
+    expect(text).toContain("truncated");
+    expect(text.length).toBeLessThan(WEB_SEARCH_OUTPUT_MAX_CHARS + 80);
+    expect(result.details.ok).toBe(true);
+    expect(result.details.resultCount).toBe(12);
+  });
+
+  it("rejects a blank query without calling the API", async () => {
+    const fetchMock = vi.fn();
+    const tool = createWebSearchTool(fakeOptions(fetchMock));
+
+    const result = await run(tool, { query: "   " });
+
+    expect(textOf(result)).toContain("Error: query must not be empty.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a query above the DeepSeek limit without calling the API", async () => {
+    const fetchMock = vi.fn();
+    const tool = createWebSearchTool(fakeOptions(fetchMock));
+
+    const result = await run(tool, { query: "q".repeat(WEB_SEARCH_MAX_QUERY_CHARS + 1) });
+
+    expect(textOf(result)).toContain(`Error: query must be at most ${WEB_SEARCH_MAX_QUERY_CHARS} characters.`);
+    expect(result.details.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns a readable message when the search finds nothing", async () => {

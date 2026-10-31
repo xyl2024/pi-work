@@ -148,6 +148,40 @@ describe("DeepSeek client", () => {
     expect(result.data.content).toContain("truncated 16 chars");
   });
 
+  it("uses the global fetch when none is injected", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async () => jsonResponse({ results: [] }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const client = createDeepSeekClient({ baseUrl: "http://deepseek.test", apiKey: "key" });
+
+      const result = await client.search({ query: "pi" });
+
+      expect(result.ok).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("maps an abort to an abort error instead of a timeout", async () => {
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "key",
+      timeoutMs: 1234,
+      fetch: (async () => {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await client.fetchPage({ url: "https://example.com" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("DeepSeek API request was aborted.");
+    expect(result.error).not.toContain("timed out");
+  });
+
   it("maps a timeout to a readable error", async () => {
     const client = createDeepSeekClient({
       baseUrl: "http://deepseek.test",

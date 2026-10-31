@@ -6,6 +6,7 @@ import { buildMessageOriginEntryData, isMessageOrigin, normalizeMessageOrigin, M
 import { extractMessageText } from "../shared/message-content";
 import type { AgentMessage } from "../shared/types";
 import type { ToolSelection } from "../shared/types";
+import type { WebToolSource } from "../shared/web-tools";
 import { declarableToolNames, expandToolSelection, isDeclarableTool } from "../shared/tool-selection";
 import {
   stripDefaultSystemPromptSections,
@@ -807,7 +808,7 @@ export async function startRpcSession(
     const piDocsManaged = !options.systemPromptPrefix && !options.systemPromptOverride;
 
     let capturedSessionId: string | null = null;
-    const capturedSource: "user" | "scheduled" | "subagent" = source;
+    const capturedSource: WebToolSource = source;
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     let appendSystemPromptLoaderOption: string[] | undefined;
