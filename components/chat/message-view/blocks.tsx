@@ -197,6 +197,10 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const resultIsEmpty = isToolResultEmpty(result);
   const isError = result?.isError ?? false;
 
+  useEffect(() => {
+    if (resultImages.length > 0) setExpanded(true);
+  }, [resultImages.length]);
+
   const diffStats = useMemo(
     () => (isFileMutation ? toolCallDiffStats(block, result) : null),
     [isFileMutation, block, result],
@@ -213,20 +217,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           setExpanded((value) => !value);
         }
       }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 7,
-        width: "100%",
-        padding: "6px 10px",
-        background: "none",
-        border: "none",
-        color: "var(--text-muted)",
-        cursor: "pointer",
-        fontSize: 12,
-        textAlign: "left",
-        minWidth: 0,
-      }}
+      style={{ ...TOOL_HEADER_STYLE, cursor: "pointer" }}
     >
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
@@ -263,7 +254,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <ToolDurationRow ms={result?.durationMs} />
+        <ToolTitleRow toolName={block.toolName} durationMs={result?.durationMs} isError={isError} />
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
         <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
@@ -281,7 +272,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <ToolDurationRow ms={result?.durationMs} />
+        <ToolTitleRow toolName={block.toolName} durationMs={result?.durationMs} isError={isError} />
         <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
         <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
@@ -416,12 +407,27 @@ function ToolDuration({ ms }: { ms?: number }) {
   );
 }
 
-function ToolDurationRow({ ms }: { ms?: number }) {
-  const text = formatToolDuration(ms);
-  if (!text) return null;
+const TOOL_HEADER_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "6px 10px",
+  background: "none",
+  border: "none",
+  color: "var(--text-muted)",
+  fontSize: 12,
+  textAlign: "left",
+  minWidth: 0,
+};
+
+function ToolTitleRow({ toolName, durationMs, isError }: { toolName: string; durationMs?: number; isError: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", padding: "5px 10px 0" }}>
-      <ToolDuration ms={ms} />
+    <div style={TOOL_HEADER_STYLE}>
+      <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        {toolName}
+      </span>
+      <span style={{ flex: 1 }} />
+      <ToolDuration ms={durationMs} />
     </div>
   );
 }
@@ -518,6 +524,9 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, 
 }) {
   const { t } = useI18n();
   const [expandedAll, setExpandedAll] = useState(false);
+  useEffect(() => {
+    if (resultImages.length > 0) setExpandedAll(true);
+  }, [resultImages.length]);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const showMask = contentHeight !== null && contentHeight > BASH_DETAIL_MAX_HEIGHT && !expandedAll;
   const cwdBase = cwd?.replace(/\\/g, "/").split("/").pop() || "";
@@ -561,7 +570,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, 
       >
         {command}
       </SyntaxHighlighter>
-      {resultText !== null && resultText.trim() !== "" && (
+      {resultText !== null && (resultText.trim() !== "" || resultImages.length === 0) && (
         resultIsEmpty ? (
           <pre
             style={{
@@ -657,6 +666,9 @@ function CodemodeToolCallContent({ code, resultText, resultImages, resultIsEmpty
 }) {
   const { t } = useI18n();
   const [expandedAll, setExpandedAll] = useState(false);
+  useEffect(() => {
+    if (resultImages.length > 0) setExpandedAll(true);
+  }, [resultImages.length]);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const showMask = contentHeight !== null && contentHeight > CODEMODE_DETAIL_MAX_HEIGHT && !expandedAll;
   const codeBg = isDark ? "#1e1e1e" : "#f7f7f7";

@@ -12,6 +12,7 @@ import {
   isChatBottomFrostMaskVisible,
 } from "@/lib/shared/chatBottomFrostMask";
 import { buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
+import { modelDisplayName } from "@/lib/shared/model-display";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
@@ -342,7 +343,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return map;
   }, [messages, inFlightToolResults]);
 
-  const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
+  const { beforeEntryId, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
     return buildTimelineDividers({
       timeline,
       entryIds: renderEntryIds,
@@ -805,7 +806,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               let streamingTurnDiffStats: ToolDiffStats | null = null;
               const maybeDivider = (idx: number): React.ReactNode => {
                 const nodes: React.ReactNode[] = [];
-                for (const divider of beforeVisible.get(idx) ?? []) {
+                const entryId = renderEntryIds[idx];
+                for (const divider of (entryId ? beforeEntryId.get(entryId) : undefined) ?? []) {
                   if (divider.kind === "compaction") {
                     nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
                   } else {
@@ -815,11 +817,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                         ? (
                           <ChangeDivider
                             key={`change-${marker.entryId}`}
-                            marker={marker}
-                            modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+                            {...marker}
+                            modelName={modelDisplayName(modelNames, marker.provider, marker.modelId)}
                           />
                         )
-                        : <ChangeDivider key={`change-${marker.entryId}`} marker={marker} />,
+                        : <ChangeDivider key={`change-${marker.entryId}`} {...marker} />,
                     );
                   }
                 }
@@ -1046,11 +1048,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 ? (
                   <ChangeDivider
                     key={`change-tail-${marker.entryId}`}
-                    marker={marker}
-                    modelName={modelNames[`${marker.provider}:${marker.modelId}`] ?? modelNames[marker.modelId] ?? marker.modelId}
+                    {...marker}
+                    modelName={modelDisplayName(modelNames, marker.provider, marker.modelId)}
                   />
                 )
-                : <ChangeDivider key={`change-tail-${marker.entryId}`} marker={marker} />
+                : <ChangeDivider key={`change-tail-${marker.entryId}`} {...marker} />
             ))}
 
             {!liveTurnActive && isStreamingThinking && (

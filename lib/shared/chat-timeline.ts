@@ -107,9 +107,12 @@ export interface TimelineDividerInput {
 
 export interface TimelineDividers {
   beforeVisible: ReadonlyMap<number, readonly ChatTimelineDivider[]>;
+  beforeEntryId: ReadonlyMap<string, readonly ChatTimelineDivider[]>;
   trailingCompactionPoints: readonly CompactionPoint[];
   trailingChangeMarkers: readonly ChangeMarker[];
 }
+
+type DividerPlacement = "unanchored" | "unrendered" | "placed";
 
 const DIVIDER_ORDER: Record<ChatTimelineDivider["kind"], number> = {
   compaction: 0,
@@ -119,28 +122,41 @@ const DIVIDER_ORDER: Record<ChatTimelineDivider["kind"], number> = {
 export function buildTimelineDividers(input: TimelineDividerInput): TimelineDividers {
   const renderedEntryIds = new Set(input.entryIds);
   const beforeVisible = new Map<number, ChatTimelineDivider[]>();
+  const beforeEntryId = new Map<string, ChatTimelineDivider[]>();
   const trailingCompactionPoints: CompactionPoint[] = [];
   const trailingChangeMarkers: ChangeMarker[] = [];
 
-  const place = (entryId: string | undefined, divider: ChatTimelineDivider): boolean => {
-    if (!entryId) return false;
-    if (!renderedEntryIds.has(entryId)) return true;
+  const entryIdAtVisibleIndex = (visibleIndex: number): string | null => {
+    const sessionIndex = input.timeline.sessionIndexOfVisible(visibleIndex);
+    if (sessionIndex === null) return null;
+    return input.entryIds[sessionIndex] ?? null;
+  };
+
+  const place = (entryId: string | undefined, divider: ChatTimelineDivider): DividerPlacement => {
+    if (!entryId) return "unanchored";
+    if (!renderedEntryIds.has(entryId)) return "unrendered";
     const visibleIndex = input.timeline.visibleIndexOfEntry(entryId);
-    if (visibleIndex === null) return false;
-    const existing = beforeVisible.get(visibleIndex);
-    if (existing) existing.push(divider);
-    else beforeVisible.set(visibleIndex, [divider]);
-    return true;
+    if (visibleIndex === null) return "unrendered";
+    const targetEntryId = entryIdAtVisibleIndex(visibleIndex);
+    if (!targetEntryId) return "unanchored";
+    let dividers = beforeVisible.get(visibleIndex);
+    if (!dividers) {
+      dividers = [];
+      beforeVisible.set(visibleIndex, dividers);
+    }
+    dividers.push(divider);
+    beforeEntryId.set(targetEntryId, dividers);
+    return "placed";
   };
 
   for (const point of input.compactionPoints ?? []) {
-    if (!place(point.beforeMessageEntryId, { kind: "compaction", point })) {
-      if (!point.beforeMessageEntryId) trailingCompactionPoints.push(point);
+    if (place(point.beforeMessageEntryId, { kind: "compaction", point }) === "unanchored") {
+      trailingCompactionPoints.push(point);
     }
   }
   for (const marker of input.changeMarkers ?? []) {
-    if (!place(marker.beforeMessageEntryId, { kind: "change", marker })) {
-      if (!marker.beforeMessageEntryId) trailingChangeMarkers.push(marker);
+    if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
+      trailingChangeMarkers.push(marker);
     }
   }
 
@@ -148,7 +164,7 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
     dividers.sort((a, b) => DIVIDER_ORDER[a.kind] - DIVIDER_ORDER[b.kind]);
   }
 
-  return { beforeVisible, trailingCompactionPoints, trailingChangeMarkers };
+  return { beforeVisible, beforeEntryId, trailingCompactionPoints, trailingChangeMarkers };
 }
 
 export type SearchJumpDecision =
