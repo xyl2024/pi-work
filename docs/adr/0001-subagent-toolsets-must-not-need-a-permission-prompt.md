@@ -1,13 +1,13 @@
 # Subagent toolsets must not require a user confirmation
 
-A subagent child session has no UI attached to it: its `permission_request` events only reach a browser that has that exact child session open (and only while it is the selected session), and the parent's subagent sessions popover only reads the task rows. A confirmation raised from a child therefore cannot be answered — it waits out `dangerous_patterns.timeout_ms` (5 minutes by default) and is then auto-denied, blocking the child for minutes to reach an outcome we already know.
+A subagent child session has no UI attached to it: its `permission_request` events only reach a browser that has that exact child session open (and only while it is the selected session), and the parent's subagent sessions popover only reads the task rows. Before unattended permission tiers existed, a confirmation raised from a child therefore could not be answered: it waited out `dangerous_patterns.timeout_ms` and was then auto-denied, blocking the child for a long time to reach an outcome we already knew. That waiting failure mode is no longer the default. A subagent session now starts in `auto_deny` and a matched dangerous rule is denied immediately, with no gate and no waiting (ADR-0025).
 
 We decided that a subagent profile must never depend on a confirmation prompt being answered: no child permission request is forwarded anywhere, and a dangerous-command rule matched inside a subagent session is denied immediately by default. `codegraph_build` init/index got the same hard denial (kept as a guard even though no current profile exposes that tool). Concretely: `codegraph_build` is excluded from every subagent profile, and `bash` (given to both `codebase_explorer` and `code_reviewer`) fast-denies on a matched rule unless the profile explicitly opts into full access (ADR-0025).
 
 ## Considered options
 
 - **Forward child permission requests to the parent's UI.** Best UX, but needs child→parent event routing plus lifting the `activeSessionId` gate in `usePendingPermissions` that only renders the queue head of the selected session.
-- **Keep waiting for the timeout.** Free, but burns up to 5 minutes per blocked command and holds one of the parallel subagent slots the whole time.
+- **Keep waiting for the timeout.** Free, but that was the old failure mode: it burns the timeout per blocked command and holds one of the parallel subagent slots the whole time.
 
 ## Consequences
 
