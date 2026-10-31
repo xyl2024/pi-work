@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasDirtyMcpBucket,
   isMcpBucketVerifying,
+  MCP_LIST_PAGE,
   releaseMcpBuckets,
   selectMcpBucket,
   shouldApplyMcpSnapshot,
@@ -10,7 +11,6 @@ import {
   type McpDraftBucket,
   type McpDraftBuckets,
 } from "@/lib/shared/mcp-drafts";
-import { MCP_LIST_PAGE } from "@/lib/shared/mcp-pages";
 import { draftFromPanelData } from "@/lib/shared/mcp-draft";
 import type { McpPanelData } from "@/lib/shared/mcp-panel";
 
@@ -34,6 +34,20 @@ describe("restore", () => {
     const state = bucketsOf(bucket("/a", true), bucket("/b", false));
     expect(selectMcpBucket(state, "/a")).toEqual(bucket("/a", true));
     expect(selectMcpBucket(state, "/b")).toEqual(bucket("/b", false));
+  });
+
+  it("keeps each cwd's page stack with its own bucket", () => {
+    const onEntry = {
+      ...bucket("/a", false),
+      pages: [MCP_LIST_PAGE, { kind: "entry" as const, uid: "a:server:0" }],
+    };
+    const state = bucketsOf(onEntry, bucket("/b", false));
+
+    expect(selectMcpBucket(state, "/a")?.pages).toEqual([
+      MCP_LIST_PAGE,
+      { kind: "entry", uid: "a:server:0" },
+    ]);
+    expect(selectMcpBucket(state, "/b")?.pages).toEqual([MCP_LIST_PAGE]);
   });
 });
 

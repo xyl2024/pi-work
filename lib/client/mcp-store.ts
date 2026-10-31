@@ -1,7 +1,12 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { isContentEqual } from "./shallowEqual";
+import {
+  createPanelViewStore,
+  type PanelViewAdapter,
+  type PanelViewCloseGuard,
+  type PanelViewLoadContext,
+  type PanelViewStore,
+} from "./panel-view-store";
 import { fetchMcpPanelData, putMcpPanelChanges } from "./mcp-io";
 import {
   addDraftEntry,
@@ -16,16 +21,8 @@ import {
   type McpDraftEntry,
 } from "@/lib/shared/mcp-draft";
 import {
-  backMcpPage as backPageStack,
-  createMcpPageStack,
-  isMcpListPage,
-  mcpPagesAfterDelete,
-  mcpPagesAfterSave,
-  openMcpEntryPage,
-  reconcileMcpPages,
-} from "@/lib/shared/mcp-pages";
-import {
   hasDirtyMcpBucket,
+  MCP_LIST_PAGE,
   releaseMcpBuckets,
   selectMcpBucket,
   shouldApplyMcpSnapshot,
@@ -33,8 +30,9 @@ import {
   withMcpBucketVerified,
   type McpDraftBucket,
   type McpDraftBuckets,
+  type McpPage,
 } from "@/lib/shared/mcp-drafts";
-import { selectMcpOpenAction } from "@/lib/shared/mcp-close";
+import { selectMcpCloseConfirm, selectMcpOpenAction } from "@/lib/shared/mcp-close";
 import type { McpScope } from "@/lib/shared/mcp-panel";
 
 export interface McpStoreState {
@@ -59,134 +57,199 @@ const INITIAL: McpStoreState = {
   savedOnce: false,
 };
 
-let state: McpStoreState = INITIAL;
-const listeners = new Set<() => void>();
-
-let loadSeq = 0;
-
-function emit(): void {
-  for (const listener of listeners) listener();
-}
-
-function patch(partial: Partial<McpStoreState>): void {
-  let changed = false;
-  for (const key of Object.keys(partial) as (keyof McpStoreState)[]) {
-    if (!isContentEqual(partial[key], state[key])) {
-      changed = true;
-      break;
-    }
-  }
-  if (!changed) return;
-  state = { ...state, ...partial };
-  emit();
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-function getSnapshot(): McpStoreState {
-  return state;
-}
-
-function getServerSnapshot(): McpStoreState {
-  return INITIAL;
-}
-
-export function useMcpStore(): McpStoreState {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-async function load(cwd: string, background = false): Promise<void> {
-  const seq = ++loadSeq;
+function pagesEqual(a: readonly McpPage[], b: readonly McpPage[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((page, index) => {
+    const other = b[index];
+    if (page.kind === "list" || other.kind === "list") return page.kind === other.kind;
+    return page.uid === other.uid;
+  });
+}
+
+function reconcilePages(pages: readonly McpPage[], entryUids: readonly string[]): McpPage[] {
+  const page = pages[pages.length - 1] ?? MCP_LIST_PAGE;
+  if (page.kind === "entry" && !entryUids.includes(page.uid)) return [MCP_LIST_PAGE];
+  return pages.length > 0 ? [...pages] : [MCP_LIST_PAGE];
+}
+
+let nextLoadIsForeground = false;
+
+function mirrorPages(pages: readonly McpPage[]): void {
+  const current = baseStore.currentPage();
+  const target = pages[pages.length - 1] ?? MCP_LIST_PAGE;
+  if (target.kind === "list") {
+    if (current.kind !== "list") baseStore.resetPages();
+    return;
+  }
+  if (current.kind === "entry" && current.uid === target.uid) return;
+  if (current.kind === "entry") baseStore.resetPages();
+  baseStore.openPage(target);
+}
+
+function commitPages(pages: readonly McpPage[]): void {
+  const state = baseStore.get();
+  if (state.currentCwd === null) return;
+  const bucket = selectMcpBucket(state.buckets, state.currentCwd);
+  if (!bucket || pagesEqual(bucket.pages, pages)) return;
+  baseStore.patch({
+    buckets: withMcpBucket(state.buckets, { ...bucket, pages: [...pages] }),
+  });
+}
+
+async function loadMcp(
+  key: string,
+  { get, patch, signal }: PanelViewLoadContext<McpStoreState>,
+): Promise<void> {
+  const foreground = nextLoadIsForeground;
+  nextLoadIsForeground = false;
+  const cwd = key === "" ? null : key;
+
+  if (cwd === null) {
+    patch({ currentCwd: null, loadingCwd: null, loadError: null, loadErrorCwd: null });
+    mirrorPages([MCP_LIST_PAGE]);
+    return;
+  }
+
+  const before = get();
+  const held = selectMcpBucket(before.buckets, cwd);
+  const action = selectMcpOpenAction({
+    loading: before.loadingCwd === cwd && before.currentCwd === cwd,
+    dirty: held?.dirty ?? false,
+    hasSnapshot: held !== null,
+  });
+
+  if (before.currentCwd !== cwd) {
+    patch({ currentCwd: cwd, loadError: null, loadErrorCwd: null });
+  }
+  mirrorPages(held?.pages ?? [MCP_LIST_PAGE]);
+
+  if (action === "reuse" && !foreground) return;
+
+  const background = action === "show-snapshot" && !foreground;
   if (background) {
     patch({
       loadingCwd: cwd,
       loadError: null,
       loadErrorCwd: null,
-      buckets: withMcpBucketVerified(state.buckets, cwd, false),
+      buckets: withMcpBucketVerified(get().buckets, cwd, false),
     });
   } else {
-    patch({ currentCwd: cwd, loadingCwd: cwd, loadError: null, loadErrorCwd: null });
+    patch({ loadingCwd: cwd, loadError: null, loadErrorCwd: null });
   }
+
   try {
-    const data = await fetchMcpPanelData(cwd);
-    if (seq !== loadSeq) return;
-    const held = selectMcpBucket(state.buckets, cwd);
-    if (!shouldApplyMcpSnapshot(held)) {
-      patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd });
-      if (background) patch({ buckets: withMcpBucketVerified(state.buckets, cwd, true) });
+    const data = await fetchMcpPanelData(cwd, signal);
+    if (signal.aborted) return;
+
+    const heldNow = selectMcpBucket(get().buckets, cwd);
+    if (!shouldApplyMcpSnapshot(heldNow)) {
+      patch({
+        loadingCwd: get().loadingCwd === cwd ? null : get().loadingCwd,
+        ...(background
+          ? { buckets: withMcpBucketVerified(get().buckets, cwd, true) }
+          : {}),
+      });
       return;
     }
+
     const draft = draftFromPanelData(data);
-    const pages = reconcileMcpPages(
-      held?.pages ?? createMcpPageStack(),
+    const pages = reconcilePages(
+      heldNow?.pages ?? [MCP_LIST_PAGE],
       draft.entries.map((entry) => entry.uid),
     );
-    const bucket: McpDraftBucket = { cwd, data, draft, pages, dirty: isDraftDirty(draft, data), verified: true };
+    const bucket: McpDraftBucket = {
+      cwd,
+      data,
+      draft,
+      pages,
+      dirty: isDraftDirty(draft, data),
+      verified: true,
+    };
     patch({
-      loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd,
-      buckets: withMcpBucket(state.buckets, bucket),
+      loadingCwd: get().loadingCwd === cwd ? null : get().loadingCwd,
+      buckets: withMcpBucket(get().buckets, bucket),
     });
+    mirrorPages(pages);
   } catch (e) {
-    if (seq !== loadSeq) return;
-    if (background && selectMcpBucket(state.buckets, cwd)) {
-      patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd, buckets: withMcpBucketVerified(state.buckets, cwd, true) });
+    if (signal.aborted) return;
+    const loadingCwd = get().loadingCwd === cwd ? null : get().loadingCwd;
+    if (background && selectMcpBucket(get().buckets, cwd)) {
+      patch({
+        loadingCwd,
+        buckets: withMcpBucketVerified(get().buckets, cwd, true),
+      });
       return;
     }
-    patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd, loadError: errorMessage(e), loadErrorCwd: cwd });
+    patch({ loadingCwd, loadError: errorMessage(e), loadErrorCwd: cwd });
   }
 }
 
-export function ensureMcpLoaded(cwd: string | null): void {
-  if (cwd === null) {
-    if (state.currentCwd !== null) patch({ currentCwd: null, loadingCwd: null, loadError: null, loadErrorCwd: null });
-    return;
-  }
+const mcpAdapter: PanelViewAdapter<McpStoreState, McpPage, string | null, string> = {
+  kind: "mcp",
+  initial: INITIAL,
+  rootPage: MCP_LIST_PAGE,
+  loadPolicy: "on-visible",
+  key: (cwd) => cwd ?? "",
+  load: loadMcp,
+  release() {
+    nextLoadIsForeground = false;
+  },
+  guard(state): PanelViewCloseGuard | null {
+    const confirm = selectMcpCloseConfirm({ dirty: hasDirtyMcpBucket(state.buckets) });
+    if (!confirm) return null;
+    return {
+      ...confirm,
+      discard() {
+        mcpPanel.patch({ buckets: releaseMcpBuckets() });
+      },
+    };
+  },
+  status(state) {
+    return hasDirtyMcpBucket(state.buckets);
+  },
+  isRootPage(pages) {
+    return pages.length <= 1;
+  },
+  isSiblingPage(next, current) {
+    return next.kind === "entry" && current.kind === "entry";
+  },
+};
 
-  const bucket = selectMcpBucket(state.buckets, cwd);
-  const loading = state.loadingCwd === cwd;
-  const action = selectMcpOpenAction({ loading, dirty: bucket?.dirty ?? false, hasSnapshot: bucket !== null });
+const baseStore = createPanelViewStore(mcpAdapter);
 
-  if (state.currentCwd !== cwd) {
-    patch({ currentCwd: cwd, loadError: null, loadErrorCwd: null });
-  }
-  if (action === "reuse") return;
-  void load(cwd, action === "show-snapshot");
+export const mcpPanel: PanelViewStore<McpStoreState, McpPage, string | null> = {
+  ...baseStore,
+  openPage(page) {
+    baseStore.openPage(page);
+    commitPages(baseStore.pages());
+  },
+  resetPages() {
+    baseStore.resetPages();
+    commitPages(baseStore.pages());
+  },
+  back() {
+    const result = baseStore.back();
+    if (!result.closePanel) commitPages(baseStore.pages());
+    return result;
+  },
+};
+
+export function useMcpPanel() {
+  return mcpPanel.useSnapshot();
 }
 
 export function reloadMcp(): void {
-  if (state.currentCwd === null) return;
-  void load(state.currentCwd);
-}
-
-export function releaseMcpState(): void {
-  if (state === INITIAL) return;
-  loadSeq += 1;
-  state = { ...INITIAL, buckets: releaseMcpBuckets() };
-  emit();
-}
-
-export function getMcpDirty(): boolean {
-  return hasDirtyMcpBucket(state.buckets);
-}
-
-export function useMcpDirty(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => hasDirtyMcpBucket(state.buckets),
-    () => false,
-  );
+  if (mcpPanel.get().currentCwd === null) return;
+  nextLoadIsForeground = true;
+  mcpPanel.reload();
 }
 
 function currentBucket(): McpDraftBucket | null {
+  const state = mcpPanel.get();
   return selectMcpBucket(state.buckets, state.currentCwd);
 }
 
@@ -194,8 +257,12 @@ function updateDraft(mutate: (draft: McpDraft) => McpDraft): void {
   const bucket = currentBucket();
   if (!bucket) return;
   const draft = mutate(bucket.draft);
-  patch({
-    buckets: withMcpBucket(state.buckets, { ...bucket, draft, dirty: isDraftDirty(draft, bucket.data) }),
+  mcpPanel.patch({
+    buckets: withMcpBucket(mcpPanel.get().buckets, {
+      ...bucket,
+      draft,
+      dirty: isDraftDirty(draft, bucket.data),
+    }),
   });
 }
 
@@ -233,14 +300,14 @@ export function dropMcpEntry(uid: string): void {
     ...bucket.draft,
     entries: bucket.draft.entries.filter((entry) => entry.uid !== uid),
   };
-  patch({
-    buckets: withMcpBucket(state.buckets, {
+  mcpPanel.patch({
+    buckets: withMcpBucket(mcpPanel.get().buckets, {
       ...bucket,
       draft,
-      pages: mcpPagesAfterDelete(),
       dirty: isDraftDirty(draft, bucket.data),
     }),
   });
+  mcpPanel.resetPages();
 }
 
 export function setMcpAutoEnable(scope: McpScope, value: boolean): void {
@@ -254,14 +321,14 @@ export function addMcpServer(scope: McpScope): string | null {
   const bucket = currentBucket();
   if (!bucket) return null;
   const added = addDraftEntry(bucket.draft, scope);
-  patch({
-    buckets: withMcpBucket(state.buckets, {
+  mcpPanel.patch({
+    buckets: withMcpBucket(mcpPanel.get().buckets, {
       ...bucket,
       draft: added.draft,
-      pages: openMcpEntryPage(added.uid),
       dirty: isDraftDirty(added.draft, bucket.data),
     }),
   });
+  mcpPanel.openPage({ kind: "entry", uid: added.uid });
   return added.uid;
 }
 
@@ -269,33 +336,19 @@ export function disableGlobalInProject(name: string): void {
   const bucket = currentBucket();
   if (!bucket) return;
   const added = addOverrideDraftEntry(bucket.draft, name);
-  patch({
-    buckets: withMcpBucket(state.buckets, {
+  mcpPanel.patch({
+    buckets: withMcpBucket(mcpPanel.get().buckets, {
       ...bucket,
       draft: added.draft,
-      pages: openMcpEntryPage(added.uid),
       dirty: isDraftDirty(added.draft, bucket.data),
     }),
   });
+  mcpPanel.openPage({ kind: "entry", uid: added.uid });
 }
 
 export function openMcpEntry(uid: string): void {
-  const bucket = currentBucket();
-  if (!bucket) return;
-  patch({ buckets: withMcpBucket(state.buckets, { ...bucket, pages: openMcpEntryPage(uid) }) });
-}
-
-export function backMcpPageAction(): void {
-  const bucket = currentBucket();
-  if (!bucket) return;
-  patch({ buckets: withMcpBucket(state.buckets, { ...bucket, pages: backPageStack(bucket.pages) }) });
-}
-
-export function escapeMcp(): { closePanel: boolean } {
-  const bucket = currentBucket();
-  if (!bucket || isMcpListPage(bucket.pages)) return { closePanel: true };
-  patch({ buckets: withMcpBucket(state.buckets, { ...bucket, pages: backPageStack(bucket.pages) }) });
-  return { closePanel: false };
+  if (!currentBucket()) return;
+  mcpPanel.openPage({ kind: "entry", uid });
 }
 
 export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }> {
@@ -306,19 +359,25 @@ export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }>
   const changes = mcpPendingChanges(bucket.draft, bucket.data);
   if (changes.length === 0) return { ok: true };
 
-  patch({ saving: true, saveError: null });
+  const scope = mcpPanel.scope();
+  mcpPanel.patch({ saving: true, saveError: null });
   try {
     await putMcpPanelChanges(bucket.cwd, changes);
-    patch({
+    if (mcpPanel.isReleased()) return { ok: true };
+
+    const latest = selectMcpBucket(scope.get().buckets, bucket.cwd) ?? bucket;
+    scope.patch({
       saving: false,
       savedOnce: true,
-      buckets: withMcpBucket(state.buckets, { ...bucket, pages: mcpPagesAfterSave(), dirty: false }),
+      buckets: withMcpBucket(scope.get().buckets, { ...latest, dirty: false }),
     });
-    if (state.currentCwd === bucket.cwd) await load(bucket.cwd);
+    mcpPanel.resetPages();
+    if (mcpPanel.get().currentCwd === bucket.cwd) reloadMcp();
     return { ok: true };
   } catch (e) {
     const message = errorMessage(e);
-    patch({ saving: false, saveError: message });
+    if (mcpPanel.isReleased()) return { ok: false, error: message };
+    scope.patch({ saving: false, saveError: message });
     return { ok: false, error: message };
   }
 }

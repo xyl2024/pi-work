@@ -87,8 +87,7 @@ import {
   usePanelViewLifecycleSync,
   type PanelViewLifecycleStore,
 } from "@/hooks/usePanelViewLifecycleSync";
-import { getMcpDirty, releaseMcpState, useMcpDirty } from "@/lib/client/mcp-store";
-import { selectMcpCloseConfirm } from "@/lib/shared/mcp-close";
+import { mcpPanel } from "@/lib/client/mcp-store";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -184,7 +183,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
-  mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
 const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
@@ -194,9 +192,10 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   skills: () => cancelSkillInstall(),
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [mcpPanel, channelsPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
+  mcp: mcpPanel,
   channels: channelsPanel,
 };
 
@@ -441,11 +440,7 @@ export function AppShell() {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
   usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
-  const mcpDirty = useMcpDirty();
-  const mcpTabOpen = selectTabByKind(panelTabsState, "mcp") !== null;
-  useEffect(() => {
-    if (!mcpTabOpen) releaseMcpState();
-  }, [mcpTabOpen]);
+  const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
 
   useEffect(() => {

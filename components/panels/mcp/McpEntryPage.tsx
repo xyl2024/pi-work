@@ -5,8 +5,8 @@ import { MCP_SCOPES, isMcpOverride, type McpScope } from "@/lib/shared/mcp-panel
 import type { McpDraftBucket } from "@/lib/shared/mcp-drafts";
 import type { McpDraftEntry } from "@/lib/shared/mcp-draft";
 import {
-  backMcpPageAction,
   dropMcpEntry,
+  mcpPanel,
   setMcpEntryConfig,
   setMcpEntryDeleted,
   setMcpEntryName,
@@ -14,6 +14,7 @@ import {
   setMcpEntryScope,
 } from "@/lib/client/mcp-store";
 import { SecondaryButton } from "@/components/settings/controls";
+import { PanelBackButton } from "../PanelBackButton";
 import { McpEntryForm } from "./McpEntryForm";
 import { McpNotice } from "./McpNotice";
 import { mcpScopeLabelKey } from "./scopeLabel";
@@ -25,29 +26,7 @@ export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry:
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px", flexShrink: 0 }}>
-        <button
-          type="button"
-          onClick={backMcpPageAction}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            background: "none",
-            border: "none",
-            padding: 0,
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 12,
-            fontFamily: "inherit",
-            flexShrink: 0,
-          }}
-          aria-label={t("Back")}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          {t("mcp.title")}
-        </button>
+        <PanelBackButton panel={mcpPanel} variant="inline" labelKey="mcp.title" ariaLabelKey="Back" />
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {entry.name || t("mcp.noName")}
