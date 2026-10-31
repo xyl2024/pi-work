@@ -110,7 +110,7 @@ export function startSkillInstall(
         },
       });
       if (skillsPanel.currentPage().kind !== "detail") {
-        skillsPanel.resetPages();
+        scope.resetPages();
         reloadSkills();
       }
       onSuccess?.();
