@@ -6,7 +6,6 @@ import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { PrimaryButton, SecondaryButton } from "@/components/settings/controls";
-import { MCP_LIST_PAGE, currentMcpPage } from "@/lib/shared/mcp-pages";
 import {
   describeStdioCommands,
   describedRemovals,
@@ -16,11 +15,10 @@ import {
 } from "@/lib/shared/mcp-draft";
 import { mcpOverrideExtraKeysError } from "@/lib/shared/mcp-panel";
 import {
-  escapeMcp,
-  ensureMcpLoaded,
+  mcpPanel,
   reloadMcp,
   saveMcpChanges,
-  useMcpStore,
+  useMcpPanel,
 } from "@/lib/client/mcp-store";
 import { isMcpBucketVerifying, selectMcpBucket } from "@/lib/shared/mcp-drafts";
 import { McpListPage } from "./mcp/McpListPage";
@@ -40,18 +38,19 @@ export function McpPanel({
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
-  const state = useMcpStore();
+  const state = useMcpPanel().view;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (visible) ensureMcpLoaded(cwd);
+    mcpPanel.setVisible(visible);
+    mcpPanel.open(cwd);
+    if (visible && mcpPanel.get().loadErrorCwd === cwd) mcpPanel.reload();
   }, [cwd, visible]);
 
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);
   const shownBucket = state.currentCwd === cwd ? bucket : null;
   const verifying = isMcpBucketVerifying(shownBucket);
-  const page = bucket ? currentMcpPage(bucket.pages) : MCP_LIST_PAGE;
-  const entry = page.kind === "entry" ? bucket?.draft.entries.find((item) => item.uid === page.uid) ?? null : null;
+  const page = mcpPanel.currentPage();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -59,7 +58,7 @@ export function McpPanel({
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (escapeMcp().closePanel) onCloseTab?.();
+    if (mcpPanel.back().closePanel) onCloseTab?.();
   });
 
   const problemText = useCallback(
@@ -85,6 +84,7 @@ export function McpPanel({
 
   const problem = bucket ? mcpDraftProblem(bucket.draft) : null;
   const dirty = bucket?.dirty ?? false;
+  const entry = page.kind === "entry" ? bucket?.draft.entries.find((item) => item.uid === page.uid) ?? null : null;
   const loadError = state.loadErrorCwd === cwd ? state.loadError : null;
 
   const save = useCallback(async () => {

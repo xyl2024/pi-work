@@ -11,14 +11,17 @@ export function PanelBackButton({
   panel,
   labelKey = "Back",
   ariaLabelKey = "Back",
+  variant = "boxed",
 }: {
   panel: PanelBackSource;
   labelKey?: string;
   ariaLabelKey?: string;
+  variant?: "boxed" | "inline";
 }) {
   const { t } = useI18n();
   const { pages } = panel.useSnapshot();
   const enabled = pages.length > 1;
+  const inline = variant === "inline";
   return (
     <button
       type="button"
@@ -31,10 +34,10 @@ export function PanelBackButton({
         display: "flex",
         alignItems: "center",
         gap: 4,
-        padding: "4px 9px",
+        padding: inline ? 0 : "4px 9px",
         background: "none",
-        border: "1px solid var(--border)",
-        borderRadius: 5,
+        border: inline ? "none" : "1px solid var(--border)",
+        borderRadius: inline ? 0 : 5,
         color: "var(--text-muted)",
         cursor: enabled ? "pointer" : "default",
         fontSize: 12,
