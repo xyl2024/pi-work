@@ -335,6 +335,10 @@ _Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-ski
 从 skills.sh 搜索技能、经 `npx skills add` 落盘到全局或当前项目的过程；由技能面板的添加页发起，日志流式回显。
 _Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那不是这条安装流程）；用「添加技能」指代它（那是面板里的按钮/页面，不是过程）
 
+**建议问题（Suggested Prompt）**：
+一轮对话正常结束后，由指定 LLM 生成的、用户可能接着问的一个问题；以输入框 placeholder 形式展示，空输入框时按 Tab 采纳为草稿。「正常结束」指该轮最后一条 assistant 消息 `stopReason === "stop"` 且正文非空——截断（`length`）、挂起（`deferred`）、中断（`aborted`）、出错（`error`）都不算。只在**用户交互会话**中生成：子代理会话与定时任务会话不生成（按会话身份排除，与会话当前由谁驱动无关）。placeholder 只是它的展示载体。
+_Avoid_: 与输入框草稿（draft，用户自己输入的未发送文本）混用；叫「自动补全」或「预测输入」（它不补全用户已输入的内容）；把「有建议」当成「可用 Tab」（只有建议可见即输入框为空时才可采纳）
+
 ### MCP
 
 **MCP 服务器（MCP server）**：
