@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { agentToolDenylist } from "@/lib/server/agent-tool-denylist";
+import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from "@/lib/shared/web-tools";
 
 const PLATFORMS = ["win32", "linux", "darwin"];
 
@@ -28,6 +29,13 @@ describe("agent tool denylist", () => {
     expect(agentToolDenylist("win32")).not.toContain("powershell");
     for (const platform of ["linux", "darwin"]) {
       expect(agentToolDenylist(platform)).toContain("powershell");
+    }
+  });
+
+  it("never denies the subagent-only web tools", () => {
+    for (const platform of PLATFORMS) {
+      expect(agentToolDenylist(platform)).not.toContain(WEB_SEARCH_TOOL_NAME);
+      expect(agentToolDenylist(platform)).not.toContain(WEB_FETCH_TOOL_NAME);
     }
   });
 
