@@ -71,6 +71,7 @@ const snapshot: SubagentTaskConfigSnapshot = {
   cwd: "/tmp/work",
   model: { provider: "p", modelId: "m-snapshot" },
   thinkingLevel: "high",
+  permissionMode: "auto_deny",
   tools: ["read"],
   systemPrompt: { kind: "prefix", text: "Explore only." },
   timeoutMs: 12_345,
@@ -168,6 +169,9 @@ describe("manual follow-up enters task management", () => {
     expect(created.description).toBe(manualTaskDescription(created.prompt));
     expect(created.createdAt).toBeGreaterThan(0);
 
+    const frozen = JSON.parse(created.configSnapshot!) as SubagentTaskConfigSnapshot;
+    expect(frozen.permissionMode).toBe("auto_deny");
+
     await runner.turns[0].acquire();
     expect(row(parent, submitted.taskId).status).toBe("running");
     expect(manager.liveStatus(parent, submitted.taskId)).toBe("running");
@@ -181,6 +185,8 @@ describe("manual follow-up enters task management", () => {
 
     await settle(runner.turns[0], child);
     await manager.idle();
+    expect((JSON.parse(row(parent, submitted.taskId).configSnapshot!) as SubagentTaskConfigSnapshot).permissionMode)
+      .toBe("auto_deny");
     expect(row(parent, submitted.taskId).status).toBe("completed");
     expect(row(parent, submitted.taskId).result).toBe("done");
   });

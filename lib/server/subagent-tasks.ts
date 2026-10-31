@@ -5,6 +5,7 @@ import {
   type SubagentProfile,
   type SubagentTaskConfigSnapshot,
 } from "../shared/subagent";
+import { resolveBackgroundPermissionMode } from "../shared/permission-mode";
 import type { SubagentTaskOrigin } from "../shared/types";
 import { MAX_CONCURRENT_SUBAGENT_RUNS } from "../shared/types";
 import {
@@ -93,6 +94,7 @@ export function resolveSubagentTaskConfig(input: {
     cwd: input.cwd,
     model: input.profile.model ?? input.parentModel,
     thinkingLevel: input.profile.thinkingLevel,
+    permissionMode: resolveBackgroundPermissionMode(input.profile.permissionMode),
     tools: restrictSubagentTools(input.profile.tools),
     systemPrompt: "systemPromptOverride" in prompt
       ? { kind: "override", text: prompt.systemPromptOverride }

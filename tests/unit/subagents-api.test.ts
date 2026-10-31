@@ -29,6 +29,7 @@ const validProfile = {
   tools: ["read", "grep"],
   model: { provider: "anthropic", modelId: "claude" },
   thinkingLevel: "medium",
+  permissionMode: "full_access",
   bot: { expression: 2, stateKey: "idle", shapeId: "blob", parts: [], accessories: [] },
   timeoutMs: 120_000,
 };
@@ -64,15 +65,18 @@ describe("/api/subagents handlers", () => {
   it("creates, updates and deletes a profile", async () => {
     const created = await POST(jsonRequest("POST", validProfile));
     expect(created.status).toBe(201);
-    const createdBody = await created.json() as { profile: { name: string; builtin: boolean } };
+    const createdBody = await created.json() as { profile: { name: string; builtin: boolean; permissionMode: string } };
     expect(createdBody.profile.name).toBe("api_agent");
     expect(createdBody.profile.builtin).toBe(false);
+    expect(createdBody.profile.permissionMode).toBe("full_access");
 
     expect((await POST(jsonRequest("POST", validProfile))).status).toBe(409);
 
-    const updated = await PUT(jsonRequest("PUT", { ...validProfile, description: "Changed." }));
+    const updated = await PUT(jsonRequest("PUT", { ...validProfile, description: "Changed.", permissionMode: "auto_deny" }));
     expect(updated.status).toBe(200);
-    expect((await updated.json() as { profile: { description: string } }).profile.description).toBe("Changed.");
+    const updatedBody = await updated.json() as { profile: { description: string; permissionMode: string } };
+    expect(updatedBody.profile.description).toBe("Changed.");
+    expect(updatedBody.profile.permissionMode).toBe("auto_deny");
 
     expect((await PUT(jsonRequest("PUT", { ...validProfile, name: "nope" }))).status).toBe(404);
 
@@ -84,10 +88,22 @@ describe("/api/subagents handlers", () => {
     expect(names).not.toContain("api_agent");
   });
 
+  it("defaults a profile created without a permission mode to auto deny", async () => {
+    const withoutMode: Record<string, unknown> = { ...validProfile };
+    delete withoutMode.permissionMode;
+    const created = await POST(jsonRequest("POST", { ...withoutMode, name: "default_mode" }));
+    expect(created.status).toBe(201);
+    expect((await created.json() as { profile: { permissionMode: string } }).profile.permissionMode).toBe("auto_deny");
+    expect((await DELETE(jsonRequest("DELETE", undefined, "?name=default_mode"))).status).toBe(200);
+  });
+
   it("rejects invalid input with 400", async () => {
     expect((await POST(jsonRequest("POST", { ...validProfile, name: "Bad Name" }))).status).toBe(400);
     expect((await POST(jsonRequest("POST", { ...validProfile, systemPrompt: "" }))).status).toBe(400);
     expect((await POST(jsonRequest("POST", { ...validProfile, timeoutMs: 1 }))).status).toBe(400);
+    expect((await POST(jsonRequest("POST", { ...validProfile, permissionMode: "confirm" }))).status).toBe(400);
+    expect((await POST(jsonRequest("POST", { ...validProfile, permissionMode: "yolo" }))).status).toBe(400);
+    expect((await PUT(jsonRequest("PUT", { ...validProfile, permissionMode: "" }))).status).toBe(400);
     expect((await DELETE(jsonRequest("DELETE", undefined, "?name=Bad Name"))).status).toBe(400);
   });
 });

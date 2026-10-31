@@ -38,6 +38,7 @@ describe("subagent profile store", () => {
       expect(profile.tools).toContain("read");
       expect(profile.bot.shapeId).toBeTruthy();
       expect(profile.timeoutMs).toBeGreaterThanOrEqual(10_000);
+      expect(profile.permissionMode).toBe("auto_deny");
     }
 
     const implementer = profiles.find((profile) => profile.name === "implementer");
@@ -81,11 +82,17 @@ describe("subagent profile store", () => {
     resetStoreGlobals();
     const { deleteSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
 
+    const { getSubagentDb } = await import("@/lib/server/subagent-store");
     const upgraded = listSubagentProfiles();
     expect(upgraded.map((profile) => profile.name).sort()).toEqual(["codebase_explorer", "implementer"]);
+    expect(upgraded.find((profile) => profile.name === "codebase_explorer")?.permissionMode).toBe("auto_deny");
     const implementer = upgraded.find((profile) => profile.name === "implementer");
     expect(implementer?.inheritSystemPrompt).toBe(true);
     expect(implementer?.tools).toEqual(["read", "edit", "write", "bash", "codemode"]);
+    expect(implementer?.permissionMode).toBe("auto_deny");
+    const columns = (getSubagentDb().prepare("PRAGMA table_info(subagent_profiles)").all() as Array<{ name: string }>)
+      .map((column) => column.name);
+    expect(columns).toContain("permission_mode");
 
     expect(deleteSubagentProfile("implementer")).toBe(true);
     resetStoreGlobals();
@@ -109,21 +116,54 @@ describe("subagent profile store", () => {
       tools: ["read", "write"],
       model: { provider: "anthropic", modelId: "claude" },
       thinkingLevel: "low",
+      permissionMode: "full_access",
       bot: { expression: 3, stateKey: "writing", shapeId: "cloud", parts: ["hands"], accessories: [] },
       timeoutMs: 60_000,
     });
     expect(created.builtin).toBe(false);
     expect(created.model).toEqual({ provider: "anthropic", modelId: "claude" });
+    expect(created.permissionMode).toBe("full_access");
 
-    const updated = updateSubagentProfile({ ...created, description: "Updated.", tools: ["read"] });
+    const updated = updateSubagentProfile({ ...created, description: "Updated.", tools: ["read"], permissionMode: "auto_deny" });
     expect(updated.description).toBe("Updated.");
     expect(updated.tools).toEqual(["read"]);
+    expect(updated.permissionMode).toBe("auto_deny");
+    expect(getSubagentProfile("docs_writer")?.permissionMode).toBe("auto_deny");
     expect(updated.updatedAt).toBeGreaterThanOrEqual(updated.createdAt);
 
     expect(getSubagentProfile("docs_writer")).not.toBeNull();
     expect(deleteSubagentProfile("docs_writer")).toBe(true);
     expect(getSubagentProfile("docs_writer")).toBeNull();
     expect(deleteSubagentProfile("docs_writer")).toBe(false);
+  });
+
+  it("lets a built-in profile's permission mode be edited", async () => {
+    resetStoreGlobals();
+    const { getSubagentProfile, updateSubagentProfile } = await import("@/lib/server/subagent-profiles");
+    const explorer = getSubagentProfile("codebase_explorer")!;
+    expect(explorer.permissionMode).toBe("auto_deny");
+    const updated = updateSubagentProfile({ ...explorer, permissionMode: "full_access" });
+    expect(updated.builtin).toBe(true);
+    expect(updated.permissionMode).toBe("full_access");
+    expect(getSubagentProfile("codebase_explorer")?.permissionMode).toBe("full_access");
+    updateSubagentProfile({ ...explorer, permissionMode: "auto_deny" });
+  });
+
+  it("reads NULL, empty and unknown stored permission modes as auto deny", async () => {
+    resetStoreGlobals();
+    const { getSubagentDb } = await import("@/lib/server/subagent-store");
+    const { getSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+    listSubagentProfiles();
+    const insert = getSubagentDb().prepare(`
+      INSERT INTO subagent_profiles
+        (name, description, system_prompt, inherit_system_prompt, tools, model_provider, model_id,
+         thinking_level, permission_mode, bot, timeout_ms, builtin, created_at, updated_at)
+      VALUES (?, 'd', 'p', 0, '["read"]', NULL, NULL, 'off', ?, '{}', 30000, 0, 1, 1)
+    `);
+    for (const [name, mode] of [["legacy_null_mode", null], ["legacy_empty_mode", ""], ["legacy_unknown_mode", "confirm"]] as const) {
+      insert.run(name, mode);
+      expect(getSubagentProfile(name)?.permissionMode).toBe("auto_deny");
+    }
   });
 
   it("refuses a duplicate name", async () => {
@@ -241,7 +281,18 @@ describe("normalizeSubagentProfileInput", () => {
     expect(input.model).toBeNull();
     expect(input.inheritSystemPrompt).toBe(false);
     expect(input.thinkingLevel).toBe("off");
+    expect(input.permissionMode).toBe("auto_deny");
     expect(input.timeoutMs).toBeGreaterThan(0);
     expect(input.bot.shapeId).toBeTruthy();
+  });
+
+  it("round-trips the background permission mode and rejects unknown values", async () => {
+    const { normalizeSubagentProfileInput, SubagentProfileError } = await import("@/lib/server/subagent-profiles");
+    const base = { name: "modes", description: "d", systemPrompt: "p", tools: ["read"] };
+    expect(normalizeSubagentProfileInput({ ...base, permissionMode: "full_access" }).permissionMode).toBe("full_access");
+    expect(normalizeSubagentProfileInput({ ...base, permissionMode: "auto_deny" }).permissionMode).toBe("auto_deny");
+    for (const permissionMode of ["confirm", "yolo", ""]) {
+      expect(() => normalizeSubagentProfileInput({ ...base, permissionMode })).toThrow(SubagentProfileError);
+    }
   });
 });

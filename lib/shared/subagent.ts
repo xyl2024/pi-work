@@ -1,3 +1,5 @@
+import type { BackgroundPermissionMode } from "./permission-mode";
+
 export const SUBAGENT_DEFAULT_TOOL_IDS: readonly string[] = ["read"];
 
 export const SUBAGENT_IMPLEMENTER_TOOL_IDS: readonly string[] = [
@@ -44,6 +46,7 @@ export interface SubagentProfile {
   inheritSystemPrompt: boolean;
   model: { provider: string; modelId: string } | null;
   thinkingLevel: SubagentThinkingLevel;
+  permissionMode: BackgroundPermissionMode;
   bot: SubagentBotAppearance;
   timeoutMs: number;
   builtin: boolean;
@@ -52,11 +55,16 @@ export interface SubagentProfile {
 }
 
 export type SubagentProfileInput =
-  Omit<SubagentProfile, "builtin" | "createdAt" | "updatedAt" | "inheritSystemPrompt"> & {
+  Omit<SubagentProfile, "builtin" | "createdAt" | "updatedAt" | "inheritSystemPrompt" | "permissionMode"> & {
     inheritSystemPrompt?: boolean;
+    permissionMode?: BackgroundPermissionMode;
   };
 
-export type NormalizedSubagentProfileInput = SubagentProfileInput & { inheritSystemPrompt: boolean };
+export type NormalizedSubagentProfileInput =
+  Omit<SubagentProfileInput, "inheritSystemPrompt" | "permissionMode"> & {
+    inheritSystemPrompt: boolean;
+    permissionMode: BackgroundPermissionMode;
+  };
 
 export const SUBAGENT_NAME_MAX = 64;
 export const SUBAGENT_NAME_PATTERN = new RegExp(`^[a-z][a-z0-9_-]{0,${SUBAGENT_NAME_MAX - 1}}$`);
@@ -78,6 +86,7 @@ export interface SubagentTaskConfigSnapshot {
   cwd: string;
   model: { provider: string; modelId: string };
   thinkingLevel: SubagentThinkingLevel;
+  permissionMode: BackgroundPermissionMode;
   tools: string[];
   systemPrompt: { kind: "override"; text: string } | { kind: "prefix"; text: string };
   timeoutMs: number;

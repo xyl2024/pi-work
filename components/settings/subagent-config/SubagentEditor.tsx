@@ -6,6 +6,10 @@ import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import {
+  DEFAULT_BACKGROUND_PERMISSION_MODE,
+  type BackgroundPermissionMode,
+} from "@/lib/shared/permission-mode";
+import {
   DEFAULT_SUBAGENT_BOT,
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   MAX_SUBAGENT_TIMEOUT_MS,
@@ -36,6 +40,7 @@ interface Draft {
   tools: string[];
   model: { provider: string; modelId: string } | null;
   thinkingLevel: SubagentThinkingLevel;
+  permissionMode: BackgroundPermissionMode;
   bot: SubagentBotAppearance;
   timeoutMinutes: string;
 }
@@ -50,6 +55,7 @@ function draftFromProfile(profile: SubagentProfile | null): Draft {
       tools: [...SUBAGENT_DEFAULT_TOOL_IDS, "bash", "powershell"],
       model: null,
       thinkingLevel: "off",
+      permissionMode: DEFAULT_BACKGROUND_PERMISSION_MODE,
       bot: { ...DEFAULT_SUBAGENT_BOT },
       timeoutMinutes: String(Math.round(DEFAULT_SUBAGENT_TIMEOUT_MS / 60_000)),
     };
@@ -62,6 +68,7 @@ function draftFromProfile(profile: SubagentProfile | null): Draft {
     tools: [...profile.tools],
     model: profile.model ? { ...profile.model } : null,
     thinkingLevel: profile.thinkingLevel,
+    permissionMode: profile.permissionMode,
     bot: { ...profile.bot, parts: [...profile.bot.parts], accessories: [...profile.bot.accessories] },
     timeoutMinutes: String(Math.round(profile.timeoutMs / 60_000)),
   };
@@ -151,6 +158,7 @@ export function SubagentEditor({
         tools: draft.tools,
         model: draft.model,
         thinkingLevel: draft.thinkingLevel,
+        permissionMode: draft.permissionMode,
         bot: draft.bot,
         timeoutMs,
       };
@@ -264,6 +272,18 @@ export function SubagentEditor({
               />
             </Field>
           </div>
+
+          <Field label={t("Dangerous commands")}>
+            <Select
+              value={draft.permissionMode}
+              required
+              options={[
+                { value: "auto_deny", label: t("Auto-deny") },
+                { value: "full_access", label: t("Full access") },
+              ]}
+              onChange={(value) => patch({ permissionMode: value as BackgroundPermissionMode })}
+            />
+          </Field>
 
           <Field label={t("System prompt")}>
             <Check
