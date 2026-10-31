@@ -8,7 +8,7 @@
 2. **提问没有截止时间。** 权限确认 5 分钟自动 deny；提问没有任何计时器，而回合进行中 idle 回收会被顶掉（`resetIdleTimer` 的 `if (this.isRunning()) return;`，`:453-471`），所以一个没人回答的提问可以让一个回合永远挂着。
 3. **「本会话总是允许」是一份裸 `Set<string>`。** `allowedThisSession` 同时收 `codegraph_init` / `codegraph_index` 与用户可配的危险规则名（写点只有 `:540`，读点 `:1326` 与 `:1358`），中间没有前缀也没有类型隔离。
 
-**我们决定**，这条关注点是一个 module（`lib/server/interaction-gates.ts`，按会话一个实例、由 wrapper 持有）：它拥有挂起表（开一张、决议、快照、全部作废）、**调用点的闸门序列**（查本会话备忘 → 子代理一律拒 → 提问 → 解释决定）、重播契约（`snapshot(): SessionEvent[]`，两种闸门都返回线协议事件）与会话级备忘。两个闸门是它的两个 adapter，各自保留类型化的对外名字与线协议不变。
+**我们决定**，这条关注点是一个 module（`lib/server/interaction-gates.ts`，按会话一个实例、由 wrapper 持有）：它拥有挂起表（开一张、决议、快照、全部作废）、**调用点的闸门序列**（按会话档位自动拒绝 → 查本会话备忘 → 提问 → 解释决定）、重播契约（`snapshot(): SessionEvent[]`，两种闸门都返回线协议事件）与会话级备忘。两个闸门是它的两个 adapter，各自保留类型化的对外名字与线协议不变。
 
 三条边界：
 
@@ -26,7 +26,7 @@
 ## Consequences
 
 - 这一刀**不是**行为冻结的搬移：它顺手修掉漂移 1（权限确认也会在重连时重播），因此 PR 必须显式列出这条行为变更，而不是声称「什么都没变」。漂移 2（提问的截止时间）与漂移 3（备忘命名空间）各自另开一刀：前者改 agent 的行为，后者改配置语义。
-- ADR-0001 的「交互闸门对子代理一律拒绝」从此有一个代码归属地；`ask_user_questions` 那条仍然靠工具集白名单排除（`lib/server/subagent-tool.ts` 的 profile 常量），是另一套机制，本 ADR 不合并它们。
+- ADR-0001 的「子代理默认快速拒绝」与 ADR-0025 的无人值守档位从此有一个代码归属地；`ask_user_questions` 那条仍然靠工具集白名单排除（`lib/server/subagent-tool.ts` 的 profile 常量），是另一套机制，本 ADR 不合并它们。
 - 重播只有一条路径：route 调 `snapshot()` 并把返回的事件 encode 一遍。客户端侧无需新逻辑——提问靠 reducer 的 `seenAskUserQuestionsToolCallIds.claim` 幂等，权限靠 `hooks/usePendingPermissions.tsx:33-38` 按 `toolCallId` 去重，且 reducer 对 `permission_request` 不写状态（`lib/shared/session-events.ts:642-653`）。
 - 探查中发现的一条**未修**缺陷：`resolvePermission` 不校验决定载荷（`dispatch` 里是 `command.decision as PermissionDecision`，`:909`），而调用点只把 `"deny"` 当作拒绝（`:1363`）——一个未知字符串因此等价于**放行**。闸门的默认值不该是放行；本 ADR 只记录它，修它另开一刀。
 - 「同一会话至多一个闸门」没有任何代码在守。以后 pi 若并行执行 `ask_user_questions`，两个闸门会同时挂在客户端的两个面上——这是本 ADR 明确接受的风险。

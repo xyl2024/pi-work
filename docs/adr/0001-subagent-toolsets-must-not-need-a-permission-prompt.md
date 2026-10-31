@@ -2,7 +2,7 @@
 
 A subagent child session has no UI attached to it: its `permission_request` events only reach a browser that has that exact child session open (and only while it is the selected session), and the parent's subagent sessions popover only reads the task rows. A confirmation raised from a child therefore cannot be answered — it waits out `dangerous_patterns.timeout_ms` (5 minutes by default) and is then auto-denied, blocking the child for minutes to reach an outcome we already know.
 
-We decided that a subagent profile may only contain tools that never need a confirmation, and that every interactive gate refuses a subagent outright instead of prompting: a dangerous-command rule matched inside a subagent session is blocked immediately, and so is `codegraph_build` init/index (kept as a guard even though no current profile exposes that tool). Concretely: `codegraph_build` is excluded from every subagent profile, and `bash` (given to both `codebase_explorer` and `code_reviewer`) fast-denies on a matched rule.
+We decided that a subagent profile must never depend on a confirmation prompt being answered: no child permission request is forwarded anywhere, and a dangerous-command rule matched inside a subagent session is denied immediately by default. `codegraph_build` init/index got the same hard denial (kept as a guard even though no current profile exposes that tool). Concretely: `codegraph_build` is excluded from every subagent profile, and `bash` (given to both `codebase_explorer` and `code_reviewer`) fast-denies on a matched rule unless the profile explicitly opts into full access (ADR-0025).
 
 ## Considered options
 
@@ -11,8 +11,8 @@ We decided that a subagent profile may only contain tools that never need a conf
 
 ## Consequences
 
-- A user can no longer approve a blocked command coming from a subagent, even with that child session open in a tab. The child is expected to switch to a read-only alternative and say what it needed.
-- Any future subagent profile must be checkable against this rule: does every tool in the profile avoid interactive prompts? `tests/unit/subagent-profiles.test.ts` guards the current profiles.
+- A user cannot answer a blocked command coming from a subagent, even with that child session open in a tab. The child is expected to switch to a read-only alternative and say what it needed. The only way to let a matched rule run is to configure the profile as `full_access` before the session starts (ADR-0025); opening the child at runtime changes nothing.
+- Any future subagent profile must be checkable against this rule: does every tool in the profile avoid interactive prompts, or run under a tier that never prompts (ADR-0025)? `tests/unit/subagent-profiles.test.ts` guards the current profiles.
 
 ## Update: profiles are user-configurable
 
@@ -21,12 +21,24 @@ Subagents (`lib/server/subagent-profiles.ts`). The seed for the built-ins
 still honours this rule — `SUBAGENT_DEFAULT_CODEGRAPH_TOOL_IDS` excludes
 `codegraph_build`, and both built-ins start from the read-only core plus shells
 — but the rule is no longer enforced on *user-created* profiles: the editor
-lets the user pick any tool. A profile that includes a confirmation-gated tool
-keeps the original failure mode (the prompt waits out the timeout, then is
-denied), it just is the user's explicit choice now. The guard test still covers
-the default seed, which is the part this project controls.
+lets the user pick any tool. A profile that includes a shell keeps the original
+failure mode by default: a matched dangerous rule is denied immediately rather
+than waiting out a timeout, unless the profile is configured as `full_access`
+(ADR-0025); it just is the user's explicit choice now. The guard test still
+covers the default seed, which is the part this project controls.
 
 The built-in `implementer` deliberately includes `edit`, `write` and `codemode`
 so it can change the working tree in one session; none of those raise a
-permission prompt, and its `bash` still fast-denies on a matched dangerous rule.
+permission prompt, and its `bash` fast-denies on a matched dangerous rule by
+default.
 It also inherits the parent's system prompt verbatim by default.
+
+## Update: unattended permission tiers
+
+Subagent sessions now carry a per-profile `permission_mode` (ADR-0025). "Always
+fast-deny" is therefore "fast-deny by default": `auto_deny` immediately denies a
+matched dangerous rule with no gate and no session memo, while `full_access`
+lets the command run. A profile does not get a `confirm` tier — no one is there
+to answer — and self-protection blocks in both tiers. The invariants above still
+hold: prompts are never forwarded to the parent, and the default for every new
+or legacy profile is `auto_deny`.
