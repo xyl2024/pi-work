@@ -68,7 +68,6 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
-import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 import {
   releaseSchedulerState,
   schedulerCloseGuard,
@@ -76,12 +75,7 @@ import {
   useSchedulerRunning,
 } from "@/lib/client/scheduler-store";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
-import {
-  cancelSkillInstall,
-  getSkillInstallPhase,
-  releaseSkillsState,
-  useSkillInstallRunning,
-} from "@/lib/client/skills-store";
+import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
 import {
   usePanelViewLifecycleSync,
@@ -182,7 +176,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
       dirty: getModelsConfigDirty(),
       oauthInProgress: hasActiveOAuthLogin(),
     }),
-  skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
@@ -191,13 +184,13 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   modelsConfig: () => {
     if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
   },
-  skills: () => cancelSkillInstall(),
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   channels: channelsPanel,
+  skills: skillsPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = [
@@ -427,11 +420,7 @@ export function AppShell() {
   useEffect(() => {
     if (!modelsConfigTabOpen) releaseModelsConfigDraft();
   }, [modelsConfigTabOpen]);
-  const skillsInstalling = useSkillInstallRunning();
-  const skillsTabOpen = selectTabByKind(panelTabsState, "skills") !== null;
-  useEffect(() => {
-    if (!skillsTabOpen) releaseSkillsState();
-  }, [skillsTabOpen]);
+  const skillsInstalling = skillsPanel.useStatus() === true;
   const schedulerRunning = useSchedulerRunning();
   const schedulerTabOpen = selectTabByKind(panelTabsState, "scheduler") !== null;
   useEffect(() => {

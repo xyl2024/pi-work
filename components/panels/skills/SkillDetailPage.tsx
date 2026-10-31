@@ -10,14 +10,15 @@ import { shortenPath } from "@/lib/client/paths";
 import { groupSkillFiles, stripFrontmatter } from "@/lib/shared/skill-files";
 import { skillGroup, type SkillDetailData } from "@/lib/shared/skills";
 import { fetchSkillDetail } from "@/lib/client/skills-io";
-import { toggleSkillInvocation, useSkillsStore } from "@/lib/client/skills-store";
+import { skillsPanel, toggleSkillInvocation, useSkillsPanel } from "@/lib/client/skills-panel";
 import { SkillFileRow } from "./SkillFileRow";
-import { SkillsBackButton } from "./SkillsBackButton";
+import { PanelBackButton } from "../PanelBackButton";
 import { HumanCallBadge } from "./HumanCallBadge";
 
 export function SkillDetailPage({ filePath }: { filePath: string }) {
   const { t } = useI18n();
-  const { skills, toggleBusy } = useSkillsStore();
+  const { view } = useSkillsPanel();
+  const { skills, toggleBusy } = view;
   const skill = skills.find((candidate) => candidate.filePath === filePath) ?? null;
 
   const [detail, setDetail] = useState<SkillDetailData | null>(null);
@@ -97,7 +98,7 @@ export function SkillDetailPage({ filePath }: { filePath: string }) {
           flexShrink: 0,
         }}
       >
-        <SkillsBackButton />
+        <PanelBackButton panel={skillsPanel} />
         <span
           style={{
             flex: 1,
