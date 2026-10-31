@@ -1,8 +1,43 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { unlink } from "node:fs/promises";
 import { PANEL_TAB_KINDS } from "@/lib/shared/panelTabs";
-import { api, uniqueId, type Json } from "./helpers";
+import { api, expectOk, uniqueId, type Json } from "./helpers";
 
 let original: Json | undefined;
+
+interface SessionState {
+  sessionId?: string;
+  sessionFile?: string;
+  systemPrompt?: string;
+}
+
+async function newSessionState(): Promise<SessionState> {
+  const { status, body } = await api("/api/agent/new", {
+    method: "POST",
+    body: JSON.stringify({ cwd: process.cwd(), type: "get_state" }),
+  });
+  expectOk(status, body);
+  const state = body.data as SessionState;
+  return { ...state, sessionId: (body.sessionId as string | undefined) ?? state.sessionId };
+}
+
+async function sessionState(sessionId: string): Promise<SessionState> {
+  const { status, body } = await api(`/api/agent/${sessionId}`, {
+    method: "POST",
+    body: JSON.stringify({ type: "get_state" }),
+  });
+  expectOk(status, body);
+  return body.data as SessionState;
+}
+
+async function setLoadPiDocs(value: boolean): Promise<void> {
+  const put = await api("/api/settings", {
+    method: "PUT",
+    body: JSON.stringify({ load_pi_docs: value }),
+  });
+  expect(put.status).toBe(200);
+  expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(value);
+}
 
 afterAll(async () => {
   if (original) {
@@ -55,6 +90,42 @@ describe("settings api", () => {
     const on = await api("/api/settings");
     expect((on.body as Json).load_pi_docs).toBe(true);
   });
+
+  it("keeps pi documentation out of the session prompt while the toggle is off", async () => {
+    const initial = ((await api("/api/settings")).body as Json).load_pi_docs as boolean;
+    try {
+      await setLoadPiDocs(false);
+      const state = await newSessionState();
+      try {
+        expect(state.systemPrompt).toContain("<cwd>");
+        expect(state.systemPrompt).not.toContain("<docs>");
+        expect(state.systemPrompt).not.toContain("Pi documentation");
+      } finally {
+        if (state.sessionFile) await unlink(state.sessionFile).catch(() => {});
+      }
+    } finally {
+      await setLoadPiDocs(initial);
+    }
+  }, 120_000);
+
+  it("applies the pi documentation toggle to a session that is already open", async () => {
+    const initial = ((await api("/api/settings")).body as Json).load_pi_docs as boolean;
+    try {
+      await setLoadPiDocs(true);
+      const state = await newSessionState();
+      try {
+        expect(state.sessionId).toBeTruthy();
+        expect((await sessionState(state.sessionId!)).systemPrompt).toContain("Pi documentation");
+
+        await setLoadPiDocs(false);
+        expect((await sessionState(state.sessionId!)).systemPrompt).not.toContain("Pi documentation");
+      } finally {
+        if (state.sessionFile) await unlink(state.sessionFile).catch(() => {});
+      }
+    } finally {
+      await setLoadPiDocs(initial);
+    }
+  }, 120_000);
 
   it("rejects out-of-range file_viewer limits with 400", async () => {
     const bad = await api("/api/settings", {

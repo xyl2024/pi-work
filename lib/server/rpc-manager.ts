@@ -84,6 +84,7 @@ export class AgentSessionWrapper {
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
     permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE,
+    private readonly piDocsManaged = false,
   ) {
     this._permissionMode = permissionMode;
     this.gates = new InteractionGates({
@@ -205,13 +206,19 @@ export class AgentSessionWrapper {
     });
   }
 
+  effectiveSystemPrompt(): string {
+    const prompt = this.inner.systemPrompt ?? "";
+    if (!this.piDocsManaged || !prompt || piDocsEnabled()) return prompt;
+    return stripPiDocumentationSection(prompt);
+  }
+
   private scheduleContextCompositionRefresh(): void {
     const refreshId = ++this.compositionRefreshId;
     this.compositionRefreshChain = this.compositionRefreshChain
       .then(async () => {
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
         const agentState = this.inner.agent.state;
-        const systemPrompt = this.inner.systemPrompt ?? "";
+        const systemPrompt = this.effectiveSystemPrompt();
         const tools = agentState?.tools ?? [];
         const messages = agentState?.messages ?? [];
         const anchoredTotalTokens = this.getContextUsage()?.tokens ?? null;
@@ -499,7 +506,7 @@ export class AgentSessionWrapper {
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
             : null,
           contextComposition: this.contextComposition,
-          systemPrompt: this.inner.systemPrompt ?? "",
+          systemPrompt: this.effectiveSystemPrompt(),
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           permissionMode: this.permissionMode,
           toolNames: this.toolSelection,
@@ -674,6 +681,14 @@ export { runTurnRpcSession, type RunTurnRpcSpec } from "./turn/rpc-factory";
 
 type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
+function piDocsEnabled(): boolean {
+  try {
+    return readConfig().load_pi_docs;
+  } catch {
+    return true;
+  }
+}
+
 export interface StartRpcSessionOptions {
   model?: { provider: string; modelId: string };
   thinkingLevel?: RpcThinkingLevel;
@@ -756,6 +771,7 @@ export async function startRpcSession(
           options.parentSessionId ? { parentSession: options.parentSessionId } : undefined,
         );
     const isNewSession = !sessionFile;
+    const piDocsManaged = !options.systemPromptPrefix && !options.systemPromptOverride;
 
     let capturedSessionId: string | null = null;
     const capturedSource: "user" | "scheduled" | "subagent" = source;
@@ -763,13 +779,11 @@ export async function startRpcSession(
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     let appendSystemPromptLoaderOption: string[] | undefined;
     let disabledSkillPaths = new Set<string>();
-    let loadPiDocs = true;
     let mcpProjectServers = false;
     let mcpStartupWaitMs = 3000;
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
-      loadPiDocs = cfg.load_pi_docs;
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
       if (options.systemPromptPrefix || options.systemPromptOverride || !cfg.append_system.enabled) {
@@ -842,15 +856,16 @@ export async function startRpcSession(
               pi.on("before_agent_start", () => ({ systemPrompt: options.systemPromptOverride! }));
             }]
           : []),
-        ...(options.systemPromptPrefix || options.systemPromptOverride || loadPiDocs
-          ? []
-          : [
-              (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
+        ...(piDocsManaged
+          ? [
+              (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string } | undefined) => void }) => {
                 pi.on("before_agent_start", (event) => {
+                  if (piDocsEnabled()) return undefined;
                   return { systemPrompt: stripPiDocumentationSection(event.systemPrompt) };
                 });
               },
-            ]),
+            ]
+          : []),
         (pi) => {
           pi.on("tool_call", async (event) => {
             const isShellCall =
@@ -1009,6 +1024,7 @@ export async function startRpcSession(
       source,
       cwd,
       readSessionPermissionMode(inner.sessionId),
+      piDocsManaged,
     );
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;

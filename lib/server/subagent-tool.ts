@@ -87,7 +87,7 @@ const liveParentResolver: SubagentParentResolver = async (parentSessionId) => {
   return {
     parentSessionId,
     model: { provider: model.provider, modelId: model.id },
-    systemPrompt: parent.inner.systemPrompt,
+    systemPrompt: parent.effectiveSystemPrompt(),
   };
 };
 
