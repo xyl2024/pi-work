@@ -11,7 +11,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { classifyToolCall, isToolResultEmpty, projectNestedCalls, toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { extractToolResultContent, imageContentSrc } from "@/lib/shared/message-content";
-import { formatToolDuration } from "@/lib/shared/tool-duration";
+import { formatToolAnnotation, formatToolDuration } from "@/lib/shared/tool-duration";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -254,8 +254,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <ToolTitleRow toolName={block.toolName} durationMs={result?.durationMs} isError={isError} />
-        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout, durationMs: result?.durationMs })} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
         <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
     );
@@ -272,8 +271,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
-        <ToolTitleRow toolName={block.toolName} durationMs={result?.durationMs} isError={isError} />
-        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs })} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
         <NestedCallsSection nestedCalls={result?.nestedCalls} />
       </div>
     );
@@ -420,18 +418,6 @@ const TOOL_HEADER_STYLE: React.CSSProperties = {
   minWidth: 0,
 };
 
-function ToolTitleRow({ toolName, durationMs, isError }: { toolName: string; durationMs?: number; isError: boolean }) {
-  return (
-    <div style={TOOL_HEADER_STYLE}>
-      <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
-        {toolName}
-      </span>
-      <span style={{ flex: 1 }} />
-      <ToolDuration ms={durationMs} />
-    </div>
-  );
-}
-
 interface DiffLine {
   kind: "added" | "removed";
   text: string;
@@ -512,9 +498,9 @@ function DiffToolCallContent({ toolName, input, resultText, resultImages, result
 
 const BASH_DETAIL_MAX_HEIGHT = 200;
 
-function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, resultIsEmpty, isError, isDark }: {
+function BashToolCallContent({ command, annotation, cwd, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   command: string;
-  timeout: string | null;
+  annotation: string | null;
   cwd?: string | null;
   resultText: string | null;
   resultImages: ImageContent[];
@@ -557,8 +543,8 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, 
         whiteSpace: "pre-wrap",
       }}
     >
-      {timeout !== null && (
-        <div style={{ color: dimFg }}>(timeout={timeout}s)</div>
+      {annotation !== null && (
+        <div style={{ color: dimFg }}>{annotation}</div>
       )}
       <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
       <SyntaxHighlighter
@@ -656,8 +642,9 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultImages, 
 
 const CODEMODE_DETAIL_MAX_HEIGHT = 300;
 
-function CodemodeToolCallContent({ code, resultText, resultImages, resultIsEmpty, isError, isDark }: {
+function CodemodeToolCallContent({ code, annotation, resultText, resultImages, resultIsEmpty, isError, isDark }: {
   code: string;
+  annotation: string | null;
   resultText: string | null;
   resultImages: ImageContent[];
   resultIsEmpty: boolean;
@@ -672,6 +659,7 @@ function CodemodeToolCallContent({ code, resultText, resultImages, resultIsEmpty
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const showMask = contentHeight !== null && contentHeight > CODEMODE_DETAIL_MAX_HEIGHT && !expandedAll;
   const codeBg = isDark ? "#1e1e1e" : "#f7f7f7";
+  const dimFg = isDark ? "#9ca3af" : "#6b7280";
   return (
     <div
       style={{
@@ -684,6 +672,9 @@ function CodemodeToolCallContent({ code, resultText, resultImages, resultIsEmpty
       }}
     >
       <div ref={contentRef} data-scroll-inset style={{ background: codeBg }}>
+        {annotation !== null && (
+          <div style={{ color: dimFg, fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 10px 0" }}>{annotation}</div>
+        )}
         <SyntaxHighlighter
           language="javascript"
           style={isDark ? vscDarkPlus : vs}
