@@ -2,12 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { currentSkillsPage } from "@/lib/shared/skills-pages";
-import {
-  ensureSkillsLoaded,
-  escapeSkills,
-  useSkillsStore,
-} from "@/lib/client/skills-store";
+import { skillsPanel, useSkillsPanel } from "@/lib/client/skills-panel";
 import { SkillsRootPage } from "./skills/SkillsRootPage";
 import { SkillDetailPage } from "./skills/SkillDetailPage";
 import { SkillsAddPage } from "./skills/SkillsAddPage";
@@ -19,14 +14,14 @@ export function SkillsPanel({
   cwd: string | null;
   onCloseTab?: () => void;
 }) {
-  const { pages } = useSkillsStore();
+  useSkillsPanel();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ensureSkillsLoaded(cwd);
+    skillsPanel.open(cwd);
   }, [cwd]);
 
-  const page = currentSkillsPage(pages);
+  const page = skillsPanel.currentPage();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -34,7 +29,7 @@ export function SkillsPanel({
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (escapeSkills().closePanel) onCloseTab?.();
+    if (skillsPanel.back().closePanel) onCloseTab?.();
   });
 
   return (

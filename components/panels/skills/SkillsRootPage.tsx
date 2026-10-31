@@ -11,14 +11,15 @@ import {
   openSkillsDetail,
   reloadSkills,
   toggleSkillInvocation,
-  useSkillsStore,
-} from "@/lib/client/skills-store";
+  useSkillsPanel,
+} from "@/lib/client/skills-panel";
 import { SkillCard } from "./SkillCard";
 
 export function SkillsRootPage() {
   const { t } = useI18n();
   const toast = useToast();
-  const { cwd, skills, loading, loaded, loadError, toggleBusy } = useSkillsStore();
+  const { view } = useSkillsPanel();
+  const { cwd, skills, loading, loaded, loadError, toggleBusy } = view;
   const [query, setQuery] = useState("");
 
   const groups = useMemo(() => groupSkills(filterSkills(skills, query)), [skills, query]);

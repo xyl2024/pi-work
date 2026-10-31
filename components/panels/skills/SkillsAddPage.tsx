@@ -7,9 +7,9 @@ import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import { shortenPath } from "@/lib/client/paths";
 import { searchSkills } from "@/lib/client/skills-io";
-import { startSkillInstall, useSkillsStore } from "@/lib/client/skills-store";
+import { skillsPanel, startSkillInstall, useSkillsPanel } from "@/lib/client/skills-panel";
 import type { SkillInstallRequest, SkillInstallScope, SkillSearchResult } from "@/lib/shared/skills";
-import { SkillsBackButton } from "./SkillsBackButton";
+import { PanelBackButton } from "../PanelBackButton";
 
 const PAGE_SIZE = 6;
 const SCROLL_THRESHOLD_PX = 240;
@@ -156,7 +156,8 @@ function ResultCard({
 export function SkillsAddPage() {
   const { t } = useI18n();
   const toast = useToast();
-  const { cwd, install } = useSkillsStore();
+  const { view } = useSkillsPanel();
+  const { cwd, install } = view;
 
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -274,7 +275,7 @@ export function SkillsAddPage() {
           flexShrink: 0,
         }}
       >
-        <SkillsBackButton />
+        <PanelBackButton panel={skillsPanel} />
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Add Skill")}</span>
       </div>
 
