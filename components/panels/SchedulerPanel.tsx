@@ -2,12 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { currentSchedulerPage } from "@/lib/shared/scheduler-pages";
-import {
-  escapeScheduler,
-  reloadSchedulerTasks,
-  useSchedulerStore,
-} from "@/lib/client/scheduler-store";
+import { escapeScheduler, schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
 import { SchedulerRootPage } from "./scheduler/SchedulerRootPage";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
@@ -21,14 +16,14 @@ export function SchedulerPanel({
   onOpenSession: (sessionId: string) => void;
   onCloseTab?: () => void;
 }) {
-  const { pages } = useSchedulerStore();
+  useSchedulerPanel();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    void reloadSchedulerTasks();
+    schedulerPanel.open();
   }, []);
 
-  const page = currentSchedulerPage(pages);
+  const page = schedulerPanel.currentPage();
 
   useEffect(() => {
     const el = containerRef.current;

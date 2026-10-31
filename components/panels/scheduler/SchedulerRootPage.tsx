@@ -11,15 +11,16 @@ import {
   openSchedulerTask,
   setSchedulerFilter,
   setSchedulerQuery,
-  useSchedulerStore,
+  useSchedulerPanel,
   type SchedulerFilter,
-} from "@/lib/client/scheduler-store";
+} from "@/lib/client/scheduler-panel";
 import type { ScheduledTask, TaskRunStatus } from "@/lib/shared/scheduler";
 import { AlertIcon, ClockIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
 export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
   const { t } = useI18n();
-  const { tasks, loaded, loadError, filter, query, selectedTaskId } = useSchedulerStore();
+  const { view } = useSchedulerPanel();
+  const { tasks, loaded, loadError, filter, query, selectedTaskId } = view;
   const now = useNow(30_000);
   const listRef = useRef<HTMLDivElement>(null);
 

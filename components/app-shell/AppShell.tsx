@@ -69,11 +69,10 @@ import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import {
-  releaseSchedulerState,
-  schedulerCloseGuard,
+  schedulerPanel,
   setSchedulerPanelOpen,
   useSchedulerRunning,
-} from "@/lib/client/scheduler-store";
+} from "@/lib/client/scheduler-panel";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
 import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
@@ -176,7 +175,6 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
       dirty: getModelsConfigDirty(),
       oauthInProgress: hasActiveOAuthLogin(),
     }),
-  scheduler: () => schedulerCloseGuard(),
   mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
@@ -186,11 +184,12 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
   },
 };
 
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel];
+const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = [channelsPanel, skillsPanel, schedulerPanel];
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   channels: channelsPanel,
   skills: skillsPanel,
+  scheduler: schedulerPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = [
@@ -422,10 +421,6 @@ export function AppShell() {
   }, [modelsConfigTabOpen]);
   const skillsInstalling = skillsPanel.useStatus() === true;
   const schedulerRunning = useSchedulerRunning();
-  const schedulerTabOpen = selectTabByKind(panelTabsState, "scheduler") !== null;
-  useEffect(() => {
-    if (!schedulerTabOpen) releaseSchedulerState();
-  }, [schedulerTabOpen]);
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
