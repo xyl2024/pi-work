@@ -29,6 +29,16 @@ export interface McpConfig {
   startup_wait_ms: number;
 }
 
+export interface SuggestedPromptModel {
+  provider: string;
+  modelId: string;
+}
+
+export interface SuggestedPromptConfig {
+  enabled: boolean;
+  model: SuggestedPromptModel | null;
+}
+
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
@@ -41,6 +51,7 @@ export interface PiWorkConfig {
   disabled_skills: Record<string, string[]>;
   network_proxy: NetworkProxyConfig;
   mcp: McpConfig;
+  suggested_prompt: SuggestedPromptConfig;
 }
 
 export const UI_SOUND_EVENT_IDS = [

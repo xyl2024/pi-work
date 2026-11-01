@@ -8,15 +8,9 @@ import {
 } from "../shared/permission-mode";
 import { getRpcSession } from "./session-registry";
 import { readSessionPermissionMode, readSessionPermissionModes } from "./session-permission-mode";
-import {
-  getSubagentTaskByChildSessionId,
-  hasSubagentStore,
-  listSubagentChildConfigSnapshots,
-} from "./subagent-store";
-import {
-  getRunSessionPermissionMode,
-  listRunSessionPermissionModes,
-} from "./scheduler/store";
+import { resolveBackgroundSessionIdentity } from "./session-identity";
+import { listSubagentChildConfigSnapshots } from "./subagent-store";
+import { listRunSessionPermissionModes } from "./scheduler/store";
 
 function snapshotPermissionMode(configSnapshot: string | null): BackgroundPermissionMode {
   if (!configSnapshot) return DEFAULT_BACKGROUND_PERMISSION_MODE;
@@ -34,7 +28,7 @@ export function resolveSessionPermission(sessionId: string): SessionPermissionSt
     return { permissionMode: live.permissionMode, background: live.isBackgroundSession };
   }
 
-  const subagentTask = hasSubagentStore() ? getSubagentTaskByChildSessionId(sessionId) : null;
+  const { subagentTask, scheduledPermissionMode } = resolveBackgroundSessionIdentity(sessionId);
   if (subagentTask) {
     return {
       permissionMode: snapshotPermissionMode(subagentTask.configSnapshot),
@@ -42,9 +36,8 @@ export function resolveSessionPermission(sessionId: string): SessionPermissionSt
     };
   }
 
-  const runPermissionMode = getRunSessionPermissionMode(sessionId);
-  if (runPermissionMode !== null) {
-    return { permissionMode: runPermissionMode, background: true };
+  if (scheduledPermissionMode !== null) {
+    return { permissionMode: scheduledPermissionMode, background: true };
   }
 
   return { permissionMode: readSessionPermissionMode(sessionId), background: false };

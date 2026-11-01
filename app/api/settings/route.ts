@@ -76,6 +76,31 @@ function validateNetworkProxy(
   return { ok: true };
 }
 
+function validateSuggestedPrompt(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "suggested_prompt must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") {
+    return { ok: false, error: "suggested_prompt.enabled must be a boolean" };
+  }
+  if (obj.model === undefined || obj.model === null) return { ok: true };
+  if (!obj.model || typeof obj.model !== "object" || Array.isArray(obj.model)) {
+    return { ok: false, error: "suggested_prompt.model must be an object or null" };
+  }
+  const model = obj.model as Record<string, unknown>;
+  if (typeof model.provider !== "string" || !model.provider.trim()) {
+    return { ok: false, error: "suggested_prompt.model.provider must be a non-empty string" };
+  }
+  if (typeof model.modelId !== "string" || !model.modelId.trim()) {
+    return { ok: false, error: "suggested_prompt.model.modelId must be a non-empty string" };
+  }
+  return { ok: true };
+}
+
 function validateUiSounds(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -158,6 +183,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.suggested_prompt !== undefined) {
+      const suggestedPromptCheck = validateSuggestedPrompt(body.suggested_prompt);
+      if (!suggestedPromptCheck.ok) {
+        log.warn("settings rejected: invalid suggested_prompt", {
+          error: suggestedPromptCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: suggestedPromptCheck.error }, { status: 400 });
+      }
+    }
+
     if (body.network_proxy !== undefined) {
       const networkProxyCheck = validateNetworkProxy(body.network_proxy);
       if (!networkProxyCheck.ok) {
@@ -189,6 +225,9 @@ export async function PUT(req: Request) {
       ...(isObject(body.ui_sounds) ? { ui_sounds: body.ui_sounds as unknown as PiWorkConfig["ui_sounds"] } : {}),
       ...(isObject(body.network_proxy)
         ? { network_proxy: body.network_proxy as unknown as PiWorkConfig["network_proxy"] }
+        : {}),
+      ...(isObject(body.suggested_prompt)
+        ? { suggested_prompt: body.suggested_prompt as unknown as PiWorkConfig["suggested_prompt"] }
         : {}),
     };
 

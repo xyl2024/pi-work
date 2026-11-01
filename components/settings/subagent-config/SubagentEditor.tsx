@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
@@ -22,15 +22,10 @@ import {
   type SubagentProfile,
   type SubagentThinkingLevel,
 } from "@/lib/shared/subagent";
-import { Check, PrimaryButton, SecondaryButton, TextArea, TextInput, Field, GroupedSelect, Select, NumInput } from "../controls";
+import { Check, PrimaryButton, SecondaryButton, TextArea, TextInput, Field, Select, NumInput } from "../controls";
+import { ModelSelect } from "../ModelSelect";
 import { BotAppearancePicker } from "./BotAppearancePicker";
 import { SubagentToolPicker } from "./SubagentToolPicker";
-
-interface ModelOption {
-  id: string;
-  name: string;
-  provider: string;
-}
 
 interface Draft {
   name: string;
@@ -86,7 +81,6 @@ export function SubagentEditor({
   const { t } = useI18n();
   const isNew = profile === null;
   const [draft, setDraft] = useState<Draft>(() => draftFromProfile(profile));
-  const [models, setModels] = useState<ModelOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -98,29 +92,6 @@ export function SubagentEditor({
     backdropAlpha: 0.4,
   });
   useBodyScrollLock(isVisible);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/models")
-      .then((response) => response.json())
-      .then((data: { modelList?: ModelOption[] }) => {
-        if (!cancelled) setModels(data.modelList ?? []);
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, []);
-
-  const groupedModels = useMemo(() => {
-    const groups = new Map<string, ModelOption[]>();
-    for (const model of models) {
-      const group = groups.get(model.provider) ?? [];
-      group.push(model);
-      groups.set(model.provider, group);
-    }
-    return [...groups.entries()];
-  }, [models]);
-
-  const modelValue = draft.model ? `${draft.model.provider}:${draft.model.modelId}` : "inherit";
 
   const patch = (next: Partial<Draft>) => setDraft((current) => ({ ...current, ...next }));
 
@@ -229,22 +200,12 @@ export function SubagentEditor({
                 maxLength={64}
               />
             </Field>
-            <Field label={t("Model")}>
-              <GroupedSelect
-                value={modelValue}
-                disabled={models.length === 0}
-                leadingOption={{ value: "inherit", label: t("Inherit parent model") }}
-                groups={groupedModels.map(([provider, providerModels]) => ({
-                  label: provider,
-                  options: providerModels.map((model) => ({ value: `${model.provider}:${model.id}`, label: model.name })),
-                }))}
-                onChange={(value) => {
-                  if (value === "inherit") { patch({ model: null }); return; }
-                  const [provider, ...id] = value.split(":");
-                  patch({ model: { provider, modelId: id.join(":") } });
-                }}
-              />
-            </Field>
+            <ModelSelect
+              label={t("Model")}
+              value={draft.model}
+              leadingOption={{ value: "inherit", label: t("Inherit parent model") }}
+              onChange={(model) => patch({ model })}
+            />
           </div>
 
           <Field label={t("Description")} hint={t("Shown to the parent model so it knows when to use this subagent.")}>
