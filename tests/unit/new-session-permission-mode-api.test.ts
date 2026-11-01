@@ -69,4 +69,31 @@ describe("new-session permission mode (agent API)", () => {
     expect(String(body.error)).toContain("Unknown permission mode");
     expect(body.sessionId).toBeUndefined();
   });
+
+  it("uses the configured default when the request does not pick a mode", async () => {
+    const before = ((await api("/api/settings")).body as { dangerous_patterns?: { full_access_by_default?: boolean } })
+      .dangerous_patterns?.full_access_by_default === true;
+    const setDefault = (value: boolean) =>
+      api("/api/dangerous-commands", {
+        method: "PUT",
+        body: JSON.stringify({ fullAccessByDefault: value }),
+      });
+    try {
+      expect((await setDefault(true)).status).toBe(200);
+      const { status, body } = await api("/api/agent/new", {
+        method: "POST",
+        body: JSON.stringify({ cwd: process.cwd(), type: "get_state" }),
+      });
+      expectOk(status, body);
+      const sessionId = body.sessionId as string;
+      const state = body.data as { permissionMode?: string; sessionFile?: string };
+      try {
+        expect(state.permissionMode).toBe("full_access");
+      } finally {
+        await cleanupSession(sessionId, state.sessionFile);
+      }
+    } finally {
+      await setDefault(before);
+    }
+  });
 });

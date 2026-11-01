@@ -25,6 +25,7 @@ import {
   type DangerousRulesDraft,
 } from "@/lib/shared/dangerous-commands-draft";
 import { Field, PrimaryButton, SETTINGS_RADIUS, TextInput, inputStyle } from "../controls";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { useSettingsPageData } from "../use-page-data";
 import type { DirtyReporter } from "../use-unsaved-changes";
@@ -248,6 +249,7 @@ export function DangerousCommandsSection({
   const [timeoutText, setTimeoutText] = useState(() => String(savedTimeoutMs));
   const [editor, setEditor] = useState<null | { mode: "new" } | { mode: "edit"; uid: string }>(null);
   const [saving, setSaving] = useState(false);
+  const [savingDefault, setSavingDefault] = useState(false);
   const [savedOk, flashSavedOk] = useTransientFlag();
 
   const current = draft ?? dangerousRulesDraft(savedRules, savedTimeoutMs);
@@ -277,6 +279,34 @@ export function DangerousCommandsSection({
     onDirtyChange?.("dangerous-commands", dirty);
   }, [dirty, onDirtyChange]);
 
+  const changeFullAccessByDefault = async (next: boolean) => {
+    if (savingDefault) return;
+    setSavingDefault(true);
+    try {
+      const response = await fetch("/api/dangerous-commands", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullAccessByDefault: next }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? `HTTP ${response.status}`);
+      }
+      setSettings({
+        ...config,
+        dangerous_patterns: { ...config.dangerous_patterns, full_access_by_default: next },
+      });
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    } finally {
+      setSavingDefault(false);
+    }
+  };
+
   const save = async () => {
     if (saving || problem) return;
     const body = dangerousRulesRequestBody(current);
@@ -293,7 +323,11 @@ export function DangerousCommandsSection({
       }
       setSettings({
         ...config,
-        dangerous_patterns: { rules: body.rules, timeout_ms: body.timeoutMs },
+        dangerous_patterns: {
+          ...config.dangerous_patterns,
+          rules: body.rules,
+          timeout_ms: body.timeoutMs,
+        },
       });
       if (data) mutate({ ...data, invalidUserRules: [] });
       setDraft(null);
@@ -311,6 +345,27 @@ export function DangerousCommandsSection({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
+      <section>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+              {t("Full access by default")}
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              {t(
+                "New sessions start in full access: dangerous commands run without asking. Self-protection still blocks commands that would kill the Pi Work server.",
+              )}
+            </p>
+          </div>
+          <ToggleSwitch
+            on={config.dangerous_patterns.full_access_by_default}
+            onChange={(next) => void changeFullAccessByDefault(next)}
+            disabled={savingDefault}
+            label={t("Full access by default")}
+          />
+        </div>
+      </section>
+
       <section>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>

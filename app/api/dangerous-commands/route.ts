@@ -4,6 +4,7 @@ import { validateDangerousRulesWrite } from "@/lib/shared/dangerous-commands-dra
 import {
   getEffectiveDangerousRuleSet,
   writeDangerousRules,
+  writeFullAccessByDefault,
 } from "@/lib/server/dangerous-patterns";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
@@ -35,6 +36,32 @@ export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {
     const raw = await req.json().catch(() => undefined);
+    if (
+      raw &&
+      typeof raw === "object" &&
+      !Array.isArray(raw) &&
+      "fullAccessByDefault" in raw &&
+      !("rules" in raw)
+    ) {
+      const value = (raw as Record<string, unknown>).fullAccessByDefault;
+      if (typeof value !== "boolean") {
+        log.warn("dangerous command default rejected", {
+          reason: "fullAccessByDefault must be a boolean",
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json(
+          { error: "fullAccessByDefault must be a boolean" },
+          { status: 400 },
+        );
+      }
+      writeFullAccessByDefault(value);
+      log.info("dangerous command default written", {
+        fullAccessByDefault: value,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json({ success: true, fullAccessByDefault: value });
+    }
+
     const parsed = validateDangerousRulesWrite(raw, {
       builtinNames: defaultDangerousRuleNames(process.platform),
     });

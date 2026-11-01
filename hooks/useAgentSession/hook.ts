@@ -10,6 +10,7 @@ import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
 import { setSessionPermissionMode } from "../permissionModeStore";
+import { useSettings } from "../settingsStore";
 import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
@@ -138,8 +139,18 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
+  const settings = useSettings();
+  const defaultNewSessionPermissionMode: PermissionMode =
+    settings?.dangerous_patterns.full_access_by_default === true
+      ? "full_access"
+      : DEFAULT_PERMISSION_MODE;
   const [newSessionPermissionMode, setNewSessionPermissionMode] =
-    useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
+    useState<PermissionMode>(defaultNewSessionPermissionMode);
+  const newSessionPermissionModeChosenRef = useRef(false);
+  useEffect(() => {
+    if (!isNew || newSessionPermissionModeChosenRef.current) return;
+    setNewSessionPermissionMode(defaultNewSessionPermissionMode);
+  }, [isNew, defaultNewSessionPermissionMode]);
   const [toolSelection, setToolSelection] = useState<ToolSelection>(() => "all");
   useEffect(() => {
     if (!isNew || !newSessionCwd) return;
@@ -529,6 +540,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     const sid = sessionIdRef.current;
     const current = runtimeStateRef.current;
     if (!sid) {
+      newSessionPermissionModeChosenRef.current = true;
       setNewSessionPermissionMode(mode);
       return;
     }

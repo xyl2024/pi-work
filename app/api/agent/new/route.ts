@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/server/rpc-manager";
+import { getFullAccessByDefault } from "@/lib/server/dangerous-patterns";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { DEFAULT_PERMISSION_MODE, isPermissionMode } from "@/lib/shared/permission-mode";
 
@@ -52,6 +53,8 @@ export async function POST(req: Request) {
 
     if (isPermissionMode(permissionMode) && permissionMode !== DEFAULT_PERMISSION_MODE) {
       await session.send({ type: "set_permission_mode", mode: permissionMode });
+    } else if (!isPermissionMode(permissionMode) && getFullAccessByDefault()) {
+      await session.send({ type: "set_permission_mode", mode: "full_access" });
     }
 
     const result = await session.send(promptCommand);

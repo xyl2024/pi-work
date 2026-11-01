@@ -37,6 +37,7 @@ import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
   rules: [],
   timeout_ms: 300_000,
+  full_access_by_default: false,
 };
 
 const CONFIGURABLE_BUTTON_IDS: readonly RightBarButtonId[] = Object.keys(
@@ -133,7 +134,11 @@ function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
   const timeout_ms = typeof timeoutRaw === "number" && Number.isFinite(timeoutRaw) && timeoutRaw > 0
     ? timeoutRaw
     : DEFAULT_DANGEROUS_PATTERNS.timeout_ms;
-  return { rules, timeout_ms };
+  const full_access_by_default =
+    typeof obj.full_access_by_default === "boolean"
+      ? obj.full_access_by_default
+      : DEFAULT_DANGEROUS_PATTERNS.full_access_by_default;
+  return { rules, timeout_ms, full_access_by_default };
 }
 
 function parseRightSideBar(raw: unknown): RightSideBarConfig {

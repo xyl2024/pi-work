@@ -23,6 +23,9 @@ export const permissions = {
   "Dangerous commands": "危险命令",
   "Auto-deny": "自动拒绝",
   "Full access": "完全访问",
+  "Full access by default": "默认开启完全访问",
+  "New sessions start in full access: dangerous commands run without asking. Self-protection still blocks commands that would kill the Pi Work server.":
+    "新会话默认使用完全访问:危险命令不再询问,直接执行;自保护仍会拦下会杀掉 Pi Work 服务进程的命令。",
   "Auto-deny dangerous commands": "自动拒绝危险命令",
   "Full access to dangerous commands": "危险命令完全访问",
   "This unattended session denies dangerous commands instead of asking.":

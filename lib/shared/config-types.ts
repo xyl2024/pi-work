@@ -10,6 +10,7 @@ export interface DangerousPatternRule {
 export interface DangerousPatternsConfig {
   rules: DangerousPatternRule[];
   timeout_ms: number;
+  full_access_by_default: boolean;
 }
 
 export interface AppendSystemConfig {

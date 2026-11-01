@@ -216,4 +216,37 @@ describe("PUT /api/dangerous-commands", () => {
     });
     expect(put.status).toBe(400);
   });
+
+  it("round-trips the default full access switch without touching the rules", async () => {
+    const before = await readRules();
+    const next = !before.full_access_by_default;
+    try {
+      const put = await api("/api/dangerous-commands", {
+        method: "PUT",
+        body: JSON.stringify({ fullAccessByDefault: next }),
+      });
+      expect(put.status).toBe(200);
+
+      const after = await readRules();
+      expect(after.full_access_by_default).toBe(next);
+      expect(after.rules).toEqual(before.rules);
+      expect(after.timeout_ms).toBe(before.timeout_ms);
+
+      await writeRules(before.rules, before.timeout_ms);
+      expect((await readRules()).full_access_by_default).toBe(next);
+    } finally {
+      await api("/api/dangerous-commands", {
+        method: "PUT",
+        body: JSON.stringify({ fullAccessByDefault: before.full_access_by_default }),
+      });
+    }
+  });
+
+  it("rejects a non-boolean default full access switch with 400", async () => {
+    const put = await api("/api/dangerous-commands", {
+      method: "PUT",
+      body: JSON.stringify({ fullAccessByDefault: "yes" }),
+    });
+    expect(put.status).toBe(400);
+  });
 });

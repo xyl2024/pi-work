@@ -68,6 +68,21 @@ export function getDangerousPatternTimeoutMs(): number {
   return readConfig().dangerous_patterns.timeout_ms;
 }
 
+export function getFullAccessByDefault(): boolean {
+  return readConfig().dangerous_patterns.full_access_by_default;
+}
+
+export function writeFullAccessByDefault(value: boolean): void {
+  const onDisk = readConfig();
+  writeConfig({
+    ...onDisk,
+    dangerous_patterns: {
+      ...onDisk.dangerous_patterns,
+      full_access_by_default: value,
+    },
+  });
+}
+
 export function writeDangerousRules(
   rules: readonly DangerousPatternRule[],
   timeoutMs: number | null,
@@ -76,6 +91,7 @@ export function writeDangerousRules(
   writeConfig({
     ...onDisk,
     dangerous_patterns: {
+      ...onDisk.dangerous_patterns,
       rules: [...rules],
       timeout_ms: timeoutMs ?? onDisk.dangerous_patterns.timeout_ms,
     },
