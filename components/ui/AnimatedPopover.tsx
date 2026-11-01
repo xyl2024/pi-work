@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import type { CSSProperties, MouseEventHandler, ReactNode, Ref } from "react";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 
-export function AnimatedPopover({ open, style, maxHeight, role, panelRef, onMouseEnter, onMouseLeave, children }: {
+export function AnimatedPopover({ open, style, maxHeight, role, inertWhenClosed = false, panelRef, onMouseEnter, onMouseLeave, children }: {
   open: boolean;
   style?: CSSProperties;
   maxHeight?: number;
   role?: string;
+  inertWhenClosed?: boolean;
   panelRef?: Ref<HTMLDivElement>;
   onMouseEnter?: MouseEventHandler<HTMLDivElement>;
   onMouseLeave?: MouseEventHandler<HTMLDivElement>;
@@ -36,6 +37,7 @@ export function AnimatedPopover({ open, style, maxHeight, role, panelRef, onMous
       ref={panelRef}
       role={role}
       aria-hidden={!open}
+      inert={inertWhenClosed && !open ? true : undefined}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{

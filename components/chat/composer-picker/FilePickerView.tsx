@@ -1,66 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/shared/file-paths";
 import { getFileIcon, FolderIcon } from "../../files/FileIcons";
-import {
-  createComposerFilePicker,
-  type ComposerFileEntry,
-  type ComposerFilePickerAdapter,
-} from "@/lib/client/composer-file-picker";
+import type { ComposerFileEntry } from "@/lib/client/composer-picker";
+import { useComposerPicker } from "./useComposerPicker";
+import { isInteractiveKeyboardTarget } from "./keyboard-target";
 import type { ComposerPickerViewProps } from "./types";
 
-function createAdapter(cwd: string): ComposerFilePickerAdapter {
-  return {
-    async list(directory, { signal }) {
-      const params = new URLSearchParams({ cwd, directory });
-      const response = await fetch(`/api/file-mentions?${params}`, { signal });
-      if (!response.ok) throw new Error("Failed to load file");
-      const data = await response.json() as { entries?: { name: string; isDir: boolean }[] };
-      return data.entries ?? [];
-    },
-  };
-}
-
-export function FilePickerView({ picker, close, cwd, onInsertText }: ComposerPickerViewProps) {
+export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerViewProps) {
   const { t } = useI18n();
-  const filePicker = useMemo(
-    () => createComposerFilePicker({ adapter: createAdapter(cwd ?? "") }),
-    [cwd],
-  );
-  const snapshot = filePicker.useSnapshot();
-
-  useEffect(() => {
-    if (!cwd) return;
-    void filePicker.load();
-    return () => filePicker.reset();
-  }, [cwd, filePicker]);
+  const snapshot = useComposerPicker(picker);
+  const file = snapshot.file;
 
   const activateEntry = useCallback((entry?: ComposerFileEntry) => {
-    if (!cwd) return;
-    void filePicker.activate(entry).then((result) => {
+    void picker.activateFile(entry).then((result) => {
       if (result?.kind !== "insert") return;
       onInsertText(result.text);
-      close();
     });
-  }, [close, cwd, filePicker, onInsertText]);
+  }, [onInsertText, picker]);
 
   useEffect(() => {
+    if (!snapshot.open || snapshot.view !== "file") return;
     const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === "Enter" || event.key === " ") && isInteractiveKeyboardTarget(event.target)) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        filePicker.moveActive(event.key === "ArrowDown" ? 1 : -1);
+        picker.moveFileActive(event.key === "ArrowDown" ? 1 : -1);
         return;
       }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
-        filePicker.nextPage(event.key === "ArrowRight" ? 1 : -1);
+        picker.nextFilePage(event.key === "ArrowRight" ? 1 : -1);
         return;
       }
       if (event.key === " " && !event.isComposing) {
         event.preventDefault();
-        filePicker.toggleSelected();
+        picker.toggleFileSelected();
         return;
       }
       if (event.key === "Enter" && !event.isComposing) {
@@ -70,20 +47,21 @@ export function FilePickerView({ picker, close, cwd, onInsertText }: ComposerPic
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [activateEntry, filePicker]);
+  }, [activateEntry, picker, snapshot.open, snapshot.view]);
 
   const confirmSelection = () => {
-    const text = filePicker.confirm();
+    const text = picker.confirmFileSelection();
     if (!text) return;
     onInsertText(text);
-    close();
   };
 
-  const title = snapshot.directory
-    ? `${snapshot.directory}/`
+  const title = file.directory
+    ? `${file.directory}/`
     : cwd ? getFileName(cwd) : "/";
-  const selectedCount = snapshot.selected.length;
-  const pageCount = filePicker.pageCount();
+  const selectedCount = file.selected.length;
+  const pageCount = picker.filePageCount();
+  const visibleEntries = picker.fileVisibleEntries();
+  const hasEntries = picker.hasFileEntries();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "100%" }}>
@@ -107,63 +85,68 @@ export function FilePickerView({ picker, close, cwd, onInsertText }: ComposerPic
         </span>
       </div>
 
-      {snapshot.loading ? (
+      {file.loading ? (
         <div style={{ padding: "12px", fontSize: 12, color: "var(--text-dim)" }}>{t("Loading files...")}</div>
-      ) : snapshot.error ? (
+      ) : file.error ? (
         <div style={{ padding: "12px", fontSize: 12, color: "var(--text-dim)" }}>
           <div>{t("Failed to load file")}</div>
-          <button type="button" onClick={() => void filePicker.retry()} style={{ marginTop: 6, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>
+          <button type="button" onClick={() => void picker.retryFileDirectory()} style={{ marginTop: 6, padding: "3px 7px", fontSize: 11, cursor: "pointer" }}>
             {t("Retry")}
           </button>
         </div>
-      ) : snapshot.entries.length === 0 ? (
+      ) : file.entries.length === 0 ? (
         <div style={{ padding: "12px", fontSize: 12, color: "var(--text-dim)" }}>{t("Empty folder")}</div>
       ) : (
-        <div role="listbox" aria-label={t("Files")} style={{ overflowY: "auto", minHeight: 0, padding: "4px" }}>
-          {filePicker.visibleEntries().map((entry, index) => {
-            const active = index === snapshot.activeIndex;
-            const selected = snapshot.selected.includes(entry.path);
-            return (
-              <div
-                key={`${entry.path}:${entry.isParent ? "parent" : "entry"}`}
-                role="option"
-                aria-selected={active}
-                onMouseEnter={() => filePicker.setActiveIndex(index)}
-                onClick={() => void activateEntry(entry)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  width: "100%", padding: "7px 8px",
-                  background: active ? "var(--bg-selected)" : "none",
-                  borderRadius: 6,
-                  color: active ? "var(--text)" : "var(--text-muted)",
-                  cursor: "pointer", fontSize: 12,
-                }}
-              >
-                <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 17, flexShrink: 0, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
-                  {entry.isParent ? "↩" : entry.isDir ? <FolderIcon size={14} name={entry.name} /> : getFileIcon(entry.name, 14)}
-                </span>
-                <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
-                  {entry.name}{entry.isDir && !entry.isParent ? "/" : ""}
-                </span>
-                {!entry.isDir && (
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    aria-label={t("Select {name}", { name: entry.name })}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={() => filePicker.toggleSelected(entry)}
-                    style={{ flexShrink: 0, cursor: "pointer" }}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <>
+          {!hasEntries && (
+            <div style={{ padding: "10px 12px 2px", fontSize: 12, color: "var(--text-dim)" }}>{t("Empty folder")}</div>
+          )}
+          <div role="listbox" aria-label={t("Files")} style={{ overflowY: "auto", minHeight: 0, padding: "4px" }}>
+            {visibleEntries.map((entry, index) => {
+              const active = index === file.activeIndex;
+              const selected = file.selected.includes(entry.path);
+              return (
+                <div
+                  key={`${entry.path}:${entry.isParent ? "parent" : "entry"}`}
+                  role="option"
+                  aria-selected={active}
+                  onMouseEnter={() => picker.setFileActiveIndex(index)}
+                  onClick={() => void activateEntry(entry)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", padding: "7px 8px",
+                    background: active ? "var(--bg-selected)" : "none",
+                    borderRadius: 6,
+                    color: active ? "var(--text)" : "var(--text-muted)",
+                    cursor: "pointer", fontSize: 12,
+                  }}
+                >
+                  <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 17, flexShrink: 0, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
+                    {entry.isParent ? "↩" : entry.isDir ? <FolderIcon size={14} name={entry.name} /> : getFileIcon(entry.name, 14)}
+                  </span>
+                  <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
+                    {entry.name}{entry.isDir && !entry.isParent ? "/" : ""}
+                  </span>
+                  {!entry.isDir && (
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      aria-label={t("Select {name}", { name: entry.name })}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={() => picker.toggleFileSelected(entry)}
+                      style={{ flexShrink: 0, cursor: "pointer" }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderTop: snapshot.entries.length > 0 ? "1px solid var(--border)" : "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderTop: file.entries.length > 0 ? "1px solid var(--border)" : "none" }}>
         <span style={{ flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {t("↑↓ switch, ←→ page, Enter to pick")}{pageCount > 1 ? ` (${snapshot.page + 1}/${pageCount})` : ""}
+          {t("↑↓ switch, ←→ page, Enter to pick")}{pageCount > 1 ? ` (${file.page + 1}/${pageCount})` : ""}
         </span>
         {selectedCount > 0 && (
           <button

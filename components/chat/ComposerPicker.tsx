@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 import { ICONS } from "../ui/icons";
 import { FilePickerView } from "./composer-picker/FilePickerView";
 import { SkillPickerView } from "./composer-picker/SkillPickerView";
+import { useComposerPicker } from "./composer-picker/useComposerPicker";
+import { isInteractiveKeyboardTarget } from "./composer-picker/keyboard-target";
 import { chatInputMetrics } from "./chat-input/metrics";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 import {
@@ -42,14 +44,40 @@ export function ComposerPicker({
   onOpenSkillsPanel?: () => void;
 }) {
   const { t } = useI18n();
-  const snapshot = picker.useSnapshot();
+  const snapshot = useComposerPicker(picker);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [available, setAvailable] = useState({ maxWidth: MAIN_WIDTH, maxHeight: MAX_HEIGHT });
+
+  const updateAvailable = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportTop = window.visualViewport?.offsetTop ?? 0;
+    const maxWidth = Math.max(0, Math.min(viewportWidth - margin * 2, viewportWidth - rect.left - margin));
+    const maxHeight = Math.max(0, Math.min(MAX_HEIGHT, rect.top - viewportTop - margin));
+    setAvailable((previous) => previous.maxWidth === maxWidth && previous.maxHeight === maxHeight
+      ? previous
+      : { maxWidth, maxHeight });
+  }, []);
 
   const activateItem = useCallback((index: number) => {
     const result = picker.activate(index);
     if (result?.action === "image") onPickImage();
   }, [onPickImage, picker]);
+
+  useLayoutEffect(() => {
+    if (!snapshot.open) return;
+    updateAvailable();
+    window.addEventListener("resize", updateAvailable);
+    window.visualViewport?.addEventListener("resize", updateAvailable);
+    return () => {
+      window.removeEventListener("resize", updateAvailable);
+      window.visualViewport?.removeEventListener("resize", updateAvailable);
+    };
+  }, [snapshot.open, updateAvailable]);
 
   useEffect(() => {
     if (!snapshot.open) return;
@@ -77,6 +105,7 @@ export function ComposerPicker({
         return;
       }
       if (event.key === "Enter" && !event.isComposing) {
+        if (isInteractiveKeyboardTarget(event.target)) return;
         event.preventDefault();
         activateItem(snapshot.activeIndex);
       }
@@ -121,14 +150,15 @@ export function ComposerPicker({
 
       <AnimatedPopover
         open={snapshot.open}
-        maxHeight={MAX_HEIGHT}
+        maxHeight={available.maxHeight}
+        inertWhenClosed
         role={snapshot.view === "main" ? "listbox" : "dialog"}
         style={{
           position: "absolute",
           bottom: "calc(100% + 6px)",
           left: 0,
           zIndex: 210,
-          width: snapshot.view === "main" ? MAIN_WIDTH : SECONDARY_WIDTH,
+          width: Math.max(0, Math.min(snapshot.view === "main" ? MAIN_WIDTH : SECONDARY_WIDTH, available.maxWidth)),
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
           borderRadius: 10,

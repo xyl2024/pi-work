@@ -20,6 +20,7 @@ import { chatInputMetrics } from "./chat-input/metrics";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import { createComposerPicker } from "@/lib/client/composer-picker";
+import { createFileMentionAdapter } from "@/lib/client/file-mentions-io";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
@@ -110,7 +111,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const composerPicker = useMemo(() => createComposerPicker(), []);
+  const composerPicker = useMemo(
+    () => createComposerPicker({ fileAdapter: createFileMentionAdapter(cwd ?? "") }),
+    [cwd],
+  );
 
   const {
     attachedImages,
