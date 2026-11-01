@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import { isSubagentTerminalStatus, type SubagentSessionStatsView, type SubagentTaskSummary } from "@/lib/shared/types";
+import { hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
+import type { SubagentSessionStatsView, SubagentTaskSummary } from "@/lib/shared/types";
 import { PopoverPortal, useDismissableLayer } from "@/components/ui/popover";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SubagentSessionsPopover } from "./subagent-sessions/SubagentSessionsPopover";
@@ -77,7 +78,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     }
   }, [loadTasks, parentSessionId, refreshKey]);
 
-  const hasUnfinishedTask = tasks.some((task) => !isSubagentTerminalStatus(task.status));
+  const hasUnfinishedTask = hasUnfinishedSubagentTask(tasks);
 
   useEffect(() => {
     if (!parentSessionId || (!hasUnfinishedTask && !open)) return;
@@ -137,6 +138,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
 
   const label = t("SubAgent");
   const disabled = !parentSessionId;
+  const running = hasUnfinishedTask && !disabled;
 
   return (
     <div ref={rootRef} className="pointer-events-auto relative">
@@ -148,10 +150,13 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
         aria-label={label}
         aria-expanded={open}
         aria-haspopup="dialog"
+        data-subagent-running-pulse={running ? "" : undefined}
         className="flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
         style={{
           background: "var(--bg-panel)",
-          borderColor: "var(--border)",
+          borderColor: running
+            ? "color-mix(in srgb, var(--accent) 55%, var(--border))"
+            : "var(--border)",
           color: disabled ? "var(--text-dim)" : "var(--text-muted)",
           opacity: disabled ? 0.45 : 1,
         }}
