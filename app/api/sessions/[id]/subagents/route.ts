@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { listSubagentTasks } from "@/lib/server/subagent-store";
 import { resolveSubagentTaskStatus } from "@/lib/server/subagent-queries";
 import { readSubagentSessionStats } from "@/lib/server/sessions/reader";
+import { readSubagentSessionViews } from "@/lib/server/subagent-session-views";
 import { createLogger } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/subagents");
@@ -22,19 +23,22 @@ export async function GET(_request: Request, { params }: RouteContext) {
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
     }));
-    const tasks = await Promise.all(
-      base.map(async (task) => {
-        const stats = task.childSessionId ? await readSubagentSessionStats(task.childSessionId) : null;
-        return {
-          ...task,
-          assistantCount: stats?.assistantCount ?? null,
-          readCount: stats?.readCount ?? null,
-          model: stats?.model ?? null,
-        };
-      }),
-    );
+    const [tasks, sessions] = await Promise.all([
+      Promise.all(
+        base.map(async (task) => {
+          const stats = task.childSessionId ? await readSubagentSessionStats(task.childSessionId) : null;
+          return {
+            ...task,
+            assistantCount: stats?.assistantCount ?? null,
+            readCount: stats?.readCount ?? null,
+            model: stats?.model ?? null,
+          };
+        }),
+      ),
+      readSubagentSessionViews(base),
+    ]);
     return NextResponse.json(
-      { tasks },
+      { tasks, sessions },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
