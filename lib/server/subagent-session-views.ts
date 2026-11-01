@@ -1,5 +1,6 @@
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import type { SubagentSessionContextUsage, SubagentSessionStatsView } from "@/lib/shared/types";
+import { summarizeSessions } from "@/lib/server/token-audit-store";
 import { readSessionDetails, readSubagentSessionStats } from "@/lib/server/sessions/reader";
 
 interface SubagentSessionTaskRef {
@@ -40,6 +41,17 @@ async function readOneSessionMetrics(sessionId: string): Promise<SubagentSession
       readSubagentSessionStats(sessionId),
       readSessionDetails(sessionId),
     ]);
+    if (!stats) return {
+      ...emptyMetrics(),
+      title: details?.info
+        ? sessionDisplayTitle({
+            id: details.info.id,
+            name: details.info.name,
+            firstMessage: details.info.firstMessage,
+          })
+        : null,
+    };
+    const usage = summarizeSessions([sessionId]);
     return {
       title: details?.info
         ? sessionDisplayTitle({
@@ -48,11 +60,13 @@ async function readOneSessionMetrics(sessionId: string): Promise<SubagentSession
             firstMessage: details.info.firstMessage,
           })
         : null,
-      assistantCount: stats?.assistantCount ?? null,
-      toolCallCount: null,
-      avgTtftMs: null,
-      avgGenerationTps: null,
-      model: stats?.model ? { provider: null, modelId: stats.model } : null,
+      assistantCount: stats.assistantCount,
+      toolCallCount: stats.toolCallCount,
+      avgTtftMs: usage.avgTtftMs,
+      avgGenerationTps: usage.avgGenerationTps,
+      model: stats.provider || stats.model
+        ? { provider: stats.provider, modelId: stats.model }
+        : null,
     };
   } catch {
     return emptyMetrics();
