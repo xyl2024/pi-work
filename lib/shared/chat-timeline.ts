@@ -20,6 +20,7 @@ export interface ChatTimelineInput {
 export interface ChatTimeline {
   readonly visibleMessages: readonly AgentMessage[];
   readonly visibleCount: number;
+  readonly persistedMessageCount: number;
   readonly toolCallVisibleIndices: ReadonlyMap<string, number>;
   visibleIndexOfSession(sessionIndex: number): number;
   sessionIndexOfVisible(visibleIndex: number): number | null;
@@ -62,6 +63,7 @@ export function buildChatTimeline(input: ChatTimelineInput): ChatTimeline {
   return {
     visibleMessages,
     visibleCount: visibleMessages.length,
+    persistedMessageCount: input.entryIds.length,
     toolCallVisibleIndices,
     visibleIndexOfSession(sessionIndex) {
       const clamped = Math.max(0, Math.min(sessionIndex, messages.length));
@@ -153,6 +155,17 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
     return input.entryIds[sessionIndex] ?? null;
   };
 
+  const placeBeforeVisible = (visibleIndex: number, divider: ChatTimelineDivider) => {
+    let dividers = beforeVisible.get(visibleIndex);
+    if (!dividers) {
+      dividers = [];
+      beforeVisible.set(visibleIndex, dividers);
+    }
+    dividers.push(divider);
+    const targetEntryId = entryIdAtVisibleIndex(visibleIndex);
+    if (targetEntryId) beforeEntryId.set(targetEntryId, dividers);
+  };
+
   const place = (entryId: string | undefined, divider: ChatTimelineDivider): DividerPlacement => {
     if (!entryId) return "unanchored";
     if (!renderedEntryIds.has(entryId)) return "unrendered";
@@ -160,13 +173,7 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
     if (visibleIndex === null) return "unrendered";
     const targetEntryId = entryIdAtVisibleIndex(visibleIndex);
     if (!targetEntryId) return "unanchored";
-    let dividers = beforeVisible.get(visibleIndex);
-    if (!dividers) {
-      dividers = [];
-      beforeVisible.set(visibleIndex, dividers);
-    }
-    dividers.push(divider);
-    beforeEntryId.set(targetEntryId, dividers);
+    placeBeforeVisible(visibleIndex, divider);
     return "placed";
   };
 
@@ -179,7 +186,9 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
   const firstVisibleUserIndex = input.timeline.visibleMessages.findIndex(
     (message) => message.role === "user",
   );
-  const retainedMarkers: ChangeMarker[] = [];
+  const pendingVisibleIndex = input.timeline.visibleIndexOfSession(input.timeline.persistedMessageCount);
+  const hasPendingMessages = pendingVisibleIndex < input.timeline.visibleCount;
+  const retainedMarkers: { marker: ChangeMarker; anchor: ChangeAnchor }[] = [];
   if (firstVisibleUserIndex !== -1) {
     const seenAnchors = new Set<string>();
     const changeMarkers = input.changeMarkers ?? [];
@@ -187,7 +196,12 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
       const marker = changeMarkers[index];
       let anchor: ChangeAnchor;
       if (!marker.beforeMessageEntryId) {
-        anchor = { kind: "trailing" };
+        if (hasPendingMessages) {
+          if (pendingVisibleIndex <= firstVisibleUserIndex) continue;
+          anchor = { kind: "visible", index: pendingVisibleIndex };
+        } else {
+          anchor = { kind: "trailing" };
+        }
       } else {
         const visibleIndex = input.timeline.visibleIndexOfEntry(marker.beforeMessageEntryId);
         if (visibleIndex === null || visibleIndex <= firstVisibleUserIndex) continue;
@@ -196,13 +210,15 @@ export function buildTimelineDividers(input: TimelineDividerInput): TimelineDivi
       const anchorKey = changeAnchorKey(marker.kind, anchor);
       if (seenAnchors.has(anchorKey)) continue;
       seenAnchors.add(anchorKey);
-      retainedMarkers.push(marker);
+      retainedMarkers.push({ marker, anchor });
     }
     retainedMarkers.reverse();
   }
 
-  for (const marker of retainedMarkers) {
-    if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
+  for (const { marker, anchor } of retainedMarkers) {
+    if (!marker.beforeMessageEntryId && anchor.kind === "visible") {
+      placeBeforeVisible(anchor.index, { kind: "change", marker });
+    } else if (place(marker.beforeMessageEntryId, { kind: "change", marker }) === "unanchored") {
       trailingChangeMarkers.push(marker);
     }
   }

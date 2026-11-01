@@ -338,6 +338,60 @@ describe("buildTimelineDividers", () => {
     expect(dividers.beforeVisible.size).toBe(0);
   });
 
+  it.each(["model", "thinking_level"] as const)("keeps a pending %s change before the new turn while messages stream", (kind) => {
+    const marker = kind === "model" ? modelChange("mc1") : thinkingChange("tl1");
+    const entryIds = ["old-user", "old-answer"];
+    const history = [user("previous task"), assistant([{ type: "text", text: "previous answer" }])];
+    for (const streamedMessages of [
+      [user("new task")],
+      [user("new task"), assistant([{ type: "text", text: "partial answer" }])],
+      [user("new task"), assistant([toolCall("call-live")]), toolResult("call-live"), assistant([{ type: "text", text: "more output" }])],
+    ]) {
+      const timeline = timelineOf([...history, ...streamedMessages], entryIds);
+      const dividers = buildTimelineDividers({ timeline, entryIds, changeMarkers: [marker] });
+      expect(dividers.beforeVisible.get(2)).toEqual([{ kind: "change", marker }]);
+      expect(dividers.trailingChangeMarkers).toEqual([]);
+    }
+  });
+
+  it("keeps both pending change kinds before the task after invisible history entries", () => {
+    const entryIds = ["old-user", "old-call", "old-result"];
+    const messages = [user("previous task"), assistant([toolCall("call-a")]), toolResult("call-a"), user("new task")];
+    const markers = [modelChange("mc1"), modelChange("mc2"), thinkingChange("tl1")];
+    const dividers = buildTimelineDividers({
+      timeline: timelineOf(messages, entryIds),
+      entryIds,
+      changeMarkers: markers,
+    });
+    expect(dividers.beforeVisible.get(2)).toEqual([
+      { kind: "change", marker: markers[1] },
+      { kind: "change", marker: markers[2] },
+    ]);
+    expect(dividers.beforeEntryId.size).toBe(0);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
+  });
+
+  it("suppresses initial changes before the first pending user message", () => {
+    const dividers = buildTimelineDividers({
+      timeline: timelineOf([user("first task")], []),
+      entryIds: [],
+      changeMarkers: [modelChange("mc1"), thinkingChange("tl1")],
+    });
+    expect(dividers.beforeVisible.size).toBe(0);
+    expect(dividers.trailingChangeMarkers).toEqual([]);
+  });
+
+  it("does not treat replay-cropped persisted messages as pending messages", () => {
+    const entryIds = ["e0", "e1", "e2", "e3"];
+    const dividers = buildTimelineDividers({
+      timeline: timelineOf(messages, entryIds),
+      entryIds: entryIds.slice(0, 2),
+      changeMarkers: [modelChange("mc1")],
+    });
+    expect(dividers.beforeVisible.size).toBe(0);
+    expect(dividers.trailingChangeMarkers).toEqual([modelChange("mc1")]);
+  });
+
   it("produces no dividers when no events are supplied", () => {
     const dividers = buildTimelineDividers({ timeline, entryIds });
     expect(dividers.beforeVisible.size).toBe(0);

@@ -394,7 +394,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return map;
   }, [messages, inFlightToolResults]);
 
-  const { beforeEntryId, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
+  const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
     return buildTimelineDividers({
       timeline,
       entryIds: renderEntryIds,
@@ -896,8 +896,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               let streamingTurnDiffStats: ToolDiffStats | null = null;
               const maybeDivider = (idx: number): React.ReactNode => {
                 const nodes: React.ReactNode[] = [];
-                const entryId = renderEntryIds[idx];
-                for (const divider of (entryId ? beforeEntryId.get(entryId) : undefined) ?? []) {
+                const visibleIndex = timeline.visibleIndexOfSession(idx);
+                const dividers = isVisibleChatMessage(renderMessages[idx]) ? beforeVisible.get(visibleIndex) : undefined;
+                for (const divider of dividers ?? []) {
                   if (divider.kind === "compaction") {
                     nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
                   } else {
