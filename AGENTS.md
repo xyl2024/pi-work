@@ -1,132 +1,19 @@
-# AGENTS.md
-
 ## 项目定位
 
-Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对话、文件操作和一组辅助面板。技术栈为 TypeScript、React 19、Next.js App Router、Tailwind CSS、SQLite；要求 Node.js 22+。`electron-shell/` 是可选的 Electron 外壳，不是核心 Web 应用。
+Pi Work 是 pi coding agent 的 Web UI。
 
-## 主要功能边界
+## 开发要求
 
-- **会话与 Agent**：多会话工作区和标签页、SSE 流式事件、分支树导航、上下文压缩、模型/推理强度/工具选择、会话搜索/重命名/删除/导出/自动命名。
-- **项目工作区**：按 cwd 浏览和搜索文件，编辑、重命名、删除和查看文本、代码、Diff、图片、音频、视频、PDF、SVG、Mermaid、ECharts；支持 Git Diff 和独立终端。
-- **辅助面板**：右栏面板为 Context、翻译、Git Diff、收藏、Token 审计、LLM API 审计、模型配置（Models config）、MCP 服务器（MCP servers）、技能（Skills）、定时任务（Scheduled tasks）、频道（Channels）、Conversation Tree；另有独立的终端面板。
-- **配置与集成**：模型/API Key/OAuth、Prompt、Skill、危险命令确认、自定义 Agent 工具、右侧按钮、音效和界面设置；另有微信登录/收发消息及 Grokbot 功能。
-
-## 目录与架构
-
-```
-pi-work/
-├── app/                # Next.js App Router 入口；app/api/**/route.ts 只做适配，业务逻辑放 lib/server
-│   └── api/            # 按领域的路由目录：agent、agent-settings、append-system、auth、btw、channels、
-│                       #   create-space、cwd-aliases/-icons/-tools、default-cwd、exchange-rate、favorites、
-│                       #   file-mentions、files、git、home、llm-audit、mcp、models、
-│                       #   models-config、profile、scheduled-tasks、
-│                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
-│                       #   token-audit、translate、workspaces
-├── components/         # React UI，按产品功能拆分
-│   ├── app-shell/      # 应用外壳与命令面板
-│   ├── chat/           # 聊天、输入、消息渲染、模型/推理强度/工具选择、权限确认、Ask User Questions
-│   ├── sessions/       # 会话侧栏、标签页、搜索、会话库、多 cwd、收藏、Conversation Tree
-│   ├── files/          # 文件浏览、Git 状态与查看器（file-viewer/ 支持文本/代码、图片、音频、视频、PDF）
-│   ├── panels/         # 右侧面板 body 组件（Context、Translate、Tokens、LLM Audit、Models config、MCP、
-│   │                   #   Skills、Scheduler、Channels、Git Diff 含 Git Log、TerminalPanel）；models-config/、
-│   │                   #   mcp/、skills/、scheduler/ 与 channels/ 是模型配置 / MCP / 技能 / 定时任务 / 频道面板视图的页；
-│   │                   #   right-bar/ 是按钮列，
-│   │                   #   desc.tsx 注册描述符（按钮含模型配置、MCP、技能、定时任务、频道；
-│   │                   #   Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
-│   ├── settings/       # 设置弹窗与各配置区块（Prompt、Profile、重试、Append System、
-│   │                   #   自定义工具、文件预览、右侧按钮、音效；models-config/ 的模型表单控件
-│   │                   #   仍在此，供面板视图复用）
-│   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
-│   ├── ui/             # 公共 UI 原语、图标与动画图标
-│   └── scheduler/ grokbot/ channels/ auth/ effects/
-│                       # 定时任务面板视图的共享原语、Grokbot、频道活动流、登录、庆祝动画
-├── hooks/              # 客户端 hooks、store 与会话状态；useAgentSession/ 只从 index.ts 导出，
-│                       # 内部文件不是稳定 API
-├── lib/
-│   ├── client/         # 浏览器端工具、状态与展示辅助（Agent client、命令、文件图标、Git 状态、
-│   │                   # Grokbot 数据、Monaco 主题、UI 音效）
-│   ├── shared/         # 客户端/服务端共用的类型、协议与纯函数（跨层禁令见「依赖与安全边界」）
-│   └── server/         # 仅服务端：文件系统、SQLite、pi SDK、RPC、会话、终端、后台循环与第三方集成
-│       ├── rpc-manager.ts   # 创建并复用进程内 AgentSessionWrapper：pi session、命令分发、SSE 事件、
-│       │                    # 权限确认、Ask User Questions、自定义工具与审计上下文
-│       ├── sessions/        # 会话读取、搜索与变更（JSONL 原子写入，并同步清理缓存/sidecar）
-│       ├── session-export/ files/ terminal/ wechat/ scheduler/ channels/
-│       │                    notifications/ self-tools/ turn/ subagent-*
-│       └── *-db.ts *-store.ts   # 各功能的 SQLite / JSON store（LLM Audit、Token Audit、
-│                                #   Profile、Subagent）
-├── scripts/            # 迁移、恢复、部署与字体处理
-├── agent-skills/       # 项目维护的 Agent skill
-├── bin/pi-work.js      # CLI 启动入口
-├── docs/               # adr/（架构决策）、agents/（issue-tracker、triage-labels、domain 约定）
-├── tests/              # vitest 测试（unit/ + 隔离实例，见 tests/README.md）
-├── public/             # 静态资源
-├── instrumentation.ts  # Node.js 服务启动入口：wechat 监控、Scheduler、
-│                       # 终端 WebSocket 服务的 bootstrap；改启停逻辑要检查幂等性、退出清理与热重载
-├── electron-shell/     # 可选 Electron 外壳：自己拉起并回收服务端进程（独立 Node 运行时），非核心 Web 应用；
-│                       # 关窗只是隐藏到托盘、服务端与后台循环继续，只有托盘「退出」才结束进程树
-└── 顶层配置            # next.config.ts、tailwind.config.ts、postcss.config.mjs、tsconfig.json、
-                        # eslint.config.mjs、vitest.config.ts、proxy.ts（全局鉴权网关）、
-                        # .npmrc / pnpm-workspace.yaml、Dockerfile + docker-compose.yml
-```
-
-**关键服务关系**
-
-- 只读会话主要从 pi 的 JSONL 文件读取；发送消息、模型切换、分支导航和压缩都通过 `AgentSessionWrapper` 完成。
-- `lib/server/terminal/` 是独立 WebSocket + `node-pty` 服务（App Router route handler 不处理 WebSocket upgrade），默认端口 `30142`。
-
-## 依赖与安全边界
-
-- `lib/shared` 不得引入 `fs`、`path`、SQLite、Node API 或 pi SDK。
-- `lib/client`、`hooks` 和客户端组件不得依赖 `lib/server`；不要把 `better-sqlite3`、`node-pty`、服务端配置/日志等传入浏览器 bundle。
-- 服务端文件/API 操作必须复用 `lib/server/file-access.ts` 的允许根目录校验，不能仅凭用户传入路径读写任意文件。
-- 危险命令权限由 `lib/server/dangerous-patterns.ts` 和 RPC 会话处理；不要绕过确认流程或把密钥写入日志。
-- 终端连接依赖随机 token；修改终端 host/port、鉴权或 cwd 校验时同时检查 `/api/terminal` 和 WebSocket 服务。终端默认只绑 loopback（`PI_WORK_TERMINAL_HOST` 可放开）。
-- 信任边界收在 `lib/shared/trust-boundary.ts`（纯规则）与 `proxy.ts` / `lib/server/auth.ts` / `lib/server/trust-boundary.ts`：服务器轨道用 `PI_WORK_AUTH_*`；桌面轨道（`PI_WORK_DESKTOP`）由 Electron 外壳每次启动生成 `PI_WORK_DESKTOP_SECRET` 并签发注入 cookie，登录页关闭、服务端与终端只绑 loopback。改这里等于改「谁能进来」，不要绕过。外壳侧的发凭方在 `electron-shell/server-process.js`（token 格式与 cookie 名刻意重写了一份，由 `tests/unit/electron-shell-server-process.test.ts` 对着服务端的验证器钉住）；打包时服务端必须跑在 `resources/runtime/` 的独立 Node 运行时上（不能用 Electron 的 Node，也不能用 `ELECTRON_RUN_AS_NODE`）。
-- `~/.pi/agent/`、`~/.pi-work/` 以及环境变量可能含有密钥和用户数据，未经明确要求不要读取、修改或提交。
-- SQLite 存储和迁移应保持幂等、向后兼容；不要把 `~/.pi-work/*.db`、会话 JSONL、上传文件或构建产物提交到仓库。
-
-## 配置和数据
-
-- pi 会话/配置默认位于 `~/.pi/agent/`；Pi Work 配置位于 `~/.pi-work/config.yaml`。
-- Scheduler、Token 审计、LLM 审计、Subagent、频道各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
-- 自定义工具、Append System、文件预览限制和右侧面板等配置通常在新 Agent session 创建时读取；修改设置后不要假定已有 session 会自动更新。
-- `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录。
-- 所有数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；多实例并存时用 `pnpm run dev:isolated` 启动完全隔离的实例（见 `scripts/dev-isolated.mjs`）。
-
-## 开发约定
-
-- 不要擅自启动服务并进行 UI 测试。
-- **代码里不写注释**（`eslint-disable`、`@ts-*`、`@vitest-environment`、`/** @type */` 这类工具指令除外）。决策与取舍记在 `docs/adr/`，行为由 `tests/` 钉住，命名与类型承担「这段代码在做什么」。不要用注释解释代码、记录历史背景或写 TODO；过期注释比没有注释更误导。字符串/模板里的内容（CSS、内联 worker 源码、SQL）不受此限，但那是数据，不是注释。
-- 在UI层面，避免不必要的次要标签和描述，让布局本身来传达信息。
-- 修改前先阅读相关入口、调用方和共享类型，做最小改动，避免无关重构。
-- 所有用户可见文案遵循现有 `useI18n` / `lib/shared/i18n-dict/` 机制；不要随意硬编码单语言文本。
-- 优先使用现有 store、hook、API client 和错误处理方式；跨层新增协议时同步更新共享类型、服务端路由和客户端调用方。
-- 涉及 pi SDK、session JSONL、ToolCall、模型协议或 SQLite schema 的修改，要检查兼容旧数据和重复事件（SSE 重连/压缩可能重放事件）。
-- 修改 pi 依赖时保持相关 `@earendil-works/pi-*` 包版本同步，使用精确版本并更新 `pnpm-lock.yaml`；`typebox` 与 pi-coding-agent 内部使用的版本必须一致（工具的 schema 类型要在同一个包实例里），所以也精确锁定。
-- 新增依赖用 `pnpm add` / `pnpm add -D`（不要手改 `package.json` 后跑 npm）。改动 `pnpm-workspace.yaml` 的 `allowBuilds` / `publicHoistPattern` 时，同步更新该文件里的注释说明理由。
-- 除非用户允许，否则永远不要直接或间接损坏 `~/.pi` 或 `~/.pi-work` 的用户数据，这是红线。
-
-## 常用命令与验证
-
-```bash
-corepack enable                     # 启用固定版本的 pnpm
-pnpm install
-pnpm run dev                        # Next.js 开发服务器，端口 30141
-pnpm run dev:isolated               # 隔离开发实例（web 30143 / ws 30144，独立数据根与构建目录，见 scripts/dev-isolated.mjs）
-node_modules/.bin/tsc --noEmit
-node_modules/.bin/eslint <修改的文件>
-pnpm run lint
-pnpm run build                      # 仅 CI/发版验证时运行（会覆盖共享的 .next/，见下）
-pnpm test                           # vitest，需要隔离实例（见 tests/README.md）
-```
-
-日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。
-
+- 代码里不写注释，让符号命名、类型、测试用例等来解释「这段代码在做什么」，不依靠注释解释代码，如果有重要的决策与取舍，记在 `docs/adr/`。
+- 在 UI 设计时，请避免不必要的次要标签和描述，让 UI 元素或布局本身来传达信息。
+- 除非用户允许，否则永远不要损坏 `~/.pi` 或 `~/.pi-work` 的用户数据，特别注意避免「间接破坏」。
+- 开发结束后，不要擅自重新构建 `pnpm run build` 或重启服务，也不要进行 Web 测试。
+- 需要测试时，阅读 `tests/README.md`
 ## Agent skills
 
 ### Issue tracker
 
-Issue 与 spec 记录在本地 `.scratch/<feature-slug>/` 下的 markdown 文件，不使用 GitHub Issues。详见 `docs/agents/issue-tracker.md`。
+Issue 与 spec 记录在本地 `.scratch/<feature-slug>/` 下的 markdown 文件。详见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 
