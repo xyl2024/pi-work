@@ -6,6 +6,7 @@ export const EN_TRANSLATIONS = {
   "Subagent sessions": "Subagent sessions",
   "No subagent sessions": "No subagent sessions",
   "Stop all subagent tasks": "Stop all subagent tasks",
+  "Stops every unfinished subagent task in this session, including queued tasks.": "Stops every unfinished subagent task in this session, including queued tasks.",
   "Stop all": "Stop all",
   "Failed to stop subagent tasks": "Failed to stop subagent tasks",
   "Failed to load subagent sessions": "Failed to load subagent sessions",

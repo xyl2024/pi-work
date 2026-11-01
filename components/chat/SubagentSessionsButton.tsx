@@ -4,47 +4,36 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import type { SubagentTaskSummary } from "@/lib/shared/types";
+import { isSubagentTerminalStatus, type SubagentTaskSummary } from "@/lib/shared/types";
 import { SUBAGENT_STATUS_COLORS, SUBAGENT_STATUS_LABEL_KEYS } from "@/lib/shared/subagent-status";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
+import { PopoverPortal, useDismissableLayer } from "@/components/ui/popover";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Props {
   parentSessionId: string | null;
   refreshKey: number;
   onOpenSession: (sessionId: string) => void;
-  parentIsStreaming?: boolean;
 }
 
-export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession, parentIsStreaming = false }: Props) {
+export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
   const { t } = useI18n();
   const { show: showToast } = useToast();
+  const confirm = useConfirm();
   const profiles = useSubagentProfiles();
   const [open, setOpen] = useState(false);
   const [tasks, setTasks] = useState<SubagentTaskSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [stoppingAll, setStoppingAll] = useState(false);
+  const [confirmingStopAll, setConfirmingStopAll] = useState(false);
   const loadedRef = useRef(false);
   const lastRefreshKeyRef = useRef(refreshKey);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const previousParentSessionIdRef = useRef<string | null>(null);
-
-  const cancelClose = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleClose = useCallback(() => {
-    cancelClose();
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null;
-      setOpen(false);
-    }, 150);
-  }, [cancelClose]);
 
   const loadTasks = useCallback(async () => {
     if (!parentSessionId) return;
@@ -85,36 +74,49 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     }
   }, [loadTasks, parentSessionId, refreshKey]);
 
-  const hasActiveTask = tasks.some(
-    (task) => task.status === "queued" || task.status === "creating" || task.status === "running" || task.status === "stopping",
-  );
+  const hasUnfinishedTask = tasks.some((task) => !isSubagentTerminalStatus(task.status));
 
   useEffect(() => {
-    if (!parentSessionId || (!hasActiveTask && !open)) return;
+    if (!parentSessionId || (!hasUnfinishedTask && !open)) return;
     const timer = setInterval(() => {
       void loadTasks();
     }, 5_000);
     return () => clearInterval(timer);
-  }, [hasActiveTask, loadTasks, open, parentSessionId]);
+  }, [hasUnfinishedTask, loadTasks, open, parentSessionId]);
 
-  useEffect(() => () => {
-    if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+  const handleDismiss = useCallback(() => {
+    setOpen(false);
   }, []);
 
-  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
-    if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
-      scheduleClose();
-    }
-  };
+  useDismissableLayer({
+    enabled: open && !confirmingStopAll,
+    containerRef: rootRef,
+    contentRef: popoverRef,
+    triggerRef,
+    onDismiss: handleDismiss,
+  });
 
   const handleOpenSession = (sessionId: string) => {
-    cancelClose();
     setOpen(false);
     onOpenSession(sessionId);
   };
 
   const handleStopAll = useCallback(async () => {
-    if (!parentSessionId || stoppingAll) return;
+    if (!parentSessionId || stoppingAll || confirmingStopAll) return;
+    setConfirmingStopAll(true);
+    let confirmed = false;
+    try {
+      confirmed = await confirm({
+        title: t("Stop all subagent tasks"),
+        description: t("Stops every unfinished subagent task in this session, including queued tasks."),
+        confirmLabel: t("Stop all"),
+        destructive: true,
+      });
+    } finally {
+      setConfirmingStopAll(false);
+    }
+    if (!confirmed) return;
+
     setStoppingAll(true);
     try {
       const response = await fetch(
@@ -128,32 +130,21 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     } finally {
       setStoppingAll(false);
     }
-  }, [loadTasks, parentSessionId, showToast, stoppingAll, t]);
+  }, [confirm, confirmingStopAll, loadTasks, parentSessionId, showToast, stoppingAll, t]);
 
   const label = t("SubAgent");
   const disabled = !parentSessionId;
 
   return (
-    <div
-      ref={rootRef}
-      className="pointer-events-auto relative"
-      onMouseEnter={() => {
-        cancelClose();
-        setOpen(true);
-      }}
-      onMouseLeave={scheduleClose}
-      onFocus={() => {
-        cancelClose();
-        setOpen(true);
-      }}
-      onBlur={handleBlur}
-    >
+    <div ref={rootRef} className="pointer-events-auto relative">
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         aria-label={label}
         aria-expanded={open}
+        aria-haspopup="dialog"
         className="flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
         style={{
           background: "var(--bg-panel)",
@@ -189,56 +180,58 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
         )}
       </button>
 
-      {open && !disabled && (
-        <div
-          role="dialog"
-          aria-label={t("Subagent sessions")}
-          onMouseEnter={cancelClose}
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: "calc(100% + 8px)",
-            width: 310,
-            maxWidth: "calc(100vw - 32px)",
-            maxHeight: 360,
-            overflowY: "auto",
-            padding: 6,
-            background: "var(--bg-panel)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
-            zIndex: 20,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "5px 8px 7px" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
-              {t("Subagent sessions")}
-            </span>
-            {hasActiveTask && !parentIsStreaming && (
-              <button
-                type="button"
-                onClick={() => void handleStopAll()}
-                disabled={stoppingAll}
-                title={t("Stop all subagent tasks")}
-                style={{
-                  flexShrink: 0,
-                  padding: "2px 8px",
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  borderRadius: 4,
-                  background: "transparent",
-                  color: stoppingAll ? "var(--text-dim)" : "#ef4444",
-                  font: "inherit",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  lineHeight: 1.6,
-                  cursor: stoppingAll ? "default" : "pointer",
-                }}
-              >
-                {stoppingAll ? t("Stopping") : t("Stop all")}
-              </button>
-            )}
-          </div>
+      <PopoverPortal
+        open={open && !disabled}
+        triggerRef={triggerRef}
+        popoverRef={popoverRef}
+        align="end"
+        gap={8}
+        contentDeps={[tasks, loading, error, stoppingAll]}
+        ariaLabel={t("Subagent sessions")}
+        style={{
+          width: 560,
+          maxWidth: "calc(100vw - 32px)",
+          maxHeight: "min(70vh, 640px)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          padding: 6,
+          background: "var(--bg-panel)",
+          color: "var(--text)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+        }}
+      >
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "5px 8px 7px" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
+            {t("Subagent sessions")}
+          </span>
+          {hasUnfinishedTask && (
+            <button
+              type="button"
+              onClick={() => void handleStopAll()}
+              disabled={stoppingAll}
+              title={t("Stop all subagent tasks")}
+              style={{
+                flexShrink: 0,
+                padding: "2px 8px",
+                border: "1px solid rgba(239,68,68,0.35)",
+                borderRadius: 4,
+                background: "transparent",
+                color: stoppingAll ? "var(--text-dim)" : "#ef4444",
+                font: "inherit",
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.6,
+                cursor: stoppingAll ? "default" : "pointer",
+              }}
+            >
+              {stoppingAll ? t("Stopping") : t("Stop all")}
+            </button>
+          )}
+        </div>
+        <div style={{ minHeight: 0, overflowY: "auto", padding: "0 2px 2px" }}>
           {loading ? (
             <div style={{ padding: "12px 8px", color: "var(--text-dim)", fontSize: 11 }}>
               {t("Loading...")}
@@ -253,7 +246,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
             </div>
           ) : (
             tasks.map((task) => {
-              const canOpen = Boolean(task.childSessionId);
+              const childSessionId = task.childSessionId;
               const statusColor = SUBAGENT_STATUS_COLORS[task.status];
               const botProfile = findSubagentProfile(profiles, task.subagentName);
               const hasStats = task.assistantCount != null && task.readCount != null;
@@ -261,33 +254,17 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                 ? `${t("{count} messages", { count: task.assistantCount as number })} · ${t("read {count} files", { count: task.readCount as number })}`
                 : null;
               return (
-                <button
+                <div
                   key={task.taskId}
-                  type="button"
-                  disabled={!canOpen}
-                  onClick={() => {
-                    if (task.childSessionId) handleOpenSession(task.childSessionId);
-                  }}
                   style={{
                     display: "flex",
                     alignItems: "flex-start",
                     gap: 8,
                     width: "100%",
                     padding: "7px 8px",
-                    border: "none",
                     borderRadius: 5,
-                    background: "transparent",
                     color: "var(--text)",
-                    textAlign: "left",
-                    cursor: canOpen ? "pointer" : "default",
-                    font: "inherit",
-                    opacity: canOpen ? 1 : 0.72,
-                  }}
-                  onMouseEnter={(event) => {
-                    if (canOpen) event.currentTarget.style.background = "var(--bg-hover)";
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = "transparent";
+                    opacity: childSessionId ? 1 : 0.72,
                   }}
                 >
                   <span
@@ -298,6 +275,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                       ? <GrokBot appearance={botProfile.bot} size={30} interactive={false} />
                       : <span style={{ display: "inline-block", width: 7, height: 7, marginTop: 4, borderRadius: "50%", background: statusColor }} />}
                   </span>
+
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span
                       style={{
@@ -365,12 +343,37 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                       </span>
                     )}
                   </span>
-                </button>
+
+                  {childSessionId && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSession(childSessionId)}
+                      aria-label={t("Open subagent session")}
+                      title={t("Open subagent session")}
+                      style={{
+                        flexShrink: 0,
+                        alignSelf: "center",
+                        padding: "3px 8px",
+                        border: "1px solid var(--border)",
+                        borderRadius: 4,
+                        background: "transparent",
+                        color: "var(--accent)",
+                        font: "inherit",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        lineHeight: 1.6,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {t("Open session")}
+                    </button>
+                  )}
+                </div>
               );
             })
           )}
         </div>
-      )}
+      </PopoverPortal>
     </div>
   );
 }
