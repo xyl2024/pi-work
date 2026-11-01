@@ -157,6 +157,7 @@ export const rightPanels = {
   "Failed to load subagent sessions": "加载子代理会话失败",
   "Open subagent session": "打开子代理会话",
   "History tasks · {count}": "历史任务 · {count}",
+  "Tool calls": "工具调用",
   "Manual": "手动",
   "{count} messages": "{count} 条消息",
   "read {count} files": "已读 {count} 个文件",

@@ -12,6 +12,7 @@ export const EN_TRANSLATIONS = {
   "Failed to load subagent sessions": "Failed to load subagent sessions",
   "Open subagent session": "Open subagent session",
   "History tasks · {count}": "History tasks · {count}",
+  "Tool calls": "Tool calls",
   "Manual": "Manual",
   "Queued": "Queued",
   "Creating": "Creating",
