@@ -386,8 +386,48 @@ pre, code {
 .markdown-body ol { list-style: decimal; }
 .markdown-body li { margin: 2px 0; }
 .markdown-body li::marker { color: var(--accent); }
-.markdown-body a { color: var(--accent); text-decoration: underline; transition: color 0.12s; }
-.markdown-body a:hover { color: var(--accent-hover); }
+.markdown-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  transition: color 0.12s, text-decoration-color 0.12s;
+}
+.markdown-body a:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+.markdown-body a:focus-visible {
+  text-decoration-color: currentColor;
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* File links read as local path references, not as web links: the label keeps
+   the body text color and only a faint rule marks it as clickable. */
+.markdown-body a.markdown-file-link {
+  color: var(--text);
+  text-decoration-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+.markdown-body a.markdown-file-link:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+/* The external-link glyph keeps its slot at all times so hovering never
+   reflows the surrounding sentence; only its opacity animates. */
+.markdown-body .markdown-link-icon {
+  width: 0.72em;
+  height: 0.72em;
+  margin-left: 2px;
+  vertical-align: baseline;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.markdown-body a:hover .markdown-link-icon,
+.markdown-body a:focus-visible .markdown-link-icon {
+  opacity: 0.7;
+}
 .markdown-body blockquote {
   border-left: 3px solid var(--accent);
   margin: 4px 0;

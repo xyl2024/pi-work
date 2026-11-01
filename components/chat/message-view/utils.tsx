@@ -8,7 +8,9 @@ import { EchartsBlock } from "@/components/renderers/EchartsBlock";
 import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
+import { ExternalLinkIcon } from "@/components/ui/icons";
 import { resolveFileLink } from "@/lib/shared/file-link";
+import { resolveNewTabUrl } from "@/lib/shared/external-link";
 import { formatToolDuration } from "@/lib/shared/tool-duration";
 import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
@@ -133,24 +135,42 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
   const target = handler ? resolveFileLink(href, handler.cwd) : null;
   if (handler && target) {
     return (
-      <a
-        {...props}
-        href={href}
-        title={target.path}
-        style={{ cursor: "pointer", ...props.style }}
-        onClick={(event) => {
-          event.preventDefault();
-          handler.openFile(target.path, target.name);
-        }}
-      >
+      <Tooltip content={target.path}>
+        <a
+          {...props}
+          href={href}
+          className={["markdown-file-link", props.className].filter(Boolean).join(" ")}
+          style={{ cursor: "pointer", ...props.style }}
+          onClick={(event) => {
+            event.preventDefault();
+            handler.openFile(target.path, target.name);
+          }}
+        >
+          {children}
+        </a>
+      </Tooltip>
+    );
+  }
+  const external = href
+    ? resolveNewTabUrl({
+        href,
+        baseUrl: typeof window === "undefined" ? "" : window.location.href,
+      }) !== null
+    : false;
+  if (!external) {
+    return (
+      <a {...props} href={href}>
         {children}
       </a>
     );
   }
   return (
-    <a {...props} href={href}>
-      {children}
-    </a>
+    <Tooltip content={href ?? ""}>
+      <a {...props} href={href}>
+        {children}
+        <ExternalLinkIcon className="markdown-link-icon" />
+      </a>
+    </Tooltip>
   );
 }
 
