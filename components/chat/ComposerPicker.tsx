@@ -31,6 +31,7 @@ export function ComposerPicker({
   slashResources = [],
   onSelectSkill = () => undefined,
   onInsertText = () => undefined,
+  onOpenSkillsPanel,
 }: {
   picker: ComposerPicker;
   onPickImage: () => void;
@@ -38,6 +39,7 @@ export function ComposerPicker({
   slashResources?: SlashResource[];
   onSelectSkill?: (resource: SlashResource) => void;
   onInsertText?: (text: string) => void;
+  onOpenSkillsPanel?: () => void;
 }) {
   const { t } = useI18n();
   const snapshot = picker.useSnapshot();
@@ -155,6 +157,7 @@ export function ComposerPicker({
             slashResources={slashResources}
             onSelectSkill={onSelectSkill}
             onInsertText={onInsertText}
+            onOpenSkillsPanel={onOpenSkillsPanel}
           />
         ) : (
           <FilePickerView

@@ -2,10 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   COMPOSER_PICKER_ITEMS,
   createComposerPicker,
+  filterComposerSkills,
   type ComposerPickerItem,
 } from "@/lib/client/composer-picker";
+import type { SlashResource } from "@/lib/shared/slash-commands";
 
 const MAIN_ITEM_COUNT = COMPOSER_PICKER_ITEMS.length;
+
+const SKILLS: SlashResource[] = [
+  { source: "skill", name: "diagnosing-bugs", command: "skill:diagnosing-bugs", description: "Diagnosis loop for hard bugs", path: "/skills/diagnosing-bugs" },
+  { source: "skill", name: "tdd", command: "skill:tdd", description: "Test-driven development", path: "/skills/tdd" },
+  { source: "action", name: "new", command: "new", description: "Start a new session", path: "" },
+];
 
 describe("composer picker initial state", () => {
   it("starts closed on the main view with the first item active", () => {
@@ -189,5 +197,113 @@ describe("active item navigation", () => {
     expect(picker.get().activeIndex).toBe(2);
     picker.setActiveIndex(-5, 3);
     expect(picker.get().activeIndex).toBe(0);
+  });
+});
+
+describe("skill filtering", () => {
+  it("keeps only skills and preserves their order without a query", () => {
+    expect(filterComposerSkills(SKILLS, "").map((skill) => skill.name)).toEqual([
+      "diagnosing-bugs",
+      "tdd",
+    ]);
+  });
+
+  it("matches skill names case-insensitively", () => {
+    expect(filterComposerSkills(SKILLS, "BUG").map((skill) => skill.name)).toEqual([
+      "diagnosing-bugs",
+    ]);
+  });
+
+  it("matches skill descriptions", () => {
+    expect(filterComposerSkills(SKILLS, "driven").map((skill) => skill.name)).toEqual(["tdd"]);
+  });
+
+  it("returns no skills when nothing matches", () => {
+    expect(filterComposerSkills(SKILLS, "missing")).toEqual([]);
+  });
+});
+
+describe("skill view state", () => {
+  it("clears the skill query when leaving the skill view", () => {
+    const picker = createComposerPicker();
+
+    picker.open();
+    picker.openView("skill");
+    picker.setSkillQuery("bug");
+    expect(picker.skillQuery()).toBe("bug");
+
+    picker.back();
+    expect(picker.skillQuery()).toBe("");
+  });
+
+  it("clears the skill query when the picker resets", () => {
+    const picker = createComposerPicker();
+
+    picker.open();
+    picker.openView("skill");
+    picker.setSkillQuery("bug");
+    picker.reset();
+
+    expect(picker.skillQuery()).toBe("");
+  });
+
+  it("resets the active skill to the first match when the query changes", () => {
+    const picker = createComposerPicker();
+
+    picker.open();
+    picker.openView("skill");
+    picker.setActiveIndex(1, 2);
+    picker.setSkillQuery("td");
+
+    expect(picker.get().activeIndex).toBe(0);
+  });
+
+  it("navigates the filtered skill list in a wrap-around", () => {
+    const picker = createComposerPicker();
+    const skills = filterComposerSkills(SKILLS, "");
+
+    picker.open();
+    picker.openView("skill");
+    picker.moveActive(1, skills.length);
+    expect(picker.get().activeIndex).toBe(1);
+
+    picker.moveActive(1, skills.length);
+    expect(picker.get().activeIndex).toBe(0);
+
+    picker.moveActive(-1, skills.length);
+    expect(picker.get().activeIndex).toBe(1);
+  });
+
+  it("hands the active skill to the slash-selection path and resets", () => {
+    const picker = createComposerPicker();
+
+    picker.open();
+    picker.openView("skill");
+    picker.setSkillQuery("driven");
+
+    expect(picker.selectSkill(SKILLS)?.name).toBe("tdd");
+    expect(picker.get()).toEqual({ open: false, view: "main", activeIndex: 0 });
+    expect(picker.skillQuery()).toBe("");
+  });
+
+  it("keeps the picker open when no skill matches", () => {
+    const picker = createComposerPicker();
+
+    picker.open();
+    picker.openView("skill");
+    picker.setSkillQuery("missing");
+
+    expect(picker.selectSkill(SKILLS)).toBeNull();
+    expect(picker.get()).toEqual({ open: true, view: "skill", activeIndex: 0 });
+  });
+
+  it("ignores skill selection outside the skill view", () => {
+    const picker = createComposerPicker();
+
+    expect(picker.selectSkill(SKILLS)).toBeNull();
+
+    picker.open();
+    expect(picker.selectSkill(SKILLS)).toBeNull();
+    expect(picker.get().view).toBe("main");
   });
 });

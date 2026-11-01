@@ -40,6 +40,7 @@ export interface BottomToolbarProps {
   onPickComposerImage: () => void;
   onSelectComposerSkill: (resource: SlashResource) => void;
   onInsertComposerText: (text: string) => void;
+  onOpenSkillsPanel?: () => void;
   composerSlashResources: SlashResource[];
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
@@ -87,6 +88,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     onPickComposerImage,
     onSelectComposerSkill,
     onInsertComposerText,
+    onOpenSkillsPanel,
     composerSlashResources,
     model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
     cwd, onCwdChange,
@@ -236,6 +238,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
           slashResources={composerSlashResources}
           onSelectSkill={onSelectComposerSkill}
           onInsertText={onInsertComposerText}
+          onOpenSkillsPanel={onOpenSkillsPanel}
         />
         {!modelOptionsEmpty && (
           <Tooltip

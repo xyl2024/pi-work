@@ -87,6 +87,7 @@ interface Props {
   onSessionNameChange?: (name: string) => void;
   onSessionInfoLoaded?: (session: SessionInfo) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
+  onOpenSkillsPanel?: () => void;
   onDraftChange?: (draft: {
     dirty: boolean;
     text: string;
@@ -100,7 +101,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -688,6 +689,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           else if (action === "compact") handleCompactClick();
           else if (action === "model") setModelModalOpen(true);
         }}
+        onOpenSkillsPanel={onOpenSkillsPanel}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}
         onDraftChange={onDraftChange}

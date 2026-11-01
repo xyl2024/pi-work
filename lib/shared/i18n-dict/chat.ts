@@ -29,6 +29,7 @@ export const chat = {
   "Upload image": "上传图片",
   "Add context": "添加内容",
   "Choose skill": "选择技能",
+  "Manage skills": "管理技能",
   "Reference file": "引用文件",
   "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",
   "↑↓ switch, Enter to pick": "↑↓切换，回车确认",
