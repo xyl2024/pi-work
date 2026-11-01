@@ -8,6 +8,7 @@ import { FilePickerView } from "./composer-picker/FilePickerView";
 import { SkillPickerView } from "./composer-picker/SkillPickerView";
 import { useComposerPicker } from "./composer-picker/useComposerPicker";
 import { isInteractiveKeyboardTarget } from "./composer-picker/keyboard-target";
+import { resolvePickerKeyAction, type PickerKeyRegion } from "@/lib/client/picker-keyboard";
 import { chatInputMetrics } from "./chat-input/metrics";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 import {
@@ -68,6 +69,25 @@ export function ComposerPicker({
     if (result?.action === "image") onPickImage();
   }, [onPickImage, picker]);
 
+  const keyboardRegion = useCallback((target: EventTarget | null): PickerKeyRegion => {
+    if (target === triggerRef.current) return "trigger";
+    if (target instanceof HTMLElement && target.closest("[data-picker-nav-row]")) return "navigation";
+    if (isInteractiveKeyboardTarget(target)) return "control";
+    return "navigation";
+  }, []);
+
+  const focusMainRow = useCallback((index: number) => {
+    containerRef.current
+      ?.querySelector<HTMLElement>(`[data-picker-main-row="${index}"]`)
+      ?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!snapshot.open || snapshot.view !== "main") return;
+    const frame = requestAnimationFrame(() => focusMainRow(picker.get().activeIndex));
+    return () => cancelAnimationFrame(frame);
+  }, [focusMainRow, picker, snapshot.open, snapshot.view]);
+
   useLayoutEffect(() => {
     if (!snapshot.open) return;
     updateAvailable();
@@ -92,27 +112,33 @@ export function ComposerPicker({
   useEffect(() => {
     if (!snapshot.open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      const action = resolvePickerKeyAction({
+        key: event.key,
+        region: keyboardRegion(event.target),
+        view: snapshot.view,
+        composing: event.isComposing,
+      });
+      if (action === "back") {
         event.preventDefault();
         const result = picker.back();
         if (result.closed) triggerRef.current?.focus();
         return;
       }
       if (snapshot.view !== "main") return;
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (action === "move-previous" || action === "move-next") {
         event.preventDefault();
-        picker.moveActive(event.key === "ArrowDown" ? 1 : -1, COMPOSER_PICKER_ITEMS.length);
+        picker.moveActive(action === "move-next" ? 1 : -1, COMPOSER_PICKER_ITEMS.length);
+        focusMainRow(picker.get().activeIndex);
         return;
       }
-      if (event.key === "Enter" && !event.isComposing) {
-        if (isInteractiveKeyboardTarget(event.target)) return;
+      if (action === "activate") {
         event.preventDefault();
-        activateItem(snapshot.activeIndex);
+        activateItem(picker.get().activeIndex);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [activateItem, picker, snapshot.activeIndex, snapshot.open, snapshot.view]);
+  }, [activateItem, focusMainRow, keyboardRegion, picker, snapshot.open, snapshot.view]);
 
   return (
     <div ref={containerRef} style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -170,6 +196,7 @@ export function ComposerPicker({
             {COMPOSER_PICKER_ITEMS.map((item, index) => (
               <PickerRow
                 key={item.action}
+                index={index}
                 action={item.action}
                 active={index === snapshot.activeIndex}
                 opensView={item.opensView}
@@ -204,7 +231,8 @@ export function ComposerPicker({
   );
 }
 
-function PickerRow({ action, active, opensView, label, onActivate, onHover }: {
+function PickerRow({ index, action, active, opensView, label, onActivate, onHover }: {
+  index: number;
   action: ComposerPickerAction;
   active: boolean;
   opensView: boolean;
@@ -217,7 +245,10 @@ function PickerRow({ action, active, opensView, label, onActivate, onHover }: {
       type="button"
       role="option"
       aria-selected={active}
+      data-picker-nav-row
+      data-picker-main-row={index}
       onMouseEnter={onHover}
+      onFocus={onHover}
       onClick={onActivate}
       style={{
         display: "flex", alignItems: "center", gap: 10,

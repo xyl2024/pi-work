@@ -1,18 +1,40 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/shared/file-paths";
 import { getFileIcon, FolderIcon } from "../../files/FileIcons";
 import type { ComposerFileEntry } from "@/lib/client/composer-picker";
 import { useComposerPicker } from "./useComposerPicker";
 import { isInteractiveKeyboardTarget } from "./keyboard-target";
+import { resolvePickerKeyAction, type PickerKeyRegion } from "@/lib/client/picker-keyboard";
 import type { ComposerPickerViewProps } from "./types";
 
 export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerViewProps) {
   const { t } = useI18n();
   const snapshot = useComposerPicker(picker);
   const file = snapshot.file;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const focusFileRow = useCallback((index: number) => {
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-picker-file-row="${index}"]`)
+      ?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!snapshot.open || snapshot.view !== "file") return;
+    const frame = requestAnimationFrame(() => {
+      if (file.loading || file.error) {
+        rootRef.current?.focus();
+        return;
+      }
+      const firstRow = listRef.current?.querySelector<HTMLElement>("[data-picker-nav-row]");
+      (firstRow ?? rootRef.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [file.directory, file.error, file.loading, snapshot.open, snapshot.view]);
 
   const activateEntry = useCallback((entry?: ComposerFileEntry) => {
     void picker.activateFile(entry).then((result) => {
@@ -24,30 +46,44 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
   useEffect(() => {
     if (!snapshot.open || snapshot.view !== "file") return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.key === "Enter" || event.key === " ") && isInteractiveKeyboardTarget(event.target)) return;
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        picker.moveFileActive(event.key === "ArrowDown" ? 1 : -1);
+      if (event.key === "Escape") return;
+      const target = event.target;
+      const isRow = target instanceof HTMLElement && target.closest("[data-picker-nav-row]") !== null;
+      const isTrigger = target instanceof HTMLElement && target.closest('[aria-haspopup="menu"]') !== null;
+      const region: PickerKeyRegion = isRow
+        ? "navigation"
+        : isTrigger
+          ? "trigger"
+          : isInteractiveKeyboardTarget(target)
+            ? "control"
+            : "navigation";
+      const action = resolvePickerKeyAction({
+        key: event.key,
+        region,
+        view: "file",
+        composing: event.isComposing,
+      });
+      if (action === "native" || action === "back") return;
+      event.preventDefault();
+      if (action === "move-previous" || action === "move-next") {
+        picker.moveFileActive(action === "move-next" ? 1 : -1);
+        focusFileRow(picker.get().file.activeIndex);
         return;
       }
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        event.preventDefault();
-        picker.nextFilePage(event.key === "ArrowRight" ? 1 : -1);
+      if (action === "page-previous" || action === "page-next") {
+        picker.nextFilePage(action === "page-next" ? 1 : -1);
+        requestAnimationFrame(() => focusFileRow(picker.get().file.activeIndex));
         return;
       }
-      if (event.key === " " && !event.isComposing) {
-        event.preventDefault();
+      if (action === "toggle-selection") {
         picker.toggleFileSelected();
         return;
       }
-      if (event.key === "Enter" && !event.isComposing) {
-        event.preventDefault();
-        activateEntry();
-      }
+      if (action === "activate") activateEntry();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [activateEntry, picker, snapshot.open, snapshot.view]);
+  }, [activateEntry, focusFileRow, picker, snapshot.open, snapshot.view]);
 
   const confirmSelection = () => {
     const text = picker.confirmFileSelection();
@@ -64,7 +100,7 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
   const hasEntries = picker.hasFileEntries();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "100%" }}>
+    <div ref={rootRef} tabIndex={-1} style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "100%", outline: "none" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderBottom: "1px solid var(--border)" }}>
         <button
           type="button"
@@ -101,7 +137,7 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
           {!hasEntries && (
             <div style={{ padding: "10px 12px 2px", fontSize: 12, color: "var(--text-dim)" }}>{t("Empty folder")}</div>
           )}
-          <div role="listbox" aria-label={t("Files")} style={{ overflowY: "auto", minHeight: 0, padding: "4px" }}>
+          <div ref={listRef} role="listbox" aria-label={t("Files")} style={{ overflowY: "auto", minHeight: 0, padding: "4px" }}>
             {visibleEntries.map((entry, index) => {
               const active = index === file.activeIndex;
               const selected = file.selected.includes(entry.path);
@@ -110,7 +146,11 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
                   key={`${entry.path}:${entry.isParent ? "parent" : "entry"}`}
                   role="option"
                   aria-selected={active}
+                  tabIndex={-1}
+                  data-picker-nav-row
+                  data-picker-file-row={index}
                   onMouseEnter={() => picker.setFileActiveIndex(index)}
+                  onFocus={() => picker.setFileActiveIndex(index)}
                   onClick={() => void activateEntry(entry)}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,

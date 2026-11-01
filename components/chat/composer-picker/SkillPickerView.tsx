@@ -6,6 +6,8 @@ import { useI18n } from "@/hooks/useI18n";
 import { ArrowLeftIcon, SearchIcon } from "@/components/ui/icons";
 import { filterComposerSkills } from "@/lib/client/composer-picker";
 import { useComposerPicker } from "./useComposerPicker";
+import { isInteractiveKeyboardTarget } from "./keyboard-target";
+import { resolvePickerKeyAction, type PickerKeyRegion } from "@/lib/client/picker-keyboard";
 import type { ComposerPickerViewProps } from "./types";
 
 export function SkillPickerView({
@@ -39,16 +41,33 @@ export function SkillPickerView({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target instanceof HTMLButtonElement) return;
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      picker.moveActive(event.key === "ArrowDown" ? 1 : -1, skills.length);
+    const target = event.target;
+    const isRow = target instanceof HTMLElement && target.closest("[data-picker-nav-row]") !== null;
+    const region: PickerKeyRegion = isRow
+      ? "navigation"
+      : target instanceof HTMLInputElement
+        ? "navigation"
+        : isInteractiveKeyboardTarget(target)
+          ? "control"
+          : "navigation";
+    const action = resolvePickerKeyAction({
+      key: event.key,
+      region,
+      view: "skill",
+      composing: event.nativeEvent.isComposing,
+    });
+    if (action === "native" || action === "back") return;
+    event.preventDefault();
+    if (action === "move-previous" || action === "move-next") {
+      picker.moveActive(action === "move-next" ? 1 : -1, skills.length);
+      if (isRow) {
+        listRef.current
+          ?.querySelector<HTMLElement>(`[data-skill-index="${picker.get().activeIndex}"]`)
+          ?.focus();
+      }
       return;
     }
-    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      selectSkill();
-    }
+    if (action === "activate") selectSkill();
   };
 
   return (
@@ -132,8 +151,10 @@ export function SkillPickerView({
               type="button"
               role="option"
               aria-selected={index === activeIndex}
+              data-picker-nav-row
               data-skill-index={index}
               onMouseEnter={() => picker.setActiveIndex(index, skills.length)}
+              onFocus={() => picker.setActiveIndex(index, skills.length)}
               onClick={() => {
                 picker.setActiveIndex(index, skills.length);
                 selectSkill();
