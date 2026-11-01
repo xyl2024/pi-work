@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type RefObject } from "react";
 import { Tooltip } from "../../ui/Tooltip";
+import { ComposerPicker } from "../ComposerPicker";
 import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
 import { CwdProjectIcon } from "../../files/CwdProjectIcon";
@@ -24,6 +25,8 @@ import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
 import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
+import type { ComposerPicker as ComposerPickerStore } from "@/lib/client/composer-picker";
+import type { SlashResource } from "@/lib/shared/slash-commands";
 import type { ContextUsage, SessionStats } from "@/hooks/sessionUiStore";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 
@@ -33,9 +36,12 @@ export interface BottomToolbarProps {
   t: (key: string, params?: Record<string, string | number>) => string;
   isStreaming: boolean;
 
-  onSlashAction?: (action: string) => void;
-  hasAttachedImages: boolean;
-  fileInputRef: RefObject<HTMLInputElement | null>;
+  composerPicker: ComposerPickerStore;
+  onPickComposerImage: () => void;
+  onSelectComposerSkill: (resource: SlashResource) => void;
+  onInsertComposerText: (text: string) => void;
+  onOpenSkillsPanel?: () => void;
+  composerSlashResources: SlashResource[];
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
@@ -78,9 +84,12 @@ export function BottomToolbar(props: BottomToolbarProps) {
   const {
     t,
     isStreaming,
-    onSlashAction,
-    hasAttachedImages,
-    fileInputRef,
+    composerPicker,
+    onPickComposerImage,
+    onSelectComposerSkill,
+    onInsertComposerText,
+    onOpenSkillsPanel,
+    composerSlashResources,
     model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
     cwd, onCwdChange,
     contextUsage, sessionStats, contextComposition,
@@ -222,69 +231,15 @@ export function BottomToolbar(props: BottomToolbarProps) {
       style={{ marginTop: chatInputMetrics.toolbarGap, display: "flex", alignItems: "center", gap: layout.buttonGap }}
     >
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: chatInputMetrics.groupGap }}>
-        <Tooltip content={t("New session")}>
-          <button
-            type="button"
-            onClick={() => onSlashAction?.("new")}
-            aria-label={t("New session")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
-              background: "none",
-              border: "none",
-              borderRadius: "50%",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              transition: "background 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.color = "var(--text)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-              e.currentTarget.style.color = "var(--text-muted)";
-            }}
-          >
-            <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-        </Tooltip>
-        {!isStreaming && (
-          <Tooltip content={t("Upload image")}>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label={t("Upload image")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
-                background: "none",
-                border: "none",
-                borderRadius: chatInputMetrics.toolbarRadius,
-                color: hasAttachedImages ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = hasAttachedImages ? "var(--accent-hover)" : "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = hasAttachedImages ? "var(--accent)" : "var(--text-muted)";
-              }}
-            >
-              <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-            </button>
-          </Tooltip>
-        )}
+        <ComposerPicker
+          picker={composerPicker}
+          onPickImage={onPickComposerImage}
+          cwd={cwd}
+          slashResources={composerSlashResources}
+          onSelectSkill={onSelectComposerSkill}
+          onInsertText={onInsertComposerText}
+          onOpenSkillsPanel={onOpenSkillsPanel}
+        />
         {!modelOptionsEmpty && (
           <Tooltip
             content={modelMetaTooltip}

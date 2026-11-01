@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { KeyboardEvent, RefObject } from "react";
+import { formatFilePathReference } from "@/lib/shared/file-reference";
 import { getRelativeFilePath, joinFilePath, normalizeFilePathSlashes } from "@/lib/shared/file-paths";
-import { SLASH_PAGE_SIZE } from "../constants";
+import { createDirectoryListing, pageWindow, DIRECTORY_PAGE_SIZE } from "@/lib/client/directory-listing";
+import { createFileMentionAdapter } from "@/lib/client/file-mentions-io";
 
 export interface FileMentionEntry {
   name: string;
@@ -39,24 +41,21 @@ function getMentionQuery(value: string, cursor: number): FileMentionQuery | null
   return { start, query: last, directory: directoryParts.join("/") };
 }
 
+function normalizeCwd(cwd: string): string {
+  return normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
+}
+
 function pathInsideCwd(cwd: string, path: string): boolean {
-  const base = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
+  const base = normalizeCwd(cwd);
   const candidate = normalizeFilePathSlashes(path).replace(/\/+$/, "");
   return candidate === base || candidate.startsWith(`${base}/`);
 }
 
 function getDirectoryPath(cwd: string, directory: string): string | null {
-  const normalizedCwd = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
+  const normalizedCwd = normalizeCwd(cwd);
   if (!directory) return normalizedCwd;
   const candidate = normalizeFilePathSlashes(joinFilePath(normalizedCwd, directory));
   return pathInsideCwd(normalizedCwd, candidate) ? candidate : null;
-}
-
-function codeSpan(path: string): string {
-  let longest = 0;
-  for (const match of path.matchAll(/`+/g)) longest = Math.max(longest, match[0].length);
-  const fence = "`".repeat(longest + 1);
-  return `${fence}${path}${fence}`;
 }
 
 export function useFileMentionMenu({
@@ -70,12 +69,11 @@ export function useFileMentionMenu({
   const [mentionMenuOpen, setMentionMenuOpen] = useState(false);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [mentionPage, setMentionPage] = useState(0);
-  const [entries, setEntries] = useState<FileMentionEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [openGeneration, setOpenGeneration] = useState(0);
-  const cacheRef = useRef(new Map<string, FileMentionEntry[]>());
-  const requestIdRef = useRef(0);
+  const listing = useMemo(
+    () => createDirectoryListing({ adapter: createFileMentionAdapter(cwd ?? "") }),
+    [cwd],
+  );
+  const listingSnapshot = useSyncExternalStore(listing.subscribe, listing.get, listing.get);
 
   const mentionQuery = useMemo(() => {
     if (!cwd) return null;
@@ -84,6 +82,26 @@ export function useFileMentionMenu({
     const directory = getDirectoryPath(cwd, parsed.directory);
     return directory ? { ...parsed, directory } : null;
   }, [cwd, value, cursorPosition]);
+
+  const relativeDirectory = useMemo(() => {
+    if (!cwd || !mentionQuery) return null;
+    const normalizedCwd = normalizeCwd(cwd);
+    if (mentionQuery.directory === normalizedCwd) return "";
+    return getRelativeFilePath(mentionQuery.directory, cwd)
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "");
+  }, [cwd, mentionQuery]);
+
+  const entries = useMemo<FileMentionEntry[]>(() => {
+    if (!cwd) return [];
+    const base = normalizeCwd(cwd);
+    return listingSnapshot.entries.map((entry) => ({
+      name: entry.name,
+      fullPath: entry.path ? joinFilePath(base, entry.path) : base,
+      isDir: entry.isDir,
+      isParent: entry.isParent,
+    }));
+  }, [cwd, listingSnapshot.entries]);
 
   const filteredEntries = useMemo(() => {
     if (!mentionMenuOpen || !mentionQuery) return [];
@@ -95,57 +113,21 @@ export function useFileMentionMenu({
     setMentionMenuOpen(false);
     setMentionActiveIndex(0);
     setMentionPage(0);
-    cacheRef.current.clear();
-    setEntries([]);
-    setError(null);
   }, [cwd]);
 
   useEffect(() => {
-    if (!mentionMenuOpen || !mentionQuery || !cwd) return;
-    const key = mentionQuery.directory;
-    const cached = cacheRef.current.get(key);
-    if (cached) {
-      setEntries(cached);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    const requestId = ++requestIdRef.current;
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({ cwd, directory: getRelativeFilePath(key, cwd) });
-    fetch(`/api/file-mentions?${params}`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to load files");
-        const data = await res.json() as { entries?: { name: string; isDir: boolean }[] };
-        const next: FileMentionEntry[] = (data.entries ?? []).map((entry) => ({
-          ...entry,
-          fullPath: joinFilePath(key, entry.name),
-        }));
-        if (key !== normalizeFilePathSlashes(cwd).replace(/\/+$/, "")) {
-          next.unshift({ name: "..", fullPath: normalizeFilePathSlashes(key).replace(/\/[^/]+$/, ""), isDir: true, isParent: true });
-        }
-        cacheRef.current.set(key, next);
-        if (requestId === requestIdRef.current) setEntries(next);
-      })
-      .catch((cause: unknown) => {
-        if ((cause as { name?: string }).name === "AbortError" || requestId !== requestIdRef.current) return;
-        setEntries([]);
-        setError(cause instanceof Error ? cause.message : "Failed to load files");
-      })
-      .finally(() => {
-        if (requestId === requestIdRef.current) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [mentionMenuOpen, mentionQuery, cwd, openGeneration]);
+    listing.reset();
+  }, [mentionMenuOpen, listing]);
 
-  const mentionPageCount = Math.max(1, Math.ceil(filteredEntries.length / SLASH_PAGE_SIZE));
-  const mentionCurrentPage = Math.min(mentionPage, mentionPageCount - 1);
-  const visibleMentionEntries = useMemo(() => {
-    const start = mentionCurrentPage * SLASH_PAGE_SIZE;
-    return filteredEntries.slice(start, start + SLASH_PAGE_SIZE);
-  }, [filteredEntries, mentionCurrentPage]);
+  useEffect(() => {
+    if (!mentionMenuOpen || relativeDirectory === null) return;
+    void listing.load(relativeDirectory);
+  }, [mentionMenuOpen, relativeDirectory, listing]);
+
+  const page = pageWindow(filteredEntries, mentionPage, DIRECTORY_PAGE_SIZE);
+  const mentionPageCount = page.pageCount;
+  const mentionCurrentPage = page.currentPage;
+  const visibleMentionEntries = page.items;
 
   useEffect(() => {
     setMentionActiveIndex(0);
@@ -153,7 +135,7 @@ export function useFileMentionMenu({
   }, [mentionQuery?.query, mentionQuery?.directory]);
 
   useEffect(() => {
-    setMentionPage((page) => Math.min(page, mentionPageCount - 1));
+    setMentionPage((current) => Math.min(current, mentionPageCount - 1));
   }, [mentionPageCount]);
 
   useEffect(() => {
@@ -161,21 +143,12 @@ export function useFileMentionMenu({
   }, [visibleMentionEntries.length]);
 
   const retryFileMentionLoad = useCallback(() => {
-    if (!mentionQuery) return;
-    cacheRef.current.delete(mentionQuery.directory);
-    setOpenGeneration((generation) => generation + 1);
-  }, [mentionQuery]);
+    void listing.retry();
+  }, [listing]);
 
   const syncFileMentionMenuForEdit = useCallback((nextValue: string, cursor: number) => {
     const nextQuery = cwd ? getMentionQuery(nextValue, cursor) : null;
-    setMentionMenuOpen((previous) => {
-      const next = Boolean(nextQuery);
-      if (next && !previous) {
-        cacheRef.current.clear();
-        setOpenGeneration((generation) => generation + 1);
-      }
-      return next;
-    });
+    setMentionMenuOpen(Boolean(nextQuery));
   }, [cwd]);
 
   const selectFileMention = useCallback((entry: FileMentionEntry) => {
@@ -185,7 +158,7 @@ export function useFileMentionMenu({
     const trailingTokenLength = value.slice(cursor).match(/^[^\s]*/)?.[0].length ?? 0;
     const tokenEnd = cursor + trailingTokenLength;
     if (entry.isParent || entry.isDir) {
-      const normalizedCwd = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
+      const normalizedCwd = normalizeCwd(cwd);
       const currentRelativeDirectory = mentionQuery.directory === normalizedCwd
         ? ""
         : getRelativeFilePath(mentionQuery.directory, cwd)
@@ -208,7 +181,8 @@ export function useFileMentionMenu({
     }
     const relative = getRelativeFilePath(entry.fullPath, cwd).replace(/^\/+/, "");
     const suffix = value.slice(tokenEnd);
-    const replacement = `${codeSpan(`./${relative}`)}${/^\s/.test(suffix) ? "" : " "}`;
+    const reference = formatFilePathReference(relative);
+    const replacement = /^\s/.test(suffix) ? reference.trimEnd() : reference;
     const nextValue = value.slice(0, mentionQuery.start) + replacement + suffix;
     const nextCursor = mentionQuery.start + replacement.length;
     setValue(nextValue);
@@ -229,13 +203,13 @@ export function useFileMentionMenu({
       setMentionMenuOpen(false);
       return true;
     }
-    if (e.key === "Backspace" && mentionQuery.query === "" && mentionQuery.directory !== normalizeFilePathSlashes(cwd ?? "").replace(/\/+$/, "")) {
+    if (e.key === "Backspace" && mentionQuery.query === "" && mentionQuery.directory !== normalizeCwd(cwd ?? "")) {
       e.preventDefault();
       const parent = entries.find((entry) => entry.isParent);
       if (parent) selectFileMention(parent);
       return true;
     }
-    if (loading) {
+    if (listingSnapshot.loading) {
       if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         return true;
@@ -252,9 +226,9 @@ export function useFileMentionMenu({
     }
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
-      setMentionPage((page) => e.key === "ArrowRight"
-        ? (page >= mentionPageCount - 1 ? 0 : page + 1)
-        : (page <= 0 ? mentionPageCount - 1 : page - 1));
+      setMentionPage((current) => e.key === "ArrowRight"
+        ? (current >= mentionPageCount - 1 ? 0 : current + 1)
+        : (current <= 0 ? mentionPageCount - 1 : current - 1));
       setMentionActiveIndex(0);
       return true;
     }
@@ -264,7 +238,7 @@ export function useFileMentionMenu({
       return true;
     }
     return false;
-  }, [mentionMenuOpen, mentionQuery, cwd, entries, loading, visibleMentionEntries, mentionActiveIndex, mentionPageCount, selectFileMention]);
+  }, [mentionMenuOpen, mentionQuery, cwd, entries, listingSnapshot.loading, visibleMentionEntries, mentionActiveIndex, mentionPageCount, selectFileMention]);
 
   return {
     mentionMenuOpen,
@@ -274,8 +248,8 @@ export function useFileMentionMenu({
     visibleMentionEntries,
     mentionPageCount,
     mentionCurrentPage,
-    loading,
-    error,
+    loading: listingSnapshot.loading,
+    error: listingSnapshot.error,
     setMentionMenuOpen,
     syncFileMentionMenuForEdit,
     handleFileMentionKeyDown,

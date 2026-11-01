@@ -27,6 +27,10 @@ export const chat = {
   "Remove": "移除",
   "Type / to select a skill, @ to select a file": "输入 / 选择技能，输入 @ 选择文件",
   "Upload image": "上传图片",
+  "Add context": "添加内容",
+  "Choose skill": "选择技能",
+  "Manage skills": "管理技能",
+  "Reference file": "引用文件",
   "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",
   "↑↓ switch, Enter to pick": "↑↓切换，回车确认",
   "Files": "文件",
@@ -40,6 +44,7 @@ export const chat = {
   "Change tool preset": "切换工具预设",
   "Export": "导出",
   "Export session": "导出会话",
+  "Export JSONL": "导出JSONL",
   "Exporting...": "导出中...",
   "Exporting…": "导出中…",
   "Stop agent": "停止 Agent",
@@ -270,4 +275,7 @@ export const chat = {
   "Message from channel {channel}": "来自频道 {channel}",
   "Message from scheduled task {task}": "来自定时任务 {task}",
   "Message from session {session}": "来自会话 {session}",
+
+  "Select {name}": "选择 {name}",
+  "Add {n} items": "添加 {n} 项",
 } as const;

@@ -10,7 +10,7 @@ import {
 } from "@/lib/shared/context-composition";
 import { contextBucketRows, type ContextCompositionRow } from "@/lib/shared/context-composition-rows";
 import { formatContextTokensK, formatContextWindowCompact } from "@/lib/shared/context-usage";
-import { getToolPreview } from "./message-view/utils";
+import { getToolPreview } from "@/lib/shared/tool-call-display";
 import {
   CONTEXT_BUCKET_COLORS,
   CONTEXT_BUCKET_LABELS,

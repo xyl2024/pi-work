@@ -10,7 +10,6 @@ import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { resolveFileLink } from "@/lib/shared/file-link";
 import { formatToolDuration } from "@/lib/shared/tool-duration";
-import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "@/lib/shared/subagent";
 import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
 import { useFileLinkHandler } from "./context";
 
@@ -165,59 +164,6 @@ export function TurnDuration({ startMs, endMs, running }: { startMs: number; end
   }, [endMs, running, startMs]);
   const ms = endMs !== undefined ? endMs - startMs : (elapsedMs ?? 0);
   return <span>{formatDuration(ms)}</span>;
-}
-
-const PREVIEW_PART_LIMIT = 80;
-const PREVIEW_TOTAL_LIMIT = 160;
-
-function previewPart(value: unknown): string {
-  return String(value).slice(0, PREVIEW_PART_LIMIT);
-}
-
-export function getToolPreview(block: { input?: unknown; toolName?: string }): string {
-  const input = block.input;
-  if (!input || typeof input !== "object") return "";
-  const keys = Object.keys(input as Record<string, unknown>);
-  if (keys.length === 0) return "";
-
-  const record = input as Record<string, unknown>;
-  const str = (v: unknown): string => (typeof v === "string" && v.length > 0 ? v : "");
-
-  let parts: string[];
-  switch (block.toolName) {
-    case "find":
-    case "grep": {
-      parts = [str(record.path), str(record.pattern)];
-      break;
-    }
-    case "read":
-    case "write":
-    case "edit":
-    case "ls": {
-      parts = [str(record.path)];
-      break;
-    }
-    case "bash": {
-      parts = [str(record.command)];
-      break;
-    }
-    case SUBAGENT_TOOL_NAME:
-    case LEGACY_SPAWN_SUBAGENT_TOOL_NAME: {
-      parts = [str(record.subagent_name) || str(record.subagentType), str(record.description)];
-      break;
-    }
-    default: {
-      const fallbackKey =
-        ["command", "path", "file_path", "pattern", "query", "symbol", "action", "url", "name"].find((k) => k in record) ?? keys[0];
-      parts = [String(record[fallbackKey])];
-    }
-  }
-
-  return parts
-    .filter((p) => p.length > 0)
-    .map(previewPart)
-    .join(" · ")
-    .slice(0, PREVIEW_TOTAL_LIMIT);
 }
 
 export interface UsageIconsProps {

@@ -1,9 +1,14 @@
+import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { exportSessionHtmlViaPi } from "@/lib/server/session-export/pi-html";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import {
+  parseSessionExportFormat,
+  sessionExportExtension,
+} from "@/lib/shared/session-export";
 
 const log = createLogger("api/sessions/[id]/export");
 
@@ -29,8 +34,9 @@ export async function GET(
     const url = new URL(req.url);
     const leafId = url.searchParams.get("leafId");
     const themeName = url.searchParams.get("theme") ?? undefined;
+    const format = parseSessionExportFormat(url.searchParams.get("format"));
 
-    log.debug("export session requested", { id, leafId, themeName });
+    log.debug("export session requested", { id, leafId, themeName, format });
 
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
@@ -40,16 +46,31 @@ export async function GET(
 
     const sm = SessionManager.open(filePath);
 
-    const html = await exportSessionHtmlViaPi(sm, {
-      leafId,
-      themeName,
-    });
-
     const sessionName =
       (typeof sm.getSessionName === "function" ? sm.getSessionName() : "") ?? "";
     const title =
       sessionName.length > 0 ? sessionName : `Session ${id.slice(0, 8)}`;
     const slug = slugifyTitle(title, id);
+    const extension = sessionExportExtension(format);
+
+    if (format === "jsonl") {
+      const body = await readFile(filePath);
+      log.info("session exported as jsonl", {
+        id, slug, bytes: body.byteLength, durationMs: elapsedMs(startedAt),
+      });
+      return new NextResponse(new Uint8Array(body), {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(slug)}.${extension}`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    const html = await exportSessionHtmlViaPi(sm, {
+      leafId,
+      themeName,
+    });
 
     log.info("session exported via pi", {
       id, slug, leafId, themeName,
@@ -60,7 +81,7 @@ export async function GET(
     return new NextResponse(html, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(slug)}.html`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(slug)}.${extension}`,
         "Cache-Control": "no-store",
       },
     });

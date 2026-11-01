@@ -2,19 +2,20 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import { useStreamingMessage } from "@/hooks/useStreamingMessage";
+import { STREAMING_VIEWPORT_MARGIN_BOTTOM_PX } from "@/lib/shared/streamingViewportHeight";
 
-const STREAMING_VIEWPORT_MAX_HEIGHT = 500;
 const BOTTOM_THRESHOLD_PX = 100;
 
 interface Props {
   tabId: string;
+  maxHeight: number;
   children: ReactNode;
   userScrollingUpRef: React.RefObject<boolean>;
   onResumeAutoScroll?: () => void;
   onHeightIncrease?: (heightDelta: number) => void;
 }
 
-export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, onResumeAutoScroll, onHeightIncrease }: Props) {
+export function StreamingMessageViewport({ tabId, maxHeight, children, userScrollingUpRef, onResumeAutoScroll, onHeightIncrease }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const previousViewportHeightRef = useRef<number | null>(null);
@@ -145,11 +146,11 @@ export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, 
       onTouchMove={handleTouchMove}
       style={{
         boxSizing: "border-box",
-        maxHeight: STREAMING_VIEWPORT_MAX_HEIGHT,
+        maxHeight,
         flexShrink: 0,
         overflowX: "hidden",
         overflowY: "auto",
-        marginBottom: 16,
+        marginBottom: STREAMING_VIEWPORT_MARGIN_BOTTOM_PX,
         padding: 12,
         border: "1px solid var(--border)",
         borderRadius: 8,

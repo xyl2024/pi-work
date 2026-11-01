@@ -13,7 +13,9 @@ import {
 } from "@/lib/shared/chatBottomFrostMask";
 import { branchAnchorEntryId, buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { modelDisplayName } from "@/lib/shared/model-display";
+import { STREAMING_STATUS_ROW_HEIGHT_PX } from "@/lib/shared/streamingViewportHeight";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
+import { sessionExportExtension, type SessionExportFormat } from "@/lib/shared/session-export";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import {
   canSwitchSessionPermissionMode,
@@ -60,6 +62,7 @@ import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
 import { useReplay } from "./chat-window/hooks/useReplay";
 import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
+import { useStreamingViewportHeight } from "./chat-window/hooks/useStreamingViewportHeight";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { useSettings } from "@/hooks/settingsStore";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
@@ -84,6 +87,7 @@ interface Props {
   onSessionNameChange?: (name: string) => void;
   onSessionInfoLoaded?: (session: SessionInfo) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
+  onOpenSkillsPanel?: () => void;
   onDraftChange?: (draft: {
     dirty: boolean;
     text: string;
@@ -97,7 +101,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -264,13 +268,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     [onOpenFile],
   );
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (format: SessionExportFormat) => {
     if (!currentSessionId || isExporting) return;
     setIsExporting(true);
     try {
       const params = new URLSearchParams();
       if (activeLeafId) params.set("leafId", activeLeafId);
       if (locale) params.set("locale", locale);
+      params.set("format", format);
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(currentSessionId)}/export${qs ? `?${qs}` : ""}`;
       const res = await fetch(url);
@@ -280,7 +285,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       }
       const blob = await res.blob();
       const cd = res.headers.get("content-disposition") ?? "";
-      let filename = `session-${currentSessionId.slice(0, 8)}.html`;
+      let filename = `session-${currentSessionId.slice(0, 8)}.${sessionExportExtension(format)}`;
       const mStar = /filename\*=UTF-8''([^;]+)/i.exec(cd);
       if (mStar) {
         try { filename = decodeURIComponent(mStar[1]); } catch {}
@@ -390,7 +395,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return map;
   }, [messages, inFlightToolResults]);
 
-  const { beforeEntryId, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
+  const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
     return buildTimelineDividers({
       timeline,
       entryIds: renderEntryIds,
@@ -455,6 +460,26 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     if (renderMessages[i].role === "user") { lastUserIdx = i; break; }
   }
   const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
+
+  const streamingViewportHeight = useStreamingViewportHeight({
+    active: liveTurnActive,
+    transcriptRef: scrollContainerRef,
+    userMessageRef: lastUserMsgRef,
+    userScrollingUpRef: userScrolledUpRef,
+  });
+  const { handleResume: handleStreamingScrollResume, handleHeightIncrease: handleStreamingHeightIncrease } = scrollFollow;
+  const {
+    maxHeight: streamingViewportMaxHeight,
+    recalculate: recalculateStreamingViewportHeight,
+  } = streamingViewportHeight;
+  const handleStreamingResumeAutoScroll = useCallback(() => {
+    handleStreamingScrollResume();
+    recalculateStreamingViewportHeight();
+  }, [handleStreamingScrollResume, recalculateStreamingViewportHeight]);
+  const handleStreamingViewportHeightIncrease = useCallback((heightDelta: number) => {
+    handleStreamingHeightIncrease(heightDelta);
+    recalculateStreamingViewportHeight();
+  }, [handleStreamingHeightIncrease, recalculateStreamingViewportHeight]);
 
   const lastUserTimestamp = lastUserIdx !== -1 ? renderMessages[lastUserIdx]?.timestamp : undefined;
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
@@ -664,6 +689,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           else if (action === "compact") handleCompactClick();
           else if (action === "model") setModelModalOpen(true);
         }}
+        onOpenSkillsPanel={onOpenSkillsPanel}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}
         onDraftChange={onDraftChange}
@@ -872,8 +898,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               let streamingTurnDiffStats: ToolDiffStats | null = null;
               const maybeDivider = (idx: number): React.ReactNode => {
                 const nodes: React.ReactNode[] = [];
-                const entryId = renderEntryIds[idx];
-                for (const divider of (entryId ? beforeEntryId.get(entryId) : undefined) ?? []) {
+                const visibleIndex = timeline.visibleIndexOfSession(idx);
+                const dividers = isVisibleChatMessage(renderMessages[idx]) ? beforeVisible.get(visibleIndex) : undefined;
+                for (const divider of dividers ?? []) {
                   if (divider.kind === "compaction") {
                     nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
                   } else {
@@ -1017,9 +1044,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingNodes.length > 0) && (
                         <StreamingMessageViewport
                           tabId={streamingKey}
+                          maxHeight={streamingViewportMaxHeight}
                           userScrollingUpRef={userScrolledUpRef}
-                          onResumeAutoScroll={scrollFollow.handleResume}
-                          onHeightIncrease={scrollFollow.handleHeightIncrease}
+                          onResumeAutoScroll={handleStreamingResumeAutoScroll}
+                          onHeightIncrease={handleStreamingViewportHeightIncrease}
                         >
                           {streamingRendered}
                           {trailingNodes}
@@ -1038,7 +1066,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       )}
                       <div
                         className="py-2"
-                        style={{ height: 40, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 12 }}
+                        style={{
+                          height: STREAMING_STATUS_ROW_HEIGHT_PX,
+                          boxSizing: "border-box",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
                       >
                         <div style={{ minWidth: 0, flexShrink: 1 }}>
                           {isStreamingThinking ? (
