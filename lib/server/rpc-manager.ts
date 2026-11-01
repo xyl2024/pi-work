@@ -23,6 +23,7 @@ import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } fr
 import type { LlmAuditSource } from "../shared/llm-audit-types";
 import type { ModelCallCommandOptions } from "../shared/token-audit-types";
 import { writeSessionName, deleteSessionName } from "./session-names";
+import { ensureSuggestionForCurrentLeaf } from "./suggested-prompt-background";
 import {
   readSessionToolSelection,
   writeSessionToolSelection,
@@ -195,6 +196,11 @@ export class AgentSessionWrapper {
         if (body) this.lastAssistantText = body;
       } else if (event.type === "agent_end") {
         void this.deliverSessionNotify();
+        if (!event.willRetry) {
+          void ensureSuggestionForCurrentLeaf(this.sessionId, {
+            onSuggestion: (publication) => this.emitSuggestion(publication),
+          });
+        }
       }
       if (event.type === "message_end") {
         this.emitTreeUpdate();
@@ -293,6 +299,14 @@ export class AgentSessionWrapper {
           error: String(error),
         });
       });
+  }
+
+  emitSuggestion(publication: {
+    leafId: string;
+    suggestion: string;
+    generatedAt: number;
+  }): void {
+    this.emit({ type: "suggested_prompt", ...publication });
   }
 
   emitTreeUpdate(): void {

@@ -13,7 +13,7 @@ import { createSubagentTask, markSubagentRunning } from "@/lib/server/subagent-s
 import { createTask, recordRunEnd, recordRunStart } from "@/lib/server/scheduler/store";
 import { readConfig, writeConfig } from "@/lib/server/config";
 import type { SuggestedPromptConfig } from "@/lib/shared/config-types";
-import { POST as suggestRoute } from "@/app/api/sessions/[id]/suggest/route";
+import { GET as suggestGetRoute, POST as suggestRoute } from "@/app/api/sessions/[id]/suggest/route";
 
 const timestamp = "2026-01-02T03:04:05.000Z";
 
@@ -132,7 +132,7 @@ describe("suggestForSession", () => {
 
     await expect(
       suggestForSession({ sessionId: "session-1", generate: generator }),
-    ).resolves.toEqual({ kind: "suggestion", suggestion: "那退避策略呢？" });
+    ).resolves.toEqual({ kind: "suggestion", suggestion: "那退避策略呢？", leafId: "a2" });
   });
 
   it("feeds the whole active branch to the model with generation options pinned", async () => {
@@ -260,7 +260,7 @@ describe("suggestForSession", () => {
 
     await expect(
       suggestForSession({ sessionId: "session-5", generate: generator }),
-    ).resolves.toEqual({ kind: "none", reason: "generation-failed" });
+    ).resolves.toEqual({ kind: "none", reason: "generation-failed", leafId: "a2" });
     expect(calls).toHaveLength(1);
   });
 
@@ -271,7 +271,7 @@ describe("suggestForSession", () => {
 
     await expect(
       suggestForSession({ sessionId: "session-6", generate: generator }),
-    ).resolves.toEqual({ kind: "none", reason: "empty-suggestion" });
+    ).resolves.toEqual({ kind: "none", reason: "empty-suggestion", leafId: "a2" });
   });
 
   it("drops a suggestion that exceeds the character limit instead of truncating it", async () => {
@@ -281,7 +281,7 @@ describe("suggestForSession", () => {
 
     await expect(
       suggestForSession({ sessionId: "session-7", generate: generator }),
-    ).resolves.toEqual({ kind: "none", reason: "suggestion-too-long" });
+    ).resolves.toEqual({ kind: "none", reason: "suggestion-too-long", leafId: "a2" });
   });
 
   it("cleans markdown and quote noise from the suggestion", async () => {
@@ -291,7 +291,7 @@ describe("suggestForSession", () => {
 
     await expect(
       suggestForSession({ sessionId: "session-8", generate: generator }),
-    ).resolves.toEqual({ kind: "suggestion", suggestion: "那退避策略呢？" });
+    ).resolves.toEqual({ kind: "suggestion", suggestion: "那退避策略呢？", leafId: "a2" });
   });
 
   it("answers the route with an empty suggestion when the turn did not end normally", async () => {
@@ -372,5 +372,87 @@ describe("suggestForSession", () => {
       source: "direct",
       purpose: "suggested-prompt",
     });
+  });
+});
+
+describe("suggest route caching", () => {
+  it("serves the stored suggestion for the requested leaf", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-get-1");
+    const { generator } = recordingGenerator("那退避策略呢？");
+    await suggestForSession({ sessionId: "session-get-1", generate: generator });
+
+    const response = await suggestGetRoute(
+      new Request("http://localhost:30143/api/sessions/session-get-1/suggest?leafId=a2"),
+      { params: Promise.resolve({ id: "session-get-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      suggestion: "那退避策略呢？",
+      leafId: "a2",
+    });
+  });
+
+  it("answers with no suggestion for a leaf it never computed", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-get-2");
+
+    const response = await suggestGetRoute(
+      new Request("http://localhost:30143/api/sessions/session-get-2/suggest?leafId=a1"),
+      { params: Promise.resolve({ id: "session-get-2" }) },
+    );
+
+    await expect(response.json()).resolves.toEqual({ suggestion: "", leafId: "a1" });
+  });
+
+  it("falls back to the session's own leaf when the query omits it", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-get-3");
+    const { generator } = recordingGenerator("那退避策略呢？");
+    await suggestForSession({ sessionId: "session-get-3", generate: generator });
+
+    const response = await suggestGetRoute(
+      new Request("http://localhost:30143/api/sessions/session-get-3/suggest"),
+      { params: Promise.resolve({ id: "session-get-3" }) },
+    );
+
+    await expect(response.json()).resolves.toEqual({
+      suggestion: "那退避策略呢？",
+      leafId: "a2",
+    });
+  });
+
+  it("does not call the model twice for the same leaf", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-get-4");
+    const { generator, calls } = recordingGenerator("那退避策略呢？");
+
+    await suggestForSession({ sessionId: "session-get-4", generate: generator });
+    await suggestForSession({ sessionId: "session-get-4", generate: generator });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries a transient failure once its ttl expired", async () => {
+    const { agentDir } = sandbox();
+    completedTurn(agentDir, "session-get-5");
+    let attempt = 0;
+    const generate: SuggestedPromptGenerator = async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("LLM call timed out");
+      return "那退避策略呢？";
+    };
+
+    const failed = await suggestForSession({ sessionId: "session-get-5", generate, now: 0 });
+    const retried = await suggestForSession({
+      sessionId: "session-get-5",
+      generate,
+      now: 60 * 60 * 1000,
+    });
+
+    expect(failed).toMatchObject({ kind: "none", reason: "generation-failed" });
+    expect(retried).toMatchObject({ kind: "suggestion", leafId: "a2" });
+    expect(attempt).toBe(2);
   });
 });

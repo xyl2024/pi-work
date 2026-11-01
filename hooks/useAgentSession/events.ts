@@ -44,6 +44,7 @@ type AgentSessionEventsOptions = {
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
   onFirstAssistantReady?: () => void;
+  onSuggestedPrompt?: (push: { leafId: string; suggestion: string; generatedAt: number }) => void;
   permissionsRef: PermissionRef;
   sessionIdRef: { current: string | null };
   dispatch: Dispatch<StreamAction>;
@@ -261,6 +262,10 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   applyRuntimeInputRef.current = applyRuntimeInput;
 
   const handleAgentEvent = useCallback((rawEvent: SessionEvent) => {
+    if (rawEvent.type === "suggested_prompt") {
+      optionsRef.current.onSuggestedPrompt?.(rawEvent);
+      return;
+    }
     const event: SessionEvent = rawEvent.type === "prompt_failed" && !rawEvent.error
       ? { ...rawEvent, error: optionsRef.current.t("Failed to send message") }
       : rawEvent;

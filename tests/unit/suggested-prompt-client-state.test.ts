@@ -1,202 +1,97 @@
 import { describe, expect, it } from "vitest";
 import {
-  INITIAL_SUGGESTED_PROMPT_STATE,
-  decideSuggestedPromptRequest,
-  reduceSuggestedPrompt,
+  decideSuggestedPromptFetch,
+  selectSuggestionText,
   selectSuggestedPromptPlaceholder,
-  type SuggestedPromptState,
+  type SuggestedPromptLeafText,
 } from "@/lib/client/suggested-prompt-state";
 
-const sessionA = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-  type: "session_changed",
-  sessionId: "session-a",
-});
+const fetched = (leafId: string, text: string): SuggestedPromptLeafText => ({ leafId, text });
 
-const settledState: SuggestedPromptState = reduceSuggestedPrompt(
-  reduceSuggestedPrompt(sessionA, { type: "request_started", sessionId: "session-a" }),
-  { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "那错误处理呢？" },
-);
-
-describe("decideSuggestedPromptRequest", () => {
-  it("skips when there is no session", () => {
-    expect(decideSuggestedPromptRequest({ sessionId: null, requestInFlight: false })).toEqual({
+describe("decideSuggestedPromptFetch", () => {
+  it("skips without a session", () => {
+    expect(decideSuggestedPromptFetch({ sessionId: null, leafId: "a1", busy: false })).toEqual({
       kind: "skip",
       reason: "no-session",
     });
   });
 
-  it("skips while a request is still in flight", () => {
-    expect(decideSuggestedPromptRequest({ sessionId: "s1", requestInFlight: true })).toEqual({
+  it("skips without a leaf", () => {
+    expect(decideSuggestedPromptFetch({ sessionId: "s1", leafId: null, busy: false })).toEqual({
       kind: "skip",
-      reason: "already-running",
+      reason: "no-leaf",
     });
   });
 
-  it("requests for the session when idle", () => {
-    expect(decideSuggestedPromptRequest({ sessionId: "s1", requestInFlight: false })).toEqual({
-      kind: "request",
+  it("waits for the turn to settle", () => {
+    expect(decideSuggestedPromptFetch({ sessionId: "s1", leafId: "a1", busy: true })).toEqual({
+      kind: "skip",
+      reason: "turn-running",
+    });
+  });
+
+  it("fetches for the current session and leaf", () => {
+    expect(decideSuggestedPromptFetch({ sessionId: "s1", leafId: "a1", busy: false })).toEqual({
+      kind: "fetch",
       sessionId: "s1",
+      leafId: "a1",
     });
   });
 });
 
-describe("reduceSuggestedPrompt", () => {
-  it("keeps the suggestion while the user types and shows it again after clearing", () => {
-    const typed = selectSuggestedPromptPlaceholder({
-      suggestion: settledState.suggestion,
-      inputText: "等一下",
-      fallback: "static hint",
-    });
-    const cleared = selectSuggestedPromptPlaceholder({
-      suggestion: settledState.suggestion,
-      inputText: "",
-      fallback: "static hint",
-    });
-    expect(typed).toBe("static hint");
-    expect(cleared).toBe("那错误处理呢？");
+describe("selectSuggestionText", () => {
+  const base = { leafId: "a1", fetched: null, pushed: null, suppressedLeafId: null };
+
+  it("returns nothing without a leaf", () => {
+    expect(selectSuggestionText({ ...base, leafId: null, fetched: fetched("a1", "x") })).toBeNull();
   });
 
-  it("clears the suggestion when a new turn starts but keeps the in-flight guard", () => {
-    const state = reduceSuggestedPrompt(settledState, { type: "turn_started" });
-    expect(state.suggestion).toBeNull();
-    expect(state.turn).toBe(1);
-    expect(state.inFlight).toBeNull();
+  it("prefers the pushed suggestion for the same leaf", () => {
+    expect(
+      selectSuggestionText({
+        ...base,
+        fetched: fetched("a1", "旧的"),
+        pushed: fetched("a1", "新的"),
+      }),
+    ).toBe("新的");
   });
 
-  it("replaces the suggestion when the new turn ends", () => {
-    const state = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "改成并发版本？" },
-    );
-    expect(state.suggestion).toBe("改成并发版本？");
-    expect(state.inFlight).toBeNull();
+  it("ignores a suggestion belonging to another leaf", () => {
+    expect(selectSuggestionText({ ...base, pushed: fetched("a2", "别的分支") })).toBeNull();
   });
 
-  it("settles an empty suggestion to none", () => {
-    const state = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "   " },
-    );
-    expect(state.suggestion).toBeNull();
+  it("hides the suggestion once a turn starts on that leaf", () => {
+    expect(
+      selectSuggestionText({
+        ...base,
+        pushed: fetched("a1", "那错误处理呢？"),
+        suppressedLeafId: "a1",
+      }),
+    ).toBeNull();
   });
 
-  it("ignores a suggestion that arrives for an older turn", () => {
-    const state = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(settledState, { type: "turn_started" }),
-      { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "过期的建议" },
-    );
-    expect(state.suggestion).toBeNull();
+  it("shows the suggestion again when the leaf moves on", () => {
+    expect(
+      selectSuggestionText({
+        ...base,
+        leafId: "a2",
+        pushed: fetched("a2", "那错误处理呢？"),
+        suppressedLeafId: "a1",
+      }),
+    ).toBe("那错误处理呢？");
   });
 });
 
 describe("selectSuggestedPromptPlaceholder", () => {
-  it("falls back to the static hint when there is no suggestion", () => {
+  it("adopts the suggestion into an empty input", () => {
     expect(
-      selectSuggestedPromptPlaceholder({
-        suggestion: INITIAL_SUGGESTED_PROMPT_STATE.suggestion,
-        inputText: "",
-        fallback: "static hint",
-      }),
-    ).toBe("static hint");
-  });
-});
-
-describe("cross-session and late responses", () => {
-  it("drops a late suggestion from a session the tab has since switched away from", () => {
-    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-      type: "session_changed",
-      sessionId: "session-a",
-    });
-    const inFlight = reduceSuggestedPrompt(started, {
-      type: "request_started",
-      sessionId: "session-a",
-    });
-    const switched = reduceSuggestedPrompt(inFlight, {
-      type: "session_changed",
-      sessionId: "session-b",
-    });
-
-    const settled = reduceSuggestedPrompt(switched, {
-      type: "request_settled",
-      sessionId: "session-a",
-      turn: 0,
-      suggestion: "旧会话的建议",
-    });
-
-    expect(settled.suggestion).toBeNull();
-    expect(settled.inFlight).toBeNull();
+      selectSuggestedPromptPlaceholder({ inputText: "", suggestion: "那错误处理呢？", fallback: "问点什么" }),
+    ).toBe("那错误处理呢？");
   });
 
-  it("drops a late suggestion for an older turn within the same session", () => {
-    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-      type: "session_changed",
-      sessionId: "session-a",
-    });
-    const inFlight = reduceSuggestedPrompt(started, {
-      type: "request_started",
-      sessionId: "session-a",
-    });
-    const nextTurn = reduceSuggestedPrompt(inFlight, { type: "turn_started" });
-
-    const settled = reduceSuggestedPrompt(nextTurn, {
-      type: "request_settled",
-      sessionId: "session-a",
-      turn: 0,
-      suggestion: "上一轮的建议",
-    });
-
-    expect(settled.suggestion).toBeNull();
-    expect(settled.turn).toBe(1);
-  });
-
-  it("keeps showing the suggestion of the session it was generated for", () => {
-    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-      type: "session_changed",
-      sessionId: "session-a",
-    });
-    const settled = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(started, { type: "request_started", sessionId: "session-a" }),
-      { type: "request_settled", sessionId: "session-a", turn: 0, suggestion: "那错误处理呢？" },
-    );
-
-    expect(settled.suggestion).toBe("那错误处理呢？");
-  });
-});
-
-describe("turn start signal", () => {
-  it("keeps the in-flight guard when a new turn starts so a late response cannot leak", () => {
-    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-      type: "session_changed",
-      sessionId: "session-a",
-    });
-    const inFlight = reduceSuggestedPrompt(started, {
-      type: "request_started",
-      sessionId: "session-a",
-    });
-
-    const nextTurn = reduceSuggestedPrompt(inFlight, { type: "turn_started" });
-
-    expect(nextTurn.inFlight).toEqual({ sessionId: "session-a", turn: 0 });
-  });
-
-  it("counts every turn_started as a new turn, so a turn must signal it exactly once", () => {
-    const started = reduceSuggestedPrompt(INITIAL_SUGGESTED_PROMPT_STATE, {
-      type: "session_changed",
-      sessionId: "session-a",
-    });
-    const once = reduceSuggestedPrompt(started, { type: "turn_started" });
-    const twice = reduceSuggestedPrompt(once, { type: "turn_started" });
-
-    const settledOnce = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(once, { type: "request_started", sessionId: "session-a" }),
-      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "这轮的建议" },
-    );
-    const settledTwice = reduceSuggestedPrompt(
-      reduceSuggestedPrompt(twice, { type: "request_started", sessionId: "session-a" }),
-      { type: "request_settled", sessionId: "session-a", turn: 1, suggestion: "这轮的建议" },
-    );
-
-    expect(settledOnce.suggestion).toBe("这轮的建议");
-    expect(settledTwice.suggestion).toBeNull();
+  it("keeps the fallback while the user is typing", () => {
+    expect(
+      selectSuggestedPromptPlaceholder({ inputText: "我在写", suggestion: "那错误处理呢？", fallback: "问点什么" }),
+    ).toBe("问点什么");
   });
 });

@@ -1037,6 +1037,7 @@ const IGNORED_EVENT_SAMPLES: SessionEvent[] = [
   { type: "entry_appended", entry: { id: "e1" } },
   { type: "queue_update", steering: ["steer"], followUp: ["follow"] },
   { type: "session_info_changed", name: "renamed" },
+  { type: "suggested_prompt", leafId: "a1", suggestion: "那退避策略呢？", generatedAt: 1 },
   { type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 3, delayMs: 250, errorMessage: "x" },
   { type: "summarization_retry_attempt_start", source: "compaction", reason: "threshold" },
   { type: "summarization_retry_finished" },

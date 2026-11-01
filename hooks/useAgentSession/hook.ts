@@ -59,7 +59,7 @@ function newRequestId(): string {
 
 export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionResult {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
+    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, onSuggestedPrompt,
     modelsRefreshKey,
     scrollToEntryId, onEntryNavigated, isActive = true, controllerId,
   } = opts;
@@ -330,6 +330,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     newSessionCwd,
     onAgentEnd,
     onFirstAssistantReady,
+    onSuggestedPrompt,
     permissionsRef,
     sessionIdRef,
     runtimeStateRef,

@@ -14,6 +14,7 @@ import {
 import { deleteSessionNotify } from "@/lib/server/session-notify";
 import { deleteSessionToolSelection } from "@/lib/server/session-tools-config";
 import { deleteSessionPermissionMode } from "@/lib/server/session-permission-mode";
+import { deleteSuggestions } from "@/lib/server/suggested-prompt-store";
 import {
   invalidateSessionListCache,
   invalidateSessionPathCache,
@@ -145,6 +146,7 @@ export async function deleteSession(
   deleteSessionToolSelection(sessionId);
   deleteSessionNotify(sessionId);
   deleteSessionPermissionMode(sessionId);
+  deleteSuggestions(sessionId);
 
   return { filePath, reparentedChildren };
 }

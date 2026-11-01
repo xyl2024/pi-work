@@ -112,6 +112,12 @@ export type SessionEvent =
   | { type: "permission_request"; toolCallId: string; ruleName: string; command: string }
   | ({ type: "ask_user_questions_request" } & AskUserQuestionsRequestPayload)
   | { type: "prompt_failed"; error: string }
+  | {
+      type: "suggested_prompt";
+      leafId: string;
+      suggestion: string;
+      generatedAt: number;
+    }
   | { type: "connected"; sessionId: string };
 
 export type SessionEventType = SessionEvent["type"];
@@ -168,6 +174,8 @@ export const IGNORED_SESSION_EVENTS: Record<IgnoredSessionEventType, string> = {
   entry_appended: "A session entry was persisted; the tree arrives via session_tree_update instead.",
   queue_update: "Steering / follow-up queue depths; the UI has no queue indicator yet.",
   session_info_changed: "Renames are mirrored to the sidecar server-side and read back through the session APIs.",
+  suggested_prompt:
+    "A server-generated follow-up question for one leaf; the transport hands it to the chat window's suggested-prompt hook instead of reducing it into the runtime state.",
   summarization_retry_scheduled: "Compaction-retry telemetry; the banner follows compaction_start / compaction_end.",
   summarization_retry_attempt_start: "Same telemetry, attempt boundary.",
   summarization_retry_finished: "Same telemetry, finished.",
@@ -204,6 +212,7 @@ export const SESSION_EVENT_TYPES = [
   "permission_request",
   "ask_user_questions_request",
   "prompt_failed",
+  "suggested_prompt",
   "connected",
 ] as const satisfies readonly SessionEventType[];
 

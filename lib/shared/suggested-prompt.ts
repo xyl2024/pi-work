@@ -120,3 +120,82 @@ export function extractSuggestedPromptContext(
   }
   return context;
 }
+
+export const MAX_STORED_SUGGESTIONS = 5;
+export const TRANSIENT_SUGGESTION_FAILURE_TTL_MS = 10 * 60 * 1000;
+export const SUGGESTED_PROMPT_STORE_VERSION = 1;
+
+export interface StoredSuggestion {
+  leafId: string;
+  text: string;
+  reason: string | null;
+  generatedAt: number;
+}
+
+export interface SuggestedPromptStoreFile {
+  version: number;
+  items: StoredSuggestion[];
+}
+
+const TRANSIENT_FAILURE_REASONS: ReadonlySet<string> = new Set(["generation-failed"]);
+
+export function isTransientSuggestionFailure(reason: string): boolean {
+  return TRANSIENT_FAILURE_REASONS.has(reason);
+}
+
+export type StoredSuggestionStatus =
+  | { kind: "suggestion"; text: string }
+  | { kind: "failure"; reason: string; transient: boolean; expired: boolean }
+  | { kind: "missing" };
+
+export function readStoredSuggestionStatus(
+  items: readonly StoredSuggestion[],
+  leafId: string,
+  now: number,
+  transientTtlMs: number = TRANSIENT_SUGGESTION_FAILURE_TTL_MS,
+): StoredSuggestionStatus {
+  const entry = items.find((item) => item.leafId === leafId);
+  if (!entry) return { kind: "missing" };
+  if (entry.text) return { kind: "suggestion", text: entry.text };
+  const reason = entry.reason ?? "empty-suggestion";
+  const transient = isTransientSuggestionFailure(reason);
+  return {
+    kind: "failure",
+    reason,
+    transient,
+    expired: transient && now - entry.generatedAt >= transientTtlMs,
+  };
+}
+
+export function upsertStoredSuggestion(
+  items: readonly StoredSuggestion[],
+  entry: StoredSuggestion,
+  max: number = MAX_STORED_SUGGESTIONS,
+): StoredSuggestion[] {
+  const kept = items.filter((item) => item.leafId !== entry.leafId);
+  const next = [entry, ...kept].sort((a, b) => b.generatedAt - a.generatedAt);
+  return next.slice(0, Math.max(1, max));
+}
+
+function toStoredSuggestion(raw: unknown): StoredSuggestion | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.leafId !== "string" || !record.leafId) return null;
+  if (typeof record.text !== "string") return null;
+  if (typeof record.generatedAt !== "number" || !Number.isFinite(record.generatedAt)) return null;
+  const reason = typeof record.reason === "string" && record.reason ? record.reason : null;
+  if (!record.text && !reason) return null;
+  return { leafId: record.leafId, text: record.text, reason, generatedAt: record.generatedAt };
+}
+
+export function parseStoredSuggestions(raw: unknown): StoredSuggestion[] {
+  if (!raw || typeof raw !== "object") return [];
+  const items = (raw as { items?: unknown }).items;
+  if (!Array.isArray(items)) return [];
+  const parsed: StoredSuggestion[] = [];
+  for (const item of items) {
+    const entry = toStoredSuggestion(item);
+    if (entry) parsed.push(entry);
+  }
+  return parsed;
+}

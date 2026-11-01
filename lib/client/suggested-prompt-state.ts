@@ -1,74 +1,39 @@
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 
-export type SuggestedPromptRequestDecision =
-  | { kind: "request"; sessionId: string }
-  | { kind: "skip"; reason: "no-session" | "already-running" };
-
-export interface SuggestedPromptRequestInput {
-  sessionId: string | null;
-  requestInFlight: boolean;
+export interface SuggestedPromptLeafText {
+  leafId: string;
+  text: string;
 }
 
-export function decideSuggestedPromptRequest(
-  input: SuggestedPromptRequestInput,
-): SuggestedPromptRequestDecision {
+export type SuggestedPromptFetchDecision =
+  | { kind: "fetch"; sessionId: string; leafId: string }
+  | { kind: "skip"; reason: "no-session" | "no-leaf" | "turn-running" };
+
+export function decideSuggestedPromptFetch(input: {
+  sessionId: string | null;
+  leafId: string | null;
+  busy: boolean;
+}): SuggestedPromptFetchDecision {
   if (!input.sessionId) return { kind: "skip", reason: "no-session" };
-  if (input.requestInFlight) return { kind: "skip", reason: "already-running" };
-  return { kind: "request", sessionId: input.sessionId };
+  if (!input.leafId) return { kind: "skip", reason: "no-leaf" };
+  if (input.busy) return { kind: "skip", reason: "turn-running" };
+  return { kind: "fetch", sessionId: input.sessionId, leafId: input.leafId };
 }
 
-export interface SuggestedPromptInFlight {
-  sessionId: string;
-  turn: number;
+export interface SuggestedPromptSelectionInput {
+  leafId: string | null;
+  fetched: SuggestedPromptLeafText | null;
+  pushed: SuggestedPromptLeafText | null;
+  suppressedLeafId: string | null;
 }
 
-export interface SuggestedPromptState {
-  sessionId: string | null;
-  suggestion: string | null;
-  inFlight: SuggestedPromptInFlight | null;
-  turn: number;
-}
-
-export const INITIAL_SUGGESTED_PROMPT_STATE: SuggestedPromptState = {
-  sessionId: null,
-  suggestion: null,
-  inFlight: null,
-  turn: 0,
-};
-
-export type SuggestedPromptAction =
-  | { type: "session_changed"; sessionId: string | null }
-  | { type: "request_started"; sessionId: string }
-  | { type: "request_settled"; sessionId: string; turn: number; suggestion: string }
-  | { type: "turn_started" };
-
-export function reduceSuggestedPrompt(
-  state: SuggestedPromptState,
-  action: SuggestedPromptAction,
-): SuggestedPromptState {
-  switch (action.type) {
-    case "session_changed":
-      if (action.sessionId === state.sessionId) return state;
-      return { sessionId: action.sessionId, suggestion: null, inFlight: null, turn: 0 };
-    case "request_started":
-      return state.inFlight === null
-        ? { ...state, inFlight: { sessionId: action.sessionId, turn: state.turn } }
-        : state;
-    case "turn_started":
-      return { ...state, suggestion: null, turn: state.turn + 1 };
-    case "request_settled": {
-      const ownsInFlight =
-        state.inFlight !== null &&
-        state.inFlight.sessionId === action.sessionId &&
-        state.inFlight.turn === action.turn;
-      const inFlight = ownsInFlight ? null : state.inFlight;
-      if (action.sessionId !== state.sessionId || action.turn !== state.turn) {
-        return { ...state, inFlight };
-      }
-      const suggestion = action.suggestion.trim();
-      return { ...state, suggestion: suggestion || null, inFlight };
-    }
-  }
+export function selectSuggestionText(input: SuggestedPromptSelectionInput): string | null {
+  const { leafId } = input;
+  if (!leafId) return null;
+  if (input.suppressedLeafId === leafId) return null;
+  if (input.pushed?.leafId === leafId) return input.pushed.text.trim() || null;
+  if (input.fetched?.leafId === leafId) return input.fetched.text.trim() || null;
+  return null;
 }
 
 export interface SuggestedPromptPlaceholderInput {

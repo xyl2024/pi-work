@@ -1,79 +1,98 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  INITIAL_SUGGESTED_PROMPT_STATE,
-  decideSuggestedPromptRequest,
-  reduceSuggestedPrompt,
-  type SuggestedPromptAction,
-  type SuggestedPromptState,
+  decideSuggestedPromptFetch,
+  selectSuggestionText,
+  type SuggestedPromptLeafText,
 } from "@/lib/client/suggested-prompt-state";
+
+export interface SuggestedPromptPush {
+  leafId: string;
+  suggestion: string;
+}
 
 export interface UseSuggestedPromptOptions {
   sessionId: string | null;
   leafId: string | null;
+  busy: boolean;
 }
 
 export interface UseSuggestedPromptResult {
   suggestion: string | null;
-  handleAgentEnd: () => void;
   handleTurnStarted: () => void;
+  handleSuggestionPushed: (push: SuggestedPromptPush) => void;
+}
+
+async function readSuggestion(
+  sessionId: string,
+  leafId: string,
+  method: "GET" | "POST",
+): Promise<string> {
+  const query = method === "GET" ? `?leafId=${encodeURIComponent(leafId)}` : "";
+  const init: RequestInit =
+    method === "GET"
+      ? { method: "GET" }
+      : {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leafId }),
+        };
+  try {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/suggest${query}`,
+      init,
+    );
+    if (!response.ok) return "";
+    const body = (await response.json().catch(() => ({}))) as { suggestion?: unknown };
+    return typeof body.suggestion === "string" ? body.suggestion : "";
+  } catch {
+    return "";
+  }
+}
+
+async function fetchSuggestion(sessionId: string, leafId: string): Promise<string> {
+  const cached = await readSuggestion(sessionId, leafId, "GET");
+  if (cached) return cached;
+  return readSuggestion(sessionId, leafId, "POST");
 }
 
 export function useSuggestedPrompt({
   sessionId,
   leafId,
+  busy,
 }: UseSuggestedPromptOptions): UseSuggestedPromptResult {
-  const stateRef = useRef<SuggestedPromptState>(INITIAL_SUGGESTED_PROMPT_STATE);
-  const [state, setState] = useState<SuggestedPromptState>(stateRef.current);
-  const sessionIdRef = useRef(sessionId);
-  const leafIdRef = useRef(leafId);
-
-  const dispatch = useCallback((action: SuggestedPromptAction) => {
-    stateRef.current = reduceSuggestedPrompt(stateRef.current, action);
-    setState(stateRef.current);
-  }, []);
+  const [fetched, setFetched] = useState<SuggestedPromptLeafText | null>(null);
+  const [pushed, setPushed] = useState<SuggestedPromptLeafText | null>(null);
+  const [suppressedLeafId, setSuppressedLeafId] = useState<string | null>(null);
 
   useEffect(() => {
-    sessionIdRef.current = sessionId;
-    leafIdRef.current = leafId;
-    dispatch({ type: "session_changed", sessionId });
-  }, [dispatch, sessionId, leafId]);
-
-  const handleAgentEnd = useCallback(() => {
-    const decision = decideSuggestedPromptRequest({
-      sessionId: sessionIdRef.current,
-      requestInFlight: stateRef.current.inFlight !== null,
-    });
-    if (decision.kind === "skip") return;
-
-    const { turn } = stateRef.current;
-    dispatch({ type: "request_started", sessionId: decision.sessionId });
+    const decision = decideSuggestedPromptFetch({ sessionId, leafId, busy });
+    if (decision.kind === "skip") {
+      setFetched(null);
+      return;
+    }
+    let cancelled = false;
     void (async () => {
-      let suggestion = "";
-      try {
-        const response = await fetch(
-          `/api/sessions/${encodeURIComponent(decision.sessionId)}/suggest`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(leafIdRef.current ? { leafId: leafIdRef.current } : {}),
-          },
-        );
-        if (response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { suggestion?: unknown };
-          if (typeof body.suggestion === "string") suggestion = body.suggestion;
-        }
-      } catch {
-        suggestion = "";
-      }
-      dispatch({ type: "request_settled", sessionId: decision.sessionId, turn, suggestion });
+      const text = await fetchSuggestion(decision.sessionId, decision.leafId);
+      if (cancelled) return;
+      setFetched(text ? { leafId: decision.leafId, text } : null);
     })();
-  }, [dispatch]);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, leafId, busy]);
+
+  const handleSuggestionPushed = useCallback((push: SuggestedPromptPush) => {
+    if (!push.suggestion.trim()) return;
+    setPushed({ leafId: push.leafId, text: push.suggestion });
+  }, []);
 
   const handleTurnStarted = useCallback(() => {
-    dispatch({ type: "turn_started" });
-  }, [dispatch]);
+    setSuppressedLeafId(leafId);
+  }, [leafId]);
 
-  return { suggestion: state.suggestion, handleAgentEnd, handleTurnStarted };
+  const suggestion = selectSuggestionText({ leafId, fetched, pushed, suppressedLeafId });
+
+  return { suggestion, handleTurnStarted, handleSuggestionPushed };
 }

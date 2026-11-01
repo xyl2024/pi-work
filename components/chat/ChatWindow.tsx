@@ -54,6 +54,7 @@ import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSuggestedPrompt } from "./chat-window/hooks/useSuggestedPrompt";
+import type { SuggestedPromptPush } from "./chat-window/hooks/useSuggestedPrompt";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
@@ -114,10 +115,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     autoNameReadyRef.current();
   }, []);
 
-  const suggestedPromptAgentEndRef = useRef<() => void>(() => {});
+  const suggestedPromptPushRef = useRef<(push: SuggestedPromptPush) => void>(() => {});
+  const handleSuggestedPromptPushed = useCallback((push: SuggestedPromptPush) => {
+    suggestedPromptPushRef.current(push);
+  }, []);
   const handleAgentEnd = useCallback(() => {
     onAgentEnd?.();
-    suggestedPromptAgentEndRef.current();
   }, [onAgentEnd]);
 
   const entryNavigatedRef = useRef<() => void>(() => {});
@@ -146,6 +149,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     inFlightToolResults,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: handleAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
+    onSuggestedPrompt: handleSuggestedPromptPushed,
     modelsRefreshKey,
     scrollToEntryId,
     onEntryNavigated: handleEntryNavigated,
@@ -153,21 +157,25 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     controllerId: tabId,
   });
 
+  const suggestedPromptBusy = agentRunning && agentPhase?.kind !== "compacting";
   const {
     suggestion: suggestedPromptText,
-    handleAgentEnd: handleSuggestedPromptAgentEnd,
     handleTurnStarted: handleSuggestedPromptTurnStarted,
-  } = useSuggestedPrompt({ sessionId: currentSessionId, leafId: activeLeafId });
+    handleSuggestionPushed,
+  } = useSuggestedPrompt({
+    sessionId: currentSessionId,
+    leafId: activeLeafId,
+    busy: suggestedPromptBusy,
+  });
   useEffect(() => {
-    suggestedPromptAgentEndRef.current = handleSuggestedPromptAgentEnd;
-  }, [handleSuggestedPromptAgentEnd]);
+    suggestedPromptPushRef.current = handleSuggestionPushed;
+  }, [handleSuggestionPushed]);
 
   const suggestedPromptBusyRef = useRef(false);
   useEffect(() => {
-    const busy = agentRunning && agentPhase?.kind !== "compacting";
-    if (busy && !suggestedPromptBusyRef.current) handleSuggestedPromptTurnStarted();
-    suggestedPromptBusyRef.current = busy;
-  }, [agentRunning, agentPhase, handleSuggestedPromptTurnStarted]);
+    if (suggestedPromptBusy && !suggestedPromptBusyRef.current) handleSuggestedPromptTurnStarted();
+    suggestedPromptBusyRef.current = suggestedPromptBusy;
+  }, [suggestedPromptBusy, handleSuggestedPromptTurnStarted]);
 
   const { pickedChannelId, setPickedChannelId, boundChannelId, setNotifyChannel } = useSessionNotifyBinding({
     sessionId: session?.id ?? null,

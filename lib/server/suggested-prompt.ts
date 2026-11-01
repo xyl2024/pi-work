@@ -10,6 +10,7 @@ import {
   decideNormalEnd,
   decideSuggestedPromptEligibility,
   extractSuggestedPromptContext,
+  readStoredSuggestionStatus,
   resolveActivePath,
   type NormalEndAbandonReason,
   type SuggestedPromptAbandonReason,
@@ -17,6 +18,7 @@ import {
   type SuggestionCleanupReason,
 } from "../shared/suggested-prompt";
 import type { SessionEntry } from "../shared/types";
+import { readSuggestions, storeSuggestion } from "./suggested-prompt-store";
 
 const log = createLogger("suggested-prompt");
 
@@ -65,13 +67,14 @@ export type SuggestedPromptSkipReason =
   | SuggestionCleanupReason;
 
 export type SuggestedPromptOutcome =
-  | { kind: "suggestion"; suggestion: string }
-  | { kind: "none"; reason: SuggestedPromptSkipReason };
+  | { kind: "suggestion"; suggestion: string; leafId: string }
+  | { kind: "none"; reason: SuggestedPromptSkipReason; leafId?: string };
 
 export interface SuggestForSessionInput {
   sessionId: string;
   leafId?: string | null;
   generate?: SuggestedPromptGenerator;
+  now?: number;
 }
 
 function skipSuggestion(
@@ -111,12 +114,27 @@ export async function suggestForSession(
 
   const sm = SessionManager.open(filePath);
   const entries = sm.getEntries() as unknown as SessionEntry[];
-  const leafId = fallbackSessionLeafId(sm, input.leafId ?? sm.getLeafId());
-  const path = resolveActivePath(entries, leafId);
+  const path = resolveActivePath(entries, fallbackSessionLeafId(sm, input.leafId ?? sm.getLeafId()));
+  const leafId = path.at(-1)?.id ?? null;
+  const now = input.now ?? Date.now();
 
   const normalEnd = decideNormalEnd(path);
   if (normalEnd.kind === "abandon") {
     return skipSuggestion(input.sessionId, normalEnd.reason, { leafId });
+  }
+  if (!leafId) return skipSuggestion(input.sessionId, "no-assistant-message");
+
+  const stored = readStoredSuggestionStatus(readSuggestions(input.sessionId), leafId, now);
+  if (stored.kind === "suggestion") {
+    log.debug("suggested prompt served from the sidecar", {
+      sessionId: input.sessionId,
+      leafId,
+      durationMs: elapsedMs(startedAt),
+    });
+    return { kind: "suggestion", suggestion: stored.text, leafId };
+  }
+  if (stored.kind === "failure" && !(stored.transient && stored.expired)) {
+    return { kind: "none", reason: stored.reason as SuggestedPromptSkipReason, leafId };
   }
 
   const context = extractSuggestedPromptContext(path);
@@ -128,6 +146,23 @@ export async function suggestForSession(
     thinkingLevel: "off",
     timeoutMs: SUGGESTED_PROMPT_TIMEOUT_MS,
     ...(provider && modelId ? { provider, modelId } : {}),
+  };
+
+  const persist = (entry: { text: string; reason: string | null }) => {
+    try {
+      storeSuggestion(input.sessionId, {
+        leafId,
+        text: entry.text,
+        reason: entry.reason,
+        generatedAt: now,
+      });
+    } catch (error) {
+      log.warn("failed to persist suggested prompt", {
+        sessionId: input.sessionId,
+        leafId,
+        error: String(error),
+      });
+    }
   };
 
   let raw: string;
@@ -148,7 +183,8 @@ export async function suggestForSession(
       error,
       durationMs: elapsedMs(startedAt),
     });
-    return { kind: "none", reason: "generation-failed" };
+    persist({ text: "", reason: "generation-failed" });
+    return { kind: "none", reason: "generation-failed", leafId };
   }
 
   const cleaned = cleanSuggestion(raw);
@@ -158,14 +194,27 @@ export async function suggestForSession(
       reason: cleaned.reason,
       durationMs: elapsedMs(startedAt),
     });
-    return { kind: "none", reason: cleaned.reason };
+    persist({ text: "", reason: cleaned.reason });
+    return { kind: "none", reason: cleaned.reason, leafId };
   }
+
+  persist({ text: cleaned.suggestion, reason: null });
 
   log.info("suggested prompt generated", {
     sessionId: input.sessionId,
+    leafId,
     contextMessages: context.length,
     suggestionLength: cleaned.suggestion.length,
     durationMs: elapsedMs(startedAt),
   });
-  return { kind: "suggestion", suggestion: cleaned.suggestion };
+  return { kind: "suggestion", suggestion: cleaned.suggestion, leafId };
+}
+
+export async function resolveSessionLeafId(sessionId: string): Promise<string | null> {
+  const filePath = await resolveSessionPath(sessionId);
+  if (!filePath) return null;
+  const sm = SessionManager.open(filePath);
+  const entries = sm.getEntries() as unknown as SessionEntry[];
+  const path = resolveActivePath(entries, fallbackSessionLeafId(sm, sm.getLeafId()));
+  return path.at(-1)?.id ?? null;
 }

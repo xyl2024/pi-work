@@ -63,6 +63,7 @@ export interface UseAgentSessionOptions {
   onAgentEnd?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onFirstAssistantReady?: () => void;
+  onSuggestedPrompt?: (push: { leafId: string; suggestion: string; generatedAt: number }) => void;
   modelsRefreshKey?: number;
   chatInputRef?: RefObject<ChatInputHandle | null>;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
