@@ -1,5 +1,6 @@
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
-import type { SubagentSessionContextUsage, SubagentSessionStatsView } from "@/lib/shared/types";
+import type { SubagentSessionStatsView } from "@/lib/shared/types";
+import { readSubagentSessionContextUsage } from "@/lib/server/subagent-context-usage";
 import { summarizeSessions } from "@/lib/server/token-audit-store";
 import { readSessionDetails, readSubagentSessionStats } from "@/lib/server/sessions/reader";
 
@@ -82,10 +83,6 @@ async function readSessionMetricsById(
   return new Map(entries);
 }
 
-async function readSessionContextUsage(_sessionId: string): Promise<SubagentSessionContextUsage | null> {
-  return null;
-}
-
 export async function readSubagentSessionViews(
   tasks: readonly SubagentSessionTaskRef[],
 ): Promise<SubagentSessionStatsView[]> {
@@ -95,7 +92,7 @@ export async function readSubagentSessionViews(
     ids.map(async (sessionId) => ({
       sessionId,
       ...(metricsById.get(sessionId) ?? emptyMetrics()),
-      context: await readSessionContextUsage(sessionId),
+      context: await readSubagentSessionContextUsage(sessionId),
     })),
   );
 }

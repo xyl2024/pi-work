@@ -156,6 +156,8 @@ export const rightPanels = {
   "Failed to stop subagent tasks": "停止子代理任务失败",
   "Failed to load subagent sessions": "加载子代理会话失败",
   "Open subagent session": "打开子代理会话",
+  "Compacted; waiting for the next assistant reply": "已压缩，等待下一条模型回复",
+  "No context window available": "无法获取模型窗口容量",
   "History tasks · {count}": "历史任务 · {count}",
   "Tool calls": "工具调用",
   "Manual": "手动",
