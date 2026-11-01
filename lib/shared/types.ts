@@ -261,6 +261,29 @@ export interface SubagentActivityItem {
   timestamp: number | null;
 }
 
+export interface SubagentSessionModel {
+  provider: string | null;
+  modelId: string | null;
+}
+
+export interface SubagentSessionContextUsage {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+  stale: boolean;
+}
+
+export interface SubagentSessionStatsView {
+  sessionId: string;
+  title: string | null;
+  assistantCount: number | null;
+  toolCallCount: number | null;
+  avgTtftMs: number | null;
+  avgGenerationTps: number | null;
+  model: SubagentSessionModel | null;
+  context: SubagentSessionContextUsage | null;
+}
+
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[];
