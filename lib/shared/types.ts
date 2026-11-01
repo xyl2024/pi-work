@@ -250,15 +250,36 @@ export interface SubagentTaskSummary {
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
-  assistantCount?: number | null;
-  readCount?: number | null;
-  model?: string | null;
 }
 
 export interface SubagentActivityItem {
   toolName: string;
   summary: string;
   timestamp: number | null;
+}
+
+export interface SubagentSessionModel {
+  provider: string | null;
+  modelId: string | null;
+}
+
+export interface SubagentSessionContextUsage {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+  stale: boolean;
+  live: boolean;
+}
+
+export interface SubagentSessionStatsView {
+  sessionId: string;
+  title: string | null;
+  assistantCount: number | null;
+  toolCallCount: number | null;
+  avgTtftMs: number | null;
+  avgGenerationTps: number | null;
+  model: SubagentSessionModel | null;
+  context: SubagentSessionContextUsage | null;
 }
 
 export interface SessionContext {

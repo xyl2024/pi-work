@@ -1,0 +1,95 @@
+import { sessionDisplayTitle } from "@/lib/shared/session-title";
+import type { SubagentSessionStatsView } from "@/lib/shared/types";
+import { readSubagentSessionContextUsage } from "@/lib/server/subagent-context-usage";
+import { summarizeSessions } from "@/lib/server/token-audit-store";
+import { readSessionDetails, readSubagentSessionStats } from "@/lib/server/sessions/reader";
+
+interface SubagentSessionTaskRef {
+  taskId: string;
+  childSessionId: string | null;
+}
+
+export type SubagentSessionMetricsView = Omit<SubagentSessionStatsView, "sessionId" | "context">;
+
+export function uniqueSubagentSessionIds(
+  tasks: readonly SubagentSessionTaskRef[],
+): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const task of tasks) {
+    const id = task.childSessionId;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function emptyMetrics(): SubagentSessionMetricsView {
+  return {
+    title: null,
+    assistantCount: null,
+    toolCallCount: null,
+    avgTtftMs: null,
+    avgGenerationTps: null,
+    model: null,
+  };
+}
+
+async function readSessionTitle(sessionId: string): Promise<string | null> {
+  try {
+    const details = await readSessionDetails(sessionId);
+    if (!details?.info) return null;
+    return sessionDisplayTitle({
+      id: details.info.id,
+      name: details.info.name,
+      firstMessage: details.info.firstMessage,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function readOneSessionMetrics(sessionId: string): Promise<SubagentSessionMetricsView> {
+  const title = await readSessionTitle(sessionId);
+  try {
+    const stats = await readSubagentSessionStats(sessionId);
+    if (!stats) return { ...emptyMetrics(), title };
+    const usage = summarizeSessions([sessionId]);
+    return {
+      title,
+      assistantCount: stats.assistantCount,
+      toolCallCount: stats.toolCallCount,
+      avgTtftMs: usage.avgTtftMs,
+      avgGenerationTps: usage.avgGenerationTps,
+      model: stats.provider || stats.model
+        ? { provider: stats.provider, modelId: stats.model }
+        : null,
+    };
+  } catch {
+    return { ...emptyMetrics(), title };
+  }
+}
+
+async function readSessionMetricsById(
+  sessionIds: readonly string[],
+): Promise<Map<string, SubagentSessionMetricsView>> {
+  const entries = await Promise.all(
+    sessionIds.map(async (sessionId) => [sessionId, await readOneSessionMetrics(sessionId)] as const),
+  );
+  return new Map(entries);
+}
+
+export async function readSubagentSessionViews(
+  tasks: readonly SubagentSessionTaskRef[],
+): Promise<SubagentSessionStatsView[]> {
+  const ids = uniqueSubagentSessionIds(tasks);
+  const metricsById = await readSessionMetricsById(ids);
+  return Promise.all(
+    ids.map(async (sessionId) => ({
+      sessionId,
+      ...metricsById.get(sessionId)!,
+      context: await readSubagentSessionContextUsage(sessionId),
+    })),
+  );
+}

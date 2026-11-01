@@ -33,6 +33,16 @@ export function isValidDurationMs(value: number | null | undefined): value is nu
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+export function formatTtft(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
+}
+
+export function formatTps(tps: number): string {
+  return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
+}
+
 export function deriveCallThroughput(facts: CallMetricFacts): CallThroughput {
   const completed = facts.status === "completed";
   const tokens = facts.outputTokens;

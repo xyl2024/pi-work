@@ -5,6 +5,7 @@ import { useEffect } from "react";
 export interface UseDismissableLayerOptions {
   enabled: boolean;
   containerRef: React.RefObject<HTMLElement | null>;
+  contentRef?: React.RefObject<HTMLElement | null>;
   triggerRef: React.RefObject<HTMLElement | null>;
   onDismiss: () => void;
   restoreFocusOnOutsideClick?: boolean;
@@ -13,6 +14,7 @@ export interface UseDismissableLayerOptions {
 export function useDismissableLayer({
   enabled,
   containerRef,
+  contentRef,
   triggerRef,
   onDismiss,
   restoreFocusOnOutsideClick = false,
@@ -23,6 +25,7 @@ export function useDismissableLayer({
       const target = e.target as Node | null;
       if (!target) return;
       if (containerRef.current && containerRef.current.contains(target)) return;
+      if (contentRef?.current && contentRef.current.contains(target)) return;
       onDismiss();
       if (restoreFocusOnOutsideClick) {
         requestAnimationFrame(() => triggerRef.current?.focus());
@@ -41,5 +44,5 @@ export function useDismissableLayer({
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [enabled, containerRef, triggerRef, onDismiss, restoreFocusOnOutsideClick]);
+  }, [enabled, containerRef, contentRef, triggerRef, onDismiss, restoreFocusOnOutsideClick]);
 }

@@ -10,6 +10,7 @@ import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { resolveFileLink } from "@/lib/shared/file-link";
 import { formatToolDuration } from "@/lib/shared/tool-duration";
+import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
 import { useFileLinkHandler } from "./context";
 
@@ -169,16 +170,6 @@ export function TurnDuration({ startMs, endMs, running }: { startMs: number; end
 export interface UsageIconsProps {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } | null;
   durationMs?: number;
-}
-
-function formatTtft(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const seconds = ms / 1000;
-  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
-}
-
-function formatTps(tps: number): string {
-  return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
 export function UsageIcons({ usage, durationMs }: UsageIconsProps) {

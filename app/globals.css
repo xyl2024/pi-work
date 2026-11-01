@@ -691,6 +691,24 @@ span.linenumber {
   }
 }
 
+@keyframes subagent-sessions-attention {
+  0%, 100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+}
+[data-subagent-running-pulse] {
+  animation: subagent-sessions-attention 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-subagent-running-pulse] {
+    animation: none !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+}
+
 /* Skeleton shimmer for loading states in the scheduler UI (e.g. while
    fetching runs for a freshly selected task). */
 @keyframes scheduler-shimmer {

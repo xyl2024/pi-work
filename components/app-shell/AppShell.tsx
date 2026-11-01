@@ -43,6 +43,7 @@ import { ExpandLeftIcon } from "../panels/right-bar/icons";
 import { ExpandRightIcon } from "../ui/animated-icons";
 import { useToast } from "../ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
@@ -177,16 +178,6 @@ function formatTokenCount(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(2)}M`;
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
   return String(Math.round(tokens));
-}
-
-function formatTtft(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const seconds = ms / 1000;
-  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
-}
-
-function formatTps(tps: number): string {
-  return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
 const LEFT_PANEL_RATIO = 0.18;
