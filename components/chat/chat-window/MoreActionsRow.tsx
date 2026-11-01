@@ -11,7 +11,7 @@ import {
   DownloadIcon,
   EditIcon,
   NotificationIcon,
-  RefreshIcon,
+  PlayIcon,
 } from "@/components/ui/icons";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
@@ -99,7 +99,7 @@ export function MoreActionsRow() {
             className={launcherButtonClass}
             style={launcherStyle(true)}
           >
-            <RefreshIcon size={16} />
+            <PlayIcon size={16} />
           </button>
         </Tooltip>
       )}
