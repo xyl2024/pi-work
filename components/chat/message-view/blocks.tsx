@@ -15,7 +15,8 @@ import { formatToolAnnotation, formatToolDuration } from "@/lib/shared/tool-dura
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
+import { useMarkdownComponents, highlightTextAsHtml } from "./utils";
+import { getToolTitle } from "@/lib/shared/tool-call-display";
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, ImageContent, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
@@ -204,24 +205,26 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     [isFileMutation, block, result],
   );
 
-  const renderHeader = () => (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => setExpanded((value) => !value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          setExpanded((value) => !value);
-        }
-      }}
-      style={{ ...TOOL_HEADER_STYLE, cursor: "pointer" }}
-    >
+  const renderHeader = () => {
+    const title = getToolTitle(block);
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((value) => !value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((value) => !value);
+          }
+        }}
+        style={{ ...TOOL_HEADER_STYLE, cursor: "pointer" }}
+      >
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
-          {block.toolName}
+          {title.name}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {getToolPreview(block)}
+          {title.preview}
         </span>
         {diffStats && (
           <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -233,8 +236,9 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
-    </div>
-  );
+      </div>
+    );
+  };
 
   if (isBash) {
     return (

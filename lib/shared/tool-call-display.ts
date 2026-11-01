@@ -1,4 +1,5 @@
 import { getFileName } from "./file-paths";
+import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import { extractMessageImages } from "./message-content";
 import {
   extractEditDiffStats,
@@ -109,4 +110,100 @@ export function summarizeTurn(
   }
 
   return { readFiles, diffStats: sumDiffStats(parts) };
+}
+
+const PREVIEW_PART_LIMIT = 80;
+const PREVIEW_TOTAL_LIMIT = 160;
+
+function previewPart(value: unknown): string {
+  return String(value).slice(0, PREVIEW_PART_LIMIT);
+}
+
+type SubagentAction = "spawn" | "continue" | "wait" | "cancel" | "list" | "get";
+
+function subagentActionOf(input: unknown): SubagentAction | null {
+  if (!input || typeof input !== "object") return null;
+  const action = (input as Record<string, unknown>).action;
+  return action === "spawn" || action === "continue" || action === "wait"
+    || action === "cancel" || action === "list" || action === "get"
+    ? action
+    : null;
+}
+
+function subagentPreviewParts(
+  action: SubagentAction | null,
+  record: Record<string, unknown>,
+  str: (value: unknown) => string,
+): string[] {
+  switch (action) {
+    case "continue":
+      return [str(record.description) || str(record.session_id)];
+    case "wait":
+    case "cancel":
+      return [str(record.task_id)];
+    case "list":
+      return [str(record.status)];
+    case "get":
+      return [str(record.task_id) || str(record.session_id)];
+    case "spawn":
+    default:
+      return [str(record.subagent_name) || str(record.subagentType), str(record.description)];
+  }
+}
+
+export function getToolTitle(block: { input?: unknown; toolName?: string }): { name: string; preview: string } {
+  const name = block.toolName ?? "";
+  const preview = getToolPreview(block);
+  if (name !== SUBAGENT_TOOL_NAME) return { name, preview };
+  const action = subagentActionOf(block.input);
+  return { name: action ? `${name} ${action}` : name, preview };
+}
+
+export function getToolPreview(block: { input?: unknown; toolName?: string }): string {
+  const input = block.input;
+  if (!input || typeof input !== "object") return "";
+  const keys = Object.keys(input as Record<string, unknown>);
+  if (keys.length === 0) return "";
+
+  const record = input as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" && v.length > 0 ? v : "");
+
+  let parts: string[];
+  switch (block.toolName) {
+    case "find":
+    case "grep": {
+      parts = [str(record.path), str(record.pattern)];
+      break;
+    }
+    case "read":
+    case "write":
+    case "edit":
+    case "ls": {
+      parts = [str(record.path)];
+      break;
+    }
+    case "bash": {
+      parts = [str(record.command)];
+      break;
+    }
+    case SUBAGENT_TOOL_NAME: {
+      parts = subagentPreviewParts(subagentActionOf(input), record, str);
+      break;
+    }
+    case LEGACY_SPAWN_SUBAGENT_TOOL_NAME: {
+      parts = [str(record.subagent_name) || str(record.subagentType), str(record.description)];
+      break;
+    }
+    default: {
+      const fallbackKey =
+        ["command", "path", "file_path", "pattern", "query", "symbol", "action", "url", "name"].find((k) => k in record) ?? keys[0];
+      parts = [String(record[fallbackKey])];
+    }
+  }
+
+  return parts
+    .filter((p) => p.length > 0)
+    .map(previewPart)
+    .join(" · ")
+    .slice(0, PREVIEW_TOTAL_LIMIT);
 }

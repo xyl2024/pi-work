@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyToolCall,
+  getToolPreview,
+  getToolTitle,
   isToolResultEmpty,
   summarizeTurn,
   toolCallDiffStats,
@@ -280,3 +282,38 @@ describe("summarizeTurn", () => {
   });
 });
 
+
+describe("getToolTitle", () => {
+  it("appends the action to the subagent tool name", () => {
+    expect(getToolTitle({ toolName: "subagent", input: { action: "spawn", subagent_name: "explorer", description: "Explore" } }))
+      .toEqual({ name: "subagent spawn", preview: "explorer · Explore" });
+    expect(getToolTitle({ toolName: "subagent", input: { action: "wait", task_id: "t1" } }))
+      .toEqual({ name: "subagent wait", preview: "t1" });
+  });
+
+  it("falls back to the bare tool name when the action is missing or unknown", () => {
+    expect(getToolTitle({ toolName: "subagent", input: { description: "Explore" } }))
+      .toEqual({ name: "subagent", preview: "Explore" });
+    expect(getToolTitle({ toolName: "subagent", input: { action: "bogus", description: "Explore" } }))
+      .toEqual({ name: "subagent", preview: "Explore" });
+  });
+
+  it("leaves other tools untouched", () => {
+    expect(getToolTitle({ toolName: "bash", input: { command: "ls" } }))
+      .toEqual({ name: "bash", preview: "ls" });
+  });
+});
+
+describe("getToolPreview for subagent actions", () => {
+  it("previews each action from the input it actually reads", () => {
+    expect(getToolPreview({ toolName: "subagent", input: { action: "continue", description: "Next turn" } })).toBe("Next turn");
+    expect(getToolPreview({ toolName: "subagent", input: { action: "cancel", task_id: "t2" } })).toBe("t2");
+    expect(getToolPreview({ toolName: "subagent", input: { action: "list", status: "running" } })).toBe("running");
+    expect(getToolPreview({ toolName: "subagent", input: { action: "get", session_id: "s1" } })).toBe("s1");
+  });
+
+  it("keeps the legacy spawn_subagent preview shape", () => {
+    expect(getToolPreview({ toolName: "spawn_subagent", input: { subagentType: "explorer", description: "Explore" } }))
+      .toBe("explorer · Explore");
+  });
+});
