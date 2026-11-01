@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, forwardRef, KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { ChatInputAttachments } from "./ChatInputAttachments";
@@ -19,6 +19,7 @@ import { THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
+import { createComposerPicker } from "@/lib/client/composer-picker";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
@@ -107,6 +108,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerPicker = useMemo(() => createComposerPicker(), []);
 
   const {
     attachedImages,
@@ -188,6 +190,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     },
     [clearImages, fillDraft],
   );
+
+  const insertTextAtCursor = useCallback((text: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setValue((v) => v + (v ? " " : "") + text);
+      return;
+    }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
+    const newVal = before + sep + text + after;
+    setValue(newVal);
+    requestAnimationFrame(() => {
+      if (!ta) return;
+      const pos = start + sep.length + text.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
+    });
+  }, []);
+
   const {
     isInHistoryMode,
     exitHistoryMode,
@@ -328,26 +354,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       });
     },
     insertText(text: string) {
-      const ta = textareaRef.current;
-      if (!ta) {
-        setValue((v) => v + (v ? " " : "") + text);
-        return;
-      }
-      const start = ta.selectionStart ?? ta.value.length;
-      const end = ta.selectionEnd ?? ta.value.length;
-      const before = ta.value.slice(0, start);
-      const after = ta.value.slice(end);
-      const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
-      const newVal = before + sep + text + after;
-      setValue(newVal);
-      requestAnimationFrame(() => {
-        if (!ta) return;
-        const pos = start + sep.length + text.length;
-        ta.setSelectionRange(pos, pos);
-        ta.focus();
-        ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
-      });
+      insertTextAtCursor(text);
     },
     addImages(files: File[]) {
       void processImageFiles(files);
@@ -571,9 +578,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <BottomToolbar
             t={t}
             isStreaming={isStreaming}
-            onSlashAction={onSlashAction}
-            hasAttachedImages={attachedImages.length > 0}
-            fileInputRef={fileInputRef}
+            composerPicker={composerPicker}
+            onPickComposerImage={() => fileInputRef.current?.click()}
+            onSelectComposerSkill={selectSlashResource}
+            onInsertComposerText={insertTextAtCursor}
+            composerSlashResources={slashResources}
             model={model}
             modelNames={modelNames}
             modelIcons={modelIcons}
