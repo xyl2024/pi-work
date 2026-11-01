@@ -5,6 +5,7 @@ import type { KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ArrowLeftIcon, SearchIcon } from "@/components/ui/icons";
 import { filterComposerSkills } from "@/lib/client/composer-picker";
+import { useComposerPicker } from "./useComposerPicker";
 import type { ComposerPickerViewProps } from "./types";
 
 export function SkillPickerView({
@@ -15,8 +16,8 @@ export function SkillPickerView({
   onOpenSkillsPanel,
 }: ComposerPickerViewProps) {
   const { t } = useI18n();
-  const snapshot = picker.useSnapshot();
-  const query = picker.useSkillQuery();
+  const snapshot = useComposerPicker(picker);
+  const query = snapshot.skillQuery;
   const skills = useMemo(() => filterComposerSkills(slashResources, query), [slashResources, query]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
