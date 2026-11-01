@@ -239,6 +239,7 @@ interface WorkspaceChatTabProps {
   onRenameCompleted: () => void;
   onSessionNameChange: (tabId: string, name: string) => void;
   onOpenFile: (filePath: string, fileName: string) => void;
+  onOpenSkillsPanel: () => void;
   onDraftChange: (tabId: string, draft: { dirty: boolean }) => void;
   onAgentStatusChange: (tabId: string, status: { running: boolean; streaming: boolean; error: string | null }) => void;
 }
@@ -260,6 +261,7 @@ function WorkspaceChatTabView({
   onRenameCompleted,
   onSessionNameChange,
   onOpenFile,
+  onOpenSkillsPanel,
   onDraftChange,
   onAgentStatusChange,
 }: WorkspaceChatTabProps) {
@@ -299,6 +301,7 @@ function WorkspaceChatTabView({
         onRenameCompleted={onRenameCompleted}
         onSessionNameChange={(name) => onSessionNameChange(tab.tabId, name)}
         onOpenFile={onOpenFile}
+        onOpenSkillsPanel={onOpenSkillsPanel}
         onDraftChange={(draft) => onDraftChange(tab.tabId, draft)}
         onAgentStatusChange={(status) => onAgentStatusChange(tab.tabId, status)}
       />
@@ -310,7 +313,8 @@ const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.tab === next.tab &&
   previous.isActive === next.isActive &&
   previous.modelsRefreshKey === next.modelsRefreshKey &&
-  previous.scrollToEntryId === next.scrollToEntryId
+  previous.scrollToEntryId === next.scrollToEntryId &&
+  previous.onOpenSkillsPanel === next.onOpenSkillsPanel
 );
 
 export function AppShell() {
@@ -693,6 +697,10 @@ export function AppShell() {
 
   const handleTogglePanel = useCallback((kind: PanelViewKind) => {
     dispatchPanelTabs({ type: "toggle", kind });
+  }, []);
+
+  const handleOpenSkillsPanel = useCallback(() => {
+    dispatchPanelTabs({ type: "open", kind: "skills" });
   }, []);
 
   useEffect(() => {
@@ -1131,6 +1139,7 @@ export function AppShell() {
               onRenameCompleted={handleSessionRenameCompleted}
               onSessionNameChange={handleSessionNameChange}
               onOpenFile={handleOpenFile}
+              onOpenSkillsPanel={handleOpenSkillsPanel}
               onDraftChange={handleDraftChange}
               onAgentStatusChange={handleAgentStatusChange}
             />

@@ -1,6 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { SlashResource } from "@/lib/shared/slash-commands";
+import { rankSlashResources } from "@/lib/shared/slash-commands";
 
 export type ComposerPickerAction = "image" | "skill" | "file";
 export type ComposerPickerView = "main" | "skill" | "file";
@@ -15,6 +17,16 @@ export const COMPOSER_PICKER_ITEMS: readonly ComposerPickerItem[] = [
   { action: "skill", opensView: true },
   { action: "file", opensView: true },
 ];
+
+export function filterComposerSkills(
+  resources: readonly SlashResource[],
+  query: string,
+): SlashResource[] {
+  return rankSlashResources(
+    resources.filter((resource) => resource.source === "skill"),
+    query,
+  );
+}
 
 export interface ComposerPickerSnapshot {
   open: boolean;
@@ -45,6 +57,10 @@ export interface ComposerPicker {
   setActiveIndex(index: number, itemCount?: number): void;
   moveActive(delta: number, itemCount: number): void;
   activate(index?: number): ComposerPickerActivation | null;
+  skillQuery(): string;
+  useSkillQuery(): string;
+  setSkillQuery(query: string): void;
+  selectSkill(resources: readonly SlashResource[]): SlashResource | null;
 }
 
 const INITIAL: ComposerPickerSnapshot = { open: false, view: "main", activeIndex: 0 };
@@ -60,12 +76,30 @@ function clampIndex(index: number, itemCount: number): number {
 
 export function createComposerPicker(): ComposerPicker {
   let snapshot = INITIAL;
+  let skillQuery = "";
   const listeners = new Set<() => void>();
+  const skillQueryListeners = new Set<() => void>();
 
   function set(next: ComposerPickerSnapshot): void {
     if (sameSnapshot(snapshot, next)) return;
     snapshot = next;
     for (const listener of listeners) listener();
+  }
+
+  function setSkillQuery(next: string): void {
+    if (skillQuery === next) return;
+    skillQuery = next;
+    for (const listener of skillQueryListeners) listener();
+    set({ ...snapshot, activeIndex: 0 });
+  }
+
+  function clearSkillQuery(): void {
+    setSkillQuery("");
+  }
+
+  function subscribeSkillQuery(listener: () => void): () => void {
+    skillQueryListeners.add(listener);
+    return () => skillQueryListeners.delete(listener);
   }
 
   function get(): ComposerPickerSnapshot {
@@ -78,21 +112,25 @@ export function createComposerPicker(): ComposerPicker {
   }
 
   function reset(): void {
+    clearSkillQuery();
     set(INITIAL);
   }
 
   function open(): void {
+    clearSkillQuery();
     set({ open: true, view: "main", activeIndex: 0 });
   }
 
   function openView(view: Exclude<ComposerPickerView, "main">): void {
     if (!snapshot.open) return;
+    clearSkillQuery();
     set({ open: true, view, activeIndex: 0 });
   }
 
   function back(): ComposerPickerBackResult {
     if (!snapshot.open) return { closed: false };
     if (snapshot.view !== "main") {
+      clearSkillQuery();
       set({ open: true, view: "main", activeIndex: 0 });
       return { closed: false };
     }
@@ -134,5 +172,20 @@ export function createComposerPicker(): ComposerPicker {
       set({ ...snapshot, activeIndex: next });
     },
     activate,
+    skillQuery: () => skillQuery,
+    useSkillQuery: () => useSyncExternalStore(
+      subscribeSkillQuery,
+      () => skillQuery,
+      () => skillQuery,
+    ),
+    setSkillQuery,
+    selectSkill(resources) {
+      if (!snapshot.open || snapshot.view !== "skill") return null;
+      const skills = filterComposerSkills(resources, skillQuery);
+      const skill = skills[clampIndex(snapshot.activeIndex, skills.length)];
+      if (!skill) return null;
+      reset();
+      return skill;
+    },
   };
 }
