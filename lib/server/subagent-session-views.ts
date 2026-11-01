@@ -1,5 +1,6 @@
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import type { SubagentSessionContextUsage, SubagentSessionStatsView } from "@/lib/shared/types";
+import { readSubagentSessionContextUsage } from "@/lib/server/subagent-context-usage";
 import { readSessionDetails, readSubagentSessionStats } from "@/lib/server/sessions/reader";
 
 interface SubagentSessionTaskRef {
@@ -68,8 +69,8 @@ async function readSessionMetricsById(
   return new Map(entries);
 }
 
-async function readSessionContextUsage(_sessionId: string): Promise<SubagentSessionContextUsage | null> {
-  return null;
+async function readSessionContextUsage(sessionId: string): Promise<SubagentSessionContextUsage | null> {
+  return readSubagentSessionContextUsage(sessionId);
 }
 
 export async function readSubagentSessionViews(
