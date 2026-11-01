@@ -15,6 +15,7 @@ import { branchAnchorEntryId, buildChatTimeline, buildTimelineDividers, indexToo
 import { modelDisplayName } from "@/lib/shared/model-display";
 import { STREAMING_STATUS_ROW_HEIGHT_PX } from "@/lib/shared/streamingViewportHeight";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
+import { sessionExportExtension, type SessionExportFormat } from "@/lib/shared/session-export";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import {
   canSwitchSessionPermissionMode,
@@ -266,13 +267,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     [onOpenFile],
   );
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (format: SessionExportFormat) => {
     if (!currentSessionId || isExporting) return;
     setIsExporting(true);
     try {
       const params = new URLSearchParams();
       if (activeLeafId) params.set("leafId", activeLeafId);
       if (locale) params.set("locale", locale);
+      params.set("format", format);
       const qs = params.toString();
       const url = `/api/sessions/${encodeURIComponent(currentSessionId)}/export${qs ? `?${qs}` : ""}`;
       const res = await fetch(url);
@@ -282,7 +284,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       }
       const blob = await res.blob();
       const cd = res.headers.get("content-disposition") ?? "";
-      let filename = `session-${currentSessionId.slice(0, 8)}.html`;
+      let filename = `session-${currentSessionId.slice(0, 8)}.${sessionExportExtension(format)}`;
       const mStar = /filename\*=UTF-8''([^;]+)/i.exec(cd);
       if (mStar) {
         try { filename = decodeURIComponent(mStar[1]); } catch {}

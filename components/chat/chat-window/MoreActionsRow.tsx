@@ -32,9 +32,11 @@ export function MoreActionsRow() {
   const confirm = useConfirm();
   const headerActions = useChatHeaderActions();
   const [channels, setChannels] = useState<ChannelRecord[]>([]);
-  const [notifyOpen, setNotifyOpen] = useState(false);
-  const notifyContainerRef = useRef<HTMLDivElement>(null);
+  const [openMenu, setOpenMenu] = useState<"notify" | "export" | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
 
+  const notifyOpen = openMenu === "notify";
+  const exportOpen = openMenu === "export";
   const notifyVisible = headerActions?.notifyVisible ?? false;
 
   useEffect(() => {
@@ -51,13 +53,13 @@ export function MoreActionsRow() {
   }, [notifyOpen]);
 
   useEffect(() => {
-    if (!notifyOpen) return;
+    if (!openMenu) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
-      if (notifyContainerRef.current && !notifyContainerRef.current.contains(e.target as Node)) {
-        setNotifyOpen(false);
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setOpenMenu(null);
       }
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setNotifyOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenMenu(null); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown);
     document.addEventListener("keydown", onKey);
@@ -66,7 +68,7 @@ export function MoreActionsRow() {
       document.removeEventListener("touchstart", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [notifyOpen]);
+  }, [openMenu]);
 
   if (!headerActions) return null;
 
@@ -84,12 +86,15 @@ export function MoreActionsRow() {
       : null;
 
   return (
-    <div className="flex items-end gap-2" style={{ marginRight: 8 }}>
+    <div ref={menuContainerRef} className="flex items-end gap-2" style={{ marginRight: 8 }}>
       {headerActions.replayVisible && (
         <Tooltip content={t("Replay")}>
           <button
             type="button"
-            onClick={headerActions.onOpenReplay}
+            onClick={() => {
+              setOpenMenu(null);
+              headerActions.onOpenReplay();
+            }}
             aria-label={t("Replay")}
             className={launcherButtonClass}
             style={launcherStyle(true)}
@@ -99,24 +104,71 @@ export function MoreActionsRow() {
         </Tooltip>
       )}
       {headerActions.exportVisible && (
-        <Tooltip content={headerActions.isExporting ? t("Exporting...") : t("Export session")}>
-          <button
-            type="button"
-            onClick={headerActions.onExport}
-            disabled={headerActions.isExporting}
-            aria-label={t("Export session")}
-            className={launcherButtonClass}
-            style={launcherStyle(!headerActions.isExporting)}
+        <div className="relative flex items-end">
+          <Tooltip content={headerActions.isExporting ? t("Exporting...") : t("Export session")}>
+            <button
+              type="button"
+              onClick={() => setOpenMenu((m) => (m === "export" ? null : "export"))}
+              disabled={headerActions.isExporting}
+              aria-label={t("Export session")}
+              aria-haspopup="menu"
+              aria-expanded={exportOpen}
+              className={launcherButtonClass}
+              style={launcherStyle(!headerActions.isExporting)}
+            >
+              <DownloadIcon size={16} />
+            </button>
+          </Tooltip>
+          <AnimatedPopover
+            open={exportOpen}
+            role="menu"
+            style={{
+              position: "absolute",
+              bottom: "calc(100% + 6px)",
+              right: 0,
+              zIndex: 120,
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+              minWidth: 180,
+            }}
           >
-            <DownloadIcon size={16} />
-          </button>
-        </Tooltip>
+            <div style={{ display: "flex", flexDirection: "column", padding: 6 }}>
+              {([
+                { format: "html", label: "Export session" },
+                { format: "jsonl", label: "Export JSONL" },
+              ] as const).map((option) => (
+                <button
+                  key={option.format}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpenMenu(null);
+                    headerActions.onExport(option.format);
+                  }}
+                  style={{
+                    display: "flex", width: "100%", alignItems: "center", gap: 8,
+                    padding: "8px 10px", border: "none", borderRadius: 6,
+                    background: "transparent", color: "var(--text)",
+                    cursor: "pointer", textAlign: "left", fontSize: 12.5,
+                  }}
+                >
+                  {t(option.label)}
+                </button>
+              ))}
+            </div>
+          </AnimatedPopover>
+        </div>
       )}
       {headerActions.autoNameVisible && (
         <Tooltip content={headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session")}>
           <button
             type="button"
-            onClick={headerActions.onAutoName}
+            onClick={() => {
+              setOpenMenu(null);
+              headerActions.onAutoName();
+            }}
             disabled={headerActions.isAutoNaming || !headerActions.canAutoName}
             aria-label={t("Auto-name session")}
             className={launcherButtonClass}
@@ -131,6 +183,7 @@ export function MoreActionsRow() {
           <button
             type="button"
             onClick={async () => {
+              setOpenMenu(null);
               const ok = await confirm({
                 title: t("Compact context?"),
                 description: t(
@@ -152,14 +205,11 @@ export function MoreActionsRow() {
         </Tooltip>
       )}
       {notifyVisible && (
-        <div
-          ref={notifyContainerRef}
-          className="relative flex items-end"
-        >
+        <div className="relative flex items-end">
           <Tooltip content={currentBinding ? `${t("Notification channel")} · ${currentBinding}` : t("Notification channel")}>
             <button
               type="button"
-              onClick={() => setNotifyOpen((o) => !o)}
+              onClick={() => setOpenMenu((m) => (m === "notify" ? null : "notify"))}
               aria-label={t("Notification channel")}
               aria-haspopup="menu"
               aria-expanded={notifyOpen}
@@ -194,7 +244,7 @@ export function MoreActionsRow() {
                 type="button"
                 onClick={() => {
                   headerActions.onSetNotifyChannel(null);
-                  setNotifyOpen(false);
+                  setOpenMenu(null);
                 }}
                 style={{
                   display: "flex", width: "100%", alignItems: "center", gap: 8,
@@ -231,7 +281,7 @@ export function MoreActionsRow() {
                       disabled={!selectable}
                       onClick={() => {
                         headerActions.onSetNotifyChannel(channel.id);
-                        setNotifyOpen(false);
+                        setOpenMenu(null);
                       }}
                       style={{
                         display: "flex", width: "100%", alignItems: "center", gap: 8,

@@ -40,6 +40,7 @@ export const chat = {
   "Change tool preset": "切换工具预设",
   "Export": "导出",
   "Export session": "导出会话",
+  "Export JSONL": "导出JSONL",
   "Exporting...": "导出中...",
   "Exporting…": "导出中…",
   "Stop agent": "停止 Agent",
