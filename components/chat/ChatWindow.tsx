@@ -13,6 +13,7 @@ import {
 } from "@/lib/shared/chatBottomFrostMask";
 import { branchAnchorEntryId, buildChatTimeline, buildTimelineDividers, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { modelDisplayName } from "@/lib/shared/model-display";
+import { STREAMING_STATUS_ROW_HEIGHT_PX } from "@/lib/shared/streamingViewportHeight";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import {
@@ -60,6 +61,7 @@ import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
 import { useReplay } from "./chat-window/hooks/useReplay";
 import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
+import { useStreamingViewportHeight } from "./chat-window/hooks/useStreamingViewportHeight";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { useSettings } from "@/hooks/settingsStore";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
@@ -455,6 +457,22 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     if (renderMessages[i].role === "user") { lastUserIdx = i; break; }
   }
   const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
+
+  const streamingViewportHeight = useStreamingViewportHeight({
+    active: liveTurnActive,
+    transcriptRef: scrollContainerRef,
+    userMessageRef: lastUserMsgRef,
+    userScrollingUpRef: userScrolledUpRef,
+  });
+  const { handleResume: handleStreamingScrollResume } = scrollFollow;
+  const {
+    maxHeight: streamingViewportMaxHeight,
+    recalculate: recalculateStreamingViewportHeight,
+  } = streamingViewportHeight;
+  const handleStreamingResumeAutoScroll = useCallback(() => {
+    handleStreamingScrollResume();
+    recalculateStreamingViewportHeight();
+  }, [handleStreamingScrollResume, recalculateStreamingViewportHeight]);
 
   const lastUserTimestamp = lastUserIdx !== -1 ? renderMessages[lastUserIdx]?.timestamp : undefined;
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
@@ -1017,8 +1035,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingNodes.length > 0) && (
                         <StreamingMessageViewport
                           tabId={streamingKey}
+                          maxHeight={streamingViewportMaxHeight}
                           userScrollingUpRef={userScrolledUpRef}
-                          onResumeAutoScroll={scrollFollow.handleResume}
+                          onResumeAutoScroll={handleStreamingResumeAutoScroll}
                           onHeightIncrease={scrollFollow.handleHeightIncrease}
                         >
                           {streamingRendered}
@@ -1038,7 +1057,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       )}
                       <div
                         className="py-2"
-                        style={{ height: 40, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 12 }}
+                        style={{
+                          height: STREAMING_STATUS_ROW_HEIGHT_PX,
+                          boxSizing: "border-box",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
                       >
                         <div style={{ minWidth: 0, flexShrink: 1 }}>
                           {isStreamingThinking ? (
