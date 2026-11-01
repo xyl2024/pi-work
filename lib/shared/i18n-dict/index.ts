@@ -16,7 +16,6 @@ import { rightPanels } from "./right-panels";
 import { scheduler } from "./scheduler";
 import { sessions } from "./sessions";
 import { settings } from "./settings";
-import { starterPrompts } from "./starter-prompts";
 import { terminal } from "./terminal";
 import { toast } from "./toast";
 import { wechat } from "./wechat";
@@ -43,7 +42,6 @@ export const ZH_TRANSLATIONS = {
   ...scheduler,
   ...sessions,
   ...settings,
-  ...starterPrompts,
   ...terminal,
   ...toast,
   ...wechat,

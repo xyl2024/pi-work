@@ -53,7 +53,6 @@ import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "../sessions/SessionSearch";
 import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
-import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSuggestedPrompt } from "./chat-window/hooks/useSuggestedPrompt";
 import type { SuggestedPromptPush } from "./chat-window/hooks/useSuggestedPrompt";
@@ -764,37 +763,33 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       )}
 
       {isEmptyNew ? (
-        <>
-          <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4">
-            <div className="mb-8 flex flex-col items-center" style={{ fontFamily: "var(--font-mono)" }}>
-              <span style={{ fontSize: 26, color: "var(--text)", fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2 }}>Pi Work</span>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
-                <span style={{ margin: "0 6px", opacity: 0.5 }}>·</span>
-                pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
-              </span>
-              <span
-                aria-hidden
-                style={{
-                  marginTop: 16,
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 15,
-                  fontWeight: 500,
-                  color: "var(--text)",
-                  lineHeight: 1.5,
-                  textAlign: "center",
-                  maxWidth: 540,
-                  padding: "0 16px",
-                }}
-              >
-                {t("Hi, {name}, what shall we create together today?").replace("{name}", username ?? t("Guest"))}
-              </span>
-            </div>
-
-            <NewSessionPresets onPickPrompt={(prompt) => chatInputRef?.current?.insertText(prompt)} />
+        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4">
+          <div className="mb-8 flex flex-col items-center" style={{ fontFamily: "var(--font-mono)" }}>
+            <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2 }}>Pi Work</span>
+            <span style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 8 }}>
+              web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
+              <span style={{ margin: "0 6px", opacity: 0.5 }}>·</span>
+              pi <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}</span>
+            </span>
+            <span
+              aria-hidden
+              style={{
+                marginTop: 16,
+                fontFamily: "var(--font-sans)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--text)",
+                lineHeight: 1.5,
+                textAlign: "center",
+                maxWidth: 540,
+                padding: "0 16px",
+              }}
+            >
+              {t("Hi, {name}, what shall we create together today?").replace("{name}", username ?? t("Guest"))}
+            </span>
           </div>
-          <div className="relative">{chatInputElement}</div>
-        </>
+          <div className="relative w-full">{chatInputElement}</div>
+        </div>
       ) : (
       <>
       {replay.visible && (
