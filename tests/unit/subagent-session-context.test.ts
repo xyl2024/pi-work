@@ -127,6 +127,7 @@ describe("readStoredSessionContextUsage", () => {
       contextWindow: MODEL_WINDOW,
       percent: 6,
       stale: false,
+      live: false,
     });
   });
 
@@ -151,6 +152,7 @@ describe("readStoredSessionContextUsage", () => {
       contextWindow: MODEL_WINDOW,
       percent: null,
       stale: true,
+      live: false,
     });
   });
 
@@ -175,7 +177,7 @@ describe("readStoredSessionContextUsage", () => {
 
     const usage = await readStoredSessionContextUsage(sessionId);
 
-    expect(usage).toEqual({ tokens: 0, contextWindow: MODEL_WINDOW, percent: 0, stale: false });
+    expect(usage).toEqual({ tokens: 0, contextWindow: MODEL_WINDOW, percent: 0, stale: false, live: false });
   });
 
   it("does not start a runtime for an ended session", async () => {
@@ -212,6 +214,7 @@ describe("readSubagentSessionContextUsage", () => {
       contextWindow: MODEL_WINDOW,
       percent: 5,
       stale: false,
+      live: true,
     });
   });
 
@@ -226,6 +229,7 @@ describe("readSubagentSessionContextUsage", () => {
       contextWindow: MODEL_WINDOW,
       percent: null,
       stale: true,
+      live: true,
     });
   });
 });
@@ -250,6 +254,7 @@ describe("readSubagentSessionViews", () => {
       contextWindow: MODEL_WINDOW,
       percent: 6,
       stale: false,
+      live: false,
     });
   });
 });

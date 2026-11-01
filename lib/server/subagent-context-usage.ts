@@ -134,10 +134,10 @@ export async function readStoredSessionContextUsage(
     if (contextWindow === null) return null;
     const branchEntries = manager.getBranch() as unknown as SessionEntry[];
     if (!hasUsageAfterLatestCompaction(projection, branchEntries)) {
-      return { tokens: null, contextWindow, percent: null, stale: true };
+      return { tokens: null, contextWindow, percent: null, stale: true, live: false };
     }
     const tokens = estimateProjectedTokens(projection, branchEntries);
-    return { tokens, contextWindow, percent: (tokens / contextWindow) * 100, stale: false };
+    return { tokens, contextWindow, percent: (tokens / contextWindow) * 100, stale: false, live: false };
   } catch {
     return null;
   }
@@ -150,10 +150,10 @@ export async function readSubagentSessionContextUsage(
   if (live) {
     if (live.contextWindow <= 0) return null;
     if (live.tokens === null) {
-      return { tokens: null, contextWindow: live.contextWindow, percent: null, stale: true };
+      return { tokens: null, contextWindow: live.contextWindow, percent: null, stale: true, live: true };
     }
     const percent = live.percent ?? (live.tokens / live.contextWindow) * 100;
-    return { tokens: live.tokens, contextWindow: live.contextWindow, percent, stale: false };
+    return { tokens: live.tokens, contextWindow: live.contextWindow, percent, stale: false, live: true };
   }
   return readStoredSessionContextUsage(sessionId);
 }

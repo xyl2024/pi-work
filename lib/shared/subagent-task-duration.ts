@@ -1,5 +1,7 @@
 import { isSubagentTerminalStatus, type SubagentTaskStatus } from "./types";
 
+const RUNNING_SUBAGENT_STATUSES: readonly SubagentTaskStatus[] = ["creating", "running", "stopping"];
+
 export interface SubagentTaskTiming {
   status: SubagentTaskStatus;
   startedAt: number | null;
@@ -21,6 +23,12 @@ export function resolveSubagentTaskDuration(
   }
   if (task.startedAt === null) return { kind: "queued" };
   return { kind: "elapsed", ms: Math.max(0, now - task.startedAt) };
+}
+
+export function hasRunningSubagentTask(
+  tasks: readonly { status: SubagentTaskStatus }[],
+): boolean {
+  return tasks.some((task) => RUNNING_SUBAGENT_STATUSES.includes(task.status));
 }
 
 export function hasUnfinishedSubagentTask(

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { listSubagentTasks } from "@/lib/server/subagent-store";
 import { resolveSubagentTaskStatus } from "@/lib/server/subagent-queries";
-import { readSubagentSessionStats } from "@/lib/server/sessions/reader";
 import { readSubagentSessionViews } from "@/lib/server/subagent-session-views";
 import { createLogger } from "@/lib/server/logger";
 
@@ -23,22 +22,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
     }));
-    const [tasks, sessions] = await Promise.all([
-      Promise.all(
-        base.map(async (task) => {
-          const stats = task.childSessionId ? await readSubagentSessionStats(task.childSessionId) : null;
-          return {
-            ...task,
-            assistantCount: stats?.assistantCount ?? null,
-            readCount: stats?.readCount ?? null,
-            model: stats?.model ?? null,
-          };
-        }),
-      ),
-      readSubagentSessionViews(base),
-    ]);
+    const sessions = await readSubagentSessionViews(base);
     return NextResponse.json(
-      { tasks, sessions },
+      { tasks: base, sessions },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

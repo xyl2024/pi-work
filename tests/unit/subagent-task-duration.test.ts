@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasRunningSubagentTask,
   hasUnfinishedSubagentTask,
   resolveSubagentTaskDuration,
 } from "@/lib/shared/subagent-task-duration";
@@ -105,6 +106,29 @@ describe("hasUnfinishedSubagentTask", () => {
   it("is false once every task has finished", () => {
     expect(
       hasUnfinishedSubagentTask([
+        { status: "completed" },
+        { status: "failed" },
+        { status: "cancelled" },
+        { status: "interrupted" },
+      ]),
+    ).toBe(false);
+  });
+});
+
+describe("hasRunningSubagentTask", () => {
+  it("is false when only queued tasks exist", () => {
+    expect(hasRunningSubagentTask([{ status: "queued" }])).toBe(false);
+  });
+
+  it("detects creating, running and stopping tasks", () => {
+    expect(hasRunningSubagentTask([{ status: "creating" }])).toBe(true);
+    expect(hasRunningSubagentTask([{ status: "running" }])).toBe(true);
+    expect(hasRunningSubagentTask([{ status: "stopping" }])).toBe(true);
+  });
+
+  it("is false once every task has finished", () => {
+    expect(
+      hasRunningSubagentTask([
         { status: "completed" },
         { status: "failed" },
         { status: "cancelled" },

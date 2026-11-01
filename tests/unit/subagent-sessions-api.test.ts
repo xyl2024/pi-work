@@ -214,16 +214,22 @@ describe("/api/sessions/[id]/subagents sessions", () => {
   it("keeps task-shaped fields for existing consumers", async () => {
     const body = await readRoute();
     const task = body.tasks.find((item) => item.taskId === "0002")!;
+    const session = body.sessions.find((item) => item.sessionId === "child-reused")!;
 
     expect(task).toMatchObject({
       childSessionId: "child-reused",
       subagentName: "codebase_explorer",
       description: "second pass",
       status: "completed",
-      assistantCount: 2,
-      model: "claude-test",
     });
-    expect(task.readCount).toBeTypeOf("number");
+    expect(task).not.toHaveProperty("assistantCount");
+    expect(task).not.toHaveProperty("readCount");
+    expect(task).not.toHaveProperty("model");
+    expect(session).toMatchObject({
+      assistantCount: 2,
+      toolCallCount: 1,
+      model: { provider: "anthropic", modelId: "claude-test" },
+    });
     expect(task.startedAt).toBeTypeOf("number");
     expect(task.finishedAt).toBeTypeOf("number");
   });

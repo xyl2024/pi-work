@@ -1178,6 +1178,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             parentSessionId={session?.id ?? currentSessionId}
             refreshKey={subagentRefreshKey}
             onOpenSession={onOpenSession}
+            modelNames={modelNames}
+            modelIcons={modelIcons}
+            modelIconPreferences={modelIconPreferences}
           />
           <Tooltip content={t("Collapse all")}>
             <button

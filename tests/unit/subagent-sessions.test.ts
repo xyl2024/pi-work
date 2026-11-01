@@ -138,8 +138,13 @@ describe("projectSubagentSessionGroups", () => {
 
     expect(projection.groups.map((group) => group.sessionId)).toEqual([
       "child-1",
-      "task:0002",
-      "task:0001",
+      null,
+      null,
+    ]);
+    expect(projection.groups.map((group) => group.latestTask.taskId)).toEqual([
+      "0003",
+      "0002",
+      "0001",
     ]);
     expect(projection.groups[1].stats).toBeNull();
     expect(projection.groups[2].stats).toBeNull();

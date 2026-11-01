@@ -4,7 +4,7 @@ import type {
 } from "./types";
 
 export interface SubagentSessionGroup {
-  sessionId: string;
+  sessionId: string | null;
   latestTask: SubagentTaskSummary;
   historyTasks: SubagentTaskSummary[];
   stats: SubagentSessionStatsView | null;
@@ -53,11 +53,11 @@ export function projectSubagentSessionGroups(
   }
 
   const groups: SubagentSessionGroup[] = [];
-  for (const [key, bucket] of grouped) {
+  for (const [, bucket] of grouped) {
     const ordered = [...bucket].sort((a, b) => compareSubagentTaskIdDesc(a.taskId, b.taskId));
-    const childSessionId = ordered[0].childSessionId;
+    const childSessionId = ordered[0].childSessionId ?? null;
     groups.push({
-      sessionId: key,
+      sessionId: childSessionId,
       latestTask: ordered[0],
       historyTasks: ordered.slice(1),
       stats: childSessionId ? statsBySession.get(childSessionId) ?? null : null,
