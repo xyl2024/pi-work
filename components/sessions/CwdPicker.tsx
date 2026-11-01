@@ -11,6 +11,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { CwdProjectIcon } from "../files/CwdProjectIcon";
 import { CwdFolderDialog } from "./CwdFolderDialog";
 import { useCwdAlias, useCwdAliases, initCwdAliases } from "@/hooks/cwdAliasStore";
+import { chatInputMetrics } from "../chat/chat-input/metrics";
 
 interface CwdPickerProps {
   cwd: string | null;
@@ -80,7 +81,7 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
           aria-label={buttonTitle}
           aria-haspopup="dialog"
           aria-expanded={open}
-          style={{ display: "flex", alignItems: "center", justifyContent: iconOnly ? "center" : undefined, gap: 6, padding: iconOnly ? 0 : "8px 12px", height: 32, width: iconOnly ? 32 : fill ? "100%" : undefined, flexShrink: 0, maxWidth: iconOnly || fill ? "none" : maxWidth, boxSizing: "border-box", overflow: "hidden", background: open ? "var(--bg-hover)" : "none", border: "none", borderRadius: 9, color: cwd ? "var(--text)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", fontSize: 12, opacity: disabled ? 0.5 : 1, transition: "background 0.12s, color 0.12s" }}
+          style={{ display: "flex", alignItems: "center", justifyContent: iconOnly ? "center" : undefined, gap: chatInputMetrics.groupGap + 4, padding: iconOnly ? 0 : chatInputMetrics.labeledPadding, height: chatInputMetrics.toolbarButton, width: iconOnly ? chatInputMetrics.toolbarButton : fill ? "100%" : undefined, flexShrink: 0, maxWidth: iconOnly || fill ? "none" : maxWidth, boxSizing: "border-box", overflow: "hidden", background: open ? "var(--bg-hover)" : "none", border: "none", borderRadius: chatInputMetrics.toolbarRadius, color: cwd ? "var(--text)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", fontSize: chatInputMetrics.font, opacity: disabled ? 0.5 : 1, transition: "background 0.12s, color 0.12s" }}
           onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
           onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = open ? "var(--bg-hover)" : "none"; e.currentTarget.style.color = cwd ? "var(--text)" : "var(--text-muted)"; } }}
         >

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../../ui/Tooltip";
 import { AnimatedPopover } from "../../ui/AnimatedPopover";
+import { chatInputMetrics } from "../chat-input/metrics";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
 interface Props {
@@ -69,8 +70,8 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 32,
-            height: 32,
+            width: chatInputMetrics.toolbarButton,
+            height: chatInputMetrics.toolbarButton,
             padding: 0,
             flexShrink: 0,
             border: "none",

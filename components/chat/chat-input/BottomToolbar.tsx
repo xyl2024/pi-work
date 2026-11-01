@@ -17,6 +17,7 @@ import {
   type ThinkingLevel,
 } from "../ThinkingPicker";
 import { MoreMenu, type CollapsedMenuEntry } from "../MoreMenu";
+import { chatInputMetrics } from "./metrics";
 import { useToolbarLayout } from "./hooks/useToolbarLayout";
 import { ICONS } from "../../ui/icons";
 import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
@@ -204,7 +205,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
       entries.push({
         key: "cwd",
         label: t("Change project"),
-        icon: <CwdProjectIcon cwd={cwd ?? null} size={14} />,
+        icon: <CwdProjectIcon cwd={cwd ?? null} size={chatInputMetrics.toolbarIconSmall} />,
         onClick: () => setCollapsedCwdOpen(true),
       });
     }
@@ -218,9 +219,9 @@ export function BottomToolbar(props: BottomToolbarProps) {
   return (
     <div
       ref={containerRef}
-      style={{ marginTop: 8, display: "flex", alignItems: "center", gap: layout.buttonGap }}
+      style={{ marginTop: chatInputMetrics.toolbarGap, display: "flex", alignItems: "center", gap: layout.buttonGap }}
     >
-      <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2 }}>
+      <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: chatInputMetrics.groupGap }}>
         <Tooltip content={t("New session")}>
           <button
             type="button"
@@ -228,7 +229,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
             aria-label={t("New session")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 32, height: 32, padding: 0, flexShrink: 0,
+              width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
               background: "none",
               border: "none",
               borderRadius: "50%",
@@ -245,7 +246,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
               e.currentTarget.style.color = "var(--text-muted)";
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -259,10 +260,10 @@ export function BottomToolbar(props: BottomToolbarProps) {
               aria-label={t("Upload image")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 32, height: 32, padding: 0, flexShrink: 0,
+                width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
                 background: "none",
                 border: "none",
-                borderRadius: 9,
+                borderRadius: chatInputMetrics.toolbarRadius,
                 color: hasAttachedImages ? "var(--accent)" : "var(--text-muted)",
                 cursor: "pointer",
                 transition: "background 0.12s, color 0.12s",
@@ -276,7 +277,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 e.currentTarget.style.color = hasAttachedImages ? "var(--accent)" : "var(--text-muted)";
               }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <polyline points="21 15 16 10 5 21" />
@@ -298,18 +299,18 @@ export function BottomToolbar(props: BottomToolbarProps) {
             aria-label={showModelName ? t("Switch model") : `${t("Switch model")}: ${currentModelName}`}
             style={{
               display: "flex", alignItems: "center", justifyContent: showModelName ? "flex-start" : "center",
-              gap: 6,
-              padding: showModelName ? "8px 12px" : 0,
-              height: 32,
-              width: showModelName ? undefined : 32,
-              maxWidth: layout.modelLabelWidth ?? 32,
+              gap: chatInputMetrics.groupGap + 4,
+              padding: showModelName ? chatInputMetrics.labeledPadding : 0,
+              height: chatInputMetrics.toolbarButton,
+              width: showModelName ? undefined : chatInputMetrics.toolbarButton,
+              maxWidth: layout.modelLabelWidth ?? chatInputMetrics.toolbarButton,
               flexShrink: 0, overflow: "hidden",
               background: "none",
               border: "none",
-              borderRadius: 9,
+              borderRadius: chatInputMetrics.toolbarRadius,
               color: "var(--text-muted)",
               cursor: isStreaming ? "not-allowed" : "pointer",
-              fontSize: 12,
+              fontSize: chatInputMetrics.font,
               opacity: isStreaming ? 0.5 : 1,
               transition: "background 0.12s, color 0.12s",
             }}
@@ -325,8 +326,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
           >
             <ProviderIcon
               id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
-              size={12}
-              fallback={<ProviderGearIcon size={11} />}
+              size={chatInputMetrics.toolbarIconSmall}
+              fallback={<ProviderGearIcon size={chatInputMetrics.toolbarIconSmall - 1} />}
             />
             {showModelName && (
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
@@ -374,10 +375,10 @@ export function BottomToolbar(props: BottomToolbarProps) {
           <span
             style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-              height: 32, padding: showThinkingLabel ? "0 10px" : 0,
-              width: showThinkingLabel ? undefined : 32, flexShrink: 0,
-              fontSize: 12, color: THINKING_LEVEL_COLOR[currentThinkingLevel],
-              background: "none", border: "none", borderRadius: 9,
+              height: chatInputMetrics.toolbarButton, padding: showThinkingLabel ? chatInputMetrics.toolbarLabelPadding : 0,
+              width: showThinkingLabel ? undefined : chatInputMetrics.toolbarButton, flexShrink: 0,
+              fontSize: chatInputMetrics.font, color: THINKING_LEVEL_COLOR[currentThinkingLevel],
+              background: "none", border: "none", borderRadius: chatInputMetrics.toolbarRadius,
               whiteSpace: "nowrap",
               fontFamily: "var(--font-mono)",
             }}
@@ -404,14 +405,14 @@ export function BottomToolbar(props: BottomToolbarProps) {
               aria-label={t("Tools")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: showToolsLabel ? "flex-start" : "center", gap: 6,
-                padding: showToolsLabel ? "0 10px" : 0, height: 32,
-                width: showToolsLabel ? undefined : 32, flexShrink: 0,
+                padding: showToolsLabel ? chatInputMetrics.toolbarLabelPadding : 0, height: chatInputMetrics.toolbarButton,
+                width: showToolsLabel ? undefined : chatInputMetrics.toolbarButton, flexShrink: 0,
                 overflow: "hidden",
                 background: toolsPickerOpen ? "var(--bg-hover)" : "none",
-                border: "none", borderRadius: 9,
+                border: "none", borderRadius: chatInputMetrics.toolbarRadius,
                 color: "var(--text-muted)",
                 cursor: "pointer",
-                fontSize: 12,
+                fontSize: chatInputMetrics.font,
                 transition: "background 0.12s, color 0.12s",
               }}
               onMouseEnter={(e) => {
@@ -469,7 +470,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
               aria-pressed={permissionFullAccess}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 32, height: 32, padding: 0, flexShrink: 0,
+                width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
                 background: permissionFullAccess
                   ? `color-mix(in srgb, ${FULL_ACCESS_RED} 16%, transparent)`
                   : "none",
@@ -492,7 +493,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 e.currentTarget.style.color = permissionFullAccess ? FULL_ACCESS_RED : "var(--text-muted)";
               }}
             >
-              <ICONS.shield size={15} strokeWidth={1.9} />
+              <ICONS.shield size={chatInputMetrics.toolbarIcon} strokeWidth={1.9} />
             </button>
           </Tooltip>
         )}

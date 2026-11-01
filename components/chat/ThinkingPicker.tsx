@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { chatInputMetrics } from "./chat-input/metrics";
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = typeof THINKING_LEVELS[number];
@@ -18,7 +19,7 @@ export const THINKING_LEVEL_COLOR: Record<ThinkingLevel, string> = {
 
 const WHEEL_THROTTLE_MS = 150;
 
-export function ThinkingIcon({ size = 15 }: { size?: number }) {
+export function ThinkingIcon({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
@@ -103,14 +104,14 @@ export function ThinkingPicker({
       onWheel={handleWheel}
       aria-label={t("Thinking level: {level}. Click or scroll to cycle.", { level: currentDisplay })}
       style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-        height: 32, padding: labelVisible ? "0 10px" : 0, flexShrink: 0,
-        width: labelVisible ? undefined : 32,
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: chatInputMetrics.groupGap + 4,
+        height: chatInputMetrics.toolbarButton, padding: labelVisible ? chatInputMetrics.toolbarLabelPadding : 0, flexShrink: 0,
+        width: labelVisible ? undefined : chatInputMetrics.toolbarButton,
         background: "none",
-        border: "none", borderRadius: 9,
+        border: "none", borderRadius: chatInputMetrics.toolbarRadius,
         color: THINKING_LEVEL_COLOR[currentLevel],
         cursor: "pointer",
-        fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
+        fontSize: chatInputMetrics.font, fontWeight: 500, whiteSpace: "nowrap",
         fontFamily: "var(--font-mono)",
         transition: "background 0.12s, color 0.12s",
       }}

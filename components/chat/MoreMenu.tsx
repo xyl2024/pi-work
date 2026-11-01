@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
+import { chatInputMetrics } from "./chat-input/metrics";
 
 export interface CollapsedMenuEntry {
   key: string;
@@ -54,8 +55,8 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: 32,
-          height: 32,
+          width: chatInputMetrics.toolbarButton,
+          height: chatInputMetrics.toolbarButton,
           padding: 0,
           flexShrink: 0,
           border: "none",
@@ -74,7 +75,7 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
           e.currentTarget.style.color = "var(--text-muted)";
         }}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={chatInputMetrics.toolbarIconSmall} height={chatInputMetrics.toolbarIconSmall} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="5" r="1.5" />
           <circle cx="12" cy="12" r="1.5" />
           <circle cx="12" cy="19" r="1.5" />

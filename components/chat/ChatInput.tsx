@@ -16,6 +16,7 @@ import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
+import { chatInputMetrics } from "./chat-input/metrics";
 import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
@@ -177,7 +178,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.focus();
       ta.setSelectionRange(text.length, text.length);
       ta.style.height = "auto";
-      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
     });
   }, []);
 
@@ -244,7 +245,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
   }, []);
 
   const handleEnterAndBuiltin = useCallback(
@@ -324,7 +325,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         if (!ta) return;
         ta.focus();
         ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
       });
     },
     insertText(text: string) {
@@ -346,7 +347,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         ta.setSelectionRange(pos, pos);
         ta.focus();
         ta.style.height = "auto";
-        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+        ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
       });
     },
     addImages(files: File[]) {
@@ -368,7 +369,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       style={{
         flexShrink: 0,
         background: "transparent",
-        padding: "0 16px 8px",
+        padding: chatInputMetrics.containerPadding,
       }}
     >
       {!hideToolbar && (
@@ -388,12 +389,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       <div style={{ maxWidth: 820, margin: "0 auto", position: "relative" }}>
         {retryInfo && (
           <div style={{
-            marginBottom: 8, padding: "5px 10px",
+            marginBottom: 8, padding: chatInputMetrics.retryBarPadding,
             background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)",
             borderRadius: 6, fontSize: 12, color: "rgba(180,130,0,0.9)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg width={chatInputMetrics.retryIcon} height={chatInputMetrics.retryIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
@@ -413,14 +414,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         <div
           style={{
             display: "flex",
-            gap: 8,
+            gap: chatInputMetrics.boxGap,
             alignItems: "center",
             background: "var(--bg)",
             border: `1.5px solid ${permissionMode === "full_access"
               ? FULL_ACCESS_BORDER_COLOR
               : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
-            borderRadius: 14,
-            padding: "10px 10px 10px 14px",
+            borderRadius: chatInputMetrics.boxBorderRadius,
+            padding: chatInputMetrics.boxPadding,
             boxShadow: "none",
             transition: "border-color 0.15s, background 0.15s",
             position: "relative",
@@ -464,11 +465,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               border: "none",
               resize: "none",
               color: "var(--text)",
-              fontSize: 14,
-              lineHeight: 1.6,
+              fontSize: chatInputMetrics.font,
+              lineHeight: chatInputMetrics.lineHeight,
               fontFamily: "inherit",
-              minHeight: 24,
-              maxHeight: 200,
+              minHeight: chatInputMetrics.textAreaMinHeight,
+              maxHeight: chatInputMetrics.textAreaMaxHeight,
               overflow: "auto",
             }}
             data-hide-v-scrollbar
@@ -485,7 +486,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 flexShrink: 0,
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 34, height: 34, padding: 0,
+                width: chatInputMetrics.sendButton, height: chatInputMetrics.sendButton, padding: 0,
                 background: "#ef4444",
                 border: "none",
                 borderRadius: "50%",
@@ -498,7 +499,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "#dc2626"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "#ef4444"; }}
             >
-              <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+              <svg width={chatInputMetrics.stopIcon} height={chatInputMetrics.stopIcon} viewBox="0 0 10 10" fill="none">
                 <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
               </svg>
             </button>
@@ -511,7 +512,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 flexShrink: 0,
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                width: 34, height: 34, padding: 0,
+                width: chatInputMetrics.sendButton, height: chatInputMetrics.sendButton, padding: 0,
                 background: canSend ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: "50%",
@@ -521,7 +522,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={chatInputMetrics.sendIcon} height={chatInputMetrics.sendIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="8" y1="13" x2="8" y2="4" />
                 <polyline points="4 7.5 8 3.5 12 7.5" />
               </svg>
@@ -533,7 +534,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{ position: "relative" }}>
             {slashMenuOpen && slashQuery && (
               <div style={{
-                position: "absolute", bottom: "calc(100% + 44px)", left: 0,
+                position: "absolute", bottom: `calc(100% + ${chatInputMetrics.menuOffset}px)`, left: 0,
                 zIndex: 200, width: "min(560px, 100%)",
                 background: "var(--bg)", border: "1px solid var(--border)",
                 borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
@@ -548,7 +549,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
             {mentionMenuOpen && mentionQuery && (
               <div style={{
-                position: "absolute", bottom: "calc(100% + 44px)", left: 0,
+                position: "absolute", bottom: `calc(100% + ${chatInputMetrics.menuOffset}px)`, left: 0,
                 zIndex: 200, width: "min(560px, 100%)", maxHeight: 320,
                 background: "var(--bg)", border: "1px solid var(--border)",
                 borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
