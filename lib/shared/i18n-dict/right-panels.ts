@@ -151,6 +151,7 @@ export const rightPanels = {
   "Subagent sessions": "子代理会话",
   "No subagent sessions": "暂无子代理会话",
   "Stop all subagent tasks": "停止全部子代理任务",
+  "Stops every unfinished subagent task in this session, including queued tasks.": "停止当前主会话下全部未结束子代理任务（含排队任务）。",
   "Stop all": "全部停止",
   "Failed to stop subagent tasks": "停止子代理任务失败",
   "Failed to load subagent sessions": "加载子代理会话失败",
