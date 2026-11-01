@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
+import { formatFilePathReference } from "@/lib/shared/file-reference";
 import { getRelativeFilePath, joinFilePath, normalizeFilePathSlashes } from "@/lib/shared/file-paths";
 import { SLASH_PAGE_SIZE } from "../constants";
 
@@ -50,13 +51,6 @@ function getDirectoryPath(cwd: string, directory: string): string | null {
   if (!directory) return normalizedCwd;
   const candidate = normalizeFilePathSlashes(joinFilePath(normalizedCwd, directory));
   return pathInsideCwd(normalizedCwd, candidate) ? candidate : null;
-}
-
-function codeSpan(path: string): string {
-  let longest = 0;
-  for (const match of path.matchAll(/`+/g)) longest = Math.max(longest, match[0].length);
-  const fence = "`".repeat(longest + 1);
-  return `${fence}${path}${fence}`;
 }
 
 export function useFileMentionMenu({
@@ -208,7 +202,8 @@ export function useFileMentionMenu({
     }
     const relative = getRelativeFilePath(entry.fullPath, cwd).replace(/^\/+/, "");
     const suffix = value.slice(tokenEnd);
-    const replacement = `${codeSpan(`./${relative}`)}${/^\s/.test(suffix) ? "" : " "}`;
+    const reference = formatFilePathReference(relative);
+    const replacement = /^\s/.test(suffix) ? reference.trimEnd() : reference;
     const nextValue = value.slice(0, mentionQuery.start) + replacement + suffix;
     const nextCursor = mentionQuery.start + replacement.length;
     setValue(nextValue);
