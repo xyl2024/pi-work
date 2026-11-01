@@ -637,13 +637,14 @@ export async function readSubagentSessionStats(sessionId: string): Promise<Subag
   const cached = cache.get(sessionId);
   if (cached && cached.mtimeMs === mtimeMs) return cached.stats;
 
-  let stats: SubagentSessionStats = { assistantCount: 0, toolCallCount: 0, readCount: 0, model: null, provider: null };
+  let stats: SubagentSessionStats;
   try {
     const sm = SessionManager.open(filePath);
     const entries = sm.getEntries() as never;
     const leafId = fallbackSessionLeafId(sm, sm.getLeafId());
     stats = summarizeSubagentSessionContext(buildSessionContext(entries, leafId));
   } catch {
+    return null;
   }
 
   cache.set(sessionId, { mtimeMs, stats });

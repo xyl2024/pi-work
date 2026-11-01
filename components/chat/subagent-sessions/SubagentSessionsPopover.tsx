@@ -2,8 +2,10 @@
 
 import { useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { isSubagentTerminalStatus, type SubagentSessionStatsView, type SubagentTaskSummary } from "@/lib/shared/types";
+import { type SubagentSessionStatsView, type SubagentTaskSummary } from "@/lib/shared/types";
 import { projectSubagentSessionGroups } from "@/lib/shared/subagent-sessions";
+import { hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
+import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import { SubagentSessionGroupCard } from "./SubagentSessionGroupCard";
 
 interface Props {
@@ -14,6 +16,9 @@ interface Props {
   stoppingAll: boolean;
   onStopAll: () => void;
   onOpenSession: (sessionId: string) => void;
+  modelNames?: Record<string, string>;
+  modelIcons?: Record<string, string>;
+  modelIconPreferences?: ModelIconPreferences;
 }
 
 export function SubagentSessionsPopover({
@@ -24,13 +29,16 @@ export function SubagentSessionsPopover({
   stoppingAll,
   onStopAll,
   onOpenSession,
+  modelNames,
+  modelIcons,
+  modelIconPreferences,
 }: Props) {
   const { t } = useI18n();
   const projection = useMemo(
     () => projectSubagentSessionGroups(tasks, sessions),
     [tasks, sessions],
   );
-  const hasUnfinishedTask = tasks.some((task) => !isSubagentTerminalStatus(task.status));
+  const hasUnfinishedTask = hasUnfinishedSubagentTask(tasks);
 
   return (
     <>
@@ -78,10 +86,16 @@ export function SubagentSessionsPopover({
         ) : (
           projection.groups.map((group, index) => (
             <div
-              key={group.sessionId}
+              key={group.latestTask.taskId}
               style={index === 0 ? undefined : { borderTop: "1px solid var(--border)" }}
             >
-              <SubagentSessionGroupCard group={group} onOpenSession={onOpenSession} />
+              <SubagentSessionGroupCard
+                group={group}
+                onOpenSession={onOpenSession}
+                modelNames={modelNames}
+                modelIcons={modelIcons}
+                modelIconPreferences={modelIconPreferences}
+              />
             </div>
           ))
         )}

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import { hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
+import { hasRunningSubagentTask, hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
+import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import type { SubagentSessionStatsView, SubagentTaskSummary } from "@/lib/shared/types";
 import { PopoverPortal, useDismissableLayer } from "@/components/ui/popover";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -14,9 +15,19 @@ interface Props {
   parentSessionId: string | null;
   refreshKey: number;
   onOpenSession: (sessionId: string) => void;
+  modelNames?: Record<string, string>;
+  modelIcons?: Record<string, string>;
+  modelIconPreferences?: ModelIconPreferences;
 }
 
-export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
+export function SubagentSessionsButton({
+  parentSessionId,
+  refreshKey,
+  onOpenSession,
+  modelNames,
+  modelIcons,
+  modelIconPreferences,
+}: Props) {
   const { t } = useI18n();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
@@ -79,6 +90,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
   }, [loadTasks, parentSessionId, refreshKey]);
 
   const hasUnfinishedTask = hasUnfinishedSubagentTask(tasks);
+  const hasRunningTask = hasRunningSubagentTask(tasks);
 
   useEffect(() => {
     if (!parentSessionId || (!hasUnfinishedTask && !open)) return;
@@ -138,7 +150,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
 
   const label = t("SubAgent");
   const disabled = !parentSessionId;
-  const running = hasUnfinishedTask && !disabled;
+  const running = hasRunningTask && !disabled;
 
   return (
     <div ref={rootRef} className="pointer-events-auto relative">
@@ -219,6 +231,9 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
           stoppingAll={stoppingAll}
           onStopAll={() => void handleStopAll()}
           onOpenSession={handleOpenSession}
+          modelNames={modelNames}
+          modelIcons={modelIcons}
+          modelIconPreferences={modelIconPreferences}
         />
       </PopoverPortal>
     </div>

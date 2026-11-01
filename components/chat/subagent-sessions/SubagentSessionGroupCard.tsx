@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 import type { SubagentSessionGroup } from "@/lib/shared/subagent-sessions";
+import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import { SubagentSessionHeader } from "./SubagentSessionHeader";
 import { SubagentSessionMetrics } from "./SubagentSessionMetrics";
 import { SubagentSessionContextRing } from "./SubagentSessionContextRing";
@@ -12,9 +13,18 @@ import { SubagentTaskRow } from "./SubagentTaskRow";
 interface Props {
   group: SubagentSessionGroup;
   onOpenSession: (sessionId: string) => void;
+  modelNames?: Record<string, string>;
+  modelIcons?: Record<string, string>;
+  modelIconPreferences?: ModelIconPreferences;
 }
 
-export function SubagentSessionGroupCard({ group, onOpenSession }: Props) {
+export function SubagentSessionGroupCard({
+  group,
+  onOpenSession,
+  modelNames,
+  modelIcons,
+  modelIconPreferences,
+}: Props) {
   const { t } = useI18n();
   const profiles = useSubagentProfiles();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -32,8 +42,26 @@ export function SubagentSessionGroupCard({ group, onOpenSession }: Props) {
         status={group.latestTask.status}
         onOpenSession={onOpenSession}
       />
-      <SubagentSessionMetrics stats={group.stats} />
-      <SubagentSessionContextRing context={group.stats?.context ?? null} />
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "2px 10px",
+          marginTop: 6,
+          fontSize: 10,
+          lineHeight: 1.6,
+          color: "var(--text-muted)",
+        }}
+      >
+        <SubagentSessionMetrics
+          stats={group.stats}
+          modelNames={modelNames}
+          modelIcons={modelIcons}
+          modelIconPreferences={modelIconPreferences}
+        />
+        <SubagentSessionContextRing context={group.stats?.context ?? null} />
+      </div>
       <div style={{ marginTop: 7, display: "flex", flexDirection: "column", gap: 2 }}>
         <SubagentTaskRow task={group.latestTask} />
         {historyCount > 0 && (

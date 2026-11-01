@@ -36,31 +36,28 @@ function emptyMetrics(): SubagentSessionMetricsView {
   };
 }
 
-async function readOneSessionMetrics(sessionId: string): Promise<SubagentSessionMetricsView> {
+async function readSessionTitle(sessionId: string): Promise<string | null> {
   try {
-    const [stats, details] = await Promise.all([
-      readSubagentSessionStats(sessionId),
-      readSessionDetails(sessionId),
-    ]);
-    if (!stats) return {
-      ...emptyMetrics(),
-      title: details?.info
-        ? sessionDisplayTitle({
-            id: details.info.id,
-            name: details.info.name,
-            firstMessage: details.info.firstMessage,
-          })
-        : null,
-    };
+    const details = await readSessionDetails(sessionId);
+    if (!details?.info) return null;
+    return sessionDisplayTitle({
+      id: details.info.id,
+      name: details.info.name,
+      firstMessage: details.info.firstMessage,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function readOneSessionMetrics(sessionId: string): Promise<SubagentSessionMetricsView> {
+  const title = await readSessionTitle(sessionId);
+  try {
+    const stats = await readSubagentSessionStats(sessionId);
+    if (!stats) return { ...emptyMetrics(), title };
     const usage = summarizeSessions([sessionId]);
     return {
-      title: details?.info
-        ? sessionDisplayTitle({
-            id: details.info.id,
-            name: details.info.name,
-            firstMessage: details.info.firstMessage,
-          })
-        : null,
+      title,
       assistantCount: stats.assistantCount,
       toolCallCount: stats.toolCallCount,
       avgTtftMs: usage.avgTtftMs,
@@ -70,7 +67,7 @@ async function readOneSessionMetrics(sessionId: string): Promise<SubagentSession
         : null,
     };
   } catch {
-    return emptyMetrics();
+    return { ...emptyMetrics(), title };
   }
 }
 
@@ -91,7 +88,7 @@ export async function readSubagentSessionViews(
   return Promise.all(
     ids.map(async (sessionId) => ({
       sessionId,
-      ...(metricsById.get(sessionId) ?? emptyMetrics()),
+      ...metricsById.get(sessionId)!,
       context: await readSubagentSessionContextUsage(sessionId),
     })),
   );

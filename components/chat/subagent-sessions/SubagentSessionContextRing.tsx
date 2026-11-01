@@ -26,16 +26,21 @@ export function SubagentSessionContextRing({ context }: SubagentSessionContextRi
   const percent = known ? Math.max(0, Math.min(100, rawPercent)) : 0;
   const windowText = context ? formatContextWindowCompact(context.contextWindow) : null;
 
+  const unknownTooltipLine = context?.stale
+    ? t("Compacted; waiting for the next assistant reply")
+    : t("No context data available");
+
   const tooltipLines = !context
-    ? [`${t("Context")}: ${t("Unknown")}`, t("No context window available")]
+    ? [`${t("Context")}: ${t("Unknown")}`, t("No context data available")]
     : known
       ? [
           `${t("Context")}: ${formatContextTokensK(tokens)} / ${windowText} (${formatPercent(percent)})`,
           `${tokens.toLocaleString()} / ${context.contextWindow.toLocaleString()} tokens`,
+          ...(context.live ? [] : [t("Last recorded value")]),
         ]
       : [
           `${t("Context")}: ${t("Unknown")} / ${windowText}`,
-          t("Compacted; waiting for the next assistant reply"),
+          unknownTooltipLine,
         ];
 
   const valueText = known

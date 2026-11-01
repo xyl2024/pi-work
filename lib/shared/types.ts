@@ -250,9 +250,6 @@ export interface SubagentTaskSummary {
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
-  assistantCount?: number | null;
-  readCount?: number | null;
-  model?: string | null;
 }
 
 export interface SubagentActivityItem {
@@ -271,6 +268,7 @@ export interface SubagentSessionContextUsage {
   contextWindow: number;
   percent: number | null;
   stale: boolean;
+  live: boolean;
 }
 
 export interface SubagentSessionStatsView {
