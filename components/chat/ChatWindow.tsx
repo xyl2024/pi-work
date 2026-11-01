@@ -776,7 +776,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       <CollapseNonceProvider value={collapseNonce}>
       <MessageCallMetricsProvider value={messageCallMetrics}>
       <div className="relative flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={scrollFollow.handleScroll} onWheel={scrollFollow.handleWheel} onTouchMove={scrollFollow.handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
+        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={scrollFollow.handleScroll} onWheel={scrollFollow.handleWheel} onTouchMove={scrollFollow.handleTouchMove} className="chat-transcript relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
 
             {(() => {

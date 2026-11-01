@@ -20,7 +20,7 @@ import type { ImageContent, UserMessage } from "@/lib/shared/types";
 const COLLAPSED_USER_MSG_HEIGHT = 240;
 
 const USER_TEXT_STYLE = {
-  fontSize: 14,
+  fontSize: 13,
   lineHeight: 1.6,
   color: "var(--text)",
   whiteSpace: "pre-wrap",

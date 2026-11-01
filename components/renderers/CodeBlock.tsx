@@ -76,7 +76,7 @@ export function CodeBlock({ code, lang }: Props) {
         customStyle={{
           margin: 0,
           padding: "10px 12px",
-          fontSize: 12.5,
+          fontSize: 12,
           lineHeight: 1.6,
           borderRadius: 0,
           border: "none",

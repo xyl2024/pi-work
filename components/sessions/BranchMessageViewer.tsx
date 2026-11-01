@@ -271,6 +271,7 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
         <div
           ref={bodyRef}
           data-scroll-wide
+          className="chat-transcript"
           style={{
             flex: 1,
             minHeight: 0,
@@ -433,6 +434,7 @@ function CompactionSummaryView({
 
         <div
           data-scroll-wide
+          className="chat-transcript"
           style={{
             flex: 1,
             minHeight: 0,

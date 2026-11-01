@@ -315,7 +315,7 @@ export function TranslateBubble() {
           overflowY: "auto",
           background: "transparent",
           color: error ? "#ef4444" : "var(--text)",
-          fontSize: 13, lineHeight: 1.6,
+          fontSize: 12.5, lineHeight: 1.6,
           whiteSpace: "pre-wrap", wordBreak: "break-word",
           fontFamily: "var(--font-mono)",
         }}

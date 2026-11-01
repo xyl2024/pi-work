@@ -400,6 +400,12 @@ pre, code {
   margin: 8px 0;
   font-size: 13px;
 }
+.chat-transcript .markdown-body:not(.thinking-expanded) {
+  font-size: 13px;
+}
+.chat-transcript .markdown-body table {
+  font-size: 12px;
+}
 .markdown-body th, .markdown-body td {
   border: 1px solid var(--border);
   padding: 5px 10px;
@@ -459,7 +465,7 @@ pre, code {
   /* Match the header so the block doesn't grow in font size on expand.
    Tighten line-height and zero out the bottom spacing so the body butts up
    against the header with the same rhythm the preview had in collapsed mode. */
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-muted);
   padding: 2px 4px 4px 20px; /* indent to align with chevron's center */

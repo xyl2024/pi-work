@@ -106,7 +106,7 @@ export function CompactionDivider({ point }: Props) {
             <div
               style={{
                 marginTop: 10,
-                fontSize: 13,
+                fontSize: 12.5,
                 lineHeight: 1.6,
                 color: "var(--text)",
                 userSelect: "text",

@@ -80,7 +80,7 @@ export function SvgBlock({ code, isStreaming }: Props) {
       style={{
         margin: 0,
         padding: "10px 12px",
-        fontSize: 12.5,
+        fontSize: 12,
         lineHeight: 1.6,
         color: "var(--text)",
         fontFamily: "var(--font-mono)",
@@ -158,7 +158,7 @@ export function SvgBlock({ code, isStreaming }: Props) {
               style={{
                 margin: 0,
                 padding: 24,
-                fontSize: 13,
+                fontSize: 12,
                 lineHeight: 1.6,
                 color: "var(--text)",
                 fontFamily: "var(--font-mono)",

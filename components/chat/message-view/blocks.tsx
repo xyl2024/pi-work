@@ -139,7 +139,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
             alignItems: "center",
             gap: 6,
             padding: "2px 4px",
-            fontSize: 12.5,
+            fontSize: 12,
             textAlign: "left",
           }}
         >
