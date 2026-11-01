@@ -10,6 +10,7 @@ import {
   STREAMING_VIEWPORT_MIN_HEIGHT_PX,
   STREAMING_VIEWPORT_TRAILING_SPACE_PX,
   resolveStreamingViewportHeight,
+  resolveStreamingViewportHeightFromGeometry,
 } from "@/lib/shared/streamingViewportHeight";
 
 function availableFor(transcriptClientHeight: number): number {
@@ -100,5 +101,65 @@ describe("resolveStreamingViewportHeight", () => {
     expect(resolveStreamingViewportHeight({ transcriptClientHeight, userMessageBlockHeight: -20, windowHeight: 1440 })).toBe(
       availableFor(transcriptClientHeight) - STREAMING_USER_MESSAGE_GAP_PX,
     );
+  });
+});
+
+describe("resolveStreamingViewportHeightFromGeometry", () => {
+  const base = {
+    currentViewportHeight: 600,
+    transcriptClientHeight: 900,
+    transcriptPaddingTop: STREAMING_TRANSCRIPT_PADDING_TOP_PX,
+    windowHeight: 1080,
+  };
+  const visibleBudget = base.transcriptClientHeight - base.transcriptPaddingTop;
+
+  it("keeps the current height when the space below the user message matches the visible budget", () => {
+    expect(
+      resolveStreamingViewportHeightFromGeometry({
+        ...base,
+        transcriptScrollHeight: 2000 + visibleBudget,
+        userMessageTopInContent: 2000,
+      }),
+    ).toBe(base.currentViewportHeight);
+  });
+
+  it("grows by the shortfall of the space below the user message", () => {
+    expect(
+      resolveStreamingViewportHeightFromGeometry({
+        ...base,
+        transcriptScrollHeight: 2000 + visibleBudget - STREAMING_TRANSCRIPT_PADDING_BOTTOM_PX,
+        userMessageTopInContent: 2000,
+      }),
+    ).toBe(base.currentViewportHeight + STREAMING_TRANSCRIPT_PADDING_BOTTOM_PX);
+  });
+
+  it("shrinks by the overflow of the space below the user message", () => {
+    const overflow = 120;
+
+    expect(
+      resolveStreamingViewportHeightFromGeometry({
+        ...base,
+        transcriptScrollHeight: 2000 + visibleBudget + overflow,
+        userMessageTopInContent: 2000,
+      }),
+    ).toBe(base.currentViewportHeight - overflow);
+  });
+
+  it("clamps the geometric correction to the window ceiling", () => {
+    const ceiling = Math.min(
+      base.windowHeight * STREAMING_VIEWPORT_MAX_WINDOW_RATIO,
+      STREAMING_VIEWPORT_ABSOLUTE_MAX_HEIGHT_PX,
+    );
+    const userMessageTopInContent = 2000;
+    const overflowAboveBudget = 500;
+
+    expect(
+      resolveStreamingViewportHeightFromGeometry({
+        ...base,
+        currentViewportHeight: ceiling,
+        transcriptScrollHeight: userMessageTopInContent + visibleBudget - overflowAboveBudget,
+        userMessageTopInContent,
+      }),
+    ).toBe(ceiling);
   });
 });

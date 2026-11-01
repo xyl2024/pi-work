@@ -25,6 +25,14 @@ export interface StreamingViewportHeightInput {
   windowHeight: number;
 }
 
+export function clampStreamingViewportHeight(height: number, windowHeight: number): number {
+  const ceiling = Math.min(
+    windowHeight * STREAMING_VIEWPORT_MAX_WINDOW_RATIO,
+    STREAMING_VIEWPORT_ABSOLUTE_MAX_HEIGHT_PX,
+  );
+  return Math.max(STREAMING_VIEWPORT_MIN_HEIGHT_PX, Math.min(height, ceiling));
+}
+
 export function resolveStreamingViewportHeight(input: StreamingViewportHeightInput): number {
   const available = Math.max(
     0,
@@ -34,9 +42,24 @@ export function resolveStreamingViewportHeight(input: StreamingViewportHeightInp
       STREAMING_VIEWPORT_TRAILING_SPACE_PX,
   );
   const budget = available - Math.max(0, input.userMessageBlockHeight) - STREAMING_USER_MESSAGE_GAP_PX;
-  const ceiling = Math.min(
-    input.windowHeight * STREAMING_VIEWPORT_MAX_WINDOW_RATIO,
-    STREAMING_VIEWPORT_ABSOLUTE_MAX_HEIGHT_PX,
-  );
-  return Math.max(STREAMING_VIEWPORT_MIN_HEIGHT_PX, Math.min(budget, ceiling));
+  return clampStreamingViewportHeight(budget, input.windowHeight);
+}
+
+export interface StreamingViewportGeometryInput {
+  currentViewportHeight: number;
+  transcriptClientHeight: number;
+  transcriptPaddingTop: number;
+  transcriptScrollHeight: number;
+  userMessageTopInContent: number;
+  windowHeight: number;
+}
+
+export function resolveStreamingViewportHeightFromGeometry(input: StreamingViewportGeometryInput): number {
+  const distanceFromUserMessageToContentEnd =
+    input.transcriptScrollHeight - input.userMessageTopInContent;
+  const target =
+    input.currentViewportHeight +
+    (input.transcriptClientHeight - input.transcriptPaddingTop) -
+    distanceFromUserMessageToContentEnd;
+  return clampStreamingViewportHeight(target, input.windowHeight);
 }

@@ -466,7 +466,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     userMessageRef: lastUserMsgRef,
     userScrollingUpRef: userScrolledUpRef,
   });
-  const { handleResume: handleStreamingScrollResume } = scrollFollow;
+  const { handleResume: handleStreamingScrollResume, handleHeightIncrease: handleStreamingHeightIncrease } = scrollFollow;
   const {
     maxHeight: streamingViewportMaxHeight,
     recalculate: recalculateStreamingViewportHeight,
@@ -475,6 +475,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     handleStreamingScrollResume();
     recalculateStreamingViewportHeight();
   }, [handleStreamingScrollResume, recalculateStreamingViewportHeight]);
+  const handleStreamingViewportHeightIncrease = useCallback((heightDelta: number) => {
+    handleStreamingHeightIncrease(heightDelta);
+    recalculateStreamingViewportHeight();
+  }, [handleStreamingHeightIncrease, recalculateStreamingViewportHeight]);
 
   const lastUserTimestamp = lastUserIdx !== -1 ? renderMessages[lastUserIdx]?.timestamp : undefined;
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
@@ -1040,7 +1044,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           maxHeight={streamingViewportMaxHeight}
                           userScrollingUpRef={userScrolledUpRef}
                           onResumeAutoScroll={handleStreamingResumeAutoScroll}
-                          onHeightIncrease={scrollFollow.handleHeightIncrease}
+                          onHeightIncrease={handleStreamingViewportHeightIncrease}
                         >
                           {streamingRendered}
                           {trailingNodes}
