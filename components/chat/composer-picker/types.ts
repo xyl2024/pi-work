@@ -8,4 +8,5 @@ export interface ComposerPickerViewProps {
   slashResources: SlashResource[];
   onSelectSkill: (resource: SlashResource) => void;
   onInsertText: (text: string) => void;
+  onOpenSkillsPanel?: () => void;
 }

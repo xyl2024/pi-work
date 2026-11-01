@@ -55,6 +55,7 @@ interface Props {
   slashResources?: SlashResource[];
   slashResourceKey?: string;
   onSlashAction?: (action: string) => void;
+  onOpenSkillsPanel?: () => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
   sessionId?: string | null;
@@ -90,6 +91,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   suggestedPrompt = null,
   slashResources = [], slashResourceKey,
   onSlashAction,
+  onOpenSkillsPanel,
   cwd,
   onCwdChange,
   sessionId,
@@ -582,6 +584,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onPickComposerImage={() => fileInputRef.current?.click()}
             onSelectComposerSkill={selectSlashResource}
             onInsertComposerText={insertTextAtCursor}
+            onOpenSkillsPanel={onOpenSkillsPanel}
             composerSlashResources={slashResources}
             model={model}
             modelNames={modelNames}
