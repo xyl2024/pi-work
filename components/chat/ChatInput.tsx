@@ -17,7 +17,6 @@ import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
-import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import type { SessionPermissionMode } from "@/lib/shared/permission-mode";
@@ -417,9 +416,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: chatInputMetrics.boxGap,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1.5px solid ${permissionMode === "full_access"
-              ? FULL_ACCESS_BORDER_COLOR
-              : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
+            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: chatInputMetrics.boxBorderRadius,
             padding: chatInputMetrics.boxPadding,
             boxShadow: "none",
