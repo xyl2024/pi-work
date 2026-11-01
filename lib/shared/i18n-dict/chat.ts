@@ -274,4 +274,7 @@ export const chat = {
   "Message from channel {channel}": "来自频道 {channel}",
   "Message from scheduled task {task}": "来自定时任务 {task}",
   "Message from session {session}": "来自会话 {session}",
+
+  "Select {name}": "选择 {name}",
+  "Add {n} items": "添加 {n} 项",
 } as const;
