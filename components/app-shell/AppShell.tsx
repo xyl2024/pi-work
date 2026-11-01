@@ -324,6 +324,7 @@ export function AppShell() {
   useExternalLinks();
   const cm = useContextMenu();
   const settings = useEnsureSettings();
+  const textSelectionEnabled = settings?.text_selection_toolbar.enabled !== false;
   const rightSideBarConfig = settings?.right_side_bar ?? null;
   const { cwds: recentCwds } = useCwdList();
   const [panelTabsState, dispatchPanelTabs] = useReducer(
@@ -380,7 +381,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
-  const rightPanelSelection = useTextSelection(rightPanelRef);
+  const rightPanelSelection = useTextSelection(rightPanelRef, textSelectionEnabled);
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 

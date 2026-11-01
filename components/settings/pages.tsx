@@ -10,6 +10,7 @@ import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { RightBarSection } from "./sections/RightBarSection";
+import { TextSelectionToolbarSection } from "./sections/TextSelectionToolbarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
 import { SuggestedPromptSection } from "./sections/SuggestedPromptSection";
@@ -35,6 +36,9 @@ export const SETTINGS_PAGES = {
     <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />
   ),
   "right-bar": ({ config, apply }) => <RightBarSection config={config} apply={apply} />,
+  "text-selection-toolbar": ({ config, apply }) => (
+    <TextSelectionToolbarSection config={config} apply={apply} />
+  ),
   "ui-sounds": ({ config, apply }) => <SoundSettingsSection config={config} apply={apply} />,
   "file-preview": ({ config, apply }) => <FilePreviewSection config={config} apply={apply} />,
   "append-system": ({ config, apply, reportDirty, pageCache }) => (

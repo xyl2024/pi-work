@@ -23,7 +23,10 @@ const EMPTY_STATE: TextSelectionState = {
   visible: false,
 };
 
-export function useTextSelection(containerRef: React.RefObject<HTMLElement | null>) {
+export function useTextSelection(
+  containerRef: React.RefObject<HTMLElement | null>,
+  enabled = true,
+) {
   const [state, setState] = useState<TextSelectionState>(EMPTY_STATE);
   const stateRef = useRef<TextSelectionState>(EMPTY_STATE);
   stateRef.current = state;
@@ -69,6 +72,10 @@ export function useTextSelection(containerRef: React.RefObject<HTMLElement | nul
   };
 
   useEffect(() => {
+    if (!enabled) {
+      hide();
+      return;
+    }
     const container = containerRef.current;
     if (!container) return;
 
@@ -97,7 +104,7 @@ export function useTextSelection(containerRef: React.RefObject<HTMLElement | nul
       clearTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerRef.current]);
+  }, [containerRef.current, enabled]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

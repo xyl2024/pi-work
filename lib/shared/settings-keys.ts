@@ -3,6 +3,7 @@ import type {
   NetworkProxyConfig,
   PiWorkConfig,
   SuggestedPromptConfig,
+  TextSelectionToolbarConfig,
   UiSoundsConfig,
 } from "./config-types";
 import type { FileViewerConfig } from "./file-viewer-limits";
@@ -12,6 +13,7 @@ export const SETTINGS_OWNED_KEYS = [
   "right_side_bar",
   "append_system",
   "load_pi_docs",
+  "text_selection_toolbar",
   "file_viewer",
   "ui_sounds",
   "network_proxy",
@@ -24,6 +26,7 @@ export type SettingsPatch = Partial<{
   right_side_bar: RightSideBarConfig;
   append_system: AppendSystemConfig;
   load_pi_docs: boolean;
+  text_selection_toolbar: TextSelectionToolbarConfig;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
   network_proxy: NetworkProxyConfig;

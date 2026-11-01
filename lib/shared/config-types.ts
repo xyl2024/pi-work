@@ -17,6 +17,10 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
+export interface TextSelectionToolbarConfig {
+  enabled: boolean;
+}
+
 export const ALWAYS_BYPASS_HOSTS = ["localhost", "127.0.0.1", "::1"] as const;
 
 export interface NetworkProxyConfig {
@@ -45,6 +49,7 @@ export interface PiWorkConfig {
   right_side_bar: RightSideBarConfig;
   append_system: AppendSystemConfig;
   load_pi_docs: boolean;
+  text_selection_toolbar: TextSelectionToolbarConfig;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
   cwd_icons: Record<string, string>;

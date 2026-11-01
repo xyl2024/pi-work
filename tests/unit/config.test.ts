@@ -56,4 +56,12 @@ describe("config: in-process cache", () => {
     expect(config.load_pi_docs).toBe(true);
     expect(readFileSync(configPath, "utf8")).toContain("load_pi_docs: true");
   });
+
+  it("defaults the text selection toolbar on and parses an explicit off", () => {
+    rmSync(configPath, { force: true });
+    expect(readConfig().text_selection_toolbar.enabled).toBe(true);
+
+    writeFileSync(configPath, "text_selection_toolbar:\n  enabled: false\n", "utf8");
+    expect(readConfig().text_selection_toolbar.enabled).toBe(false);
+  });
 });

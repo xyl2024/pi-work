@@ -60,6 +60,7 @@ import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
 import { useReplay } from "./chat-window/hooks/useReplay";
 import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
 import { useTextSelection } from "@/hooks/useTextSelection";
+import { useSettings } from "@/hooks/settingsStore";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
 interface Props {
@@ -182,7 +183,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     onSessionInfoLoaded?.(data.info);
   }, [data, onSessionInfoLoaded, session?.id]);
 
-  const selection = useTextSelection(scrollContainerRef);
+  const settings = useSettings();
+  const textSelectionEnabled = settings?.text_selection_toolbar.enabled !== false;
+  const selection = useTextSelection(scrollContainerRef, textSelectionEnabled);
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const streamingStoreIsBody = useIsStreamingBody(streamingKey);
   const streamingStoreIsToolCall = useIsStreamingToolCall(streamingKey);

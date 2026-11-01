@@ -101,6 +101,20 @@ function validateSuggestedPrompt(
   return { ok: true };
 }
 
+function validateTextSelectionToolbar(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "text_selection_toolbar must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") {
+    return { ok: false, error: "text_selection_toolbar.enabled must be a boolean" };
+  }
+  return { ok: true };
+}
+
 function validateUiSounds(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -183,6 +197,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.text_selection_toolbar !== undefined) {
+      const textSelectionToolbarCheck = validateTextSelectionToolbar(body.text_selection_toolbar);
+      if (!textSelectionToolbarCheck.ok) {
+        log.warn("settings rejected: invalid text_selection_toolbar", {
+          error: textSelectionToolbarCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: textSelectionToolbarCheck.error }, { status: 400 });
+      }
+    }
+
     if (body.suggested_prompt !== undefined) {
       const suggestedPromptCheck = validateSuggestedPrompt(body.suggested_prompt);
       if (!suggestedPromptCheck.ok) {
@@ -219,6 +244,9 @@ export async function PUT(req: Request) {
         ? { append_system: body.append_system as unknown as PiWorkConfig["append_system"] }
         : {}),
       ...(typeof body.load_pi_docs === "boolean" ? { load_pi_docs: body.load_pi_docs } : {}),
+      ...(isObject(body.text_selection_toolbar)
+        ? { text_selection_toolbar: body.text_selection_toolbar as unknown as PiWorkConfig["text_selection_toolbar"] }
+        : {}),
       ...(isObject(body.file_viewer)
         ? { file_viewer: body.file_viewer as unknown as PiWorkConfig["file_viewer"] }
         : {}),

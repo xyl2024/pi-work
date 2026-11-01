@@ -9,6 +9,7 @@ import {
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
+  type TextSelectionToolbarConfig,
   type McpConfig,
   type SuggestedPromptConfig,
   type UiSoundEventId,
@@ -80,6 +81,11 @@ function parseSuggestedPrompt(raw: unknown): SuggestedPromptConfig {
   };
 }
 
+function parseTextSelectionToolbar(raw: unknown): TextSelectionToolbarConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: true };
+  return { enabled: (raw as Record<string, unknown>).enabled !== false };
+}
+
 function parseMcp(raw: unknown): McpConfig {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
   const obj = raw as Record<string, unknown>;
@@ -98,6 +104,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
   append_system: { enabled: true },
   load_pi_docs: true,
+  text_selection_toolbar: { enabled: true },
   file_viewer: {
     max_size_mb: { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB },
   },
@@ -329,6 +336,7 @@ export function readConfig(): PiWorkConfig {
         right_side_bar: parseRightSideBar(cfg.right_side_bar),
         append_system: parseAppendSystem(cfg.append_system),
         load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
+        text_selection_toolbar: parseTextSelectionToolbar(cfg.text_selection_toolbar),
         file_viewer: parseFileViewer(cfg.file_viewer),
         ui_sounds: parseUiSounds(cfg.ui_sounds),
         cwd_icons: parseCwdIcons(cfg.cwd_icons),
