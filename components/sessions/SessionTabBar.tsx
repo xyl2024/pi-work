@@ -330,7 +330,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   if (event.button !== 0) return;
                   armCloseGuard(tab.tabId);
                 }}
-                className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
                   onCloseTab(tab.tabId);

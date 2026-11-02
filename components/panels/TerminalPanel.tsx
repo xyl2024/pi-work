@@ -824,7 +824,7 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
                         }}
                         aria-label={t("Close terminal")}
                         style={{ background: "var(--bg)" }}
-                        className="absolute right-1.5 top-1 z-10 flex h-5 w-5 items-center justify-center rounded text-[13px] leading-none text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-selected)] hover:text-[var(--text)] group-hover:opacity-100"
+                        className="absolute right-1.5 top-1 z-10 flex h-5 w-5 items-center justify-center rounded text-[13px] leading-none text-[var(--text-muted)] transition-opacity hover:bg-[var(--bg-selected)] hover:text-[var(--text)]"
                       >
                         ×
                       </button>

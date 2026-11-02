@@ -123,7 +123,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <button
                 type="button"
                 aria-label={`${t("Close")} ${displayLabel}`}
-                className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
