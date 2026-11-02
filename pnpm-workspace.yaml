@@ -80,3 +80,13 @@ overrides:
   # pre-1.0 consumers onto the same 1.x copy; our own `^1.37.0` is left alone
   # by the `<1` selector.
   'lucide-react@<1': 1.54.0
+
+minimumReleaseAgeExclude:
+  - '@earendil-works/pi-agent-core@1.5.0'
+  - '@earendil-works/pi-ai@1.5.0'
+  - '@earendil-works/pi-codemode@1.5.0'
+  - '@earendil-works/pi-coding-agent@1.5.0'
+  - '@earendil-works/pi-mcp@1.5.0'
+  - '@earendil-works/pi-schema@1.5.0'
+  - '@earendil-works/pi-telemetry@1.5.0'
+  - '@earendil-works/pi-tui@1.5.0'
