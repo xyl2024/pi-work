@@ -383,7 +383,20 @@ export function AppShell() {
   }, [documentTitle]);
   const selectedSession = activeTab?.kind === "session" ? activeTab.session : null;
   const newSessionCwd = activeTab?.kind === "draft" ? activeTab.cwd : null;
+  const assistantActive = activeTab?.kind === "assistant";
   const activeTabId = workspace.activeTabId;
+  const [assistantCwd, setAssistantCwd] = useState<string | null>(null);
+  useEffect(() => {
+    if (!assistantActive || assistantCwd) return;
+    let cancelled = false;
+    void fetch("/api/default-cwd", { method: "POST" })
+      .then((response) => response.json())
+      .then((data: { cwd?: string }) => {
+        if (!cancelled && data.cwd) setAssistantCwd(data.cwd);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [assistantActive, assistantCwd]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingScrollEntryIds, setPendingScrollEntryIds] = useState<Record<string, string | null>>({});
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
@@ -1299,6 +1312,8 @@ export function AppShell() {
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
       onOpenAssistant={handleOpenAssistant}
+      assistantActive={assistantActive}
+      assistantCwd={assistantCwd}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
       onOpenFile={handleOpenFile}
       explorerRefreshKey={explorerRefreshKey}

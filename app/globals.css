@@ -56,7 +56,7 @@
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --user-bg: #eff6ff;
-  --assistant-bg: #ffffff;
+  --assistant-bg: #ececec;
   --tool-bg: #fefefe;
   --bg-subtle: rgba(0,0,0,0.04);
 
@@ -93,7 +93,7 @@
   --accent: #7aa2f7;
   --accent-hover: #93c5fd;
   --user-bg: #1e293b;
-  --assistant-bg: #1a1a1a;
+  --assistant-bg: #333338;
   --tool-bg: #1f2937;
   --bg-subtle: rgba(255,255,255,0.04);
 

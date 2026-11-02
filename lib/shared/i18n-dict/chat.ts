@@ -83,7 +83,7 @@ export const chat = {
   "Open": "打开",
   "New": "新建",
   "New session": "新会话",
-  "Assistant": "助理",
+  "Assistant": "个人助理",
   "Message the assistant": "发消息给助理",
   "Failed to load assistant sessions": "加载助理会话失败",
   "New session in this project": "在此项目中新建会话",

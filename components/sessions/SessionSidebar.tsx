@@ -39,6 +39,8 @@ interface Props {
   onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
   onOpenAssistant?: () => void;
+  assistantActive?: boolean;
+  assistantCwd?: string | null;
   selectedCwd?: string | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   explorerRefreshKey?: number;
@@ -144,7 +146,7 @@ function PiAgentTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onOpenAssistant, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onOpenAssistant, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -183,6 +185,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [perCwdSessions, setPerCwdSessions] = useState<Record<string, CwdSessionsState>>({});
   const [expandedCwd, setExpandedCwd] = useState<string | null>(null);
+  const assistantActive = assistantActiveProp ?? false;
+  const assistantCwd = assistantCwdProp ?? null;
+  const explorerCwd = assistantActive ? assistantCwd : selectedCwdProp;
   const activeCwd = selectedSession?.cwd ?? selectedCwdProp ?? null;
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const sessionsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -683,43 +688,11 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: assistantActive ? 8 : 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <PiAgentTitle />
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            {onOpenAssistant && (
-              <Tooltip content={t("Assistant")}>
-                <button
-                  onClick={onOpenAssistant}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(37,99,235,0.08)",
-                    border: "1px solid rgba(37,99,235,0.35)",
-                    color: "var(--accent)",
-                    cursor: "pointer",
-                    width: 32, height: 32,
-                    borderRadius: 7,
-                    padding: 0,
-                    flexShrink: 0,
-                    transition: "background 0.12s, border-color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(37,99,235,0.18)";
-                    e.currentTarget.style.borderColor = "rgba(37,99,235,0.55)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(37,99,235,0.08)";
-                    e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    <line x1="7" y1="2" x2="7" y2="12" />
-                    <line x1="2" y1="7" x2="12" y2="7" />
-                  </svg>
-                </button>
-              </Tooltip>
-            )}
             {onOpenSearch && (
               <Tooltip content={`${t("Command palette")} (⌘K)`}>
               <button
@@ -754,15 +727,51 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             )}
           </div>
         </div>
+        {onOpenAssistant && (
+          <button
+            onClick={onOpenAssistant}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              justifyContent: "flex-start",
+              width: "100%",
+              height: SESSION_ROW_HEIGHT_PX,
+              padding: "0 8px 0 0",
+              borderRadius: 8,
+              background: "transparent",
+              border: "none",
+              color: "var(--text)",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 500,
+              flexShrink: 0,
+              transition: "background 0.1s, box-shadow 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-hover)";
+              e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
+              <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+              <path d="M19 17l.9 2.1L22 20l-2.1.9L19 23l-.9-2.1L16 20l2.1-.9z" />
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("Assistant")}</span>
+          </button>
+        )}
         </div>
 
+      {!assistantActive && (
       <SidebarSection
         title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
         scrollRef={attachSessionsScroll}
         contentHeight={SESSIONS_CONTENT_HEIGHT_PX}
-        grow={selectedCwdProp && explorerOpen ? 0 : 1}
+        grow={!assistantActive && explorerCwd && explorerOpen ? 0 : 1}
         actions={
           <>
           <Tooltip content={t("Only today's sessions")}>
@@ -825,8 +834,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onNewSession={onNewSession}
       />
       </SidebarSection>
+      )}
 
-      {selectedCwdProp && (
+      {explorerCwd && (
         <SidebarSection
           title={t("Explorer")}
           open={explorerOpen}
@@ -864,7 +874,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           }
         >
           <FileExplorer
-            cwd={selectedCwdProp!}
+            cwd={explorerCwd!}
             onOpenFile={onOpenFile ?? (() => {})}
             refreshKey={explorerKey}
             onAtMention={onAtMention}

@@ -254,8 +254,8 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
             gap: 8,
             padding: "8px 8px 8px 14px",
             borderRadius: 18,
-            border: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            border: "1px solid var(--text-dim)",
+            background: "transparent",
           }}
         >
           <textarea
