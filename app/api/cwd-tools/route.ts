@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { readCwdToolSelection, writeCwdToolSelection } from "@/lib/server/cwd-tools-config";
+import { resolveCwdToolSelection, writeCwdToolSelection } from "@/lib/server/cwd-tools-config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const cwd = new URL(req.url).searchParams.get("cwd");
   if (!cwd) return NextResponse.json({ error: "cwd is required" }, { status: 400 });
-  return NextResponse.json({ cwd, selection: readCwdToolSelection(cwd) });
+  return NextResponse.json({ cwd, selection: resolveCwdToolSelection(cwd) });
 }
 
 export async function PUT(req: Request) {

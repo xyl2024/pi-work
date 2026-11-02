@@ -30,7 +30,7 @@ import {
   readSessionToolSelection,
   writeSessionToolSelection,
 } from "./session-tools-config";
-import { readCwdToolSelection } from "./cwd-tools-config";
+import { resolveCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
 import { resolveMemoryForSession } from "./memory-injection";
@@ -766,8 +766,8 @@ export async function startRpcSession(
     toolNames !== undefined
       ? toolNames
       : sessionFile
-        ? readSessionToolSelection(sessionId) ?? readCwdToolSelection(cwd) ?? "all"
-        : readCwdToolSelection(cwd) ?? "all";
+        ? readSessionToolSelection(sessionId) ?? resolveCwdToolSelection(cwd)
+        : resolveCwdToolSelection(cwd);
   if (toolNames === undefined) {
     log.info("tool selection resolved for session start", {
       sessionId,

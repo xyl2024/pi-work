@@ -15,6 +15,7 @@ import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import type { ToolSelection } from "@/lib/shared/types";
 import {
+  DEFAULT_CWD_TOOL_NAMES,
   buildToolChecklistRows,
   expandToolPatterns,
   isToolChecklistRowChecked,
@@ -31,7 +32,7 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
   useBodyScrollLock(isVisible);
 
   const [tools, setTools] = useState<{ name: string; description?: string | null }[]>([]);
-  const [selection, setSelection] = useState<ToolSelection>("all");
+  const [selection, setSelection] = useState<ToolSelection>(() => [...DEFAULT_CWD_TOOL_NAMES]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
@@ -49,7 +50,7 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
       fetch(`/api/cwd-tools?cwd=${encodeURIComponent(cwd)}`).then((r) => r.json()),
       fetch("/api/agent/tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd }) }).then((r) => r.json()),
     ]).then(([config, catalog]) => {
-      setSelection(config.selection ?? "all");
+      setSelection(config.selection ?? [...DEFAULT_CWD_TOOL_NAMES]);
       setTools(catalog.data?.available ?? []);
     }).finally(() => setLoading(false));
   }, [cwd, open]);

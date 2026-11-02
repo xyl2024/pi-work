@@ -1,5 +1,7 @@
 import type { ToolSelection } from "./types";
 
+export const DEFAULT_CWD_TOOL_NAMES: readonly string[] = ["read", "write", "edit", "bash"];
+
 export function expandToolPatterns(patterns: readonly string[], allToolNames: readonly string[]): string[] {
   const out: string[] = [];
   for (const entry of patterns) {

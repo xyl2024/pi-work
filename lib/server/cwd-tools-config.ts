@@ -3,6 +3,7 @@ import { join } from "path";
 import { dataPath } from "./data-dir";
 import type { ToolSelection } from "../shared/types";
 import { migrateToolNames } from "../shared/subagent";
+import { DEFAULT_CWD_TOOL_NAMES } from "../shared/tool-selection";
 
 const CONFIG_PATH = join(dataPath(), "cwd-tools.json");
 type StoredConfig = Record<string, ToolSelection>;
@@ -31,6 +32,10 @@ function readConfig(): StoredConfig {
 
 export function readCwdToolSelection(cwd: string): ToolSelection | null {
   return readConfig()[cwd] ?? null;
+}
+
+export function resolveCwdToolSelection(cwd: string): ToolSelection {
+  return readCwdToolSelection(cwd) ?? [...DEFAULT_CWD_TOOL_NAMES];
 }
 
 export function writeCwdToolSelection(cwd: string, selection: unknown): ToolSelection {

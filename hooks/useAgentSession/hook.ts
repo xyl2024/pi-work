@@ -38,6 +38,7 @@ import {
   type SessionPermissionMode,
 } from "@/lib/shared/permission-mode";
 import { parseSkillCommand } from "@/lib/shared/skill-block";
+import { DEFAULT_CWD_TOOL_NAMES } from "@/lib/shared/tool-selection";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -151,7 +152,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     if (!isNew || newSessionPermissionModeChosenRef.current) return;
     setNewSessionPermissionMode(defaultNewSessionPermissionMode);
   }, [isNew, defaultNewSessionPermissionMode]);
-  const [toolSelection, setToolSelection] = useState<ToolSelection>(() => "all");
+  const [toolSelection, setToolSelection] = useState<ToolSelection>(() => [...DEFAULT_CWD_TOOL_NAMES]);
   useEffect(() => {
     if (!isNew || !newSessionCwd) return;
     let cancelled = false;
@@ -159,7 +160,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       fetch(`/api/cwd-tools?cwd=${encodeURIComponent(newSessionCwd)}`)
         .then((res) => res.json() as Promise<{ selection?: ToolSelection | null }>)
         .then((data) => {
-          if (!cancelled) setToolSelection(data.selection ?? "all");
+          if (!cancelled) setToolSelection(data.selection ?? [...DEFAULT_CWD_TOOL_NAMES]);
         })
         .catch(() => {});
     };
