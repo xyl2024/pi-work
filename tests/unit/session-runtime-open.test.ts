@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   openSubagentChildSession: vi.fn(),
   resolveSessionPermission: vi.fn(),
   openSessionFile: vi.fn(),
-  isAssistantSessionFile: vi.fn(),
 }));
 
 vi.mock("@/lib/server/rpc-manager", () => ({
@@ -17,7 +16,6 @@ vi.mock("@/lib/server/rpc-manager", () => ({
 
 vi.mock("@/lib/server/session-reader", () => ({
   resolveSessionPath: mocks.resolveSessionPath,
-  isAssistantSessionFile: mocks.isAssistantSessionFile,
 }));
 
 vi.mock("@/lib/server/subagent-tasks", () => ({
@@ -42,7 +40,6 @@ beforeEach(() => {
   mocks.openSessionFile.mockReturnValue({ getHeader: () => ({ cwd: "/work" }) });
   mocks.resolveSessionPermission.mockReturnValue({ permissionMode: "confirm", background: false });
   mocks.startRpcSession.mockResolvedValue({ session: { source: "user" } });
-  mocks.isAssistantSessionFile.mockReturnValue(false);
 });
 
 describe("opening a session for runtime", () => {
@@ -95,10 +92,21 @@ describe("opening a session for runtime", () => {
     );
   });
 
-  it("reopens an assistant session with the assistant runtime options", async () => {
-    mocks.isAssistantSessionFile.mockReturnValue(true);
-
+  it("opens an assistant session as an ordinary session by default", async () => {
     await openSessionForRuntime("assistant");
+
+    expect(mocks.startRpcSession).toHaveBeenCalledWith(
+      "assistant",
+      "/sessions/child.jsonl",
+      "/work",
+      undefined,
+      "user",
+      {},
+    );
+  });
+
+  it("keeps the assistant runtime when the assistant page asks for it", async () => {
+    await openSessionForRuntime("assistant", { assistant: true });
 
     expect(mocks.startRpcSession).toHaveBeenCalledWith(
       "assistant",

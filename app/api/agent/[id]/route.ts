@@ -65,7 +65,9 @@ export async function POST(
     }
 
     const existing = getRpcSession(id);
-    const sendWrapper = existing?.isAlive() ? existing : await openSessionForRuntime(id);
+    const sendWrapper = existing?.isAlive()
+      ? existing
+      : await openSessionForRuntime(id, { assistant: body.assistant === true });
     if (!sendWrapper) {
       log.warn("agent command session not found", { id, commandType, durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -99,18 +101,19 @@ export async function POST(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const startedAt = Date.now();
+  const assistant = new URL(req.url).searchParams.get("assistant") === "1";
   log.debug("agent state requested", { id });
 
   try {
     let session = getRpcSession(id);
     if (!session || !session.isAlive()) {
       try {
-        session = (await openSessionForRuntime(id)) ?? undefined;
+        session = (await openSessionForRuntime(id, { assistant })) ?? undefined;
         if (!session) {
           log.debug("agent state completed: session not found", { id, durationMs: elapsedMs(startedAt) });
           return NextResponse.json({ running: false });

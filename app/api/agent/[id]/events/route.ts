@@ -13,12 +13,13 @@ export async function GET(
 ) {
   const { id } = await params;
   const startedAt = Date.now();
+  const assistant = new URL(req.url).searchParams.get("assistant") === "1";
   log.info("agent event stream requested", { id });
 
   let session = getRpcSession(id);
   if (!session || !session.isAlive()) {
     try {
-      session = (await openSessionForRuntime(id)) ?? undefined;
+      session = (await openSessionForRuntime(id, { assistant })) ?? undefined;
       if (!session) {
         log.warn("agent event stream session not found", { id, durationMs: elapsedMs(startedAt) });
         return new Response("Session not found", { status: 404 });

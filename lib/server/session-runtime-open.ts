@@ -1,6 +1,6 @@
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { getRpcSession, startRpcSession } from "./rpc-manager";
-import { isAssistantSessionFile, resolveSessionPath } from "./session-reader";
+import { resolveSessionPath } from "./session-reader";
 import { openSubagentChildSession } from "./subagent-tasks";
 import { resolveSessionPermission } from "./session-permission-visibility";
 import { createLogger } from "./logger";
@@ -10,6 +10,7 @@ const log = createLogger("session-runtime-open");
 
 export async function openSessionForRuntime(
   sessionId: string,
+  options: { assistant?: boolean } = {},
 ): Promise<AgentSessionWrapper | null> {
   const live = getRpcSession(sessionId);
   if (live?.isAlive()) return live;
@@ -24,7 +25,7 @@ export async function openSessionForRuntime(
   if (!filePath) return null;
   const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
   const permission = resolveSessionPermission(sessionId);
-  const assistant = isAssistantSessionFile(filePath);
+  const assistant = options.assistant === true;
   const { session } = await startRpcSession(
     sessionId,
     filePath,

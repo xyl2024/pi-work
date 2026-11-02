@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowUp, Square } from "lucide-react";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useI18n } from "@/hooks/useI18n";
@@ -9,13 +9,43 @@ import {
   projectAssistantConversation,
   type AssistantConversationSession,
 } from "@/lib/shared/assistant-conversation";
+import {
+  fetchAssistantSessions,
+  type AssistantSessionPayload,
+} from "@/lib/client/assistant-sessions";
 import { selectLatestAssistantSession } from "@/lib/shared/assistant-session";
 import { extractMessageText } from "@/lib/shared/message-content";
 import { isAtTop } from "@/lib/shared/scroll-follow";
 import type { AgentMessage, SessionInfo } from "@/lib/shared/types";
 
-interface AssistantSessionPayload extends SessionInfo {
-  messages?: AgentMessage[];
+const bubbleBaseStyle: CSSProperties = {
+  maxWidth: "78%",
+  padding: "8px 12px",
+  borderRadius: 16,
+  fontSize: 14,
+  lineHeight: 1.5,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+};
+
+const userBubbleStyle: CSSProperties = {
+  ...bubbleBaseStyle,
+  alignSelf: "flex-end",
+  background: "var(--accent)",
+  color: "#fff",
+  border: "none",
+};
+
+const assistantBubbleStyle: CSSProperties = {
+  ...bubbleBaseStyle,
+  alignSelf: "flex-start",
+  background: "var(--assistant-bg)",
+  color: "var(--text)",
+  border: "1px solid var(--border)",
+};
+
+function distanceFromBottom(element: HTMLElement): number {
+  return element.scrollHeight - element.scrollTop - element.clientHeight;
 }
 
 interface AssistantChatProps {
@@ -24,9 +54,14 @@ interface AssistantChatProps {
   cwd: string | null;
   session: SessionInfo | null;
   history: readonly AssistantSessionPayload[];
+  onAgentStatusChange?: (status: {
+    running: boolean;
+    streaming: boolean;
+    error: string | null;
+  }) => void;
 }
 
-function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChatProps) {
+function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusChange }: AssistantChatProps) {
   const { t } = useI18n();
   const [createdSession, setCreatedSession] = useState<SessionInfo | null>(null);
   const [loadedStart, setLoadedStart] = useState<number | null>(null);
@@ -40,6 +75,8 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
     messages,
     agentRunning,
     streamState,
+    error,
+    runtimeError,
     handleSend,
     handleAbort,
   } = useAgentSession({
@@ -47,6 +84,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
     newSessionCwd: cwd,
     isActive,
     controllerId: tabId,
+    assistantSession: true,
     onSessionCreated: setCreatedSession,
   });
   const streaming = useStreamingMessage(tabId);
@@ -61,7 +99,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
         id: entry.id,
         cwd: entry.cwd,
         created: entry.created,
-        assistant: entry.assistant === true,
+        assistant: true,
         messages: entry.messages ?? [],
       });
     }
@@ -100,13 +138,21 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
   const showStreaming = streamingText !== "" && bubbles[bubbles.length - 1]?.text !== streamingText;
 
   useEffect(() => {
+    onAgentStatusChange?.({
+      running: agentRunning,
+      streaming: streamState.isStreaming,
+      error: error ?? runtimeError,
+    });
+  }, [agentRunning, streamState.isStreaming, error, runtimeError, onAgentStatusChange]);
+
+  useEffect(() => {
     if (loadedStart === null) return;
     const element = scrollRef.current;
     const previousVisibleCount = previousVisibleCountRef.current;
     previousVisibleCountRef.current = projection.visibleCount;
     if (!element || prependScrollHeightRef.current !== null) return;
     if (projection.visibleCount <= previousVisibleCount) return;
-    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    const distance = distanceFromBottom(element);
     if (previousVisibleCount === 0 || distance < 100) element.scrollTop = element.scrollHeight;
   }, [loadedStart, projection.visibleCount]);
 
@@ -114,7 +160,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
     if (!streamingText) return;
     const element = scrollRef.current;
     if (!element) return;
-    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    const distance = distanceFromBottom(element);
     if (distance < 100) element.scrollTop = element.scrollHeight;
   }, [streamingText]);
 
@@ -189,39 +235,13 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
         {bubbles.map((bubble) => (
           <div
             key={bubble.key}
-            style={{
-              alignSelf: bubble.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "78%",
-              padding: "8px 12px",
-              borderRadius: 16,
-              fontSize: 14,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              background: bubble.role === "user" ? "var(--accent)" : "var(--assistant-bg)",
-              color: bubble.role === "user" ? "#fff" : "var(--text)",
-              border: bubble.role === "user" ? "none" : "1px solid var(--border)",
-            }}
+            style={bubble.role === "user" ? userBubbleStyle : assistantBubbleStyle}
           >
             {bubble.text}
           </div>
         ))}
         {showStreaming ? (
-          <div
-            style={{
-              alignSelf: "flex-start",
-              maxWidth: "78%",
-              padding: "8px 12px",
-              borderRadius: 16,
-              fontSize: 14,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              background: "var(--assistant-bg)",
-              color: "var(--text)",
-              border: "1px solid var(--border)",
-            }}
-          >
+          <div style={assistantBubbleStyle}>
             {streamingText}
           </div>
         ) : null}
@@ -290,7 +310,15 @@ function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChat
   );
 }
 
-export function AssistantConversation({ tabId, isActive }: { tabId: string; isActive: boolean }) {
+export function AssistantConversation({ tabId, isActive, onAgentStatusChange }: {
+  tabId: string;
+  isActive: boolean;
+  onAgentStatusChange?: (status: {
+    running: boolean;
+    streaming: boolean;
+    error: string | null;
+  }) => void;
+}) {
   const [cwd, setCwd] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AssistantSessionPayload[]>([]);
   const [ready, setReady] = useState(false);
@@ -300,19 +328,16 @@ export function AssistantConversation({ tabId, isActive }: { tabId: string; isAc
     let cancelled = false;
     void (async () => {
       try {
-        const [cwdResponse, sessionsResponse] = await Promise.all([
+        const [cwdResponse, assistantSessions] = await Promise.all([
           fetch("/api/default-cwd", { method: "POST" }),
-          fetch("/api/assistant/sessions?includeMessages=1"),
+          fetchAssistantSessions({ includeMessages: true }),
         ]);
         if (cancelled) return;
         if (cwdResponse.ok) {
           const data = await cwdResponse.json() as { cwd?: string };
           setCwd(data.cwd ?? null);
         }
-        if (sessionsResponse.ok) {
-          const data = await sessionsResponse.json() as { sessions?: AssistantSessionPayload[] };
-          setSessions(data.sessions ?? []);
-        }
+        setSessions(assistantSessions);
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -332,6 +357,7 @@ export function AssistantConversation({ tabId, isActive }: { tabId: string; isAc
       cwd={cwd}
       session={latest}
       history={sessions}
+      onAgentStatusChange={onAgentStatusChange}
     />
   );
 }

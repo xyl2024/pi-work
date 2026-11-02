@@ -50,6 +50,7 @@ import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
 import { selectAssistantRestoreSession } from "@/lib/shared/assistant-session";
+import { fetchAssistantSessions } from "@/lib/client/assistant-sessions";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
   createPanelTabsState,
@@ -476,17 +477,23 @@ export function AppShell() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch("/api/assistant/sessions");
-        if (!response.ok) return;
-        const data = await response.json() as { sessions?: SessionInfo[] };
-        const restore = selectAssistantRestoreSession(initialSessionId, data.sessions ?? []);
+        const sessions = await fetchAssistantSessions();
+        const restore = selectAssistantRestoreSession(initialSessionId, sessions);
         if (!cancelled && restore) dispatchWorkspace({ type: "open_assistant" });
-      } catch {}
+      } catch (error) {
+        if (!cancelled) {
+          toast.show({
+            kind: "error",
+            message: t("Failed to load assistant sessions"),
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [initialSessionId]);
+  }, [initialSessionId, t, toast]);
 
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd || !activeTabId) return;
@@ -615,10 +622,10 @@ export function AppShell() {
   }, [usageController]);
 
   const handleSlashNew = useCallback((cwdOverride?: string) => {
-    const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd ?? recentCwds?.[0];
+    const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd;
     if (!cwd) return;
     handleNewSession("draft", cwd);
-  }, [selectedSession?.cwd, newSessionCwd, recentCwds, handleNewSession]);
+  }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
 
   const handleOpenAssistant = useCallback(() => {
     dispatchWorkspace({ type: "open_assistant" });
@@ -1192,7 +1199,14 @@ export function AppShell() {
           const tab = workspace.tabs[tabId];
           if (!tab) return null;
           if (tab.kind === "assistant") {
-            return <AssistantConversation key={tab.tabId} tabId={tab.tabId} isActive={tab.tabId === activeTabId} />;
+            return (
+              <AssistantConversation
+                key={tab.tabId}
+                tabId={tab.tabId}
+                isActive={tab.tabId === activeTabId}
+                onAgentStatusChange={(status) => handleAgentStatusChange(tab.tabId, status)}
+              />
+            );
           }
           return (
             <WorkspaceChatTab

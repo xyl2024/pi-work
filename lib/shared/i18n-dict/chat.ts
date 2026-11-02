@@ -85,6 +85,7 @@ export const chat = {
   "New session": "新会话",
   "Assistant": "助理",
   "Message the assistant": "发消息给助理",
+  "Failed to load assistant sessions": "加载助理会话失败",
   "New session in this project": "在此项目中新建会话",
   "Background complete": "后台已完成",
   "Unsaved draft": "有未发送内容",

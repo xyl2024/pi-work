@@ -37,6 +37,7 @@ type UseAgentSessionDataOptions = {
   newSessionCwd: string | null;
   loadContextRef: LoadContextRef;
   refreshAgentRuntimeStateRef: RuntimeStateRef;
+  assistantSession?: boolean;
 };
 
 export function useAgentSessionData(options: UseAgentSessionDataOptions) {
@@ -63,13 +64,14 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     newSessionCwd,
     loadContextRef,
     refreshAgentRuntimeStateRef,
+    assistantSession = false,
   } = options;
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     try {
       if (showLoading) setLoading(true);
       const url = includeState
-        ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
+        ? `/api/sessions/${encodeURIComponent(sid)}?includeState${assistantSession ? "&assistant=1" : ""}`
         : `/api/sessions/${encodeURIComponent(sid)}`;
       const res = await fetch(url);
       if (res.status === 404) {
@@ -125,7 +127,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [modelThinkingLevels, onSessionLoaded, setActiveLeafId, setChangeMarkers, setCompactionPoints, setCurrentModelOverride, setData, setEntryIds, setEntryTimestamps, setError, setLoading, setMessages, setThinkingLevel]);
+  }, [assistantSession, modelThinkingLevels, onSessionLoaded, setActiveLeafId, setChangeMarkers, setCompactionPoints, setCurrentModelOverride, setData, setEntryIds, setEntryTimestamps, setError, setLoading, setMessages, setThinkingLevel]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
