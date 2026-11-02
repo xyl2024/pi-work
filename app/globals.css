@@ -538,6 +538,31 @@ pre, code {
   user-select: none;
 }
 
+.assistant-bubble-in {
+  animation: assistant-bubble-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes assistant-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.assistant-typing-dot {
+  animation: assistant-typing-dot 1.2s ease-in-out infinite;
+}
+@keyframes assistant-typing-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-bubble-in { animation: none; }
+  .assistant-typing-dot { animation: none; }
+}
+
 /* Conversation-tree active branch — flowing dashes while the agent works.
    Applied to the connector paths on the active path via .tree-edge-flow;
    the dash pattern (stroke-dasharray) is set inline, so this class only

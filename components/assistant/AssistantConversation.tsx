@@ -4,7 +4,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowUp, Square } from "lucide-react";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useI18n } from "@/hooks/useI18n";
-import { useStreamingMessage } from "@/hooks/useStreamingMessage";
 import {
   projectAssistantConversation,
   type AssistantConversationSession,
@@ -16,7 +15,7 @@ import {
 import { selectLatestAssistantSession } from "@/lib/shared/assistant-session";
 import { extractMessageText } from "@/lib/shared/message-content";
 import { isAtTop } from "@/lib/shared/scroll-follow";
-import type { AgentMessage, SessionInfo } from "@/lib/shared/types";
+import type { SessionInfo } from "@/lib/shared/types";
 
 const bubbleBaseStyle: CSSProperties = {
   maxWidth: "78%",
@@ -46,6 +45,26 @@ const assistantBubbleStyle: CSSProperties = {
 
 function distanceFromBottom(element: HTMLElement): number {
   return element.scrollHeight - element.scrollTop - element.clientHeight;
+}
+
+function TypingIndicator() {
+  return (
+    <span style={{ display: "inline-flex", gap: 4, alignItems: "center", padding: "2px 0" }}>
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="assistant-typing-dot"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            background: "var(--text-muted)",
+            animationDelay: `${index * 0.18}s`,
+          }}
+        />
+      ))}
+    </span>
+  );
 }
 
 interface AssistantChatProps {
@@ -87,7 +106,6 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
     assistantSession: true,
     onSessionCreated: setCreatedSession,
   });
-  const streaming = useStreamingMessage(tabId);
 
   const projection = useMemo(() => {
     const activeId = activeSession?.id;
@@ -132,10 +150,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
     });
   }, [loadedStart, projection]);
 
-  const streamingText = streamState.isStreaming && streaming.streamingMessage
-    ? extractMessageText(streaming.streamingMessage as AgentMessage).trim()
-    : "";
-  const showStreaming = streamingText !== "" && bubbles[bubbles.length - 1]?.text !== streamingText;
+  const awaitingAssistant = agentRunning && bubbles[bubbles.length - 1]?.role !== "assistant";
 
   useEffect(() => {
     onAgentStatusChange?.({
@@ -156,13 +171,19 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
     if (previousVisibleCount === 0 || distance < 100) element.scrollTop = element.scrollHeight;
   }, [loadedStart, projection.visibleCount]);
 
+  const bubbleCountRef = useRef(0);
   useEffect(() => {
-    if (!streamingText) return;
     const element = scrollRef.current;
     if (!element) return;
-    const distance = distanceFromBottom(element);
-    if (distance < 100) element.scrollTop = element.scrollHeight;
-  }, [streamingText]);
+    const appended = bubbles.length > bubbleCountRef.current;
+    bubbleCountRef.current = bubbles.length;
+    const appendedNow = appended || awaitingAssistant;
+    if (!appendedNow) return;
+    const frame = requestAnimationFrame(() => {
+      element.scrollTop = element.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bubbles.length, awaitingAssistant]);
 
   useLayoutEffect(() => {
     const element = scrollRef.current;
@@ -235,14 +256,15 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
         {bubbles.map((bubble) => (
           <div
             key={bubble.key}
+            className="assistant-bubble-in"
             style={bubble.role === "user" ? userBubbleStyle : assistantBubbleStyle}
           >
             {bubble.text}
           </div>
         ))}
-        {showStreaming ? (
+        {awaitingAssistant ? (
           <div style={assistantBubbleStyle}>
-            {streamingText}
+            <TypingIndicator />
           </div>
         ) : null}
       </div>
