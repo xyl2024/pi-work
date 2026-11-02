@@ -222,7 +222,11 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         )}
         {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
-        const title = tab.kind === "draft" ? t("New session") : getSessionTabTitle(tab.session!);
+        const title = tab.kind === "assistant"
+          ? t("Assistant")
+          : tab.kind === "draft"
+            ? t("New session")
+            : getSessionTabTitle(tab.session!);
         const tooltip = tab.kind === "draft"
           ? (tab.cwd ? `${t("New session")} · ${tab.cwd}` : t("New session"))
           : title;
@@ -262,7 +266,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               event.preventDefault();
               const index = tabs.findIndex((item) => item.tabId === tab.tabId);
               const items: ContextMenuItem[] = [
-                { key: "reload", label: t("Refresh"), onSelect: () => onReload?.(tab.tabId), disabled: tab.kind === "draft" || !onReload },
+                { key: "reload", label: t("Refresh"), onSelect: () => onReload?.(tab.tabId), disabled: tab.kind !== "session" || !onReload },
                 { key: "close", label: t("Close tab"), onSelect: () => onCloseTab(tab.tabId), separatorBefore: true },
                 { key: "close-left", label: t("Close tabs to the left"), onSelect: () => onBatchClose?.(tab.tabId, "left"), disabled: index === 0 },
                 { key: "close-right", label: t("Close tabs to the right"), onSelect: () => onBatchClose?.(tab.tabId, "right"), disabled: index === tabs.length - 1 },

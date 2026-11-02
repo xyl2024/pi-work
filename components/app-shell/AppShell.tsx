@@ -80,6 +80,7 @@ import {
 import { mcpPanel } from "@/lib/client/mcp-panel";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
+import { AssistantConversation } from "../assistant/AssistantConversation";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
 import {
@@ -571,8 +572,9 @@ export function AppShell() {
         const current = workspaceRef.current;
         return current.tabOrder
           .map((tabId) => current.tabs[tabId])
-          .filter((tab): tab is SessionTab => Boolean(tab))
-          .map((tab) => ({ tabId: tab.tabId, kind: tab.kind, dirty: tab.dirty }));
+          .flatMap((tab) => tab && tab.kind !== "assistant"
+            ? [{ tabId: tab.tabId, kind: tab.kind, dirty: tab.dirty }]
+            : []);
       },
       ensureDraft: (cwd) => {
         const tabId = createDraftTabId();
@@ -595,10 +597,15 @@ export function AppShell() {
   }, [usageController]);
 
   const handleSlashNew = useCallback((cwdOverride?: string) => {
-    const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd;
+    const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd ?? recentCwds?.[0];
     if (!cwd) return;
     handleNewSession("draft", cwd);
-  }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
+  }, [selectedSession?.cwd, newSessionCwd, recentCwds, handleNewSession]);
+
+  const handleOpenAssistant = useCallback(() => {
+    dispatchWorkspace({ type: "open_assistant" });
+    closeTopPanel();
+  }, [closeTopPanel]);
 
   const handleSessionCreated = useCallback((tabId: string, session: SessionInfo) => {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
@@ -1166,6 +1173,9 @@ export function AppShell() {
         {showChat && workspace.tabOrder.map((tabId) => {
           const tab = workspace.tabs[tabId];
           if (!tab) return null;
+          if (tab.kind === "assistant") {
+            return <AssistantConversation key={tab.tabId} isActive={tab.tabId === activeTabId} />;
+          }
           return (
             <WorkspaceChatTab
               key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
@@ -1256,6 +1266,7 @@ export function AppShell() {
       onSessionDeleted={handleSessionDeleted}
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
+      onOpenAssistant={handleOpenAssistant}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
       onOpenFile={handleOpenFile}
       explorerRefreshKey={explorerRefreshKey}
