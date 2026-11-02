@@ -1,5 +1,6 @@
 import type {
   AppendSystemConfig,
+  MemoryConfig,
   NetworkProxyConfig,
   PiWorkConfig,
   SuggestedPromptConfig,
@@ -18,6 +19,7 @@ export const SETTINGS_OWNED_KEYS = [
   "ui_sounds",
   "network_proxy",
   "suggested_prompt",
+  "memory",
 ] as const satisfies readonly (keyof PiWorkConfig)[];
 
 export type SettingsOwnedKey = (typeof SETTINGS_OWNED_KEYS)[number];
@@ -31,6 +33,7 @@ export type SettingsPatch = Partial<{
   ui_sounds: UiSoundsConfig;
   network_proxy: NetworkProxyConfig;
   suggested_prompt: SuggestedPromptConfig;
+  memory: MemoryConfig;
 }>;
 
 const OWNED_KEY_SET: ReadonlySet<string> = new Set(SETTINGS_OWNED_KEYS);

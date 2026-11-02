@@ -101,6 +101,20 @@ function validateSuggestedPrompt(
   return { ok: true };
 }
 
+function validateMemory(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "memory must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") {
+    return { ok: false, error: "memory.enabled must be a boolean" };
+  }
+  return { ok: true };
+}
+
 function validateTextSelectionToolbar(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -230,6 +244,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.memory !== undefined) {
+      const memoryCheck = validateMemory(body.memory);
+      if (!memoryCheck.ok) {
+        log.warn("settings rejected: invalid memory", {
+          error: memoryCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: memoryCheck.error }, { status: 400 });
+      }
+    }
+
     const onDisk = readConfig();
 
     const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -257,6 +282,7 @@ export async function PUT(req: Request) {
       ...(isObject(body.suggested_prompt)
         ? { suggested_prompt: body.suggested_prompt as unknown as PiWorkConfig["suggested_prompt"] }
         : {}),
+      ...(isObject(body.memory) ? { memory: body.memory as unknown as PiWorkConfig["memory"] } : {}),
     };
 
     writeConfig(next);

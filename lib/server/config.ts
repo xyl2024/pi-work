@@ -11,6 +11,7 @@ import {
   type PiWorkConfig,
   type TextSelectionToolbarConfig,
   type McpConfig,
+  type MemoryConfig,
   type SuggestedPromptConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
@@ -119,6 +120,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   network_proxy: { enabled: false, url: "", no_proxy: "" },
   mcp: { ...DEFAULT_MCP },
   suggested_prompt: { ...DEFAULT_SUGGESTED_PROMPT },
+  memory: { enabled: false },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -173,6 +175,11 @@ function parseAppendSystem(raw: unknown): AppendSystemConfig {
   if (!raw || typeof raw !== "object") return { enabled: true };
   const obj = raw as Record<string, unknown>;
   return { enabled: obj.enabled !== false };
+}
+
+function parseMemory(raw: unknown): MemoryConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: false };
+  return { enabled: (raw as Record<string, unknown>).enabled === true };
 }
 
 function parseFileViewerMaxSizeMb(raw: unknown): FileViewerMaxSizeMb {
@@ -345,6 +352,7 @@ export function readConfig(): PiWorkConfig {
         network_proxy: parseNetworkProxy(cfg.network_proxy),
         mcp: parseMcp(cfg.mcp),
         suggested_prompt: parseSuggestedPrompt(cfg.suggested_prompt),
+        memory: parseMemory(cfg.memory),
       },
       statConfig(),
     );

@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { open, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { MEMORY_ENTRY_SEPARATOR, MEMORY_TARGET_FILES, type MemoryTarget } from "@/lib/shared/memory";
 import { dataPath } from "./data-dir";
 
-export type MemoryTarget = "memory" | "user";
+export type { MemoryTarget };
 
 export const MEMORY_CHAR_LIMITS: Record<MemoryTarget, number> = {
   memory: 2200,
@@ -11,13 +12,6 @@ export const MEMORY_CHAR_LIMITS: Record<MemoryTarget, number> = {
 };
 
 const MEMORY_DIR_NAME = "memory";
-
-const STORE_FILE_NAMES: Record<MemoryTarget, string> = {
-  memory: "MEMORY.md",
-  user: "USER.md",
-};
-
-export const MEMORY_ENTRY_SEPARATOR = "\n§\n";
 
 const LOCK_FILE_NAME = ".lock";
 const LOCK_RETRY_MS = 10;
@@ -81,7 +75,7 @@ function storeDir(): string {
 }
 
 function storePath(target: MemoryTarget): string {
-  return join(storeDir(), STORE_FILE_NAMES[target]);
+  return join(storeDir(), MEMORY_TARGET_FILES[target]);
 }
 
 function splitEntries(raw: string): string[] {
