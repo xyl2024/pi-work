@@ -256,6 +256,27 @@ describe("subagent profile store", () => {
     expect(deleteSubagentProfile("docs_writer")).toBe(false);
   });
 
+  it("stores memory in a profile tool set so the child session may write it", async () => {
+    resetStoreGlobals();
+    const { createSubagentProfile, getSubagentProfile, updateSubagentProfile } = await import("@/lib/server/subagent-profiles");
+
+    const created = createSubagentProfile({
+      name: "memory_writer",
+      description: "Writes memory.",
+      systemPrompt: "Keep memory tidy.",
+      tools: ["read", "memory"],
+      model: null,
+      bot: { expression: 3, stateKey: "writing", shapeId: "cloud", parts: ["hands"], accessories: [] },
+      thinkingLevel: "off",
+      timeoutMs: 60_000,
+    });
+    expect(created.tools).toEqual(["read", "memory"]);
+    expect(getSubagentProfile("memory_writer")!.tools).toEqual(["read", "memory"]);
+
+    const updated = updateSubagentProfile({ ...created, tools: ["read"] });
+    expect(updated.tools).toEqual(["read"]);
+  });
+
   it("lets a built-in profile's permission mode be edited", async () => {
     resetStoreGlobals();
     const { getSubagentProfile, updateSubagentProfile } = await import("@/lib/server/subagent-profiles");
