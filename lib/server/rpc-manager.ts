@@ -33,7 +33,7 @@ import {
 import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
-import { loadMemoryPromptBlock } from "./memory-injection";
+import { resolveMemoryForSession } from "./memory-injection";
 import { memoryTool } from "./memory-tool";
 import { getRegistry } from "./session-registry";
 import { subagentWebTools } from "./web-tools";
@@ -843,8 +843,9 @@ export async function startRpcSession(
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
-      memoryEnabled = cfg.memory.enabled === true;
-      memoryPromptBlock = loadMemoryPromptBlock(memoryEnabled);
+      const memory = resolveMemoryForSession(cwd, cfg.memory.enabled === true);
+      memoryEnabled = memory.enabled;
+      memoryPromptBlock = memory.block;
       if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }

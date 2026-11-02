@@ -36,6 +36,9 @@ export const sessions = {
   "Emoji": "表情",
   "No icons match": "没有匹配的图标",
 
+  "Memory": "记忆",
+  "Turn memory on in Settings first": "先在设置里打开记忆",
+
   "Set default tools": "设置默认工具",
   "Default tools for this project": "此项目的默认工具",
 

@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createSandbox, type Sandbox } from "./sandbox";
 import { composeAppendSystemPrompt, composeOverrideSystemPrompt } from "@/lib/server/web-tool-guidance";
-import { loadMemoryPromptBlock } from "@/lib/server/memory-injection";
+import { loadMemoryPromptBlock, resolveMemoryForSession } from "@/lib/server/memory-injection";
+import { readMemoryCwdOverrides, writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
 import { applyMemoryOperations } from "@/lib/server/memory-store";
 import type { MemoryTarget } from "@/lib/shared/memory";
 
@@ -129,5 +130,71 @@ describe("memory injection: block contents", () => {
     expect(loadMemoryPromptBlock(true)).toContain("新事实");
     expect(composed.join("\n")).toContain("旧事实");
     expect(composed.join("\n")).not.toContain("新事实");
+  });
+});
+
+describe("memory injection: cwd switch decides at session start", () => {
+  it("injects when the global switch is on and the cwd is unrecorded", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["用户偏好中文"]);
+
+    const session = resolveMemoryForSession("/work/plain", true);
+
+    expect(session.enabled).toBe(true);
+    expect(session.block).toContain("用户偏好中文");
+  });
+
+  it("injects nothing for a cwd recorded off and leaves the files untouched", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    seedStore(sandbox, "user", ["用户叫 Al"]);
+    writeMemoryCwdEnabled("/work/secret", false);
+    const memoryFile = join(sandbox.dataDir, "memory", "MEMORY.md");
+
+    const session = resolveMemoryForSession("/work/secret", true);
+
+    expect(session).toEqual({ enabled: false, block: null });
+    expect(readFileSync(memoryFile, "utf8")).toBe("用户偏好中文");
+    expect(readMemoryCwdOverrides()).toEqual({ "/work/secret": false });
+  });
+
+  it("injects nothing anywhere while the global switch is off", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["用户偏好中文"]);
+
+    expect(resolveMemoryForSession("/work/plain", false)).toEqual({ enabled: false, block: null });
+  });
+
+  it("restores injection and the tool for the next session after turning the cwd back on", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    writeMemoryCwdEnabled("/work/secret", false);
+
+    expect(resolveMemoryForSession("/work/secret", true).enabled).toBe(false);
+
+    writeMemoryCwdEnabled("/work/secret", true);
+
+    const session = resolveMemoryForSession("/work/secret", true);
+    expect(session.enabled).toBe(true);
+    expect(session.block).toContain("用户偏好中文");
+  });
+
+  it("keeps a session created before the switch changed on its captured snapshot", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["旧事实"]);
+
+    const existing = resolveMemoryForSession("/work/plain", true);
+    const composed = composeAppendSystemPrompt({
+      mode: "default",
+      baseAppend: [],
+      sessionBlocks: [],
+      webBlocks: [],
+      memoryBlock: existing.block,
+    });
+
+    writeMemoryCwdEnabled("/work/plain", false);
+
+    expect(resolveMemoryForSession("/work/plain", true)).toEqual({ enabled: false, block: null });
+    expect(composed.join("\n")).toContain("旧事实");
   });
 });
