@@ -49,3 +49,11 @@ describe("settings page map covers exactly the registry", () => {
     expect(Object.keys(SETTINGS_PAGES).sort()).toEqual([...SETTINGS_SECTION_IDS].sort());
   });
 });
+
+describe("settings registry: memory section", () => {
+  it("navigates to memory from the agent group, right after the system prompt", () => {
+    const agentSections = sectionsForGroup("agent").map((section) => section.id);
+    expect(agentSections.slice(0, 2)).toEqual(["append-system", "memory"]);
+    expect(groupForSection("memory").id).toBe("agent");
+  });
+});

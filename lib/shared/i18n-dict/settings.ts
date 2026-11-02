@@ -96,6 +96,10 @@ export const settings = {
   "Append system prompt saved": "追加系统提示词已保存",
   "Failed to save append system prompt": "保存追加系统提示词失败",
 
+  "Memory": "记忆",
+  "Memory on": "已启用记忆",
+  "Memory off": "已停用记忆",
+
   "Pi documentation": "Pi 文档",
 
   "Right-side buttons": "右侧按钮",

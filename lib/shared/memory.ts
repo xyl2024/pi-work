@@ -22,13 +22,28 @@ export interface MemoryUsage {
   limit: number;
 }
 
+export type MemoryStoreStatus = "ok" | "missing" | "unreadable";
+
+export interface MemoryStoreUsage {
+  file: string;
+  status: MemoryStoreStatus;
+  used: number;
+  limit: number;
+}
+
+export type MemoryUsageReport = Record<MemoryTarget, MemoryStoreUsage>;
+
 export interface MemoryUsageByTarget {
   memory: MemoryUsage;
   user: MemoryUsage;
 }
 
-function groupDigits(value: number): string {
+export function groupDigits(value: number): string {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+export function formatMemoryCharCounts(used: number, limit: number): string {
+  return `${groupDigits(used)}/${groupDigits(limit)}`;
 }
 
 export function formatMemoryUsage(usage: Pick<MemoryUsage, "used" | "limit">): string {

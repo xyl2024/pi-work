@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { open, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { MEMORY_ENTRY_SEPARATOR, MEMORY_TARGET_FILES, type MemoryTarget } from "@/lib/shared/memory";
+import {
+  MEMORY_ENTRY_SEPARATOR,
+  MEMORY_TARGET_FILES,
+  type MemoryStoreStatus,
+  type MemoryTarget,
+  type MemoryUsageReport,
+} from "@/lib/shared/memory";
 import { dataPath } from "./data-dir";
 
 export type { MemoryTarget };
@@ -18,7 +24,7 @@ const LOCK_RETRY_MS = 10;
 const LOCK_TIMEOUT_MS = 5000;
 const LOCK_STALE_MS = 10_000;
 
-export type MemoryStoreStatus = "ok" | "missing" | "unreadable";
+export type { MemoryStoreStatus };
 
 export interface MemorySnapshot {
   target: MemoryTarget;
@@ -105,6 +111,23 @@ export function readMemory(target: MemoryTarget): MemorySnapshot {
   }
   const entries = splitEntries(raw);
   return { target, status: "ok", entries, used: usageOf(entries), limit };
+}
+
+export function readMemoryUsage(): MemoryUsageReport {
+  return {
+    memory: storeUsage("memory"),
+    user: storeUsage("user"),
+  };
+}
+
+function storeUsage(target: MemoryTarget): MemoryUsageReport[MemoryTarget] {
+  const snapshot = readMemory(target);
+  return {
+    file: MEMORY_TARGET_FILES[target],
+    status: snapshot.status,
+    used: snapshot.used,
+    limit: snapshot.limit,
+  };
 }
 
 function writeAtomic(target: MemoryTarget, content: string): void {
