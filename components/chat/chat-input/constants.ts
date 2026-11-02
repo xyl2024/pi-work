@@ -39,4 +39,12 @@ export const BUILTIN_MODEL: SlashResource = {
   path: "",
 };
 
-export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_MODEL];
+export const BUILTIN_USAGE: SlashResource = {
+  source: "action",
+  name: "Usage",
+  command: "usage",
+  description: "查询订阅模型服务用量",
+  path: "",
+};
+
+export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_MODEL, BUILTIN_USAGE];

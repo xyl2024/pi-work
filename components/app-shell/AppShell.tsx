@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
+import { createUsageCommandController, type UsageCommandController } from "@/lib/client/usage-command";
+import type { SlashResource } from "@/lib/shared/slash-commands";
 import { ChatWindow } from "../chat/ChatWindow";
 import { TextSelectionToolbar } from "../chat/text-selection-toolbar";
 import { TranslateBubble } from "../chat/translate-bubble";
@@ -82,6 +84,7 @@ import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
 import {
   APP_TITLE,
+  createDraftTabId,
   createSessionWorkspaceState,
   getActiveSessionTab,
   getDocumentTitleForTab,
@@ -225,6 +228,10 @@ interface WorkspaceChatTabProps {
   scrollToEntryId: string | null;
   onScrollComplete: () => void;
   onNewSessionRequest: (cwdOverride?: string) => void;
+  onUsageRequest: () => void;
+  usageSendSignal: number;
+  takePendingUsageSend: (tabId: string) => string | null;
+  restorePendingUsageSend: (tabId: string, prompt: string) => void;
   onOpenSession: (sessionId: string) => void;
   onCwdChange: (cwd: string) => void;
   onRenameCompleted: () => void;
@@ -247,6 +254,10 @@ function WorkspaceChatTabView({
   scrollToEntryId,
   onScrollComplete,
   onNewSessionRequest,
+  onUsageRequest,
+  usageSendSignal,
+  takePendingUsageSend,
+  restorePendingUsageSend,
   onOpenSession,
   onCwdChange,
   onRenameCompleted,
@@ -286,6 +297,10 @@ function WorkspaceChatTabView({
         scrollToEntryId={scrollToEntryId}
         onScrollComplete={onScrollComplete}
         onNewSessionRequest={onNewSessionRequest}
+        onUsageRequest={onUsageRequest}
+        usageSendSignal={usageSendSignal}
+        takePendingUsageSend={takePendingUsageSend}
+        restorePendingUsageSend={restorePendingUsageSend}
         onOpenSession={onOpenSession}
         cwd={tab.session?.cwd ?? tab.cwd}
         onCwdChange={onCwdChange}
@@ -305,6 +320,7 @@ const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.isActive === next.isActive &&
   previous.modelsRefreshKey === next.modelsRefreshKey &&
   previous.scrollToEntryId === next.scrollToEntryId &&
+  previous.usageSendSignal === next.usageSendSignal &&
   previous.onOpenSkillsPanel === next.onOpenSkillsPanel
 );
 
@@ -533,6 +549,50 @@ export function AppShell() {
       .catch(() => undefined)
       .finally(() => { window.location.href = "/login"; });
   }, []);
+
+  const [usageSendSignals, setUsageSendSignals] = useState<Record<string, number>>({});
+  const usageControllerRef = useRef<UsageCommandController | null>(null);
+  if (!usageControllerRef.current) {
+    usageControllerRef.current = createUsageCommandController({
+      requestDefaultCwd: async () => {
+        const response = await fetch("/api/default-cwd", { method: "POST" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json() as { cwd?: string };
+        if (!data.cwd) throw new Error("Missing cwd");
+        return data.cwd;
+      },
+      querySlashResources: async (cwd) => {
+        const response = await fetch(`/api/slash-commands?cwd=${encodeURIComponent(cwd)}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json() as { commands?: SlashResource[] };
+        return data.commands ?? [];
+      },
+      readSessionTabs: () => {
+        const current = workspaceRef.current;
+        return current.tabOrder
+          .map((tabId) => current.tabs[tabId])
+          .filter((tab): tab is SessionTab => Boolean(tab))
+          .map((tab) => ({ tabId: tab.tabId, kind: tab.kind, dirty: tab.dirty }));
+      },
+      ensureDraft: (cwd) => {
+        const tabId = createDraftTabId();
+        dispatchWorkspace({ type: "create_draft", tabId, cwd });
+        return tabId;
+      },
+      activate: (tabId) => dispatchWorkspace({ type: "activate", tabId }),
+      setDraftCwd: (tabId, cwd) => dispatchWorkspace({ type: "set_draft_cwd", tabId, cwd }),
+      scheduleAutoSend: (tabId) => {
+        setUsageSendSignals((previous) => ({ ...previous, [tabId]: (previous[tabId] ?? 0) + 1 }));
+      },
+      showErrorToast: (message) => toast.show({ kind: "error", message }),
+    });
+  }
+  const usageController = usageControllerRef.current;
+  const takePendingUsageSend = usageController.takePendingSend;
+  const restorePendingUsageSend = usageController.restorePendingSend;
+  const handleUsageRequest = useCallback(() => {
+    void usageController.run();
+  }, [usageController]);
 
   const handleSlashNew = useCallback((cwdOverride?: string) => {
     const cwd = cwdOverride ?? selectedSession?.cwd ?? newSessionCwd;
@@ -1125,6 +1185,10 @@ export function AppShell() {
                 return next;
               })}
               onNewSessionRequest={handleSlashNew}
+              onUsageRequest={handleUsageRequest}
+              usageSendSignal={usageSendSignals[tab.tabId] ?? 0}
+              takePendingUsageSend={takePendingUsageSend}
+              restorePendingUsageSend={restorePendingUsageSend}
               onOpenSession={handleOpenScheduledSession}
               onCwdChange={handleCwdPicked}
               onRenameCompleted={handleSessionRenameCompleted}

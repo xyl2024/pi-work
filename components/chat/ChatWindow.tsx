@@ -48,6 +48,7 @@ import { CompactionDivider } from "./CompactionDivider";
 import { ChangeDivider } from "./ChangeDivider";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import type { SlashResource } from "@/lib/shared/slash-commands";
+import { deliverPendingUsageSend } from "@/lib/client/usage-command";
 import { setToolCallScrollCallback } from "@/hooks/toolCallScrollStore";
 import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "../sessions/SessionSearch";
@@ -79,6 +80,10 @@ interface Props {
   scrollToEntryId?: string | null;
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
+  onUsageRequest?: () => void;
+  usageSendSignal?: number;
+  takePendingUsageSend?: (tabId: string) => string | null;
+  restorePendingUsageSend?: (tabId: string, prompt: string) => void;
   onOpenSession: (sessionId: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
@@ -100,7 +105,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, usageSendSignal = 0, takePendingUsageSend, restorePendingUsageSend, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -150,6 +155,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     userMessageHistory,
     activeLeafId, currentSessionId,
     inFlightToolResults,
+    newSessionModel,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: handleAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     onSuggestedPrompt: handleSuggestedPromptPushed,
@@ -159,6 +165,21 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isActive,
     controllerId: tabId,
   });
+
+  const consumedUsageSendSignalRef = useRef(0);
+  useEffect(() => {
+    if (usageSendSignal <= consumedUsageSendSignalRef.current) return;
+    if (!tabId || !newSessionCwd || !newSessionModel || !takePendingUsageSend || !restorePendingUsageSend) return;
+    void deliverPendingUsageSend({
+      tabId,
+      takePendingSend: takePendingUsageSend,
+      restorePendingSend: restorePendingUsageSend,
+      send: handleSend,
+      onClaimed: () => {
+        consumedUsageSendSignalRef.current = usageSendSignal;
+      },
+    });
+  }, [usageSendSignal, tabId, newSessionCwd, newSessionModel, takePendingUsageSend, restorePendingUsageSend, handleSend]);
 
   const suggestedPromptBusy = agentRunning && agentPhase?.kind !== "compacting";
   const {
@@ -687,6 +708,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
           else if (action === "model") setModelModalOpen(true);
+          else if (action === "usage") onUsageRequest?.();
         }}
         onOpenSkillsPanel={onOpenSkillsPanel}
         sessionId={currentSessionId}
