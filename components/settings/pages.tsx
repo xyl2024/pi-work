@@ -8,6 +8,7 @@ import type { SettingsApply } from "./use-settings-write";
 import type { DirtyReporter } from "./use-unsaved-changes";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
+import { MemorySection } from "./sections/MemorySection";
 import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { TextSelectionToolbarSection } from "./sections/TextSelectionToolbarSection";
@@ -48,6 +49,9 @@ export const SETTINGS_PAGES = {
       onDirtyChange={reportDirty}
       pageCache={pageCache}
     />
+  ),
+  memory: ({ config, apply, pageCache }) => (
+    <MemorySection config={config} apply={apply} pageCache={pageCache} />
   ),
   "dangerous-commands": ({ config, pageCache, reportDirty }) => (
     <DangerousCommandsSection
