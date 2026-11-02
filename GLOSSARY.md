@@ -327,9 +327,13 @@ _Avoid_: 把它当成**权限模式**的前台开关（前台的可切换两档�
 
 ### 提示词与技能
 
+**记忆（Memory）**：
+agent 在会话中自主读写、跨会话持久的事实库，双库存放于 `~/.pi-work/memory/`：MEMORY.md（agent 笔记：环境、约定、工具怪癖、教训）与 USER.md（用户画像：身份、偏好、风格），条目式存储、有字符预算。启用时以冻结快照注入系统提示词：会话创建时读一次，本会话内写入落盘但不刷新提示词，下个会话生效。
+_Avoid_: 与「追加系统提示词」混用（那是用户手写给 agent 的常驻指令，作者与更新路径不同）；与「技能」混用（那是流程性知识，按需加载）；用「上下文」「上下文窗口」指它；把项目级事实塞进它（那归 `<cwd>/AGENTS.md` 管）
+
 **追加系统提示词（Append System）**：
 附加到系统提示词末尾的单文件 `~/.pi/agent/APPEND_SYSTEM.md`。
-_Avoid_: 用它指代系统提示词本身
+_Avoid_: 用它指代系统提示词本身；用「记忆」指它
 
 **斜杠命令（Slash command）**：
 聊天输入框里 `/` 唤起的统一调用入口，`source` 为 `"skill"` 或 `"action"`（Pi Work 内置的 `/new`、`/compact`、`/model`）。Pi Work 不展示也不管理 pi 的 prompt 模板文件（`~/.pi/agent/prompts/`、`<cwd>/.pi/prompts`），直接输入 `/name` 仍由 pi 自身展开。
