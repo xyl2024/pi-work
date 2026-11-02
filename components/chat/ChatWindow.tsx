@@ -79,6 +79,7 @@ interface Props {
   scrollToEntryId?: string | null;
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
+  onUsageRequest?: () => void;
   onOpenSession: (sessionId: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
@@ -100,7 +101,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -687,6 +688,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
           else if (action === "model") setModelModalOpen(true);
+          else if (action === "usage") onUsageRequest?.();
         }}
         onOpenSkillsPanel={onOpenSkillsPanel}
         sessionId={currentSessionId}

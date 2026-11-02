@@ -15,7 +15,7 @@ import { useToolsDropdown } from "./chat-input/hooks/useToolsDropdown";
 import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
-import { THINKING_BORDER_COLOR } from "./chat-input/constants";
+import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
@@ -284,9 +284,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
       if (!(e.ctrlKey || e.metaKey) && !enterToSend) return false;
       const trimmed = value.trim();
-      if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/model") {
-        const action = trimmed.slice(1);
-        onSlashAction?.(action);
+      const builtinAction = BUILTIN_SLASH_ACTIONS.find((item) => trimmed === `/${item.command}`);
+      if (builtinAction) {
+        onSlashAction?.(builtinAction.command);
         setValue("");
         setCursorPosition(0);
         setSelectedSlashResource(null);
