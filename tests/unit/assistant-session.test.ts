@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionInfo } from "@/lib/shared/types";
-import {
-  selectAssistantRestoreSession,
-  selectLatestAssistantSession,
-} from "@/lib/shared/assistant-session";
+import { selectLatestAssistantSession } from "@/lib/shared/assistant-session";
 
 function session(id: string, options: { assistant?: boolean; modified?: string } = {}): SessionInfo {
   return {
@@ -45,26 +42,3 @@ describe("selectLatestAssistantSession", () => {
   });
 });
 
-describe("selectAssistantRestoreSession", () => {
-  it("restores the latest assistant session on a plain reload", () => {
-    const restore = selectAssistantRestoreSession(null, [
-      session("old", { assistant: true, modified: "2026-01-01T00:00:00.000Z" }),
-      session("new", { assistant: true, modified: "2026-02-01T00:00:00.000Z" }),
-    ]);
-
-    expect(restore?.id).toBe("new");
-  });
-
-  it("does not replace a session opened through a deep link", () => {
-    const restore = selectAssistantRestoreSession("deep-link", [
-      session("assistant", { assistant: true, modified: "2026-02-01T00:00:00.000Z" }),
-    ]);
-
-    expect(restore).toBeNull();
-  });
-
-  it("keeps the plain draft when no assistant session exists", () => {
-    expect(selectAssistantRestoreSession(null, [session("plain")])).toBeNull();
-    expect(selectAssistantRestoreSession(null, [])).toBeNull();
-  });
-});

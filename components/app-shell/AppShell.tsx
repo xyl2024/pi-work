@@ -49,8 +49,6 @@ import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
-import { selectAssistantRestoreSession } from "@/lib/shared/assistant-session";
-import { fetchAssistantSessions } from "@/lib/client/assistant-sessions";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
   createPanelTabsState,
@@ -485,29 +483,6 @@ export function AppShell() {
 
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
 
-  useEffect(() => {
-    if (initialSessionId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const sessions = await fetchAssistantSessions();
-        const restore = selectAssistantRestoreSession(initialSessionId, sessions);
-        if (!cancelled && restore) dispatchWorkspace({ type: "open_assistant" });
-      } catch (error) {
-        if (!cancelled) {
-          toast.show({
-            kind: "error",
-            message: t("Failed to load assistant sessions"),
-            description: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [initialSessionId, t, toast]);
-
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd || !activeTabId) return;
     if (activeTab?.kind === "draft") {
@@ -639,6 +614,34 @@ export function AppShell() {
     if (!cwd) return;
     handleNewSession("draft", cwd);
   }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
+
+  const handleNewTask = useCallback(async () => {
+    try {
+      const response = await fetch("/api/default-cwd", { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json() as { cwd?: string };
+      if (!data.cwd) throw new Error("Missing cwd");
+      const current = workspaceRef.current;
+      const existingDraft = current.tabOrder
+        .map((id) => current.tabs[id])
+        .find((tab) => tab?.kind === "draft");
+      if (existingDraft) {
+        if (existingDraft.cwd !== data.cwd) {
+          dispatchWorkspace({ type: "set_draft_cwd", tabId: existingDraft.tabId, cwd: data.cwd });
+        }
+        dispatchWorkspace({ type: "activate", tabId: existingDraft.tabId });
+      } else {
+        dispatchWorkspace({ type: "ensure_draft", cwd: data.cwd });
+      }
+      closeTopPanel();
+    } catch (error) {
+      toast.show({
+        kind: "error",
+        message: t("Create failed"),
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [closeTopPanel, t, toast]);
 
   const handleOpenAssistant = useCallback(() => {
     dispatchWorkspace({ type: "open_assistant" });
@@ -1311,6 +1314,7 @@ export function AppShell() {
       onSessionDeleted={handleSessionDeleted}
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
+      onNewTask={handleNewTask}
       onOpenAssistant={handleOpenAssistant}
       assistantActive={assistantActive}
       assistantCwd={assistantCwd}

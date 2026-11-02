@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import type { SessionInfo, Workspace, WorkspacesResponse } from "@/lib/shared/types";
 import { FileExplorer } from "../files/FileExplorer";
@@ -38,6 +39,7 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
+  onNewTask?: () => void;
   onOpenAssistant?: () => void;
   assistantActive?: boolean;
   assistantCwd?: string | null;
@@ -146,7 +148,41 @@ function PiAgentTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onOpenAssistant, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+function SidebarNavButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        justifyContent: "flex-start",
+        width: "100%",
+        height: SESSION_ROW_HEIGHT_PX,
+        padding: "0 8px 0 0",
+        borderRadius: 8,
+        background: "transparent",
+        border: "none",
+        color: "var(--text)",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 500,
+        flexShrink: 0,
+        transition: "background 0.1s, box-shadow 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "var(--bg-hover)";
+        e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -688,7 +724,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: assistantActive ? 8 : 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <PiAgentTitle />
           </div>
@@ -727,42 +763,28 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             )}
           </div>
         </div>
+      </div>
+      <div style={{ height: 1, flexShrink: 0, background: "var(--border)" }} />
+      <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
+        {onNewTask && (
+          <SidebarNavButton onClick={onNewTask}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <path d="M12 8v8M8 12h8" />
+            </svg>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("New task")}</span>
+          </SidebarNavButton>
+        )}
         {onOpenAssistant && (
-          <button
-            onClick={onOpenAssistant}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              justifyContent: "flex-start",
-              width: "100%",
-              height: SESSION_ROW_HEIGHT_PX,
-              padding: "0 8px 0 0",
-              borderRadius: 8,
-              background: "transparent",
-              border: "none",
-              color: "var(--text)",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 500,
-              flexShrink: 0,
-              transition: "background 0.1s, box-shadow 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          >
+          <SidebarNavButton onClick={onOpenAssistant}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
               <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
               <path d="M19 17l.9 2.1L22 20l-2.1.9L19 23l-.9-2.1L16 20l2.1-.9z" />
             </svg>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("Assistant")}</span>
-          </button>
+          </SidebarNavButton>
         )}
-        </div>
+      </div>
 
       {!assistantActive && (
       <SidebarSection

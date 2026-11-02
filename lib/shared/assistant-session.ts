@@ -11,10 +11,3 @@ export function selectLatestAssistantSession(
   return latest;
 }
 
-export function selectAssistantRestoreSession(
-  initialSessionId: string | null,
-  sessions: readonly SessionInfo[],
-): SessionInfo | null {
-  if (initialSessionId) return null;
-  return selectLatestAssistantSession(sessions);
-}
