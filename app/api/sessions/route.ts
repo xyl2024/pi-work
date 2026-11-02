@@ -73,7 +73,8 @@ export async function GET(request: Request) {
       ...row,
       ...sessionPermissionFields(permissionStates[row.id]),
     });
-    const all = allSessions.filter((session) => !subagentIds.has(session.id));
+    const all = allSessions.filter((session) =>
+      !subagentIds.has(session.id) && session.assistant !== true);
     const recent = recentCwds(all, 5);
 
     if (q && limit > 0) {

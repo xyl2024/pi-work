@@ -52,7 +52,10 @@ export async function GET(request: Request) {
     const allSessions = await listAllSessionsHeaderOnly();
     const subagentIds = new Set(listSubagentChildSessionIds());
     const all = allSessions.filter((session) =>
-      !!session.cwd && !subagentIds.has(session.id) && matchesSessionDate(session.modified, dateRange));
+      !!session.cwd &&
+      !subagentIds.has(session.id) &&
+      session.assistant !== true &&
+      matchesSessionDate(session.modified, dateRange));
 
     const byCwd = new Map<string, { lastUsed: string; firstSession: typeof all[number] }>();
     for (const s of all) {

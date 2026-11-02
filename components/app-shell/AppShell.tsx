@@ -49,6 +49,7 @@ import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
+import { selectAssistantRestoreSession } from "@/lib/shared/assistant-session";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
   createPanelTabsState,
@@ -469,6 +470,23 @@ export function AppShell() {
   }, [getActiveChatInput, selectedSession?.cwd, newSessionCwd]);
 
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
+
+  useEffect(() => {
+    if (initialSessionId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/assistant/sessions");
+        if (!response.ok) return;
+        const data = await response.json() as { sessions?: SessionInfo[] };
+        const restore = selectAssistantRestoreSession(initialSessionId, data.sessions ?? []);
+        if (!cancelled && restore) dispatchWorkspace({ type: "open_assistant" });
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSessionId]);
 
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd || !activeTabId) return;
