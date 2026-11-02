@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { writeFileAtomic } from "./atomic-write";
 import { dataPath } from "./data-dir";
 
 const FILE_NAME = "memory-cwd.json";
@@ -36,7 +37,6 @@ export function writeMemoryCwdEnabled(cwd: string, enabled: boolean): MemoryCwdO
     overrides[cwd] = false;
   }
   const path = overridesPath();
-  mkdirSync(dataPath(), { recursive: true });
   if (Object.keys(overrides).length === 0) {
     try {
       unlinkSync(path);
@@ -44,8 +44,6 @@ export function writeMemoryCwdEnabled(cwd: string, enabled: boolean): MemoryCwdO
     }
     return overrides;
   }
-  const temp = `${path}.${process.pid}.tmp`;
-  writeFileSync(temp, JSON.stringify(overrides, null, 2) + "\n", "utf8");
-  renameSync(temp, path);
+  writeFileAtomic(path, JSON.stringify(overrides, null, 2) + "\n");
   return overrides;
 }

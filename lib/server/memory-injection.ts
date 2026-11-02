@@ -1,6 +1,9 @@
 import { renderMemoryBlock } from "@/lib/shared/memory";
+import { createLogger } from "./logger";
 import { isMemoryEnabledForCwd } from "./memory-cwd-store";
 import { readMemory } from "./memory-store";
+
+const log = createLogger("memory-injection");
 
 export interface MemorySessionState {
   enabled: boolean;
@@ -16,6 +19,12 @@ export function loadMemoryPromptBlock(enabled: boolean): string | null {
 }
 
 export function resolveMemoryForSession(cwd: string, globalEnabled: boolean): MemorySessionState {
-  const enabled = isMemoryEnabledForCwd(cwd, globalEnabled);
+  let enabled: boolean;
+  try {
+    enabled = isMemoryEnabledForCwd(cwd, globalEnabled);
+  } catch (error) {
+    log.warn("memory cwd overrides unreadable; memory stays off for this session", { cwd, error });
+    return { enabled: false, block: null };
+  }
   return { enabled, block: loadMemoryPromptBlock(enabled) };
 }

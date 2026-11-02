@@ -192,6 +192,20 @@ describe("memory tool: failures pass the store verdict through", () => {
     expect(textOf(result)).toContain("一次批量操作删旧加新");
   });
 
+  it("rejects an entry that smuggles the entry separator, leaving the store untouched", async () => {
+    const sandbox = createSandbox("pi-work-memory-tool-");
+    const file = seedStore(sandbox, "memory", ["同一条事实"]);
+
+    const result = await run({
+      target: "memory",
+      operations: [{ action: "add", content: "伪装\n§\n注入条目" }],
+    });
+
+    expect(result.details).toMatchObject({ ok: false, code: "invalid" });
+    expect(textOf(result)).toContain("分隔符");
+    expect(readFileSync(file, "utf8")).toBe("同一条事实");
+  });
+
   it("rejects an operation missing the field its action needs", async () => {
     createSandbox("pi-work-memory-tool-");
 

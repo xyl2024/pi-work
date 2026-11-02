@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createSandbox, type Sandbox } from "./sandbox";
 import { composeAppendSystemPrompt, composeOverrideSystemPrompt } from "@/lib/server/web-tool-guidance";
 import { loadMemoryPromptBlock, resolveMemoryForSession } from "@/lib/server/memory-injection";
@@ -177,6 +177,20 @@ describe("memory injection: cwd switch decides at session start", () => {
     const session = resolveMemoryForSession("/work/secret", true);
     expect(session.enabled).toBe(true);
     expect(session.block).toContain("用户偏好中文");
+  });
+
+  it("keeps memory off and logs a warning when the cwd override file is corrupt", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    writeFileSync(join(sandbox.dataDir, "memory-cwd.json"), "{ not json", "utf8");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(resolveMemoryForSession("/work/plain", true)).toEqual({ enabled: false, block: null });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("memory cwd overrides unreadable"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("keeps a session created before the switch changed on its captured snapshot", () => {

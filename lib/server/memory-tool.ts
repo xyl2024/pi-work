@@ -1,7 +1,6 @@
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import {
-  MEMORY_ENTRY_SEPARATOR,
   MEMORY_TARGET_FILES,
   formatMemoryUsage,
   type MemoryTarget,
@@ -76,9 +75,6 @@ function toOperation(
   raw: { action: "add" | "patch" | "remove"; content?: string; old_text?: string },
   index: number,
 ): { operation: MemoryOperation } | { error: string } {
-  if (raw.content?.includes(MEMORY_ENTRY_SEPARATOR)) {
-    return { error: `第 ${index + 1} 个操作：content 不能包含 § 分隔符。` };
-  }
   if (raw.action === "add") {
     if (typeof raw.content !== "string") return { error: `第 ${index + 1} 个操作：add 需要 content。` };
     return { operation: { action: "add", content: raw.content } };

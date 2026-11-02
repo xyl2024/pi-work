@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { open, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -8,6 +8,7 @@ import {
   type MemoryTarget,
   type MemoryUsageReport,
 } from "@/lib/shared/memory";
+import { writeFileAtomic } from "./atomic-write";
 import { dataPath } from "./data-dir";
 
 export type { MemoryTarget };
@@ -128,22 +129,6 @@ function storeUsage(target: MemoryTarget): MemoryUsageReport[MemoryTarget] {
     used: snapshot.used,
     limit: snapshot.limit,
   };
-}
-
-function writeAtomic(target: MemoryTarget, content: string): void {
-  const dir = storeDir();
-  mkdirSync(dir, { recursive: true });
-  const path = storePath(target);
-  const tmp = `${path}.tmp.${process.pid}.${Date.now()}`;
-  try {
-    writeFileSync(tmp, content, "utf8");
-    renameSync(tmp, path);
-  } catch (error) {
-    try {
-      unlinkSync(tmp);
-    } catch {}
-    throw error;
-  }
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -443,7 +428,7 @@ export async function applyMemoryOperations(
     if (used > snapshot.limit) {
       return failure(target, "budget", operations.length - 1, snapshot.entries, { attemptedUsed: used });
     }
-    writeAtomic(target, joinEntries(entries));
+    writeFileAtomic(storePath(target), joinEntries(entries));
     return { ok: true, target, entries, used, limit: snapshot.limit };
   } finally {
     await release();
