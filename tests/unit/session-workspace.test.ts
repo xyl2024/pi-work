@@ -156,3 +156,38 @@ describe("getDocumentTitleForTab", () => {
     expect(getDocumentTitleForTab(state.tabs[state.activeTabId!])).toBe(`Renamed · ${APP_TITLE}`);
   });
 });
+
+describe("sessionWorkspaceReducer create_draft", () => {
+  it("adds another draft instead of reusing the existing one", () => {
+    const existingId = "draft:existing";
+    let state = createSessionWorkspaceState({ draftId: existingId });
+    state = openSession(state, "a");
+    state = sessionWorkspaceReducer(state, { type: "activate", tabId: existingId });
+
+    const created = sessionWorkspaceReducer(state, {
+      type: "create_draft",
+      tabId: "draft:new",
+      cwd: "/tmp/usage",
+    });
+
+    expect(created.tabOrder).toEqual([existingId, "session:a", "draft:new"]);
+    expect(created.activeTabId).toBe("draft:new");
+    expect(created.tabs["draft:new"]).toMatchObject({ kind: "draft", cwd: "/tmp/usage", dirty: false });
+    expect(created.tabs[existingId]).toEqual(state.tabs[existingId]);
+  });
+
+  it("leaves a dirty draft untouched", () => {
+    const dirtyId = "draft:dirty";
+    let state = createSessionWorkspaceState({ draftId: dirtyId });
+    state = sessionWorkspaceReducer(state, { type: "set_dirty", tabId: dirtyId, dirty: true });
+
+    const created = sessionWorkspaceReducer(state, {
+      type: "create_draft",
+      tabId: "draft:fresh",
+      cwd: "/tmp/usage",
+    });
+
+    expect(created.tabs[dirtyId]).toEqual(state.tabs[dirtyId]);
+    expect(created.activeTabId).toBe("draft:fresh");
+  });
+});

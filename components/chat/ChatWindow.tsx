@@ -80,6 +80,8 @@ interface Props {
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
   onUsageRequest?: () => void;
+  usageSendSignal?: number;
+  takePendingUsageSend?: (tabId: string) => string | null;
   onOpenSession: (sessionId: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
@@ -101,7 +103,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, usageSendSignal = 0, takePendingUsageSend, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -151,6 +153,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     userMessageHistory,
     activeLeafId, currentSessionId,
     inFlightToolResults,
+    newSessionModel,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: handleAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     onSuggestedPrompt: handleSuggestedPromptPushed,
@@ -160,6 +163,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isActive,
     controllerId: tabId,
   });
+
+  const consumedUsageSendSignalRef = useRef(0);
+  useEffect(() => {
+    if (usageSendSignal <= consumedUsageSendSignalRef.current) return;
+    if (!tabId || !newSessionCwd || !newSessionModel || !takePendingUsageSend) return;
+    const prompt = takePendingUsageSend(tabId);
+    if (!prompt) return;
+    consumedUsageSendSignalRef.current = usageSendSignal;
+    void handleSend(prompt);
+  }, [usageSendSignal, tabId, newSessionCwd, newSessionModel, takePendingUsageSend, handleSend]);
 
   const suggestedPromptBusy = agentRunning && agentPhase?.kind !== "compacting";
   const {

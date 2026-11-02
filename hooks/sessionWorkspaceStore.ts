@@ -23,6 +23,7 @@ export interface SessionWorkspaceState {
 
 export type SessionWorkspaceAction =
   | { type: "ensure_draft"; tabId?: string; cwd?: string | null }
+  | { type: "create_draft"; tabId?: string; cwd?: string | null }
   | { type: "open_session"; session: SessionInfo; tabId?: string; activate?: boolean }
   | { type: "open_session_by_id"; sessionId: string }
   | { type: "activate"; tabId: string }
@@ -35,7 +36,7 @@ export type SessionWorkspaceAction =
   | { type: "close_session"; sessionId: string }
   | { type: "reorder"; tabId: string; toIndex: number };
 
-function makeDraftId(preferred?: string): string {
+export function createDraftTabId(preferred?: string): string {
   if (preferred) return preferred;
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `draft:${crypto.randomUUID()}`;
@@ -45,7 +46,7 @@ function makeDraftId(preferred?: string): string {
 
 export function createDraftTab(tabId?: string, cwd: string | null = null): SessionTab {
   return {
-    tabId: makeDraftId(tabId),
+    tabId: createDraftTabId(tabId),
     kind: "draft",
     sessionId: null,
     session: null,
@@ -124,6 +125,9 @@ export function sessionWorkspaceReducer(
       }
       return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
     }
+
+    case "create_draft":
+      return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
 
     case "open_session_by_id": {
       const existing = findSessionTab(state, action.sessionId);
