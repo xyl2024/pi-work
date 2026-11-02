@@ -231,6 +231,7 @@ interface WorkspaceChatTabProps {
   onUsageRequest: () => void;
   usageSendSignal: number;
   takePendingUsageSend: (tabId: string) => string | null;
+  restorePendingUsageSend: (tabId: string, prompt: string) => void;
   onOpenSession: (sessionId: string) => void;
   onCwdChange: (cwd: string) => void;
   onRenameCompleted: () => void;
@@ -256,6 +257,7 @@ function WorkspaceChatTabView({
   onUsageRequest,
   usageSendSignal,
   takePendingUsageSend,
+  restorePendingUsageSend,
   onOpenSession,
   onCwdChange,
   onRenameCompleted,
@@ -298,6 +300,7 @@ function WorkspaceChatTabView({
         onUsageRequest={onUsageRequest}
         usageSendSignal={usageSendSignal}
         takePendingUsageSend={takePendingUsageSend}
+        restorePendingUsageSend={restorePendingUsageSend}
         onOpenSession={onOpenSession}
         cwd={tab.session?.cwd ?? tab.cwd}
         onCwdChange={onCwdChange}
@@ -586,6 +589,7 @@ export function AppShell() {
   }
   const usageController = usageControllerRef.current;
   const takePendingUsageSend = usageController.takePendingSend;
+  const restorePendingUsageSend = usageController.restorePendingSend;
   const handleUsageRequest = useCallback(() => {
     void usageController.run();
   }, [usageController]);
@@ -1184,6 +1188,7 @@ export function AppShell() {
               onUsageRequest={handleUsageRequest}
               usageSendSignal={usageSendSignals[tab.tabId] ?? 0}
               takePendingUsageSend={takePendingUsageSend}
+              restorePendingUsageSend={restorePendingUsageSend}
               onOpenSession={handleOpenScheduledSession}
               onCwdChange={handleCwdPicked}
               onRenameCompleted={handleSessionRenameCompleted}

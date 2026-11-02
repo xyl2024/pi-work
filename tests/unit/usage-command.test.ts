@@ -5,6 +5,7 @@ import {
   USAGE_COMMAND_PROMPT,
   USAGE_SKILL_COMMAND,
   createUsageCommandController,
+  deliverPendingUsageSend,
   type UsageCommandPort,
   type UsageCommandTab,
 } from "@/lib/client/usage-command";
@@ -63,9 +64,9 @@ function createHarness(options: HarnessOptions = {}) {
     setDraftCwd(tabId, cwd) {
       calls.push(`set-cwd:${tabId}:${cwd}`);
     },
-    scheduleAutoSend(tabId, prompt) {
+    scheduleAutoSend(tabId) {
       calls.push(`schedule:${tabId}`);
-      sends.push({ tabId, prompt });
+      sends.push({ tabId, prompt: USAGE_COMMAND_PROMPT });
     },
     showErrorToast(message) {
       toasts.push(message);
@@ -182,6 +183,17 @@ describe("usage command controller", () => {
     expect(harness.activeTabId()).toBeNull();
   });
 
+  it("shows a resource query error instead of the skill hint when the query fails", async () => {
+    const harness = createHarness({ slashResourcesError: "offline" });
+
+    await harness.controller.run();
+
+    expect(harness.toasts).toEqual([USAGE_COMMAND_ERRORS.slashResources]);
+    expect(harness.tabs).toEqual([]);
+    expect(harness.sends).toEqual([]);
+    expect(harness.activeTabId()).toBeNull();
+  });
+
   it("treats a missing resource list the same as a disabled skill", async () => {
     const harness = createHarness({ resources: [] });
 
@@ -267,5 +279,88 @@ describe("usage command controller", () => {
     expect(harness.controller.takePendingSend("draft:new-1")).toBe(USAGE_COMMAND_PROMPT);
     expect(harness.controller.takePendingSend("draft:new-1")).toBeNull();
     expect(harness.sends).toHaveLength(1);
+  });
+});
+
+describe("pending usage send delivery", () => {
+  function createDelivery(prompt: Promise<boolean>) {
+    let stored: string | null = USAGE_COMMAND_PROMPT;
+    const restored: string[] = [];
+    const claimed: string[] = [];
+    const send = async () => prompt;
+    return {
+      pending: {
+        takePendingSend: () => {
+          const value = stored;
+          stored = null;
+          return value;
+        },
+        restorePendingSend: (_tabId: string, value: string) => {
+          restored.push(value);
+          stored = value;
+        },
+      },
+      restored,
+      claimed,
+      send,
+      stored: () => stored,
+    };
+  }
+
+  it("restores the prompt once when the send fails", async () => {
+    const delivery = createDelivery(Promise.resolve(false));
+
+    await deliverPendingUsageSend({
+      tabId: "draft:1",
+      takePendingSend: delivery.pending.takePendingSend,
+      restorePendingSend: delivery.pending.restorePendingSend,
+      send: delivery.send,
+      onClaimed: () => delivery.claimed.push("draft:1"),
+    });
+
+    expect(delivery.claimed).toEqual(["draft:1"]);
+    expect(delivery.restored).toEqual([USAGE_COMMAND_PROMPT]);
+    expect(delivery.stored()).toBe(USAGE_COMMAND_PROMPT);
+  });
+
+  it("claims before sending and leaves nothing pending when the send succeeds", async () => {
+    const order: string[] = [];
+    const delivery = createDelivery(Promise.resolve(true));
+
+    await deliverPendingUsageSend({
+      tabId: "draft:1",
+      takePendingSend: delivery.pending.takePendingSend,
+      restorePendingSend: delivery.pending.restorePendingSend,
+      send: async () => {
+        order.push("send");
+        return true;
+      },
+      onClaimed: () => order.push("claim"),
+    });
+
+    expect(order).toEqual(["claim", "send"]);
+    expect(delivery.restored).toEqual([]);
+    expect(delivery.stored()).toBeNull();
+  });
+
+  it("does nothing when no prompt is pending", async () => {
+    let sent = false;
+    let claimed = false;
+
+    await deliverPendingUsageSend({
+      tabId: "draft:1",
+      takePendingSend: () => null,
+      restorePendingSend: () => {},
+      send: async () => {
+        sent = true;
+        return true;
+      },
+      onClaimed: () => {
+        claimed = true;
+      },
+    });
+
+    expect(sent).toBe(false);
+    expect(claimed).toBe(false);
   });
 });

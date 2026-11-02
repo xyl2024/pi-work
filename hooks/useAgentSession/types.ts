@@ -173,7 +173,7 @@ export interface UseAgentSessionResult {
   lastUserMsgRef: RefObject<HTMLDivElement | null>;
   pendingScrollToUserRef: MutableRefObject<boolean>;
   userJustSentRef: MutableRefObject<boolean>;
-  handleSend: (message: string, images?: AttachedImage[]) => Promise<void>;
+  handleSend: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   handleAbort: () => Promise<void>;
   handleNavigate: (entryId: string) => Promise<void>;
   handleModelChange: (provider: string, modelId: string) => Promise<void>;

@@ -98,6 +98,13 @@ function addTab(state: SessionWorkspaceState, tab: SessionTab, activate = true):
   return next;
 }
 
+function addDraftTab(
+  state: SessionWorkspaceState,
+  action: { tabId?: string; cwd?: string | null },
+): SessionWorkspaceState {
+  return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
+}
+
 function findDraft(state: SessionWorkspaceState): SessionTab | undefined {
   return state.tabOrder.map((id) => state.tabs[id]).find((tab) => tab?.kind === "draft");
 }
@@ -123,11 +130,11 @@ export function sessionWorkspaceReducer(
         next.activeTabId = existing.tabId;
         return next;
       }
-      return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
+      return addDraftTab(state, action);
     }
 
     case "create_draft":
-      return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
+      return addDraftTab(state, action);
 
     case "open_session_by_id": {
       const existing = findSessionTab(state, action.sessionId);

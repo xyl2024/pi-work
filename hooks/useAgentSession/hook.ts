@@ -353,11 +353,11 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   applyRuntimeInputRef.current = applyRuntimeInput;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
-    if (!message.trim() && !images?.length) return;
-    if (isAgentRunning()) return;
+    if (!message.trim() && !images?.length) return false;
+    if (isAgentRunning()) return false;
     if (isNew && !newSessionCwd) {
       showToast({ kind: "error", message: t("Select a project first") });
-      return;
+      return false;
     }
 
     const imageBlocks = images?.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mimeType, data: img.data } }));
@@ -448,7 +448,9 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       dispatch({ type: "end" });
       endStreamingStore(streamingKey);
       closeEvents();
+      return false;
     }
+    return true;
   }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, loadSession, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {

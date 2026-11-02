@@ -5,6 +5,7 @@ export const USAGE_SKILL_COMMAND = "skill:usage-check";
 
 export const USAGE_COMMAND_ERRORS = {
   defaultCwd: "获取默认工作目录失败",
+  slashResources: "查询可用斜杠命令失败",
   skillUnavailable: "未安装或未启用 usage-check 技能",
 } as const;
 
@@ -21,7 +22,7 @@ export interface UsageCommandPort {
   ensureDraft(cwd: string): string;
   activate(tabId: string): void;
   setDraftCwd(tabId: string, cwd: string): void;
-  scheduleAutoSend(tabId: string, prompt: string): void;
+  scheduleAutoSend(tabId: string): void;
   showErrorToast(message: string): void;
 }
 
@@ -69,7 +70,7 @@ export function createUsageCommandController(port: UsageCommandPort): UsageComma
       try {
         resources = await port.querySlashResources(cwd);
       } catch {
-        port.showErrorToast(USAGE_COMMAND_ERRORS.skillUnavailable);
+        port.showErrorToast(USAGE_COMMAND_ERRORS.slashResources);
         return;
       }
       if (!resources.some((resource) => resource.command === USAGE_SKILL_COMMAND)) {
@@ -83,11 +84,25 @@ export function createUsageCommandController(port: UsageCommandPort): UsageComma
       claimedTabIds.add(tabId);
       port.activate(tabId);
       pendingByTab.set(tabId, USAGE_COMMAND_PROMPT);
-      port.scheduleAutoSend(tabId, USAGE_COMMAND_PROMPT);
+      port.scheduleAutoSend(tabId);
     } finally {
       preparing = false;
     }
   };
 
   return { run, takePendingSend, restorePendingSend };
+}
+
+export async function deliverPendingUsageSend(options: {
+  tabId: string;
+  takePendingSend: (tabId: string) => string | null;
+  restorePendingSend: (tabId: string, prompt: string) => void;
+  send: (prompt: string) => Promise<boolean>;
+  onClaimed?: () => void;
+}): Promise<void> {
+  const prompt = options.takePendingSend(options.tabId);
+  if (prompt === null) return;
+  options.onClaimed?.();
+  const sent = await options.send(prompt);
+  if (!sent) options.restorePendingSend(options.tabId, prompt);
 }
