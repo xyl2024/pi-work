@@ -232,6 +232,7 @@ function CwdGroup({
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
   const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
+  const [memorySwitch, setMemorySwitch] = useState<{ enabled: boolean; globalEnabled: boolean } | null>(null);
 
   useEffect(() => {
     onHeaderRef(headerRef.current);
@@ -319,13 +320,45 @@ function CwdGroup({
   const cancelMenuClose = useCallback(() => {
   }, []);
 
+  const cwd = workspace.cwd;
+
+  const readMemorySwitch = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/memory/cwd?cwd=${encodeURIComponent(cwd)}`);
+      if (!res.ok) return;
+      const body = (await res.json()) as { enabled?: unknown; globalEnabled?: unknown };
+      if (typeof body.enabled !== "boolean" || typeof body.globalEnabled !== "boolean") return;
+      setMemorySwitch({ enabled: body.enabled, globalEnabled: body.globalEnabled });
+    } catch {
+    }
+  }, [cwd]);
+
+  const toggleMemory = useCallback(async () => {
+    if (!memorySwitch?.globalEnabled) return;
+    const next = !memorySwitch.enabled;
+    setMemorySwitch({ ...memorySwitch, enabled: next });
+    try {
+      const res = await fetch("/api/memory/cwd", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd, enabled: next }),
+      });
+      if (!res.ok) throw new Error("memory switch write failed");
+      const body = (await res.json()) as { enabled?: unknown };
+      setMemorySwitch({ globalEnabled: true, enabled: body.enabled === true });
+    } catch {
+      setMemorySwitch(memorySwitch);
+    }
+  }, [cwd, memorySwitch]);
+
   const openLoadMenu = useCallback(() => {
     cancelMenuClose();
     if (!loadMenuTriggerRef.current) return;
     const rect = loadMenuTriggerRef.current.getBoundingClientRect();
     setLoadMenuPos({ top: rect.top, left: rect.right + 6 });
     setLoadMenuOpen(true);
-  }, [cancelMenuClose]);
+    void readMemorySwitch();
+  }, [cancelMenuClose, readMemorySwitch]);
 
   useEffect(() => {
     if (!loadMenuOpen) {
@@ -600,6 +633,19 @@ function CwdGroup({
                 setIconPickerOpen(true);
               }}
             />
+            <CwdMenuRow
+              index={4}
+              icon={
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="4" />
+                  {memorySwitch?.enabled && <path d="M8 12.5l2.6 2.6L16 9.5" />}
+                </svg>
+              }
+              label={t("Memory")}
+              title={memorySwitch && !memorySwitch.globalEnabled ? t("Turn memory on in Settings first") : undefined}
+              disabled={!memorySwitch?.globalEnabled}
+              onClick={() => { void toggleMemory(); }}
+            />
           </div>,
           document.body,
         )}
@@ -681,12 +727,14 @@ function CwdMenuRow({
   label,
   onClick,
   disabled,
+  title,
   index = 0,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  title?: string;
   index?: number;
 }) {
   const [hover, setHover] = useState(false);
@@ -694,6 +742,7 @@ function CwdMenuRow({
     <div
       role="menuitem"
       tabIndex={-1}
+      title={title}
       onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (!disabled) onClick(); }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

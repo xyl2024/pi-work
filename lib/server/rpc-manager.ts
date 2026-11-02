@@ -33,6 +33,8 @@ import {
 import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
+import { resolveMemoryForSession } from "./memory-injection";
+import { memoryTool } from "./memory-tool";
 import { getRegistry } from "./session-registry";
 import { subagentWebTools } from "./web-tools";
 import {
@@ -831,6 +833,8 @@ export async function startRpcSession(
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     let appendSystemPromptLoaderOption: string[] | undefined;
+    let memoryEnabled = false;
+    let memoryPromptBlock: string | null = null;
     let disabledSkillPaths = new Set<string>();
     let mcpProjectServers = false;
     let mcpStartupWaitMs = 3000;
@@ -839,6 +843,9 @@ export async function startRpcSession(
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
+      const memory = resolveMemoryForSession(cwd, cfg.memory.enabled === true);
+      memoryEnabled = memory.enabled;
+      memoryPromptBlock = memory.block;
       if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
@@ -879,6 +886,7 @@ export async function startRpcSession(
           baseAppend,
           sessionBlocks,
           webBlocks: webPromptBlocks,
+          memoryBlock: memoryPromptBlock,
         });
       },
       noSkills: Boolean(options.systemPromptPrefix || systemPromptOverride),
@@ -921,7 +929,7 @@ export async function startRpcSession(
         ...(systemPromptOverride
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", () => ({
-                systemPrompt: composeOverrideSystemPrompt(systemPromptOverride!, webPromptBlocks),
+                systemPrompt: composeOverrideSystemPrompt(systemPromptOverride!, webPromptBlocks, memoryPromptBlock),
               }));
             }]
           : []),
@@ -1059,6 +1067,7 @@ export async function startRpcSession(
         }),
         celebrateTool,
         piWorkCallTool,
+        ...(memoryEnabled ? [memoryTool] : []),
       ],
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
       excludeTools: [...agentToolDenylist(process.platform)],

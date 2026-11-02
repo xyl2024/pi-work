@@ -1,5 +1,7 @@
 export const EN_TRANSLATIONS = {
   "Context insight": "Context",
+  "Memory": "Memory",
+  "Turn memory on in Settings first": "Turn memory on in Settings first",
   "Set default tools": "Set default tools",
   "Default tools for this project": "Default tools for this project",
   "SubAgent": "SubAgent",

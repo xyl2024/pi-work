@@ -17,6 +17,10 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
+export interface MemoryConfig {
+  enabled: boolean;
+}
+
 export interface TextSelectionToolbarConfig {
   enabled: boolean;
 }
@@ -58,6 +62,7 @@ export interface PiWorkConfig {
   network_proxy: NetworkProxyConfig;
   mcp: McpConfig;
   suggested_prompt: SuggestedPromptConfig;
+  memory: MemoryConfig;
 }
 
 export const UI_SOUND_EVENT_IDS = [

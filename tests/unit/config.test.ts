@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
 
 const root = mkdtempSync(join(tmpdir(), "pi-work-config-"));
 const configPath = join(root, "config.yaml");
@@ -63,5 +64,20 @@ describe("config: in-process cache", () => {
 
     writeFileSync(configPath, "text_selection_toolbar:\n  enabled: false\n", "utf8");
     expect(readConfig().text_selection_toolbar.enabled).toBe(false);
+  });
+
+  it("defaults memory off and only enables it on an explicit true", () => {
+    rmSync(configPath, { force: true });
+    expect(readConfig().memory.enabled).toBe(false);
+
+    writeFileSync(configPath, "memory:\n  enabled: false\n", "utf8");
+    expect(readConfig().memory.enabled).toBe(false);
+
+    writeFileSync(configPath, "memory:\n  enabled: true\n", "utf8");
+    expect(readConfig().memory.enabled).toBe(true);
+  });
+
+  it("owns the memory settings key", () => {
+    expect(isSettingsOwnedKey("memory")).toBe(true);
   });
 });

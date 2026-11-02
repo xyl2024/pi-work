@@ -19,13 +19,20 @@ export function composeAppendSystemPrompt(input: {
   baseAppend: string[];
   sessionBlocks: string[];
   webBlocks: string[];
+  memoryBlock?: string | null;
 }): string[] {
   if (input.mode === "override") return input.baseAppend;
-  if (input.mode === "prefix") return [...input.baseAppend, ...input.webBlocks];
-  return [...input.baseAppend, ...input.sessionBlocks, ...input.webBlocks];
+  const memoryBlocks = input.memoryBlock ? [input.memoryBlock] : [];
+  if (input.mode === "prefix") return [...input.baseAppend, ...input.webBlocks, ...memoryBlocks];
+  return [...input.baseAppend, ...input.sessionBlocks, ...input.webBlocks, ...memoryBlocks];
 }
 
-export function composeOverrideSystemPrompt(overrideText: string, webBlocks: string[]): string {
-  if (webBlocks.length === 0) return overrideText;
-  return `${overrideText}\n\n${webBlocks.join("\n\n")}`;
+export function composeOverrideSystemPrompt(
+  overrideText: string,
+  webBlocks: string[],
+  memoryBlock?: string | null,
+): string {
+  const blocks = memoryBlock ? [...webBlocks, memoryBlock] : webBlocks;
+  if (blocks.length === 0) return overrideText;
+  return `${overrideText}\n\n${blocks.join("\n\n")}`;
 }
