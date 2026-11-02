@@ -1174,7 +1174,7 @@ export function AppShell() {
           const tab = workspace.tabs[tabId];
           if (!tab) return null;
           if (tab.kind === "assistant") {
-            return <AssistantConversation key={tab.tabId} isActive={tab.tabId === activeTabId} />;
+            return <AssistantConversation key={tab.tabId} tabId={tab.tabId} isActive={tab.tabId === activeTabId} />;
           }
           return (
             <WorkspaceChatTab

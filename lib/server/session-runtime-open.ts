@@ -1,6 +1,6 @@
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { getRpcSession, startRpcSession } from "./rpc-manager";
-import { resolveSessionPath } from "./session-reader";
+import { isAssistantSessionFile, resolveSessionPath } from "./session-reader";
 import { openSubagentChildSession } from "./subagent-tasks";
 import { resolveSessionPermission } from "./session-permission-visibility";
 import { createLogger } from "./logger";
@@ -24,19 +24,24 @@ export async function openSessionForRuntime(
   if (!filePath) return null;
   const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
   const permission = resolveSessionPermission(sessionId);
+  const assistant = isAssistantSessionFile(filePath);
   const { session } = await startRpcSession(
     sessionId,
     filePath,
     cwd,
     undefined,
     permission.background ? "scheduled" : "user",
-    permission.background ? { permissionMode: permission.permissionMode } : {},
+    {
+      ...(permission.background ? { permissionMode: permission.permissionMode } : {}),
+      ...(assistant ? { assistant: true } : {}),
+    },
   );
   log.info("started session", {
     sessionId,
     cwd,
     background: permission.background,
     permissionMode: permission.permissionMode,
+    assistant,
   });
   return session;
 }
