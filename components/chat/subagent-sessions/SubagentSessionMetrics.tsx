@@ -39,8 +39,8 @@ export function SubagentSessionMetrics({
   const items = [
     { key: "messages", label: t("Message count"), value: formatCount(stats?.assistantCount) },
     { key: "toolCalls", label: t("Tool calls"), value: formatCount(stats?.toolCallCount) },
-    { key: "ttft", label: t("Avg TTFT"), value: formatMetric(stats?.avgTtftMs, formatTtft) },
-    { key: "tps", label: t("Avg TPS"), value: formatMetric(stats?.avgGenerationTps, formatTps) },
+    { key: "ttft", label: "ttft", value: formatMetric(stats?.avgTtftMs, formatTtft) },
+    { key: "tps", label: "tps", value: formatMetric(stats?.avgGenerationTps, formatTps) },
   ];
 
   return (

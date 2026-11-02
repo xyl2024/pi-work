@@ -65,7 +65,7 @@ export function SubagentTaskRow({ task }: Props) {
           minWidth: 38,
           textAlign: "right",
           whiteSpace: "nowrap",
-          color: "var(--text-dim)",
+          color: "var(--text)",
           fontFamily: "var(--font-mono)",
           fontSize: 10,
           lineHeight: 1.5,
