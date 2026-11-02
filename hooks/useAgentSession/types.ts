@@ -71,6 +71,7 @@ export interface UseAgentSessionOptions {
   onEntryNavigated?: () => void;
   isActive?: boolean;
   controllerId?: string;
+  assistantSession?: boolean;
 }
 
 export type ToastNotification = {

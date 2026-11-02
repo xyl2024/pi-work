@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
+import { isUserVisibleSession } from "@/lib/shared/session-visibility";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
 import { resolveSessionPermissions, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
@@ -52,7 +53,9 @@ export async function GET(request: Request) {
     const allSessions = await listAllSessionsHeaderOnly();
     const subagentIds = new Set(listSubagentChildSessionIds());
     const all = allSessions.filter((session) =>
-      !!session.cwd && !subagentIds.has(session.id) && matchesSessionDate(session.modified, dateRange));
+      !!session.cwd &&
+      isUserVisibleSession(session, subagentIds) &&
+      matchesSessionDate(session.modified, dateRange));
 
     const byCwd = new Map<string, { lastUsed: string; firstSession: typeof all[number] }>();
     for (const s of all) {

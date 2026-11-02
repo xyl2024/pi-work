@@ -34,7 +34,9 @@ export async function GET(req: Request, { params }: RouteContext) {
         agentState = { running: true, state };
       } else {
         try {
-          const opened = await openSessionForRuntime(id);
+          const opened = await openSessionForRuntime(id, {
+            assistant: url.searchParams.get("assistant") === "1",
+          });
           if (opened) {
             const state = await opened.send({ type: "get_state" });
             agentState = { running: true, state };

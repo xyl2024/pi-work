@@ -9,11 +9,12 @@ type UseAgentSessionTransportOptions = {
   handleAgentEventRef: EventHandlerRef;
   onConnectCompensate: (sid: string) => Promise<void>;
   onConnectionClosed: () => void;
+  assistantSession?: boolean;
   t: Translator;
 };
 
 export function useAgentSessionTransport(options: UseAgentSessionTransportOptions) {
-  const { refs, handleAgentEventRef, onConnectCompensate, onConnectionClosed, t } = options;
+  const { refs, handleAgentEventRef, onConnectCompensate, onConnectionClosed, assistantSession = false, t } = options;
   const eventSourceRef = refs.eventSource;
   const eventSourceSessionRef = refs.eventSourceSession;
   const transportGenerationRef = refs.generation;
@@ -44,7 +45,7 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
       eventSourceSessionRef.current = null;
     }
     const generation = ++transportGenerationRef.current;
-    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
+    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events${assistantSession ? "?assistant=1" : ""}`);
     eventSourceRef.current = es;
     eventSourceSessionRef.current = sid;
     es.onopen = () => {
@@ -79,7 +80,7 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
         }
       }, delay);
     };
-  }, [isAgentRunning, closeEvents, disposedRef, eventSourceRef, eventSourceSessionRef, handleAgentEventRef, reconnectAttemptRef, reconnectTimerRef, transportGenerationRef, onConnectCompensate]);
+  }, [assistantSession, isAgentRunning, closeEvents, disposedRef, eventSourceRef, eventSourceSessionRef, handleAgentEventRef, reconnectAttemptRef, reconnectTimerRef, transportGenerationRef, onConnectCompensate]);
 
   const ensureEventsConnected = useCallback(async (sid: string) => {
     connectEvents(sid);

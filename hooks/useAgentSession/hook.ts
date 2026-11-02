@@ -61,7 +61,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, onSuggestedPrompt,
     modelsRefreshKey,
-    scrollToEntryId, onEntryNavigated, isActive = true, controllerId,
+    scrollToEntryId, onEntryNavigated, isActive = true, controllerId, assistantSession = false,
   } = opts;
   const streamingKey = controllerId ?? session?.id ?? "default";
   const { t } = useI18n();
@@ -296,6 +296,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     newSessionCwd,
     loadContextRef,
     refreshAgentRuntimeStateRef,
+    assistantSession,
   });
   const loadContext = loadContextBound;
   const ensureAvailableTools = useCallback(() => {
@@ -303,6 +304,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   }, [ensureAvailableToolsImpl, availableTools.length, toolsLoading]);
   const { closeEvents, connectEvents, ensureEventsConnected } = useAgentSessionTransport({
     refs: transportRefs,
+    assistantSession,
     handleAgentEventRef,
     onConnectCompensate: async (sid: string) => {
       await loadContextRef.current(sid, null);
@@ -315,13 +317,13 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const refreshSystemPrompt = useCallback(() => {
     const sid = sessionIdRef.current;
     if (!sid) return;
-    fetch(`/api/agent/${encodeURIComponent(sid)}`)
+    fetch(`/api/agent/${encodeURIComponent(sid)}${assistantSession ? "?assistant=1" : ""}`)
       .then((r) => r.json())
       .then((d: { state?: { systemPrompt?: string } }) => {
         if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
       })
       .catch(() => {});
-  }, []);
+  }, [assistantSession]);
 
   const { handleAgentEvent, applyRuntimeInput } = useAgentSessionEvents({
     controllerId: streamingKey,
@@ -401,6 +403,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
             ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
             thinkingLevel: runtimeState.thinkingLevel,
             permissionMode: newSessionPermissionMode,
+            ...(assistantSession ? { assistant: true } : {}),
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -434,6 +437,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
           message,
           ...(piImages?.length ? { images: piImages } : {}),
           request_id: newRequestId(),
+          ...(assistantSession ? { assistant: true } : {}),
         });
       }
     } catch (e) {
@@ -451,7 +455,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       return false;
     }
     return true;
-  }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, loadSession, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, assistantSession, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, loadSession, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;

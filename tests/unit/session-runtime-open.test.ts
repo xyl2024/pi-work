@@ -92,6 +92,32 @@ describe("opening a session for runtime", () => {
     );
   });
 
+  it("opens an assistant session as an ordinary session by default", async () => {
+    await openSessionForRuntime("assistant");
+
+    expect(mocks.startRpcSession).toHaveBeenCalledWith(
+      "assistant",
+      "/sessions/child.jsonl",
+      "/work",
+      undefined,
+      "user",
+      {},
+    );
+  });
+
+  it("keeps the assistant runtime when the assistant page asks for it", async () => {
+    await openSessionForRuntime("assistant", { assistant: true });
+
+    expect(mocks.startRpcSession).toHaveBeenCalledWith(
+      "assistant",
+      "/sessions/child.jsonl",
+      "/work",
+      undefined,
+      "user",
+      { assistant: true },
+    );
+  });
+
   it("returns null when no session file exists", async () => {
     mocks.resolveSessionPath.mockResolvedValue(null);
     await expect(openSessionForRuntime("missing")).resolves.toBeNull();

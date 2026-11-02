@@ -210,6 +210,7 @@ export interface SessionInfo {
   firstMessage: string;
   parentSessionId?: string;
   running: boolean;
+  assistant?: boolean;
   permissionMode?: SessionPermissionMode;
   background?: boolean;
 }

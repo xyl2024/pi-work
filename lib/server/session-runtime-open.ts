@@ -10,6 +10,7 @@ const log = createLogger("session-runtime-open");
 
 export async function openSessionForRuntime(
   sessionId: string,
+  options: { assistant?: boolean } = {},
 ): Promise<AgentSessionWrapper | null> {
   const live = getRpcSession(sessionId);
   if (live?.isAlive()) return live;
@@ -24,19 +25,24 @@ export async function openSessionForRuntime(
   if (!filePath) return null;
   const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
   const permission = resolveSessionPermission(sessionId);
+  const assistant = options.assistant === true;
   const { session } = await startRpcSession(
     sessionId,
     filePath,
     cwd,
     undefined,
     permission.background ? "scheduled" : "user",
-    permission.background ? { permissionMode: permission.permissionMode } : {},
+    {
+      ...(permission.background ? { permissionMode: permission.permissionMode } : {}),
+      ...(assistant ? { assistant: true } : {}),
+    },
   );
   log.info("started session", {
     sessionId,
     cwd,
     background: permission.background,
     permissionMode: permission.permissionMode,
+    assistant,
   });
   return session;
 }

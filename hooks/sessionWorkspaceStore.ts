@@ -1,7 +1,7 @@
 import type { SessionInfo } from "@/lib/shared/types";
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 
-export type SessionTabKind = "session" | "draft";
+export type SessionTabKind = "session" | "draft" | "assistant";
 export type SessionTabStatus = "idle" | "running" | "completed" | "error";
 
 export interface SessionTab {
@@ -23,6 +23,7 @@ export interface SessionWorkspaceState {
 
 export type SessionWorkspaceAction =
   | { type: "ensure_draft"; tabId?: string; cwd?: string | null }
+  | { type: "open_assistant" }
   | { type: "create_draft"; tabId?: string; cwd?: string | null }
   | { type: "open_session"; session: SessionInfo; tabId?: string; activate?: boolean }
   | { type: "open_session_by_id"; sessionId: string }
@@ -68,6 +69,25 @@ export function createSessionTab(session: SessionInfo, tabId = `session:${sessio
     status: session.running ? "running" : "idle",
     createdAt: Date.now(),
   };
+}
+
+const ASSISTANT_TAB_ID = "assistant:main";
+
+function createAssistantTab(): SessionTab {
+  return {
+    tabId: ASSISTANT_TAB_ID,
+    kind: "assistant",
+    sessionId: null,
+    session: null,
+    cwd: null,
+    dirty: false,
+    status: "idle",
+    createdAt: Date.now(),
+  };
+}
+
+function findAssistant(state: SessionWorkspaceState): SessionTab | undefined {
+  return state.tabOrder.map((id) => state.tabs[id]).find((tab) => tab?.kind === "assistant");
 }
 
 export function createSessionWorkspaceState(options: {
@@ -135,6 +155,16 @@ export function sessionWorkspaceReducer(
 
     case "create_draft":
       return addDraftTab(state, action);
+
+    case "open_assistant": {
+      const existing = findAssistant(state);
+      if (existing) {
+        const next = copyState(state);
+        next.activeTabId = existing.tabId;
+        return next;
+      }
+      return addTab(state, createAssistantTab());
+    }
 
     case "open_session_by_id": {
       const existing = findSessionTab(state, action.sessionId);
@@ -314,6 +344,8 @@ export function getSessionTabTitle(session: SessionInfo): string {
 export const APP_TITLE = "Pi Work";
 
 export function getDocumentTitleForTab(tab: SessionTab | null | undefined): string {
-  if (!tab || tab.kind !== "session" || !tab.session) return APP_TITLE;
+  if (!tab) return APP_TITLE;
+  if (tab.kind === "assistant") return `Assistant · ${APP_TITLE}`;
+  if (tab.kind !== "session" || !tab.session) return APP_TITLE;
   return `${getSessionTabTitle(tab.session)} · ${APP_TITLE}`;
 }

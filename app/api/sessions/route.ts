@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
+import { isUserVisibleSession } from "@/lib/shared/session-visibility";
 import {
   listAllSessionsHeaderOnly,
   searchSessionsPaged,
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
       ...row,
       ...sessionPermissionFields(permissionStates[row.id]),
     });
-    const all = allSessions.filter((session) => !subagentIds.has(session.id));
+    const all = allSessions.filter((session) => isUserVisibleSession(session, subagentIds));
     const recent = recentCwds(all, 5);
 
     if (q && limit > 0) {

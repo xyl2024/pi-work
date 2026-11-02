@@ -49,6 +49,8 @@ import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
+import { selectAssistantRestoreSession } from "@/lib/shared/assistant-session";
+import { fetchAssistantSessions } from "@/lib/client/assistant-sessions";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
   createPanelTabsState,
@@ -80,6 +82,7 @@ import {
 import { mcpPanel } from "@/lib/client/mcp-panel";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
+import { AssistantConversation } from "../assistant/AssistantConversation";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
 import {
@@ -469,6 +472,29 @@ export function AppShell() {
 
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
 
+  useEffect(() => {
+    if (initialSessionId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const sessions = await fetchAssistantSessions();
+        const restore = selectAssistantRestoreSession(initialSessionId, sessions);
+        if (!cancelled && restore) dispatchWorkspace({ type: "open_assistant" });
+      } catch (error) {
+        if (!cancelled) {
+          toast.show({
+            kind: "error",
+            message: t("Failed to load assistant sessions"),
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSessionId, t, toast]);
+
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd || !activeTabId) return;
     if (activeTab?.kind === "draft") {
@@ -571,8 +597,9 @@ export function AppShell() {
         const current = workspaceRef.current;
         return current.tabOrder
           .map((tabId) => current.tabs[tabId])
-          .filter((tab): tab is SessionTab => Boolean(tab))
-          .map((tab) => ({ tabId: tab.tabId, kind: tab.kind, dirty: tab.dirty }));
+          .flatMap((tab) => tab && tab.kind !== "assistant"
+            ? [{ tabId: tab.tabId, kind: tab.kind, dirty: tab.dirty }]
+            : []);
       },
       ensureDraft: (cwd) => {
         const tabId = createDraftTabId();
@@ -599,6 +626,11 @@ export function AppShell() {
     if (!cwd) return;
     handleNewSession("draft", cwd);
   }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
+
+  const handleOpenAssistant = useCallback(() => {
+    dispatchWorkspace({ type: "open_assistant" });
+    closeTopPanel();
+  }, [closeTopPanel]);
 
   const handleSessionCreated = useCallback((tabId: string, session: SessionInfo) => {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
@@ -1166,6 +1198,16 @@ export function AppShell() {
         {showChat && workspace.tabOrder.map((tabId) => {
           const tab = workspace.tabs[tabId];
           if (!tab) return null;
+          if (tab.kind === "assistant") {
+            return (
+              <AssistantConversation
+                key={tab.tabId}
+                tabId={tab.tabId}
+                isActive={tab.tabId === activeTabId}
+                onAgentStatusChange={(status) => handleAgentStatusChange(tab.tabId, status)}
+              />
+            );
+          }
           return (
             <WorkspaceChatTab
               key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
@@ -1256,6 +1298,7 @@ export function AppShell() {
       onSessionDeleted={handleSessionDeleted}
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
+      onOpenAssistant={handleOpenAssistant}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
       onOpenFile={handleOpenFile}
       explorerRefreshKey={explorerRefreshKey}

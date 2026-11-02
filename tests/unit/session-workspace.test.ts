@@ -133,11 +133,97 @@ describe("sessionWorkspaceReducer reorder", () => {
   });
 });
 
+function assistantTabs(state: SessionWorkspaceState) {
+  return state.tabOrder.map((id) => state.tabs[id]).filter((tab) => tab?.kind === "assistant");
+}
+
+function openAssistant(state: SessionWorkspaceState): SessionWorkspaceState {
+  return sessionWorkspaceReducer(state, { type: "open_assistant" });
+}
+
+describe("sessionWorkspaceReducer open_assistant", () => {
+  it("adds an assistant tab and activates it", () => {
+    const state = openAssistant(createSessionWorkspaceState({ withDraft: false }));
+    expect(assistantTabs(state)).toHaveLength(1);
+    expect(state.activeTabId).toBe(assistantTabs(state)[0].tabId);
+    expect(state.tabs[state.activeTabId!]).toMatchObject({
+      kind: "assistant",
+      sessionId: null,
+      session: null,
+      status: "idle",
+      dirty: false,
+    });
+  });
+
+  it("reuses the assistant tab instead of opening a second one", () => {
+    let state = createSessionWorkspaceState({ draftId: "draft:x" });
+    state = openAssistant(state);
+    const assistantId = state.activeTabId;
+    state = sessionWorkspaceReducer(state, { type: "activate", tabId: "draft:x" });
+
+    const reopened = openAssistant(state);
+
+    expect(assistantTabs(reopened)).toHaveLength(1);
+    expect(reopened.activeTabId).toBe(assistantId);
+    expect(reopened.tabOrder).toEqual(state.tabOrder);
+  });
+
+  it("opens again after being closed while other tabs remain", () => {
+    let state = createSessionWorkspaceState({ draftId: "draft:x" });
+    state = openAssistant(state);
+    const assistantId = state.activeTabId!;
+    state = sessionWorkspaceReducer(state, { type: "close", tabId: assistantId });
+    expect(assistantTabs(state)).toHaveLength(0);
+
+    const reopened = openAssistant(state);
+    expect(assistantTabs(reopened)).toHaveLength(1);
+    expect(reopened.activeTabId).toBe(assistantTabs(reopened)[0].tabId);
+  });
+
+  it("opens again after being closed as the only tab", () => {
+    let state = openAssistant(createSessionWorkspaceState({ withDraft: false }));
+    state = sessionWorkspaceReducer(state, { type: "close", tabId: state.activeTabId! });
+    expect(assistantTabs(state)).toHaveLength(0);
+
+    const reopened = openAssistant(state);
+    expect(assistantTabs(reopened)).toHaveLength(1);
+    expect(reopened.activeTabId).toBe(assistantTabs(reopened)[0].tabId);
+  });
+
+  it("closes to the neighbouring tab like any other tab", () => {
+    let state = createSessionWorkspaceState({ withDraft: false });
+    state = openSession(state, "a");
+    state = openAssistant(state);
+    const assistantId = state.activeTabId!;
+
+    const closed = sessionWorkspaceReducer(state, { type: "close", tabId: assistantId });
+
+    expect(closed.tabOrder).toEqual(["session:a"]);
+    expect(closed.activeTabId).toBe("session:a");
+  });
+
+  it("does not turn the other new-session entries into assistant tabs", () => {
+    let state = createSessionWorkspaceState({ draftId: "draft:x" });
+    state = openAssistant(state);
+    state = sessionWorkspaceReducer(state, { type: "ensure_draft", cwd: "/tmp/a" });
+    expect(state.tabs[state.activeTabId!].kind).toBe("draft");
+
+    state = openAssistant(state);
+    state = sessionWorkspaceReducer(state, { type: "create_draft", tabId: "draft:y", cwd: "/tmp/b" });
+    expect(state.tabs[state.activeTabId!].kind).toBe("draft");
+  });
+});
+
 describe("getDocumentTitleForTab", () => {
   it("shows the active session name with the app-name suffix", () => {
     const state = openSession(createSessionWorkspaceState(), "a");
     const tab = state.tabs[state.activeTabId!];
     expect(getDocumentTitleForTab(tab)).toBe(`Session a · ${APP_TITLE}`);
+  });
+
+  it("names the assistant tab", () => {
+    const state = openAssistant(createSessionWorkspaceState({ withDraft: false }));
+    expect(getDocumentTitleForTab(state.tabs[state.activeTabId!])).toBe(`Assistant · ${APP_TITLE}`);
   });
 
   it("falls back to the plain app name for a draft or empty workspace", () => {

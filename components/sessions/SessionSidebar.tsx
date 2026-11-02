@@ -38,6 +38,7 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
+  onOpenAssistant?: () => void;
   selectedCwd?: string | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   explorerRefreshKey?: number;
@@ -143,7 +144,7 @@ function PiAgentTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onOpenAssistant, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -687,52 +688,38 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             <PiAgentTitle />
           </div>
           <div style={{ display: "flex", gap: 6 }}>
-            {onNewSession && (() => {
-              const canNew = true;
-              return (
-                <Tooltip content={t("New session")}>
-                  <button
-                    onClick={() => {
-                      void fetch("/api/default-cwd", { method: "POST" })
-                        .then((res) => (res.ok ? res.json() : null))
-                        .then((data: { cwd?: string } | null) => {
-                          if (data?.cwd) onNewSession(data.cwd);
-                        })
-                        .catch(() => {});
-                    }}
-                    disabled={!canNew}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      background: "rgba(37,99,235,0.08)",
-                      border: "1px solid rgba(37,99,235,0.35)",
-                      color: "var(--accent)",
-                      cursor: canNew ? "pointer" : "not-allowed",
-                      width: 32, height: 32,
-                      borderRadius: 7,
-                      padding: 0,
-                      flexShrink: 0,
-                      opacity: canNew ? 1 : 0.4,
-                      transition: "opacity 0.12s, background 0.12s, border-color 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!canNew) return;
-                      e.currentTarget.style.background = "rgba(37,99,235,0.18)";
-                      e.currentTarget.style.borderColor = "rgba(37,99,235,0.55)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!canNew) return;
-                      e.currentTarget.style.background = "rgba(37,99,235,0.08)";
-                      e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                      <line x1="7" y1="2" x2="7" y2="12" />
-                      <line x1="2" y1="7" x2="12" y2="7" />
-                    </svg>
-                  </button>
-                </Tooltip>
-              );
-            })()}
+            {onOpenAssistant && (
+              <Tooltip content={t("Assistant")}>
+                <button
+                  onClick={onOpenAssistant}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "rgba(37,99,235,0.08)",
+                    border: "1px solid rgba(37,99,235,0.35)",
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    width: 32, height: 32,
+                    borderRadius: 7,
+                    padding: 0,
+                    flexShrink: 0,
+                    transition: "background 0.12s, border-color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(37,99,235,0.18)";
+                    e.currentTarget.style.borderColor = "rgba(37,99,235,0.55)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(37,99,235,0.08)";
+                    e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <line x1="7" y1="2" x2="7" y2="12" />
+                    <line x1="2" y1="7" x2="12" y2="7" />
+                  </svg>
+                </button>
+              </Tooltip>
+            )}
             {onOpenSearch && (
               <Tooltip content={`${t("Command palette")} (⌘K)`}>
               <button

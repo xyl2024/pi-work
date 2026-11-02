@@ -3,6 +3,8 @@ import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fa
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
 import { buildMessageOriginEntryData, isMessageOrigin, normalizeMessageOrigin, MESSAGE_ORIGIN_ENTRY_TYPE, type MessageOrigin } from "../shared/message-origin";
+import { ASSISTANT_SESSION_ENTRY_TYPE, buildAssistantSessionMarkerData } from "../shared/assistant-marker";
+import { ASSISTANT_SYSTEM_PROMPT } from "../shared/assistant-prompt";
 import { extractMessageText } from "../shared/message-content";
 import type { AgentMessage } from "../shared/types";
 import type { ToolSelection } from "../shared/types";
@@ -747,6 +749,7 @@ export interface StartRpcSessionOptions {
   parentSessionId?: string;
   mcp?: boolean;
   permissionMode?: SessionPermissionMode;
+  assistant?: boolean;
 }
 
 export async function startRpcSession(
@@ -819,7 +822,9 @@ export async function startRpcSession(
           options.parentSessionId ? { parentSession: options.parentSessionId } : undefined,
         );
     const isNewSession = !sessionFile;
-    const piDocsManaged = !options.systemPromptPrefix && !options.systemPromptOverride;
+    const assistantSession = options.assistant === true;
+    const systemPromptOverride = assistantSession ? ASSISTANT_SYSTEM_PROMPT : options.systemPromptOverride;
+    const piDocsManaged = !options.systemPromptPrefix && !systemPromptOverride;
 
     let capturedSessionId: string | null = null;
     const capturedSource: WebToolSource = source;
@@ -834,14 +839,16 @@ export async function startRpcSession(
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
-      if (options.systemPromptPrefix || options.systemPromptOverride || !cfg.append_system.enabled) {
+      if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
     } catch {
     }
-    const mcpEnabled = options.mcp
-      ?? (source === "user" && !options.systemPromptPrefix && !options.systemPromptOverride);
-    const promptAppendMode: SystemPromptAppendMode = options.systemPromptOverride
+    const mcpEnabled = assistantSession
+      ? false
+      : options.mcp
+        ?? (source === "user" && !options.systemPromptPrefix && !systemPromptOverride);
+    const promptAppendMode: SystemPromptAppendMode = systemPromptOverride
       ? "override"
       : options.systemPromptPrefix
         ? "prefix"
@@ -874,10 +881,10 @@ export async function startRpcSession(
           webBlocks: webPromptBlocks,
         });
       },
-      noSkills: Boolean(options.systemPromptPrefix || options.systemPromptOverride),
+      noSkills: Boolean(options.systemPromptPrefix || systemPromptOverride),
       skillsOverride: (base) => ({
         ...base,
-        skills: options.systemPromptPrefix || options.systemPromptOverride
+        skills: options.systemPromptPrefix || systemPromptOverride
           ? []
           : [
               ...base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
@@ -911,10 +918,10 @@ export async function startRpcSession(
               });
             }]
           : []),
-        ...(options.systemPromptOverride
+        ...(systemPromptOverride
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", () => ({
-                systemPrompt: composeOverrideSystemPrompt(options.systemPromptOverride!, webPromptBlocks),
+                systemPrompt: composeOverrideSystemPrompt(systemPromptOverride!, webPromptBlocks),
               }));
             }]
           : []),
@@ -1057,6 +1064,13 @@ export async function startRpcSession(
       excludeTools: [...agentToolDenylist(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
+
+    if (isNewSession && assistantSession) {
+      inner.sessionManager.appendCustomEntry(
+        ASSISTANT_SESSION_ENTRY_TYPE,
+        buildAssistantSessionMarkerData(),
+      );
+    }
 
     if (isNewSession) {
       invalidateSessionListCache();

@@ -36,10 +36,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Unknown permission mode: ${String(body.permissionMode)}` }, { status: 400 });
     }
 
-    const { provider, modelId, toolNames, thinkingLevel, permissionMode, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[] | "all"; thinkingLevel?: string; permissionMode?: unknown; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, permissionMode, assistant, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[] | "all"; thinkingLevel?: string; permissionMode?: unknown; assistant?: unknown; [key: string]: unknown };
 
     const tempKey = `__new__${Date.now()}`;
-    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);
+    const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, "user", assistant === true ? { assistant: true } : {});
 
     globalThis.__piAllowedRootsCache?.roots.add(cwd);
 

@@ -22,6 +22,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { listSessionNames } from "@/lib/server/session-names";
 import { isMessageOriginEntryData, MESSAGE_ORIGIN_ENTRY_TYPE } from "@/lib/shared/message-origin";
+import { ASSISTANT_SESSION_ENTRY_TYPE, isAssistantSessionMarkerData } from "@/lib/shared/assistant-marker";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import { cleanFirstMessage } from "@/lib/shared/session-title";
 import {
@@ -133,13 +134,14 @@ export function invalidateSessionListCache(): void {
 const HEADER_SCAN_CHUNK_BYTES = 16 * 1024;
 const HEADER_SCAN_MAX_BYTES = 1024 * 1024;
 
-interface HeaderScanResult {
+export interface SessionHeaderScan {
   id: string;
   cwd: string;
   created: string;
   parentSessionPath?: string;
   name?: string;
   firstMessage?: string;
+  assistant?: boolean;
 }
 
 function extractMessageText(content: unknown): string | undefined {
@@ -159,7 +161,7 @@ function extractMessageText(content: unknown): string | undefined {
   return undefined;
 }
 
-function readHeaderOnly(filePath: string): HeaderScanResult | null {
+export function readSessionHeader(filePath: string): SessionHeaderScan | null {
   let fd: number;
   try {
     fd = openSync(filePath, "r");
@@ -176,6 +178,7 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
     let parentSessionPath: string | undefined;
     let name: string | undefined;
     let firstMessage: string | undefined;
+    let assistant = false;
     let headerSeen = false;
     let pending = "";
     let offset = 0;
@@ -218,7 +221,13 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
         }
         if (!headerSeen) continue;
 
-        if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
+        if (
+          entryType === "custom" &&
+          (entry as { customType?: unknown }).customType === ASSISTANT_SESSION_ENTRY_TYPE &&
+          isAssistantSessionMarkerData((entry as { data?: unknown }).data)
+        ) {
+          assistant = true;
+        } else if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
           const trimmed = ((entry as { name: string }).name).trim();
           if (trimmed) name = trimmed;
         } else if (entryType === "message" && firstMessage === undefined) {
@@ -235,10 +244,11 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
     }
 
     if (!id || !created) return null;
-    const result: HeaderScanResult = { id, cwd: cwd ?? "", created };
+    const result: SessionHeaderScan = { id, cwd: cwd ?? "", created };
     if (parentSessionPath !== undefined) result.parentSessionPath = parentSessionPath;
     if (name !== undefined) result.name = name;
     if (firstMessage !== undefined) result.firstMessage = firstMessage;
+    if (assistant) result.assistant = true;
     return result;
   } catch {
     return null;
@@ -300,7 +310,7 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
     for (const filePath of allFiles) {
       const mtime = safeStatMtime(filePath);
       if (!mtime) continue;
-      const header = readHeaderOnly(filePath);
+      const header = readSessionHeader(filePath);
       if (!header) continue;
       if (seen.has(header.id)) continue;
       seen.add(header.id);
@@ -316,6 +326,7 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
         firstMessage: cleanFirstMessage(header.firstMessage),
         parentSessionId: undefined,
         running: false,
+        ...(header.assistant ? { assistant: true } : {}),
       };
       if (header.parentSessionPath) {
         info.parentSessionId = pathToId.get(header.parentSessionPath);
@@ -385,6 +396,10 @@ export function cacheSessionPath(sessionId: string, filePath: string): void {
 
 export function invalidateSessionPathCache(sessionId: string): void {
   getPathCache().delete(sessionId);
+}
+
+export function isAssistantSessionFile(filePath: string): boolean {
+  return readSessionHeader(filePath)?.assistant === true;
 }
 
 export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
@@ -528,7 +543,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
 
 export function resolveParentSessionId(parentSessionPath: string | undefined): string | undefined {
   if (!parentSessionPath) return undefined;
-  return readHeaderOnly(parentSessionPath)?.id;
+  return readSessionHeader(parentSessionPath)?.id;
 }
 
 export async function readSessionDetails(sessionId: string) {
