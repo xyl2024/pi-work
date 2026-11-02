@@ -1,26 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Square } from "lucide-react";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useI18n } from "@/hooks/useI18n";
 import { useStreamingMessage } from "@/hooks/useStreamingMessage";
+import {
+  projectAssistantConversation,
+  type AssistantConversationSession,
+} from "@/lib/shared/assistant-conversation";
 import { selectLatestAssistantSession } from "@/lib/shared/assistant-session";
 import { extractMessageText } from "@/lib/shared/message-content";
+import { isAtTop } from "@/lib/shared/scroll-follow";
 import type { AgentMessage, SessionInfo } from "@/lib/shared/types";
+
+interface AssistantSessionPayload extends SessionInfo {
+  messages?: AgentMessage[];
+}
 
 interface AssistantChatProps {
   tabId: string;
   isActive: boolean;
   cwd: string | null;
   session: SessionInfo | null;
+  history: readonly AssistantSessionPayload[];
 }
 
-function AssistantChat({ tabId, isActive, cwd, session }: AssistantChatProps) {
+function AssistantChat({ tabId, isActive, cwd, session, history }: AssistantChatProps) {
   const { t } = useI18n();
   const [createdSession, setCreatedSession] = useState<SessionInfo | null>(null);
+  const [loadedStart, setLoadedStart] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const prependScrollHeightRef = useRef<number | null>(null);
+  const previousVisibleCountRef = useRef(0);
   const activeSession = createdSession ?? session;
 
   const {
@@ -38,14 +51,48 @@ function AssistantChat({ tabId, isActive, cwd, session }: AssistantChatProps) {
   });
   const streaming = useStreamingMessage(tabId);
 
+  const projection = useMemo(() => {
+    const activeId = activeSession?.id;
+    const snapshot = activeId ? history.find((entry) => entry.id === activeId) : undefined;
+    const inputs: AssistantConversationSession[] = [];
+    for (const entry of history) {
+      if (entry.id === activeId) continue;
+      inputs.push({
+        id: entry.id,
+        cwd: entry.cwd,
+        created: entry.created,
+        assistant: entry.assistant === true,
+        messages: entry.messages ?? [],
+      });
+    }
+    if (activeSession) {
+      inputs.push({
+        id: activeSession.id,
+        cwd: activeSession.cwd,
+        created: activeSession.created,
+        assistant: true,
+        messages: messages.length > 0 ? messages : snapshot?.messages ?? [],
+      });
+    }
+    return projectAssistantConversation(inputs, {
+      defaultCwd: cwd ?? activeSession?.cwd ?? "",
+    });
+  }, [activeSession, cwd, history, messages]);
+
+  useEffect(() => {
+    if (loadedStart !== null) return;
+    setLoadedStart(projection.latestPageStart);
+  }, [loadedStart, projection.latestPageStart]);
+
   const bubbles = useMemo(() => {
-    return messages.flatMap((message, index) => {
+    const start = loadedStart ?? projection.latestPageStart;
+    return projection.messages.slice(start).flatMap((message, offset) => {
       if (message.role !== "user" && message.role !== "assistant") return [];
       const text = extractMessageText(message).trim();
       if (!text) return [];
-      return [{ key: `${message.role}-${index}`, role: message.role, text }];
+      return [{ key: `${message.role}-${start + offset}`, role: message.role, text }];
     });
-  }, [messages]);
+  }, [loadedStart, projection]);
 
   const streamingText = streamState.isStreaming && streaming.streamingMessage
     ? extractMessageText(streaming.streamingMessage as AgentMessage).trim()
@@ -53,9 +100,54 @@ function AssistantChat({ tabId, isActive, cwd, session }: AssistantChatProps) {
   const showStreaming = streamingText !== "" && bubbles[bubbles.length - 1]?.text !== streamingText;
 
   useEffect(() => {
+    if (loadedStart === null) return;
     const element = scrollRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [bubbles.length, streamingText]);
+    const previousVisibleCount = previousVisibleCountRef.current;
+    previousVisibleCountRef.current = projection.visibleCount;
+    if (!element || prependScrollHeightRef.current !== null) return;
+    if (projection.visibleCount <= previousVisibleCount) return;
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (previousVisibleCount === 0 || distance < 100) element.scrollTop = element.scrollHeight;
+  }, [loadedStart, projection.visibleCount]);
+
+  useEffect(() => {
+    if (!streamingText) return;
+    const element = scrollRef.current;
+    if (!element) return;
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distance < 100) element.scrollTop = element.scrollHeight;
+  }, [streamingText]);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    const previousHeight = prependScrollHeightRef.current;
+    if (!element || previousHeight === null) return;
+    element.scrollTop += element.scrollHeight - previousHeight;
+    prependScrollHeightRef.current = null;
+  }, [loadedStart]);
+
+  const loadEarlier = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element || loadedStart === null || loadedStart <= 0) return;
+    if (prependScrollHeightRef.current !== null) return;
+    const atTop = isAtTop({
+      scrollHeight: element.scrollHeight,
+      scrollTop: element.scrollTop,
+      clientHeight: element.clientHeight,
+    });
+    if (!atTop) return;
+    const page = projection.pageBefore(loadedStart);
+    if (page.messages.length === 0 || page.start === loadedStart) return;
+    prependScrollHeightRef.current = element.scrollHeight;
+    setLoadedStart(page.start);
+  }, [loadedStart, projection]);
+
+  useEffect(() => {
+    if (loadedStart === null || loadedStart <= 0) return;
+    const element = scrollRef.current;
+    if (!element || element.scrollHeight > element.clientHeight) return;
+    loadEarlier();
+  }, [bubbles.length, loadedStart, loadEarlier]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -83,6 +175,7 @@ function AssistantChat({ tabId, isActive, cwd, session }: AssistantChatProps) {
     >
       <div
         ref={scrollRef}
+        onScroll={loadEarlier}
         style={{
           flex: 1,
           minHeight: 0,
@@ -199,8 +292,9 @@ function AssistantChat({ tabId, isActive, cwd, session }: AssistantChatProps) {
 
 export function AssistantConversation({ tabId, isActive }: { tabId: string; isActive: boolean }) {
   const [cwd, setCwd] = useState<string | null>(null);
-  const [latest, setLatest] = useState<SessionInfo | null>(null);
+  const [sessions, setSessions] = useState<AssistantSessionPayload[]>([]);
   const [ready, setReady] = useState(false);
+  const latest = useMemo(() => selectLatestAssistantSession(sessions), [sessions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +302,7 @@ export function AssistantConversation({ tabId, isActive }: { tabId: string; isAc
       try {
         const [cwdResponse, sessionsResponse] = await Promise.all([
           fetch("/api/default-cwd", { method: "POST" }),
-          fetch("/api/assistant/sessions"),
+          fetch("/api/assistant/sessions?includeMessages=1"),
         ]);
         if (cancelled) return;
         if (cwdResponse.ok) {
@@ -216,8 +310,8 @@ export function AssistantConversation({ tabId, isActive }: { tabId: string; isAc
           setCwd(data.cwd ?? null);
         }
         if (sessionsResponse.ok) {
-          const data = await sessionsResponse.json() as { sessions?: SessionInfo[] };
-          setLatest(selectLatestAssistantSession(data.sessions ?? []));
+          const data = await sessionsResponse.json() as { sessions?: AssistantSessionPayload[] };
+          setSessions(data.sessions ?? []);
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -237,6 +331,7 @@ export function AssistantConversation({ tabId, isActive }: { tabId: string; isAc
       isActive={isActive}
       cwd={cwd}
       session={latest}
+      history={sessions}
     />
   );
 }
