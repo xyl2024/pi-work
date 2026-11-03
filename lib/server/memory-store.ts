@@ -4,6 +4,9 @@ import { join } from "node:path";
 import {
   MEMORY_ENTRY_SEPARATOR,
   MEMORY_TARGET_FILES,
+  memoryEntriesUsage,
+  memoryLibraryView,
+  type MemoryLibraryView,
   type MemoryStoreStatus,
   type MemoryTarget,
   type MemoryUsageReport,
@@ -95,7 +98,7 @@ function joinEntries(entries: readonly string[]): string {
 }
 
 function usageOf(entries: readonly string[]): number {
-  return joinEntries(entries).length;
+  return memoryEntriesUsage(entries);
 }
 
 export function readMemory(target: MemoryTarget): MemorySnapshot {
@@ -114,6 +117,10 @@ export function readMemory(target: MemoryTarget): MemorySnapshot {
   return { target, status: "ok", entries, used: usageOf(entries), limit };
 }
 
+export function readMemoryView(target: MemoryTarget): MemoryLibraryView {
+  return memoryLibraryView(readMemory(target));
+}
+
 export function readMemoryUsage(): MemoryUsageReport {
   return {
     memory: storeUsage("memory"),
@@ -122,12 +129,12 @@ export function readMemoryUsage(): MemoryUsageReport {
 }
 
 function storeUsage(target: MemoryTarget): MemoryUsageReport[MemoryTarget] {
-  const snapshot = readMemory(target);
+  const view = readMemoryView(target);
   return {
-    file: MEMORY_TARGET_FILES[target],
-    status: snapshot.status,
-    used: snapshot.used,
-    limit: snapshot.limit,
+    file: view.file,
+    status: view.status,
+    used: view.used,
+    limit: view.limit,
   };
 }
 

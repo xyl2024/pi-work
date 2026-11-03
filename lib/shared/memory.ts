@@ -16,6 +16,44 @@ const MEMORY_BLOCK_TITLES: Record<MemoryTarget, string> = {
 
 const MEMORY_BLOCK_RULE = "═".repeat(46);
 
+export interface MemoryEntryView {
+  index: number;
+  text: string;
+  length: number;
+  oversized: boolean;
+  hash: string;
+}
+
+const ENTRY_HASH_SEEDS = [0x811c9dc5, 0x9e3779b9] as const;
+
+function foldCodeUnits(text: string, seed: number): number {
+  let hash = seed >>> 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+export function memoryEntryHash(text: string): string {
+  return ENTRY_HASH_SEEDS.map((seed) =>
+    foldCodeUnits(text, seed).toString(16).padStart(8, "0"),
+  ).join("");
+}
+
+export function memoryEntryViews(entries: readonly string[], limit: number): MemoryEntryView[] {
+  return entries.map((text, index) => ({
+    index,
+    text,
+    length: text.length,
+    oversized: text.length > limit,
+    hash: memoryEntryHash(text),
+  }));
+}
+
+export function memoryEntriesUsage(entries: readonly string[]): number {
+  return entries.join(MEMORY_ENTRY_SEPARATOR).length;
+}
+
 export interface MemoryUsage {
   entries: readonly string[];
   used: number;
@@ -36,6 +74,33 @@ export type MemoryUsageReport = Record<MemoryTarget, MemoryStoreUsage>;
 export interface MemoryUsageByTarget {
   memory: MemoryUsage;
   user: MemoryUsage;
+}
+
+export interface MemoryLibrarySource {
+  target: MemoryTarget;
+  status: MemoryStoreStatus;
+  entries: readonly string[];
+  limit: number;
+}
+
+export interface MemoryLibraryView {
+  target: MemoryTarget;
+  file: string;
+  status: MemoryStoreStatus;
+  entries: MemoryEntryView[];
+  used: number;
+  limit: number;
+}
+
+export function memoryLibraryView(source: MemoryLibrarySource): MemoryLibraryView {
+  return {
+    target: source.target,
+    file: MEMORY_TARGET_FILES[source.target],
+    status: source.status,
+    entries: memoryEntryViews(source.entries, source.limit),
+    used: memoryEntriesUsage(source.entries),
+    limit: source.limit,
+  };
 }
 
 export function groupDigits(value: number): string {
