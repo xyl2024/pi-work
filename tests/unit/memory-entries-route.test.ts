@@ -1,9 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { GET } from "@/app/api/memory/entries/route";
+import { describe, expect, it, vi } from "vitest";
+import { DELETE, GET } from "@/app/api/memory/entries/route";
 import { readConfig, writeConfig } from "@/lib/server/config";
-import { MEMORY_ENTRY_SEPARATOR } from "@/lib/shared/memory";
+import { MEMORY_ENTRY_SEPARATOR, memoryEntryHash } from "@/lib/shared/memory";
 import { createSandbox, type Sandbox } from "./sandbox";
 
 function seedLibrary(sandbox: Sandbox, file: string, entries: readonly string[]): void {
@@ -107,5 +107,120 @@ describe("GET /api/memory/entries", () => {
 
     expect(body.globalEnabled).toBe(false);
     expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual(["用户用 WSL2"]);
+  });
+});
+
+function deleteRequest(body: unknown): Request {
+  return new Request("http://localhost/api/memory/entries", {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("DELETE /api/memory/entries", () => {
+  it("rejects a body without a valid target, index or hash", async () => {
+    createSandbox("pi-work-memory-entries-route-");
+
+    const cases: Array<[unknown, string]> = [
+      [{ index: 0, hash: "x" }, "target must be memory or user"],
+      [{ target: "other", index: 0, hash: "x" }, "target must be memory or user"],
+      [{ target: "memory", hash: "x" }, "index must be a non-negative integer"],
+      [{ target: "memory", index: -1, hash: "x" }, "index must be a non-negative integer"],
+      [{ target: "memory", index: 0 }, "hash is required"],
+      [{ target: "memory", index: 0, hash: "" }, "hash is required"],
+    ];
+
+    for (const [body, error] of cases) {
+      const response = await DELETE(deleteRequest(body));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error });
+    }
+
+    const malformed = await DELETE(
+      new Request("http://localhost/api/memory/entries", { method: "DELETE", body: "not json" }),
+    );
+    expect(malformed.status).toBe(400);
+  });
+
+  it("deletes the pinned entry and returns the write-after snapshot", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条", "第三条"]);
+    seedLibrary(sandbox, "USER.md", ["回复用中文"]);
+    setGlobalMemory(true);
+
+    const response = await DELETE(
+      deleteRequest({ target: "memory", index: 1, hash: memoryEntryHash("第二条") }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.globalEnabled).toBe(true);
+    expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual([
+      "第一条",
+      "第三条",
+    ]);
+    expect(body.memory.used).toBe("第一条\n§\n第三条".length);
+    expect(body.user.entries.map((entry: { text: string }) => entry.text)).toEqual(["回复用中文"]);
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
+      "第一条\n§\n第三条",
+    );
+  });
+
+  it("rejects a stale hash without touching the file", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条"]);
+
+    const response = await DELETE(
+      deleteRequest({ target: "memory", index: 0, hash: memoryEntryHash("旧内容") }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "条目在你确认前已被改动，已拒绝删除，请刷新后再试。",
+      code: "stale_entry",
+    });
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
+      "第一条\n§\n第二条",
+    );
+  });
+
+  it("rejects an out-of-range index", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedLibrary(sandbox, "MEMORY.md", ["第一条"]);
+
+    const response = await DELETE(
+      deleteRequest({ target: "memory", index: 9, hash: memoryEntryHash("第一条") }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "条目索引越界，记忆库可能已被改动，请刷新后再删。",
+      code: "out_of_range",
+    });
+  });
+
+  it("surfaces a busy store as an error with its reason", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条"]);
+    writeFileSync(join(sandbox.dataDir, "memory", ".lock"), "", "utf8");
+
+    let tick = Date.now();
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => {
+      tick += 1000;
+      return tick;
+    });
+    try {
+      const response = await DELETE(
+        deleteRequest({ target: "memory", index: 0, hash: memoryEntryHash("第一条") }),
+      );
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: "记忆库正被其它会话写入，请稍后重试。",
+        code: "busy",
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
