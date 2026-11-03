@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createSandbox, type Sandbox } from "./sandbox";
+import { memoryEntryHash } from "@/lib/shared/memory";
 import {
   MEMORY_CHAR_LIMITS,
   applyMemoryOperations,
+  deleteMemoryEntry,
   readMemory,
   type MemoryTarget,
 } from "@/lib/server/memory-store";
@@ -398,5 +400,133 @@ describe("memory store: concurrent writers", () => {
     expect(results.every((result) => result.ok)).toBe(true);
     expect(readMemory("user").entries.sort()).toEqual([...contents].sort());
     expect(readFileSync(storeFile(sandbox, "user"), "utf8").split("\n§\n").sort()).toEqual([...contents].sort());
+  });
+});
+
+describe("memory store: user deletes one entry", () => {
+  function backups(sandbox: Sandbox): string[] {
+    return readdirSync(join(sandbox.dataDir, "memory")).filter((name) => name.endsWith(".bak"));
+  }
+
+  it("deletes the entry pinned by index and hash and returns the new entries", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedStore(sandbox, "memory", ["第一条", "第二条", "第三条"]);
+
+    const result = await deleteMemoryEntry("memory", 1, memoryEntryHash("第二条"));
+
+    expect(result).toMatchObject({
+      ok: true,
+      entries: ["第一条", "第三条"],
+      used: "第一条\n§\n第三条".length,
+      limit: MEMORY_CHAR_LIMITS.memory,
+    });
+    expect(readFileSync(file, "utf8")).toBe("第一条\n§\n第三条");
+    expect(backups(sandbox)).toEqual([]);
+  });
+
+  it("refuses a delete whose entry changed after it was rendered", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedStore(sandbox, "memory", ["第一条", "第二条"]);
+
+    const result = await deleteMemoryEntry("memory", 1, memoryEntryHash("已经被改过的条目"));
+
+    expect(result).toMatchObject({ ok: false, code: "stale_entry", entries: ["第一条", "第二条"] });
+    expect(readFileSync(file, "utf8")).toBe("第一条\n§\n第二条");
+  });
+
+  it("refuses an index outside the current entries", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedStore(sandbox, "user", ["唯一条目"]);
+
+    const past = await deleteMemoryEntry("user", 1, memoryEntryHash("唯一条目"));
+    const negative = await deleteMemoryEntry("user", -1, memoryEntryHash("唯一条目"));
+
+    expect(past).toMatchObject({ ok: false, code: "out_of_range" });
+    expect(negative).toMatchObject({ ok: false, code: "out_of_range" });
+    expect(readFileSync(file, "utf8")).toBe("唯一条目");
+  });
+
+  it("deletes an oversized entry while the agent path stays blocked by drift", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const runaway = "手写".repeat(1200);
+    const file = seedStore(sandbox, "memory", [runaway, "正常条目"]);
+
+    const agent = await applyMemoryOperations("memory", [{ action: "add", content: "新条目" }]);
+    const userDelete = await deleteMemoryEntry("memory", 0, memoryEntryHash(runaway));
+
+    expect(agent).toMatchObject({ ok: false, code: "drift" });
+    expect(userDelete).toMatchObject({ ok: true, entries: ["正常条目"] });
+    expect(readFileSync(file, "utf8")).toBe("正常条目");
+  });
+
+  it("snapshots the pre-delete file when the deleted entry is oversized", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const runaway = "手写".repeat(1200);
+    const raw = [runaway, "正常条目"].join("\n§\n");
+    const file = seedStore(sandbox, "memory", [runaway, "正常条目"]);
+
+    const result = await deleteMemoryEntry("memory", 0, memoryEntryHash(runaway));
+
+    expect(result).toMatchObject({ ok: true });
+    const files = backups(sandbox);
+    expect(files).toHaveLength(1);
+    expect(readFileSync(join(sandbox.dataDir, "memory", files[0]!), "utf8")).toBe(raw);
+    expect(readFileSync(file, "utf8")).toBe("正常条目");
+  });
+
+  it("keeps two oversized snapshots in the same second from overwriting each other", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const first = "甲".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    const second = "乙".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    seedStore(sandbox, "memory", [first, second]);
+
+    const one = await deleteMemoryEntry("memory", 0, memoryEntryHash(first));
+    const two = await deleteMemoryEntry("memory", 0, memoryEntryHash(second));
+
+    expect(one).toMatchObject({ ok: true });
+    expect(two).toMatchObject({ ok: true });
+    expect(backups(sandbox)).toHaveLength(2);
+  });
+
+  it("writes even when the remaining entries still exceed the limit", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const first = "甲".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    const second = "乙".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    const file = seedStore(sandbox, "memory", [first, second]);
+
+    const result = await deleteMemoryEntry("memory", 0, memoryEntryHash(first));
+
+    expect(result).toMatchObject({ ok: true, entries: [second], used: second.length });
+    expect(readFileSync(file, "utf8")).toBe(second);
+  });
+
+  it("reports busy when another writer holds the lock", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    seedStore(sandbox, "memory", ["第一条", "第二条"]);
+    writeFileSync(join(sandbox.dataDir, "memory", ".lock"), "", "utf8");
+
+    const now = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValueOnce(now).mockReturnValue(now + 60_000);
+    try {
+      const result = await deleteMemoryEntry("memory", 0, memoryEntryHash("第一条"));
+      expect(result).toMatchObject({ ok: false, code: "busy" });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(readMemory("memory").entries).toEqual(["第一条", "第二条"]);
+  });
+
+  it("keeps the other entries when two deletes race for the same pin", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    seedStore(sandbox, "memory", ["甲", "乙"]);
+
+    const [one, two] = await Promise.all([
+      deleteMemoryEntry("memory", 0, memoryEntryHash("甲")),
+      deleteMemoryEntry("memory", 0, memoryEntryHash("甲")),
+    ]);
+
+    expect([one.ok, two.ok].filter(Boolean)).toHaveLength(1);
+    expect([one, two].find((result) => !result.ok)).toMatchObject({ code: "stale_entry" });
+    expect(readMemory("memory").entries).toEqual(["乙"]);
   });
 });
