@@ -1,19 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  MEMORY_ENTRY_SEPARATOR,
-  memoryEntryHash,
-  memoryEntryViews,
-} from "@/lib/shared/memory";
+import { memoryEntryHash, memoryEntryViews } from "@/lib/shared/memory";
 import { readMemoryView } from "@/lib/server/memory-store";
-import { createSandbox, type Sandbox } from "./sandbox";
-
-function seedMemory(sandbox: Sandbox, content: string): void {
-  const dir = join(sandbox.dataDir, "memory");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "MEMORY.md"), content, "utf8");
-}
+import { createSandbox, seedMemoryLibrary } from "./sandbox";
 
 describe("memory entry views", () => {
   it("keeps the disk order and reports each entry's text and length", () => {
@@ -61,6 +51,7 @@ describe("memory library views", () => {
       file: "MEMORY.md",
       status: "missing",
       entries: [],
+      hash: expect.any(String),
       used: 0,
       limit: 2200,
     });
@@ -69,7 +60,7 @@ describe("memory library views", () => {
   it("views every entry and flags the oversized one", () => {
     const sandbox = createSandbox("pi-work-memory-entry-view-");
     const runaway = "手写".repeat(1200);
-    seedMemory(sandbox, ["用户用 WSL2", runaway].join(MEMORY_ENTRY_SEPARATOR));
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2", runaway]);
 
     const view = readMemoryView("memory");
 
@@ -81,7 +72,7 @@ describe("memory library views", () => {
 
   it("keeps a bare § inside an entry instead of splitting it", () => {
     const sandbox = createSandbox("pi-work-memory-entry-view-");
-    seedMemory(sandbox, "编号 § 规则写在文档里");
+    seedMemoryLibrary(sandbox, "memory", ["编号 § 规则写在文档里"]);
 
     const view = readMemoryView("memory");
 

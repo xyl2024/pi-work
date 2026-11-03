@@ -159,7 +159,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
   ),
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
-  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} />,
+  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {

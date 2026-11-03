@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readConfig } from "@/lib/server/config";
+import { isMemoryEnabledForCwd } from "@/lib/server/memory-cwd-store";
 import { deleteMemoryEntry, readMemoryView } from "@/lib/server/memory-store";
 import type { MemoryEntriesResponse } from "@/lib/shared/memory";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
@@ -8,9 +9,19 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/memory/entries");
 
-function entriesSnapshot(): MemoryEntriesResponse {
+function cwdOf(request: Request): string | null {
+  const cwd = new URL(request.url).searchParams.get("cwd")?.trim() ?? "";
+  return cwd === "" ? null : cwd;
+}
+
+function enabledFor(cwd: string | null): boolean {
+  const globalEnabled = readConfig().memory.enabled === true;
+  return cwd === null ? globalEnabled : isMemoryEnabledForCwd(cwd, globalEnabled);
+}
+
+function entriesSnapshot(enabled: boolean): MemoryEntriesResponse {
   return {
-    globalEnabled: readConfig().memory.enabled === true,
+    enabled,
     memory: readMemoryView("memory"),
     user: readMemoryView("user"),
   };
@@ -20,10 +31,10 @@ function validationError(error: string): NextResponse {
   return NextResponse.json({ error }, { status: 400 });
 }
 
-export async function GET(_request: Request) {
+export async function GET(request: Request) {
   const startedAt = Date.now();
   try {
-    const body = entriesSnapshot();
+    const body = entriesSnapshot(enabledFor(cwdOf(request)));
     log.info("memory entries read", {
       memoryStatus: body.memory.status,
       userStatus: body.user.status,
@@ -59,6 +70,7 @@ export async function DELETE(request: Request) {
       return validationError("hash is required");
     }
 
+    const enabled = enabledFor(cwdOf(request));
     const result = await deleteMemoryEntry(target, index, hash);
     if (!result.ok) {
       log.warn("memory entry delete failed", {
@@ -70,7 +82,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: result.message, code: result.code }, { status: 409 });
     }
 
-    const snapshot = entriesSnapshot();
+    const snapshot = entriesSnapshot(enabled);
     log.info("memory entry deleted", {
       target,
       index,

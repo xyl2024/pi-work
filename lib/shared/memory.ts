@@ -1,6 +1,11 @@
 export type MemoryTarget = "memory" | "user";
 
-const MEMORY_TARGETS: readonly MemoryTarget[] = ["memory", "user"];
+export const MEMORY_TARGETS: readonly MemoryTarget[] = ["memory", "user"];
+
+export const MEMORY_TARGET_TITLE_KEYS: Record<MemoryTarget, string> = {
+  memory: "Agent notes",
+  user: "User profile",
+};
 
 export const MEMORY_TARGET_FILES: Record<MemoryTarget, string> = {
   memory: "MEMORY.md",
@@ -56,10 +61,18 @@ export interface MemoryLibrarySnapshot {
   entryHashes: readonly string[];
 }
 
-export type SessionMemorySnapshot = Record<MemoryTarget, MemoryLibrarySnapshot | null>;
+export interface SessionMemorySnapshot {
+  capturedAt: number;
+  memory: MemoryLibrarySnapshot | null;
+  user: MemoryLibrarySnapshot | null;
+}
 
 export function injectedMemoryEntries(entries: readonly string[]): string[] {
   return entries.filter((entry) => entry.trim().length > 0);
+}
+
+export function memoryLibraryHash(entryHashes: readonly string[]): string {
+  return memoryEntryHash(entryHashes.join(""));
 }
 
 export function memoryLibrarySnapshot(entries: readonly string[]): MemoryLibrarySnapshot | null {
@@ -67,7 +80,7 @@ export function memoryLibrarySnapshot(entries: readonly string[]): MemoryLibrary
   if (injected.length === 0) return null;
   const entryHashes = injected.map((text) => memoryEntryHash(text));
   return {
-    hash: memoryEntryHash(entryHashes.join("")),
+    hash: memoryLibraryHash(entryHashes),
     entryCount: injected.length,
     entryHashes,
   };
@@ -95,6 +108,37 @@ export function memorySnapshotChanges(
 
 export function memoryEntriesUsage(entries: readonly string[]): number {
   return entries.join(MEMORY_ENTRY_SEPARATOR).length;
+}
+
+export interface MemorySnapshotDifference {
+  capturedAt: number;
+  changed: number;
+}
+
+export function memorySnapshotDifference(
+  snapshot: SessionMemorySnapshot | null,
+  current: MemoryLibrariesView | null,
+): MemorySnapshotDifference | null {
+  if (snapshot === null || current === null) return null;
+  let changed = 0;
+  for (const target of MEMORY_TARGETS) {
+    const view = current[target];
+    if (view.status === "unreadable") return null;
+    const library = snapshot[target];
+    if (library === null) {
+      changed += view.entries.filter((entry) => entry.text.trim().length > 0).length;
+      continue;
+    }
+    if (library.hash === view.hash) continue;
+    changed += memorySnapshotChanges(library, view.entries);
+  }
+  return { capturedAt: snapshot.capturedAt, changed };
+}
+
+export function formatMemorySnapshotTime(capturedAt: number): string {
+  const at = new Date(capturedAt);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
 
 export interface MemoryUsage {
@@ -131,16 +175,21 @@ export interface MemoryLibraryView {
   file: string;
   status: MemoryStoreStatus;
   entries: MemoryEntryView[];
+  hash: string;
   used: number;
   limit: number;
 }
 
 export function memoryLibraryView(source: MemoryLibrarySource): MemoryLibraryView {
+  const entries = memoryEntryViews(source.entries, source.limit);
   return {
     target: source.target,
     file: MEMORY_TARGET_FILES[source.target],
     status: source.status,
-    entries: memoryEntryViews(source.entries, source.limit),
+    entries,
+    hash: memoryLibraryHash(
+      entries.filter((entry) => entry.text.trim().length > 0).map((entry) => entry.hash),
+    ),
     used: memoryEntriesUsage(source.entries),
     limit: source.limit,
   };
@@ -184,7 +233,7 @@ export interface MemoryLibrariesView {
 }
 
 export interface MemoryEntriesResponse extends MemoryLibrariesView {
-  globalEnabled: boolean;
+  enabled: boolean;
 }
 
 export type MemoryLibraryState = "entries" | "empty" | "unreadable";

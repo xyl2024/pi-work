@@ -1,7 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach } from "vitest";
+import {
+  MEMORY_ENTRY_SEPARATOR,
+  MEMORY_TARGET_FILES,
+  type MemoryTarget,
+} from "@/lib/shared/memory";
 
 const createdRoots: string[] = [];
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -36,6 +41,17 @@ export function createSandbox(prefix: string): Sandbox {
   process.env.PI_WORK_DATA_DIR = dataDir;
   resetPiWorkRuntimeState();
   return { root, agentDir, dataDir, configPath: path.join(dataDir, "config.yaml") };
+}
+
+export function seedMemoryLibrary(
+  sandbox: Sandbox,
+  target: MemoryTarget,
+  entries: readonly string[],
+): string {
+  const file = path.join(sandbox.dataDir, "memory", MEMORY_TARGET_FILES[target]);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, entries.join(MEMORY_ENTRY_SEPARATOR), "utf8");
+  return file;
 }
 
 afterEach(() => {

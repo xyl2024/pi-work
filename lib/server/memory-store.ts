@@ -5,7 +5,7 @@ import {
   MEMORY_ENTRY_SEPARATOR,
   MEMORY_TARGET_FILES,
   memoryEntriesUsage,
-  memoryEntryHash,
+  memoryEntryViews,
   memoryLibraryView,
   type MemoryLibraryView,
   type MemoryStoreStatus,
@@ -479,14 +479,15 @@ export async function deleteMemoryEntry(
   try {
     const snapshot = readMemory(target);
     if (snapshot.status === "unreadable") return failure(target, "unreadable", index, []);
-    if (!Number.isInteger(index) || index < 0 || index >= snapshot.entries.length) {
+    const views = memoryEntryViews(snapshot.entries, snapshot.limit);
+    const view = Number.isInteger(index) && index >= 0 ? views[index] : undefined;
+    if (view === undefined) {
       return failure(target, "out_of_range", index, snapshot.entries);
     }
-    const entry = snapshot.entries[index]!;
-    if (memoryEntryHash(entry) !== hash) {
+    if (view.hash !== hash) {
       return failure(target, "stale_entry", index, snapshot.entries);
     }
-    if (entry.length > snapshot.limit) {
+    if (view.oversized) {
       await snapshotDeletedRaw(target, readFileSync(storePath(target), "utf8"));
     }
     const entries = snapshot.entries.filter((_, at) => at !== index);

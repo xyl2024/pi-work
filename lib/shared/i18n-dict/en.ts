@@ -9,6 +9,7 @@ export const EN_TRANSLATIONS = {
   "This session will not inject memory": "This session will not inject memory",
   "External write, not separated by the entry separator": "External write, not separated by the entry separator",
   "Session memory snapshot": "Session memory snapshot",
+  "Snapshot time {time}": "Snapshot time {time}",
   "{label} {count}": "{label} {count}",
   "Matches the current file": "Matches the current file",
   "{count} changes not applied": "{count} changes not applied",
