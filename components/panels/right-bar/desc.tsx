@@ -10,6 +10,7 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import {
+  Brain,
   Eye,
   ChartColumn,
   ChartSpline,
@@ -158,6 +159,10 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "mcp.open",
     icon: ({ size }) => <McpIcon size={size} />,
     badge: (ctx) => (ctx.mcpDirty ? <CornerBadge /> : null),
+  }),
+  memory: panelButton("memory", {
+    labelKey: "Open memory",
+    icon: ({ size }) => <Brain size={size} />,
   }),
   channels: panelButton("channels", {
     labelKey: "Open channels",

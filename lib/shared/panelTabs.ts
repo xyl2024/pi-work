@@ -6,6 +6,7 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
+  MEMORY_TAB_ID,
   MODELS_CONFIG_TAB_ID,
   SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
@@ -23,6 +24,7 @@ export interface PanelTabParams {
   context: undefined;
   modelsConfig: undefined;
   mcp: undefined;
+  memory: undefined;
   skills: undefined;
   scheduler: undefined;
   channels: undefined;
@@ -230,6 +232,19 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Conversation Tree",
     defaultMode: "normal",
     sessionBound: true,
+  },
+  memory: {
+    kind: "memory",
+    tabId: MEMORY_TAB_ID,
+    labelKey: "Memory",
+    defaultMode: "normal",
+    sessionBound: false,
+    commands: [
+      {
+        labelKey: "Open memory",
+        keywords: ["memory", "memories", "remember", "记忆", "记住"],
+      },
+    ],
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

@@ -5,6 +5,7 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
+  MEMORY_TAB_ID,
   SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
   TOKENS_TAB_ID,
@@ -374,12 +375,27 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "llmAudit",
         "mcp",
+        "memory",
         "modelsConfig",
         "scheduler",
         "skills",
         "tokens",
         "translate",
       ].sort(),
+    );
+  });
+
+  it("registers the memory panel as a global read-only button with a bilingual command", () => {
+    const memory = PANEL_TAB_SPECS.find((spec) => spec.kind === "memory");
+
+    expect(memory?.tabId).toBe(MEMORY_TAB_ID);
+    expect(memory?.labelKey).toBe("Memory");
+    expect(memory?.sessionBound).toBe(false);
+    expect(memory?.defaultMode).toBe("normal");
+    expect(memory?.commands).toHaveLength(1);
+    expect(memory?.commands?.[0]?.labelKey).toBe("Open memory");
+    expect(memory?.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["memory", "remember", "记忆"]),
     );
   });
 
@@ -695,6 +711,7 @@ describe("panelTabs registry → command palette", () => {
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.mcp",
+        "panel.memory",
         "panel.modelsConfig",
         "panel.scheduler",
         "panel.skills",
@@ -717,6 +734,13 @@ describe("panelTabs registry → command palette", () => {
     expect(cmd?.title).toBe("Open skills");
     expect(cmd?.group).toBe("Panel");
     expect(cmd?.keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
+  });
+
+  it("reaches the memory panel through english and chinese keywords", () => {
+    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.memory");
+
+    expect(cmd?.title).toBe("Open memory");
+    expect(cmd?.keywords).toEqual(expect.arrayContaining(["memory", "remember", "记忆"]));
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {
