@@ -8,6 +8,7 @@ export interface SettingsGroupSpec {
 
 export type SettingsSectionId =
   | "profile"
+  | "appearance"
   | "right-bar"
   | "assistant"
   | "text-selection-toolbar"
@@ -48,6 +49,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
 export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "profile", labelKey: "Profile", group: "personal" },
 
+  { id: "appearance", labelKey: "Theme & language", group: "appearance" },
   { id: "right-bar", labelKey: "Right-side buttons", group: "appearance" },
   { id: "assistant", labelKey: "Assistant", group: "appearance" },
   { id: "text-selection-toolbar", labelKey: "Text selection toolbar", group: "appearance" },

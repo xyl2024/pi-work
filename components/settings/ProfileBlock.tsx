@@ -1,14 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useTheme } from "@/hooks/useTheme";
 import { Tooltip } from "../ui/Tooltip";
 import { SmartImage } from "../ui/SmartImage";
 import { SettingsIcon } from "../ui/animated-icons";
-import { MorphToggleIcon } from "../ui/MorphToggleIcon";
-import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -37,8 +33,7 @@ const itemBaseStyle: React.CSSProperties = {
 };
 
 export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
-  const { t, locale, toggleLocale } = useI18n();
-  const { isDark, setPreset } = useTheme();
+  const { t } = useI18n();
   const [username, setUsername] = useState<string | null>(null);
   const [loginEnabled, setLoginEnabled] = useState(false);
   const [avatarAttempted, setAvatarAttempted] = useState(0);
@@ -78,16 +73,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
     cancelClose();
     setMenuOpen(true);
   }, [cancelClose]);
-
-  const handleToggleTheme = useCallback((e: ReactMouseEvent<HTMLButtonElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPreset(isDark ? "light" : "dark", {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    });
-  }, [isDark, setPreset]);
-
-  const nextLocaleLabel = `${t("Switch language")} → ${t(locale === "zh" ? "English" : "Chinese")}`;
 
   useEffect(() => () => cancelClose(), [cancelClose]);
 
@@ -227,57 +212,6 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
           {loading ? "…" : (username ?? t("Guest"))}
         </span>
       </button>
-
-      <Tooltip content={nextLocaleLabel}>
-        <button
-          onClick={toggleLocale}
-          aria-label={nextLocaleLabel}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 28, height: 28, padding: 0, flexShrink: 0,
-            background: "none",
-            border: "none", borderRadius: 7,
-            color: "var(--text-muted)", cursor: "pointer",
-            transition: "background 0.12s, color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-        >
-          <span
-            key={locale}
-            aria-hidden="true"
-            style={{
-              display: "inline-block",
-              fontSize: 15,
-              fontWeight: 600,
-              lineHeight: 1,
-              animation: "lang-swap-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
-            }}
-          >
-            {locale === "zh" ? "中" : "英"}
-          </span>
-        </button>
-      </Tooltip>
-
-      <Tooltip content={t("Switch theme")}>
-        <button
-          onClick={handleToggleTheme}
-          aria-label={t("Switch theme")}
-          aria-pressed={isDark}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 28, height: 28, padding: 0, flexShrink: 0,
-            background: "none",
-            border: "none", borderRadius: 7,
-            color: "var(--text-muted)", cursor: "pointer",
-            transition: "background 0.12s, color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-        >
-          <MorphToggleIcon from={SUN} to={MOON} active={isDark} size={15} strokeWidth={2} />
-        </button>
-      </Tooltip>
 
       {onOpenSettings && (
         <Tooltip content={t("Settings")}>

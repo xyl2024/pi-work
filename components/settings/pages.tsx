@@ -10,6 +10,7 @@ import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { MemorySection } from "./sections/MemorySection";
 import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
+import { AppearanceSection } from "./sections/AppearanceSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { AssistantSection } from "./sections/AssistantSection";
 import { TextSelectionToolbarSection } from "./sections/TextSelectionToolbarSection";
@@ -37,6 +38,7 @@ export const SETTINGS_PAGES = {
   profile: ({ onProfileSaved, reportDirty }) => (
     <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />
   ),
+  appearance: () => <AppearanceSection />,
   "right-bar": ({ config, apply }) => <RightBarSection config={config} apply={apply} />,
   assistant: ({ config, apply }) => <AssistantSection config={config} apply={apply} />,
   "text-selection-toolbar": ({ config, apply }) => (
