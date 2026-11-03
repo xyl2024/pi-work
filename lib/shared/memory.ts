@@ -50,6 +50,49 @@ export function memoryEntryViews(entries: readonly string[], limit: number): Mem
   }));
 }
 
+export interface MemoryLibrarySnapshot {
+  hash: string;
+  entryCount: number;
+  entryHashes: readonly string[];
+}
+
+export type SessionMemorySnapshot = Record<MemoryTarget, MemoryLibrarySnapshot | null>;
+
+export function injectedMemoryEntries(entries: readonly string[]): string[] {
+  return entries.filter((entry) => entry.trim().length > 0);
+}
+
+export function memoryLibrarySnapshot(entries: readonly string[]): MemoryLibrarySnapshot | null {
+  const injected = injectedMemoryEntries(entries);
+  if (injected.length === 0) return null;
+  const entryHashes = injected.map((text) => memoryEntryHash(text));
+  return {
+    hash: memoryEntryHash(entryHashes.join("")),
+    entryCount: injected.length,
+    entryHashes,
+  };
+}
+
+export function memorySnapshotChanges(
+  snapshot: MemoryLibrarySnapshot,
+  entries: readonly Pick<MemoryEntryView, "text" | "hash">[],
+): number {
+  const counts = new Map<string, number>();
+  for (const hash of snapshot.entryHashes) {
+    counts.set(hash, (counts.get(hash) ?? 0) + 1);
+  }
+  let added = 0;
+  for (const entry of entries) {
+    if (entry.text.trim().length === 0) continue;
+    const remaining = counts.get(entry.hash) ?? 0;
+    if (remaining === 0) added += 1;
+    else counts.set(entry.hash, remaining - 1);
+  }
+  let removed = 0;
+  for (const remaining of counts.values()) removed += remaining;
+  return added + removed;
+}
+
 export function memoryEntriesUsage(entries: readonly string[]): number {
   return entries.join(MEMORY_ENTRY_SEPARATOR).length;
 }
@@ -117,7 +160,7 @@ export function formatMemoryUsage(usage: Pick<MemoryUsage, "used" | "limit">): s
 }
 
 function renderMemorySection(target: MemoryTarget, usage: MemoryUsage): string | null {
-  const entries = usage.entries.filter((entry) => entry.trim().length > 0);
+  const entries = injectedMemoryEntries(usage.entries);
   if (entries.length === 0) return null;
   return [
     MEMORY_BLOCK_RULE,

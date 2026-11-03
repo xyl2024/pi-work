@@ -33,7 +33,8 @@ import {
 import { resolveCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
-import { resolveMemoryForSession } from "./memory-injection";
+import { resolveMemoryInjectionForSession } from "./memory-injection";
+import type { SessionMemorySnapshot } from "../shared/memory";
 import { memoryTool } from "./memory-tool";
 import { getRegistry } from "./session-registry";
 import { subagentWebTools } from "./web-tools";
@@ -89,6 +90,7 @@ export class AgentSessionWrapper {
   private _permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE;
   private readonly piDocsManaged: boolean;
   private readonly background: boolean;
+  private readonly _memorySnapshot: SessionMemorySnapshot | null;
   private contextComposition: ContextComposition | null = null;
   private compositionRefreshId = 0;
   private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
@@ -105,11 +107,16 @@ export class AgentSessionWrapper {
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
     permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE,
-    options: { piDocsManaged?: boolean; background?: boolean } = {},
+    options: {
+      piDocsManaged?: boolean;
+      background?: boolean;
+      memorySnapshot?: SessionMemorySnapshot | null;
+    } = {},
   ) {
     this._permissionMode = permissionMode;
     this.piDocsManaged = options.piDocsManaged ?? false;
     this.background = options.background ?? false;
+    this._memorySnapshot = options.memorySnapshot ?? null;
     this.gates = new InteractionGates({
       emit: (event) => this.emit(event),
       permissionMode: () => this._permissionMode,
@@ -164,6 +171,10 @@ export class AgentSessionWrapper {
 
   get isBackgroundSession(): boolean {
     return this.background;
+  }
+
+  get memorySnapshot(): SessionMemorySnapshot | null {
+    return this._memorySnapshot;
   }
 
   isAlive(): boolean {
@@ -565,6 +576,7 @@ export class AgentSessionWrapper {
           permissionMode: this.permissionMode,
           background: this.isBackgroundSession,
           toolNames: this.toolSelection,
+          memorySnapshot: this.memorySnapshot,
         };
       }
 
@@ -835,6 +847,7 @@ export async function startRpcSession(
     let appendSystemPromptLoaderOption: string[] | undefined;
     let memoryEnabled = false;
     let memoryPromptBlock: string | null = null;
+    let memorySnapshot: SessionMemorySnapshot | null = null;
     let disabledSkillPaths = new Set<string>();
     let mcpProjectServers = false;
     let mcpStartupWaitMs = 3000;
@@ -843,9 +856,10 @@ export async function startRpcSession(
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
-      const memory = resolveMemoryForSession(cwd, cfg.memory.enabled === true);
+      const memory = resolveMemoryInjectionForSession(cwd, cfg.memory.enabled === true);
       memoryEnabled = memory.enabled;
       memoryPromptBlock = memory.block;
+      memorySnapshot = memory.snapshot;
       if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
@@ -1113,7 +1127,7 @@ export async function startRpcSession(
       background
         ? resolveBackgroundPermissionMode(options.permissionMode)
         : readSessionPermissionMode(inner.sessionId),
-      { piDocsManaged, background },
+      { piDocsManaged, background, memorySnapshot },
     );
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;
