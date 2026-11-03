@@ -103,6 +103,7 @@ export const settings = {
   "Pi documentation": "Pi 文档",
 
   "Right-side buttons": "右侧按钮",
+  "Sidebar entry": "侧边栏入口",
   "Text selection toolbar": "划词工具栏",
   "Selection toolbar on": "已启用划词工具栏",
   "Selection toolbar off": "已停用划词工具栏",

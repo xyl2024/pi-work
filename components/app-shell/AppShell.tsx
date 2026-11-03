@@ -338,6 +338,7 @@ export function AppShell() {
   const settings = useEnsureSettings();
   const textSelectionEnabled = settings?.text_selection_toolbar.enabled !== false;
   const rightSideBarConfig = settings?.right_side_bar ?? null;
+  const assistantSidebarEntryEnabled = settings?.assistant.sidebar_entry === true;
   const { cwds: recentCwds } = useCwdList();
   const [panelTabsState, dispatchPanelTabs] = useReducer(
     panelTabsReducer,
@@ -1315,7 +1316,7 @@ export function AppShell() {
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
       onNewTask={handleNewTask}
-      onOpenAssistant={handleOpenAssistant}
+      onOpenAssistant={assistantSidebarEntryEnabled ? handleOpenAssistant : undefined}
       assistantActive={assistantActive}
       assistantCwd={assistantCwd}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}

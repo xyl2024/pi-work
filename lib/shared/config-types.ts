@@ -21,6 +21,10 @@ export interface MemoryConfig {
   enabled: boolean;
 }
 
+export interface AssistantConfig {
+  sidebar_entry: boolean;
+}
+
 export interface TextSelectionToolbarConfig {
   enabled: boolean;
 }
@@ -63,6 +67,7 @@ export interface PiWorkConfig {
   mcp: McpConfig;
   suggested_prompt: SuggestedPromptConfig;
   memory: MemoryConfig;
+  assistant: AssistantConfig;
 }
 
 export const UI_SOUND_EVENT_IDS = [

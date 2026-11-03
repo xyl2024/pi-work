@@ -10,6 +10,7 @@ import {
   type DangerousPatternsConfig,
   type PiWorkConfig,
   type TextSelectionToolbarConfig,
+  type AssistantConfig,
   type McpConfig,
   type MemoryConfig,
   type SuggestedPromptConfig,
@@ -87,6 +88,13 @@ function parseTextSelectionToolbar(raw: unknown): TextSelectionToolbarConfig {
   return { enabled: (raw as Record<string, unknown>).enabled !== false };
 }
 
+const DEFAULT_ASSISTANT: AssistantConfig = { sidebar_entry: false };
+
+function parseAssistant(raw: unknown): AssistantConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_ASSISTANT };
+  return { sidebar_entry: (raw as Record<string, unknown>).sidebar_entry === true };
+}
+
 function parseMcp(raw: unknown): McpConfig {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
   const obj = raw as Record<string, unknown>;
@@ -121,6 +129,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   mcp: { ...DEFAULT_MCP },
   suggested_prompt: { ...DEFAULT_SUGGESTED_PROMPT },
   memory: { enabled: false },
+  assistant: { ...DEFAULT_ASSISTANT },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -353,6 +362,7 @@ export function readConfig(): PiWorkConfig {
         mcp: parseMcp(cfg.mcp),
         suggested_prompt: parseSuggestedPrompt(cfg.suggested_prompt),
         memory: parseMemory(cfg.memory),
+        assistant: parseAssistant(cfg.assistant),
       },
       statConfig(),
     );

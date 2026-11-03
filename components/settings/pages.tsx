@@ -11,6 +11,7 @@ import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { MemorySection } from "./sections/MemorySection";
 import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { RightBarSection } from "./sections/RightBarSection";
+import { AssistantSection } from "./sections/AssistantSection";
 import { TextSelectionToolbarSection } from "./sections/TextSelectionToolbarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
@@ -37,6 +38,7 @@ export const SETTINGS_PAGES = {
     <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />
   ),
   "right-bar": ({ config, apply }) => <RightBarSection config={config} apply={apply} />,
+  assistant: ({ config, apply }) => <AssistantSection config={config} apply={apply} />,
   "text-selection-toolbar": ({ config, apply }) => (
     <TextSelectionToolbarSection config={config} apply={apply} />
   ),

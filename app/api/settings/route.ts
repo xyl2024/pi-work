@@ -115,6 +115,20 @@ function validateMemory(
   return { ok: true };
 }
 
+function validateAssistant(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "assistant must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.sidebar_entry !== undefined && typeof obj.sidebar_entry !== "boolean") {
+    return { ok: false, error: "assistant.sidebar_entry must be a boolean" };
+  }
+  return { ok: true };
+}
+
 function validateTextSelectionToolbar(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -255,6 +269,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.assistant !== undefined) {
+      const assistantCheck = validateAssistant(body.assistant);
+      if (!assistantCheck.ok) {
+        log.warn("settings rejected: invalid assistant", {
+          error: assistantCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: assistantCheck.error }, { status: 400 });
+      }
+    }
+
     const onDisk = readConfig();
 
     const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -283,6 +308,9 @@ export async function PUT(req: Request) {
         ? { suggested_prompt: body.suggested_prompt as unknown as PiWorkConfig["suggested_prompt"] }
         : {}),
       ...(isObject(body.memory) ? { memory: body.memory as unknown as PiWorkConfig["memory"] } : {}),
+      ...(isObject(body.assistant)
+        ? { assistant: body.assistant as unknown as PiWorkConfig["assistant"] }
+        : {}),
     };
 
     writeConfig(next);
