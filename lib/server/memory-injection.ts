@@ -9,12 +9,9 @@ import { readMemory } from "./memory-store";
 
 const log = createLogger("memory-injection");
 
-export interface MemorySessionState {
+export interface MemorySessionInjection {
   enabled: boolean;
   block: string | null;
-}
-
-export interface MemorySessionInjection extends MemorySessionState {
   snapshot: SessionMemorySnapshot | null;
 }
 
@@ -30,6 +27,7 @@ function loadMemoryInjection(enabled: boolean): { block: string | null; snapshot
   return {
     block,
     snapshot: {
+      capturedAt: Date.now(),
       memory: memoryLibrarySnapshot(memory.entries),
       user: memoryLibrarySnapshot(user.entries),
     },
@@ -38,11 +36,6 @@ function loadMemoryInjection(enabled: boolean): { block: string | null; snapshot
 
 export function loadMemoryPromptBlock(enabled: boolean): string | null {
   return loadMemoryInjection(enabled).block;
-}
-
-export function resolveMemoryForSession(cwd: string, globalEnabled: boolean): MemorySessionState {
-  const injection = resolveMemoryInjectionForSession(cwd, globalEnabled);
-  return { enabled: injection.enabled, block: injection.block };
 }
 
 export function resolveMemoryInjectionForSession(

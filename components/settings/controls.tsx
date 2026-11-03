@@ -355,7 +355,16 @@ export function SecondaryButton({ children, onClick, disabled, title, ariaLabel,
   );
 }
 
-export function DangerButton({ children, onClick, disabled, title, ariaLabel, type = "button", style }: ButtonProps) {
+export function DangerButton({
+  children,
+  onClick,
+  disabled,
+  title,
+  ariaLabel,
+  type = "button",
+  style,
+  size = "default",
+}: ButtonProps & { size?: "default" | "compact" }) {
   return (
     <button
       type={type}
@@ -365,10 +374,12 @@ export function DangerButton({ children, onClick, disabled, title, ariaLabel, ty
       aria-label={ariaLabel}
       style={{
         ...BUTTON_BASE,
+        ...(size === "compact"
+          ? { height: 22, padding: "0 4px", borderRadius: 4, gap: 4, fontSize: 11 }
+          : { fontSize: 12 }),
         background: "var(--bg)",
         border: "1px solid var(--border)",
         color: "var(--text-muted)",
-        fontSize: 12,
         fontWeight: 500,
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.5 : 1,

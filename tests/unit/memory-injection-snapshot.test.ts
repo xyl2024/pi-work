@@ -1,17 +1,11 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createSandbox, type Sandbox } from "./sandbox";
+import { createSandbox, seedMemoryLibrary } from "./sandbox";
 import { resolveMemoryInjectionForSession } from "@/lib/server/memory-injection";
 import { readMemoryView, applyMemoryOperations } from "@/lib/server/memory-store";
 import { writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
 import { MEMORY_TARGET_FILES, type MemoryTarget } from "@/lib/shared/memory";
-
-function seedStore(sandbox: Sandbox, target: MemoryTarget, entries: string[]): void {
-  const file = join(sandbox.dataDir, "memory", MEMORY_TARGET_FILES[target]);
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, entries.join("\n§\n"), "utf8");
-}
 
 function currentHashes(target: MemoryTarget): string[] {
   return readMemoryView(target).entries.map((entry) => entry.hash);
@@ -20,12 +14,13 @@ function currentHashes(target: MemoryTarget): string[] {
 describe("session memory snapshot", () => {
   it("derives the snapshot from the same entries the entries route renders", () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["用户偏好中文", "项目用 pnpm"]);
-    seedStore(sandbox, "user", ["用户叫 Al"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文", "项目用 pnpm"]);
+    seedMemoryLibrary(sandbox, "user", ["用户叫 Al"]);
 
     const session = resolveMemoryInjectionForSession("/work/plain", true);
 
     expect(session.block).toContain("用户偏好中文");
+    expect(session.snapshot?.capturedAt).toEqual(expect.any(Number));
     expect(session.snapshot?.memory).toEqual({
       hash: expect.any(String),
       entryCount: 2,
@@ -40,7 +35,7 @@ describe("session memory snapshot", () => {
 
   it("is null per library when that library contributed nothing to the block", () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
 
     const session = resolveMemoryInjectionForSession("/work/plain", true);
 
@@ -50,8 +45,8 @@ describe("session memory snapshot", () => {
 
   it("is null as a whole when the block is empty", () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["   "]);
-    seedStore(sandbox, "user", []);
+    seedMemoryLibrary(sandbox, "memory", ["   "]);
+    seedMemoryLibrary(sandbox, "user", []);
 
     const session = resolveMemoryInjectionForSession("/work/plain", true);
 
@@ -61,7 +56,7 @@ describe("session memory snapshot", () => {
 
   it("is null when the global switch is off", () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
 
     expect(resolveMemoryInjectionForSession("/work/plain", false)).toEqual({
       enabled: false,
@@ -72,7 +67,7 @@ describe("session memory snapshot", () => {
 
   it("is null for a cwd recorded off", () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["用户偏好中文"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
     writeMemoryCwdEnabled("/work/secret", false);
 
     expect(resolveMemoryInjectionForSession("/work/secret", true)).toEqual({
@@ -94,7 +89,7 @@ describe("session memory snapshot", () => {
 
   it("stays frozen when the file changes after the session captured it", async () => {
     const sandbox = createSandbox("pi-work-memory-snapshot-");
-    seedStore(sandbox, "memory", ["旧事实"]);
+    seedMemoryLibrary(sandbox, "memory", ["旧事实"]);
 
     const session = resolveMemoryInjectionForSession("/work/plain", true);
 

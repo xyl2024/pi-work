@@ -3,39 +3,18 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
-  memorySnapshotChanges,
+  formatMemorySnapshotTime,
+  MEMORY_TARGETS,
+  MEMORY_TARGET_TITLE_KEYS,
+  memorySnapshotDifference,
   type MemoryEntriesResponse,
-  type MemoryLibrarySnapshot,
-  type MemoryTarget,
   type SessionMemorySnapshot,
 } from "@/lib/shared/memory";
 import type { SessionSnapshotPayload } from "@/lib/shared/session-runtime-state";
 
-const LIBRARY_ORDER: readonly MemoryTarget[] = ["memory", "user"];
-
-const LIBRARY_TITLE_KEYS: Record<MemoryTarget, string> = {
-  memory: "Agent notes",
-  user: "User profile",
-};
-
 interface LoadedSnapshot {
   sessionId: string;
   snapshot: SessionMemorySnapshot | null;
-}
-
-function changedEntriesOf(
-  snapshot: SessionMemorySnapshot,
-  current: MemoryEntriesResponse,
-): number | null {
-  let changed = 0;
-  for (const target of LIBRARY_ORDER) {
-    const library: MemoryLibrarySnapshot | null = snapshot[target];
-    if (library === null) continue;
-    const view = current[target];
-    if (view.status === "unreadable") return null;
-    changed += memorySnapshotChanges(library, view.entries);
-  }
-  return changed;
 }
 
 export function MemorySnapshotRow({
@@ -68,12 +47,13 @@ export function MemorySnapshotRow({
   const snapshot = loaded !== null && loaded.sessionId === sessionId ? loaded.snapshot : null;
   if (sessionId === null || snapshot === null) return null;
 
-  const labels = LIBRARY_ORDER.flatMap((target) => {
+  const labels = MEMORY_TARGETS.flatMap((target) => {
     const library = snapshot[target];
     if (library === null) return [];
-    return [t("{label} {count}", { label: t(LIBRARY_TITLE_KEYS[target]), count: library.entryCount })];
+    return [t("{label} {count}", { label: t(MEMORY_TARGET_TITLE_KEYS[target]), count: library.entryCount })];
   });
-  const changed = current === null ? null : changedEntriesOf(snapshot, current);
+  const difference = memorySnapshotDifference(snapshot, current);
+  const snapshotTime = formatMemorySnapshotTime(snapshot.capturedAt);
 
   return (
     <div
@@ -93,10 +73,13 @@ export function MemorySnapshotRow({
       <span>
         {t("Session memory snapshot")}
         <span style={{ color: "var(--text-muted)" }}>{` · ${labels.join(" · ")}`}</span>
+        <span>{` · ${t("Snapshot time {time}", { time: snapshotTime })}`}</span>
       </span>
-      {changed !== null && (
-        <span style={{ color: changed === 0 ? "var(--text-dim)" : "var(--warning)" }}>
-          {changed === 0 ? t("Matches the current file") : t("{count} changes not applied", { count: changed })}
+      {difference !== null && (
+        <span style={{ color: difference.changed === 0 ? "var(--text-dim)" : "var(--warning)" }}>
+          {difference.changed === 0
+            ? t("Matches the current file")
+            : t("{count} changes not applied", { count: difference.changed })}
         </span>
       )}
     </div>

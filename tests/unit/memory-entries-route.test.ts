@@ -1,16 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DELETE, GET } from "@/app/api/memory/entries/route";
 import { readConfig, writeConfig } from "@/lib/server/config";
+import { writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
 import { MEMORY_ENTRY_SEPARATOR, memoryEntryHash } from "@/lib/shared/memory";
-import { createSandbox, type Sandbox } from "./sandbox";
-
-function seedLibrary(sandbox: Sandbox, file: string, entries: readonly string[]): void {
-  const dir = join(sandbox.dataDir, "memory");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, file), entries.join(MEMORY_ENTRY_SEPARATOR), "utf8");
-}
+import { createSandbox, seedMemoryLibrary, type Sandbox } from "./sandbox";
 
 function unreadableLibrary(sandbox: Sandbox, file: string): void {
   mkdirSync(join(sandbox.dataDir, "memory", file), { recursive: true });
@@ -20,8 +15,11 @@ function setGlobalMemory(enabled: boolean): void {
   writeConfig({ ...readConfig(), memory: { enabled } });
 }
 
-function getRequest(): Request {
-  return new Request("http://localhost/api/memory/entries");
+function getRequest(cwd?: string): Request {
+  const url = cwd === undefined
+    ? "http://localhost/api/memory/entries"
+    : `http://localhost/api/memory/entries?cwd=${encodeURIComponent(cwd)}`;
+  return new Request(url);
 }
 
 describe("GET /api/memory/entries", () => {
@@ -33,12 +31,13 @@ describe("GET /api/memory/entries", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      globalEnabled: true,
+      enabled: true,
       memory: {
         target: "memory",
         file: "MEMORY.md",
         status: "missing",
         entries: [],
+        hash: expect.any(String),
         used: 0,
         limit: 2200,
       },
@@ -47,6 +46,7 @@ describe("GET /api/memory/entries", () => {
         file: "USER.md",
         status: "missing",
         entries: [],
+        hash: expect.any(String),
         used: 0,
         limit: 1375,
       },
@@ -56,8 +56,8 @@ describe("GET /api/memory/entries", () => {
   it("returns every entry with its index, length, oversized flag and hash", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
     const runaway = "手写".repeat(1200);
-    seedLibrary(sandbox, "MEMORY.md", ["用户用 WSL2", runaway]);
-    seedLibrary(sandbox, "USER.md", ["回复用中文"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2", runaway]);
+    seedMemoryLibrary(sandbox, "user", ["回复用中文"]);
 
     const response = await GET(getRequest());
     const body = await response.json();
@@ -100,18 +100,44 @@ describe("GET /api/memory/entries", () => {
 
   it("reports the global switch so a turned-off library stays visible", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
-    seedLibrary(sandbox, "MEMORY.md", ["用户用 WSL2"]);
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2"]);
     setGlobalMemory(false);
 
     const body = await (await GET(getRequest())).json();
 
-    expect(body.globalEnabled).toBe(false);
+    expect(body.enabled).toBe(false);
     expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual(["用户用 WSL2"]);
+  });
+
+  it("reports the effective switch for a cwd recorded off", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2"]);
+    setGlobalMemory(true);
+    writeMemoryCwdEnabled("/work/secret", false);
+
+    const body = await (await GET(getRequest("/work/secret"))).json();
+
+    expect(body.enabled).toBe(false);
+    expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual(["用户用 WSL2"]);
+  });
+
+  it("falls back to the global switch when no cwd is given", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2"]);
+    setGlobalMemory(true);
+    writeMemoryCwdEnabled("/work/secret", false);
+
+    const body = await (await GET(getRequest())).json();
+
+    expect(body.enabled).toBe(true);
   });
 });
 
-function deleteRequest(body: unknown): Request {
-  return new Request("http://localhost/api/memory/entries", {
+function deleteRequest(body: unknown, cwd?: string): Request {
+  const url = cwd === undefined
+    ? "http://localhost/api/memory/entries"
+    : `http://localhost/api/memory/entries?cwd=${encodeURIComponent(cwd)}`;
+  return new Request(url, {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -145,8 +171,8 @@ describe("DELETE /api/memory/entries", () => {
 
   it("deletes the pinned entry and returns the write-after snapshot", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
-    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条", "第三条"]);
-    seedLibrary(sandbox, "USER.md", ["回复用中文"]);
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条", "第三条"]);
+    seedMemoryLibrary(sandbox, "user", ["回复用中文"]);
     setGlobalMemory(true);
 
     const response = await DELETE(
@@ -155,7 +181,7 @@ describe("DELETE /api/memory/entries", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.globalEnabled).toBe(true);
+    expect(body.enabled).toBe(true);
     expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual([
       "第一条",
       "第三条",
@@ -167,9 +193,25 @@ describe("DELETE /api/memory/entries", () => {
     );
   });
 
+  it("reports the cwd's effective switch after a delete", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+    setGlobalMemory(true);
+    writeMemoryCwdEnabled("/work/secret", false);
+
+    const response = await DELETE(
+      deleteRequest({ target: "memory", index: 0, hash: memoryEntryHash("第一条") }, "/work/secret"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.enabled).toBe(false);
+    expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual(["第二条"]);
+  });
+
   it("rejects a stale hash without touching the file", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
-    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条"]);
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
 
     const response = await DELETE(
       deleteRequest({ target: "memory", index: 0, hash: memoryEntryHash("旧内容") }),
@@ -187,7 +229,7 @@ describe("DELETE /api/memory/entries", () => {
 
   it("rejects an out-of-range index", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
-    seedLibrary(sandbox, "MEMORY.md", ["第一条"]);
+    seedMemoryLibrary(sandbox, "memory", ["第一条"]);
 
     const response = await DELETE(
       deleteRequest({ target: "memory", index: 9, hash: memoryEntryHash("第一条") }),
@@ -202,8 +244,10 @@ describe("DELETE /api/memory/entries", () => {
 
   it("surfaces a busy store as an error with its reason", async () => {
     const sandbox = createSandbox("pi-work-memory-entries-route-");
-    seedLibrary(sandbox, "MEMORY.md", ["第一条", "第二条"]);
-    writeFileSync(join(sandbox.dataDir, "memory", ".lock"), "", "utf8");
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+    const lockFile = join(sandbox.dataDir, "memory", ".lock");
+    writeFileSync(lockFile, "", "utf8");
+    utimesSync(lockFile, 2_000_000_000, 2_000_000_000);
 
     let tick = Date.now();
     const spy = vi.spyOn(Date, "now").mockImplementation(() => {

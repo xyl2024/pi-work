@@ -26,6 +26,7 @@ export const rightPanels = {
   "This session will not inject memory": "当前会话不会注入记忆",
   "External write, not separated by the entry separator": "外部写入、未按条目分隔",
   "Session memory snapshot": "本会话记忆快照",
+  "Snapshot time {time}": "快照时间 {time}",
   "{label} {count}": "{label} {count}",
   "Matches the current file": "与当前文件一致",
   "{count} changes not applied": "{count} 条变更未生效",

@@ -4,23 +4,18 @@ import { useEffect, useState } from "react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { TrashIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
+import { DangerButton } from "@/components/settings/controls";
 import { useI18n } from "@/hooks/useI18n";
 import { MemorySnapshotRow } from "./MemorySnapshotRow";
 import {
   formatMemoryCharCounts,
+  MEMORY_TARGETS,
+  MEMORY_TARGET_TITLE_KEYS,
   memoryLibraryState,
   type MemoryEntriesResponse,
   type MemoryEntryView,
   type MemoryLibraryView,
-  type MemoryTarget,
 } from "@/lib/shared/memory";
-
-const LIBRARY_ORDER: readonly MemoryTarget[] = ["memory", "user"];
-
-const LIBRARY_TITLE_KEYS: Record<MemoryTarget, string> = {
-  memory: "Agent notes",
-  user: "User profile",
-};
 
 const DELETE_FAILURE_KEYS: Record<string, string> = {
   stale_entry: "This entry changed after the panel loaded. Refresh and try again.",
@@ -47,25 +42,9 @@ const BADGE_STYLE = {
   fontWeight: 600,
 } as const;
 
-const DELETE_BUTTON_STYLE = {
-  flexShrink: 0,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 22,
-  height: 22,
-  padding: 0,
-  background: "transparent",
-  border: "1px solid transparent",
-  borderRadius: 4,
-  color: "var(--error)",
-  cursor: "pointer",
-  fontFamily: "inherit",
-} as const;
-
-function MemoryPanelHeader({ globalEnabled }: { globalEnabled: boolean }) {
+function MemoryPanelHeader({ enabled }: { enabled: boolean }) {
   const { t } = useI18n();
-  if (globalEnabled) return null;
+  if (enabled) return null;
   return (
     <div
       style={{
@@ -90,7 +69,7 @@ function MemoryLibraryHeader({
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-      <span style={SECTION_TITLE_STYLE}>{t(LIBRARY_TITLE_KEYS[view.target])}</span>
+      <span style={SECTION_TITLE_STYLE}>{t(MEMORY_TARGET_TITLE_KEYS[view.target])}</span>
       {usage !== null && (
         <span style={{ fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>
           {usage}
@@ -137,20 +116,16 @@ function MemoryEntryRow({
       {entry.oversized && (
         <span style={BADGE_STYLE}>{t("External write, not separated by the entry separator")}</span>
       )}
-      <button
-        type="button"
+      <DangerButton
+        size="compact"
         onClick={onDelete}
         disabled={deleting}
-        aria-label={t("Delete memory entry")}
+        ariaLabel={t("Delete memory entry")}
         title={t("Delete memory entry")}
-        style={{
-          ...DELETE_BUTTON_STYLE,
-          cursor: deleting ? "default" : "pointer",
-          opacity: deleting ? 0.5 : 1,
-        }}
+        style={{ flexShrink: 0 }}
       >
         <TrashIcon width={12} height={12} />
-      </button>
+      </DangerButton>
     </div>
   );
 }
@@ -197,17 +172,18 @@ function MemoryLibrarySection({
   );
 }
 
-export function MemoryPanel({ sessionId }: { sessionId: string | null }) {
+export function MemoryPanel({ sessionId, cwd }: { sessionId: string | null; cwd: string | null }) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
   const [response, setResponse] = useState<MemoryEntriesResponse | null>(null);
   const [failed, setFailed] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const entriesUrl = cwd === null ? "/api/memory/entries" : `/api/memory/entries?cwd=${encodeURIComponent(cwd)}`;
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/memory/entries")
+    fetch(entriesUrl)
       .then(async (result) => {
         const body = (await result.json().catch(() => ({}))) as
           & Partial<MemoryEntriesResponse>
@@ -223,7 +199,7 @@ export function MemoryPanel({ sessionId }: { sessionId: string | null }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [entriesUrl]);
 
   function failureMessage(body: { error?: unknown; code?: unknown }): string {
     const key = typeof body.code === "string" ? DELETE_FAILURE_KEYS[body.code] : undefined;
@@ -255,7 +231,7 @@ export function MemoryPanel({ sessionId }: { sessionId: string | null }) {
     const key = `${view.target}:${entry.index}`;
     setDeletingKey(key);
     try {
-      const result = await fetch("/api/memory/entries", {
+      const result = await fetch(entriesUrl, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ target: view.target, index: entry.index, hash: entry.hash }),
@@ -297,9 +273,9 @@ export function MemoryPanel({ sessionId }: { sessionId: string | null }) {
       }}
     >
       <MemorySnapshotRow sessionId={sessionId} current={response} />
-      {response !== null && <MemoryPanelHeader globalEnabled={response.globalEnabled} />}
+      {response !== null && <MemoryPanelHeader enabled={response.enabled} />}
       {response !== null ? (
-        LIBRARY_ORDER.map((target) => (
+        MEMORY_TARGETS.map((target) => (
           <MemoryLibrarySection
             key={target}
             view={response[target]}
