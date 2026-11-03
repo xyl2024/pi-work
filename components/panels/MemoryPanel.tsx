@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { MemorySnapshotRow } from "./MemorySnapshotRow";
 import {
   formatMemoryCharCounts,
   memoryLibraryState,
@@ -129,7 +130,7 @@ function MemoryLibrarySection({ view }: { view: MemoryLibraryView }) {
   );
 }
 
-export function MemoryPanel() {
+export function MemoryPanel({ sessionId }: { sessionId: string | null }) {
   const { t } = useI18n();
   const [response, setResponse] = useState<MemoryEntriesResponse | null>(null);
   const [failed, setFailed] = useState(false);
@@ -164,6 +165,7 @@ export function MemoryPanel() {
         lineHeight: 1.6,
       }}
     >
+      <MemorySnapshotRow sessionId={sessionId} current={response} />
       {response !== null && <MemoryPanelHeader globalEnabled={response.globalEnabled} />}
       {response !== null ? (
         LIBRARY_ORDER.map((target) => (
