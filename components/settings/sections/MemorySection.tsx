@@ -6,6 +6,7 @@ import { useSettingsPageData } from "../use-page-data";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { MemoryStoreUsage, MemoryUsageReport } from "@/lib/shared/memory";
 import { formatMemoryCharCounts } from "@/lib/shared/memory";
+import { SecondaryButton } from "../controls";
 import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 
 async function loadMemoryUsage(): Promise<MemoryUsageReport> {
@@ -54,10 +55,12 @@ export function MemorySection({
   config,
   apply,
   pageCache,
+  onOpenMemoryPanel,
 }: {
   config: PiWorkConfig;
   apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean>;
   pageCache: SettingsPageDataCache;
+  onOpenMemoryPanel?: () => void;
 }) {
   const { t } = useI18n();
   const { data: usage } = useSettingsPageData(pageCache, "memory", loadMemoryUsage);
@@ -81,6 +84,11 @@ export function MemorySection({
         <MemoryUsageRow file="MEMORY.md" usage={usage?.memory} />
         <MemoryUsageRow file="USER.md" usage={usage?.user} />
       </div>
+      {onOpenMemoryPanel && (
+        <div style={{ marginTop: 12 }}>
+          <SecondaryButton onClick={onOpenMemoryPanel}>{t("View entries")}</SecondaryButton>
+        </div>
+      )}
     </>
   );
 }

@@ -30,6 +30,7 @@ import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { ContextInsightPanel } from "../panels/ContextInsightPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
+import { MemoryPanel } from "../panels/MemoryPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
@@ -158,6 +159,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
   ),
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
+  memory: () => <MemoryPanel />,
 };
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
@@ -801,6 +803,11 @@ export function AppShell() {
 
   const handleOpenSkillsPanel = useCallback(() => {
     dispatchPanelTabs({ type: "open", kind: "skills" });
+  }, []);
+
+  const handleOpenMemoryPanel = useCallback(() => {
+    setSettingsConfigOpen(false);
+    dispatchPanelTabs({ type: "open", kind: "memory" });
   }, []);
 
   useEffect(() => {
@@ -1569,7 +1576,13 @@ export function AppShell() {
     </div>
 
   </div>
-    {settingsConfigOpen && <SettingsModal onClose={() => setSettingsConfigOpen(false)} onProfileSaved={() => setProfileRefreshKey((k) => k + 1)} />}
+    {settingsConfigOpen && (
+      <SettingsModal
+        onClose={() => setSettingsConfigOpen(false)}
+        onProfileSaved={() => setProfileRefreshKey((k) => k + 1)}
+        onOpenMemoryPanel={handleOpenMemoryPanel}
+      />
+    )}
     <CwdPicker
       cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
       onCwdChange={handleCwdPicked}

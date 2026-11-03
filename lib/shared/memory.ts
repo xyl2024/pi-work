@@ -134,3 +134,21 @@ export function renderMemoryBlock(usages: MemoryUsageByTarget): string | null {
   if (sections.length === 0) return null;
   return sections.join("\n\n");
 }
+
+export interface MemoryLibrariesView {
+  memory: MemoryLibraryView;
+  user: MemoryLibraryView;
+}
+
+export interface MemoryEntriesResponse extends MemoryLibrariesView {
+  globalEnabled: boolean;
+}
+
+export type MemoryLibraryState = "entries" | "empty" | "unreadable";
+
+export function memoryLibraryState(
+  view: Pick<MemoryLibraryView, "status" | "entries">,
+): MemoryLibraryState {
+  if (view.status === "unreadable") return "unreadable";
+  return view.entries.length > 0 ? "entries" : "empty";
+}
