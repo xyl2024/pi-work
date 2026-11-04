@@ -35,6 +35,8 @@ export const scheduler = {
   "prompt failed": "提示词执行失败",
   "Task running, auto-refreshing…": "有任务正在运行，自动刷新中…",
   "No runs match this filter": "该筛选条件下暂无记录",
+  "Select a run to see its output": "选择一条运行记录查看输出",
+  "Waiting for output…": "等待输出…",
   "{n} tasks": "{n} 个任务",
   "Select a task from the list on the left": "从左侧选择一个任务",
   "or create a new task": "或创建一个新任务",

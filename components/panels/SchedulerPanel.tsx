@@ -43,7 +43,7 @@ export function SchedulerPanel({
         return;
       }
       if (selectedTaskId !== null) {
-        schedulerPanel.patch({ selectedTaskId: null, runsVisible: false });
+        schedulerPanel.patch({ selectedTaskId: null, selectedRunId: null, runsVisible: false });
         return;
       }
       onExit?.();
