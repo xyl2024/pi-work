@@ -56,7 +56,6 @@ export interface SchedulerViewState {
   saving: boolean;
   saveError: string | null;
   triggering: boolean;
-  panelOpen: boolean;
   runsVisible: boolean;
 }
 
@@ -77,7 +76,6 @@ const INITIAL: SchedulerViewState = {
   saving: false,
   saveError: null,
   triggering: false,
-  panelOpen: false,
   runsVisible: false,
 };
 
@@ -106,7 +104,6 @@ function schedulePoll(): void {
   if (!writer) return;
   const view = writer.get();
   const delay = schedulerPollDelayMs({
-    panelOpen: view.panelOpen,
     runsVisible: view.runsVisible,
     hidden: typeof document !== "undefined" && document.hidden,
   });
@@ -158,10 +155,6 @@ function clearPollingResources(): void {
   }
   unsubscribeIconPreferences?.();
   unsubscribeIconPreferences = null;
-}
-
-export function setSchedulerPanelOpen(panelOpen: boolean): void {
-  schedulerPanel.patch({ panelOpen });
 }
 
 export function setSchedulerRunsVisible(runsVisible: boolean): void {

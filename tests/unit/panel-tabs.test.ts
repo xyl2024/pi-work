@@ -24,6 +24,7 @@ import {
   selectHasTabs,
   selectIsOpen,
   selectOpenCount,
+  selectTabByKind,
   type PanelTabsAction,
   type PanelTabsState,
   type PanelViewKind,
@@ -51,6 +52,15 @@ function kinds(state: PanelTabsState): string[] {
 function openCount(state: PanelTabsState, id: string): number | undefined {
   return state.tabs.find((tab) => tab.id === id)?.openCount;
 }
+
+describe("selectTabByKind", () => {
+  it("finds no panel tab for a main view kind", () => {
+    const state = reduce(createPanelTabsState(), { type: "open", kind: "translate" });
+
+    expect(selectTabByKind(state, "scheduler")).toBe(null);
+    expect(selectTabByKind(state, "translate")?.kind).toBe("translate");
+  });
+});
 
 describe("panelTabs open", () => {
   it("opens a panel view once, activating it and opening the strip", () => {

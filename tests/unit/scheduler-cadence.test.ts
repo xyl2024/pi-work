@@ -3,53 +3,32 @@ import {
   SCHEDULER_POLL_MS,
   schedulerPollDelayMs,
   schedulerPollTier,
-  type SchedulerPollConditions,
-  type SchedulerPollTier,
 } from "@/lib/shared/scheduler-cadence";
 
-const TIERS: SchedulerPollTier[] = ["runs", "panel", "collapsed"];
-
 describe("schedulerPollTier", () => {
-  it("uses the runs tier only while the run history is on screen", () => {
-    expect(schedulerPollTier({ panelOpen: true, runsVisible: true, hidden: false })).toBe("runs");
-  });
-
-  it("falls back to the panel tier on the other open pages", () => {
-    expect(schedulerPollTier({ panelOpen: true, runsVisible: false, hidden: false })).toBe("panel");
-  });
-
-  it("uses the collapsed tier when the scheduler view is not the open panel", () => {
-    expect(schedulerPollTier({ panelOpen: false, runsVisible: false, hidden: false })).toBe("collapsed");
-    expect(schedulerPollTier({ panelOpen: false, runsVisible: true, hidden: false })).toBe("collapsed");
+  it("speeds up only while the run history is on screen", () => {
+    expect(schedulerPollTier({ runsVisible: true, hidden: false })).toBe("runs");
+    expect(schedulerPollTier({ runsVisible: false, hidden: false })).toBe("idle");
   });
 });
 
 describe("schedulerPollDelayMs", () => {
-  it("returns the tier's delay when the browser tab is visible", () => {
-    for (const tier of TIERS) {
-      const conditions =
-        tier === "runs"
-          ? { panelOpen: true, runsVisible: true, hidden: false }
-          : tier === "panel"
-            ? { panelOpen: true, runsVisible: false, hidden: false }
-            : { panelOpen: false, runsVisible: false, hidden: false };
-      expect(schedulerPollDelayMs(conditions)).toBe(SCHEDULER_POLL_MS[tier]);
-    }
+  it("uses the runs cadence while the run history is visible", () => {
+    expect(schedulerPollDelayMs({ runsVisible: true, hidden: false })).toBe(SCHEDULER_POLL_MS.runs);
+  });
+
+  it("keeps polling on the slow cadence after leaving the main view", () => {
+    expect(schedulerPollDelayMs({ runsVisible: false, hidden: false })).toBe(SCHEDULER_POLL_MS.idle);
+    expect(SCHEDULER_POLL_MS.idle).toBeGreaterThan(SCHEDULER_POLL_MS.runs);
   });
 
   it("stops entirely while the browser tab is hidden", () => {
-    for (const tier of TIERS) {
-      const conditions: SchedulerPollConditions = {
-        panelOpen: tier !== "collapsed",
-        runsVisible: tier === "runs",
-        hidden: true,
-      };
-      expect(schedulerPollDelayMs(conditions)).toBeNull();
+    for (const runsVisible of [true, false]) {
+      expect(schedulerPollDelayMs({ runsVisible, hidden: true })).toBeNull();
     }
   });
 
-  it("slows down as the panel gets further out of view", () => {
-    expect(SCHEDULER_POLL_MS.runs).toBeLessThan(SCHEDULER_POLL_MS.panel);
-    expect(SCHEDULER_POLL_MS.panel).toBeLessThan(SCHEDULER_POLL_MS.collapsed);
+  it("has no tier that stops polling while the page is in front", () => {
+    expect(Object.keys(SCHEDULER_POLL_MS).sort()).toEqual(["idle", "runs"]);
   });
 });

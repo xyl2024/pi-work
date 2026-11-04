@@ -60,11 +60,22 @@ export function mainViewReducer(
     case "activate_chat":
       return { active: "chat" };
     case "toggle":
-      if (state.active === action.kind) return { active: "chat" };
+      if (selectToggleExits(state, action.kind)) return { active: "chat" };
       return { active: action.kind, returnPanelMode: action.panelMode };
   }
 }
 
 export function selectMainViewKind(state: MainViewState): MainViewKind | null {
   return state.active === "chat" ? null : state.active;
+}
+
+export function selectToggleExits(state: MainViewState, kind: MainViewKind): boolean {
+  return state.active === kind;
+}
+
+export function shouldMountMainViewBody(
+  active: MainViewKind | null,
+  visited: boolean,
+): boolean {
+  return visited || active !== null;
 }

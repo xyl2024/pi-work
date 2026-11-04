@@ -72,6 +72,8 @@ import {
   createMainViewState,
   mainViewReducer,
   selectMainViewKind,
+  selectToggleExits,
+  shouldMountMainViewBody,
   type MainViewKind,
 } from "@/lib/shared/mainView";
 import type { ChatInputHandle } from "../chat/ChatInput";
@@ -80,7 +82,7 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
-import { schedulerPanel, setSchedulerPanelOpen } from "@/lib/client/scheduler-panel";
+import { renderMainViewBadges } from "@/lib/client/main-view-badges";
 import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
@@ -390,12 +392,17 @@ export function AppShell() {
   mainViewRef.current = mainViewState;
   const activeMainViewKind = selectMainViewKind(mainViewState);
   const chatForeground = mainViewState.active === "chat";
+  const [mainViewVisited, setMainViewVisited] = useState(false);
+  useEffect(() => {
+    if (activeMainViewKind !== null) setMainViewVisited(true);
+  }, [activeMainViewKind]);
+  const mainViewBodiesMounted = shouldMountMainViewBody(activeMainViewKind, mainViewVisited);
   const setMainView = useCallback((kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
-    const next = mainViewReducer(current, { type: "toggle", kind, panelMode });
+    const exits = selectToggleExits(current, kind);
     dispatchMainView({ type: "toggle", kind, panelMode });
-    setPanelMode(next.active === "chat" ? panelMode : "closed");
+    setPanelMode(exits ? panelMode : "closed");
   }, [setPanelMode]);
   const enterMainView = useCallback((kind: MainViewKind) => {
     const current = mainViewRef.current;
@@ -472,10 +479,6 @@ export function AppShell() {
 
   const modelsConfigDirty = modelsConfigPanel.useStatus() === true;
   const skillsInstalling = skillsPanel.useStatus() === true;
-  const schedulerRunning = schedulerPanel.useStatus() === true;
-  useEffect(() => {
-    setSchedulerPanelOpen(true);
-  }, []);
   usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
   const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -906,7 +909,6 @@ export function AppShell() {
         e.key === " " &&
         !e.ctrlKey && !e.metaKey && !e.altKey &&
         !paletteOpen &&
-        canFocusChatInput({ foreground: chatForeground }) &&
         getActiveChatInput()
       ) {
         if (!isEditable) {
@@ -1340,14 +1342,7 @@ export function AppShell() {
     openSessionById: handleOpenScheduledSession,
     onExit: leaveMainView,
   };
-  const mainViewBadges: Partial<Record<MainViewKind, ReactNode>> = {
-    scheduler: schedulerRunning ? (
-      <span
-        aria-hidden="true"
-        style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
-      />
-    ) : null,
-  };
+  const mainViewBadges = renderMainViewBadges();
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
   const mainViewLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].labelKey;
   const mainViewCard = (
@@ -1386,7 +1381,7 @@ export function AppShell() {
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
-        {MAIN_VIEW_KINDS.map((kind) => (
+        {mainViewBodiesMounted && MAIN_VIEW_KINDS.map((kind) => (
           <div
             key={kind}
             style={{

@@ -35,7 +35,7 @@ export function SchedulerPanel({
 
   usePanelEscapeGuard(containerRef, () => {
     if (schedulerPanel.back().closePanel) onExit?.();
-  });
+  }, visible);
 
   return (
     <div

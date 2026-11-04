@@ -18,6 +18,7 @@ import { SidebarSection } from "../ui/SidebarSection";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { MAIN_VIEW_SPECS, type MainViewKind } from "@/lib/shared/mainView";
+import { MAIN_VIEW_NAV_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
   SESSION_PAGE_SIZE_GROUPED,
@@ -798,10 +799,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             active={activeMainView === spec.kind}
             badge={mainViewBadges[spec.kind]}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
+            <span style={{ display: "flex", flexShrink: 0, color: "var(--text-muted)" }}>
+              {MAIN_VIEW_NAV_ICON_BY_KIND[spec.kind] ?? null}
+            </span>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(spec.labelKey)}</span>
           </SidebarNavButton>
         ))}
