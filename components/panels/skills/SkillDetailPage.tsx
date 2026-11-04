@@ -10,9 +10,8 @@ import { shortenPath } from "@/lib/client/paths";
 import { groupSkillFiles, stripFrontmatter } from "@/lib/shared/skill-files";
 import { skillGroup, type SkillDetailData } from "@/lib/shared/skills";
 import { fetchSkillDetail } from "@/lib/client/skills-io";
-import { skillsPanel, toggleSkillInvocation, useSkillsPanel } from "@/lib/client/skills-panel";
+import { toggleSkillInvocation, useSkillsPanel } from "@/lib/client/skills-panel";
 import { SkillFileRow } from "./SkillFileRow";
-import { PanelBackButton } from "../PanelBackButton";
 import { HumanCallBadge } from "./HumanCallBadge";
 
 export function SkillDetailPage({ filePath }: { filePath: string }) {
@@ -98,7 +97,6 @@ export function SkillDetailPage({ filePath }: { filePath: string }) {
           flexShrink: 0,
         }}
       >
-        <PanelBackButton panel={skillsPanel} />
         <span
           style={{
             flex: 1,

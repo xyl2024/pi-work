@@ -164,6 +164,19 @@ describe("mainView registry", () => {
     expect(ZH_TRANSLATIONS["New session"]).not.toBe(ZH_TRANSLATIONS["New task"]);
   });
 
+  it("registers skills third in the sidebar navigation", () => {
+    const ordered = MAIN_VIEW_SPECS.map((spec) => spec.kind);
+
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.navPriority).toBe(2);
+    expect(ordered.indexOf("skills")).toBeGreaterThan(ordered.indexOf("scheduler"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.labelKey).toBe("Skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.backLabelKey).toBe("Back to chat");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.labelKey).toBe("Open skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["skills", "技能"]),
+    );
+  });
+
   it("reaches scheduled tasks through english and chinese keywords", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.scheduler.commands?.[0]?.labelKey).toBe(
       "Open scheduled tasks",

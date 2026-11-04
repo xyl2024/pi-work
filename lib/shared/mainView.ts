@@ -2,6 +2,7 @@ import type { PanelMode } from "./panelTabs";
 
 export interface MainViewParams {
   scheduler: undefined;
+  skills: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -30,6 +31,18 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       {
         labelKey: "Open scheduled tasks",
         keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
+      },
+    ],
+  },
+  skills: {
+    kind: "skills",
+    navPriority: 2,
+    labelKey: "Skills",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open skills",
+        keywords: ["skills", "skill", "extensions", "技能", "扩展"],
       },
     ],
   },

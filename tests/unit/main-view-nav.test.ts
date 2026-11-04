@@ -31,8 +31,8 @@ describe("resolveMainViewNav", () => {
   });
 
   it("does not overflow when the kinds fit the available rows", () => {
-    const kinds = [...REGISTRY_ORDER, ...allKinds(2)];
-    const layout = resolveMainViewNav({ kinds, active: kinds[2], availableRows: 3 });
+    const kinds = allKinds(3);
+    const layout = resolveMainViewNav({ kinds, active: kinds[1], availableRows: 3 });
 
     expect(layout.visible).toEqual(kinds);
     expect(layout.overflow).toEqual([]);

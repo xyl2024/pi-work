@@ -20,7 +20,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -34,7 +34,6 @@ export interface RightBarCtx {
   selectedSessionId: string | null;
   selectedCwd: string | null;
   modelsConfigDirty: boolean;
-  skillsInstalling: boolean;
   mcpDirty: boolean;
   t: (key: string) => string;
 
@@ -142,11 +141,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Open models config",
     icon: ({ size }) => <ProviderGearIcon size={size} color="inherit" />,
     badge: (ctx) => (ctx.modelsConfigDirty ? <CornerBadge /> : null),
-  }),
-  skills: panelButton("skills", {
-    labelKey: "Open skills",
-    icon: ({ size }) => <ToolIcon size={size} />,
-    badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
   }),
   mcp: panelButton("mcp", {
     labelKey: "mcp.open",

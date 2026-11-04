@@ -348,12 +348,12 @@ _Avoid_: 用它指代系统提示词本身；用「记忆」指它
 _Avoid_: 把它当成第三种资源
 
 **技能（Skill）**：
-一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。它在界面上是一个**面板视图**（右侧按钮列上的全局按钮，内容跟选中会话的 cwd 走），启用状态按工作目录分桶，是 Pi Work 对来源的覆盖项。
-_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录；与聊天里「这次用哪个技能」的入口（输入框 `/skill:...` 菜单、SKILL.md 文件 chip）混用
+一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。它在界面上是一个**主视图**：左列按来源分组的技能列表，右列是选中技能的来源、文件清单与模型调用开关，安装是占满整块的表单；技能状态按工作目录分桶，切换目录即重载，跨目录不混。启用状态同样按工作目录分桶（`config.yaml` 的 `disabled_skills`），是 Pi Work 对来源的覆盖项。
+_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录；与聊天里「这次用哪个技能」的入口（输入框 `/skill:...` 菜单、SKILL.md 文件 chip）混用；把它当作**面板视图**或右侧按钮列上的按钮（那些是右栏的会话相关视图）
 
 **技能安装（Skill install）**：
-从 skills.sh 搜索技能、经 `npx skills add` 落盘到全局或当前项目的过程；由技能面板的添加页发起，日志流式回显。
-_Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那不是这条安装流程）；用「添加技能」指代它（那是面板里的按钮/页面，不是过程）
+从 skills.sh 搜索技能、经 `npx skills add` 落盘到全局或当前项目的过程；由技能主视图的安装表单发起，日志流式回显。
+_Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那不是这条安装流程）；用「添加技能」指代它（那是表单里的按钮，不是过程）
 
 **建议问题（Suggested Prompt）**：
 一轮对话正常结束后，由指定 LLM 生成的、用户可能接着问的一个问题；以输入框 placeholder 形式展示，空输入框时按 Tab 采纳为草稿。「正常结束」指该轮最后一条 assistant 消息 `stopReason === "stop"` 且正文非空——截断（`length`）、挂起（`deferred`）、中断（`aborted`）、出错（`error`）都不算。只在**用户交互会话**中生成：子代理会话与定时任务会话不生成（按会话身份排除，与会话当前由谁驱动无关）。placeholder 只是它的展示载体。
