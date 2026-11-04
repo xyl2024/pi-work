@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync("components/panels/ModelsConfigPanel.tsx", "utf8");
-const focusCall = source.indexOf("containerRef.current?.focus");
+const focusCall = source.indexOf("el.focus({ preventScroll");
 const start = source.lastIndexOf("  useEffect(() => {", focusCall);
-const end = source.indexOf("\n  }, [page]);", start);
+const end = source.indexOf("\n  }, [page, selectedProvider]);", start);
 const runEffect = new Function(
   "containerRef",
   "document",
