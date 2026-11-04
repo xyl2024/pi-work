@@ -31,7 +31,7 @@ import {
   type SchedulerDetailSection,
 } from "@/lib/shared/scheduler-detail";
 import type { TaskRun } from "@/lib/shared/scheduler";
-import { ChevronDownIcon, EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ChevronLeftIcon, EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
 import { SchedulerExecutionConfig } from "./SchedulerExecutionConfig";
 
 interface ChannelMeta {
@@ -41,9 +41,11 @@ interface ChannelMeta {
 export function SchedulerDetailPage({
   taskId,
   onOpenSession,
+  onBack,
 }: {
   taskId: string;
   onOpenSession: (sessionId: string) => void;
+  onBack?: () => void;
 }) {
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -181,6 +183,12 @@ export function SchedulerDetailPage({
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={summaryStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {onBack && (
+            <button type="button" onClick={onBack} style={backButtonStyle}>
+              <ChevronLeftIcon width={12} height={12} aria-hidden="true" />
+              {t("Back")}
+            </button>
+          )}
           <h2 style={titleStyle}>{task.name}</h2>
           <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="md" />
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -351,6 +359,21 @@ const disclosureButtonStyle: CSSProperties = {
   fontFamily: "inherit",
   textAlign: "left",
 };
+
+const backButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  padding: "3px 8px 3px 5px",
+  background: "transparent",
+  border: "1px solid var(--border)",
+  borderRadius: 5,
+  color: "var(--text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  flexShrink: 0,
+} as const;
 
 const actionButtonStyle = {
   display: "inline-flex",

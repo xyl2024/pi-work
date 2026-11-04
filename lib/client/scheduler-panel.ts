@@ -216,6 +216,10 @@ export async function openSchedulerTask(taskId: string): Promise<boolean> {
   return true;
 }
 
+export function clearSchedulerSelection(): void {
+  schedulerPanel.patch({ selectedTaskId: null, selectedRunId: null, runsVisible: false });
+}
+
 export function setSchedulerRunSelected(selectedRunId: string | null): void {
   schedulerPanel.patch({ selectedRunId });
 }
