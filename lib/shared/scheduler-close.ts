@@ -1,6 +1,13 @@
 import type { SchedulerTaskForm } from "./scheduler";
 
-export interface SchedulerCloseConditions {
+export type SchedulerLeaveIntent =
+  | "back_to_browse"
+  | "select_task"
+  | "new_task"
+  | "leave_main_view";
+
+export interface SchedulerLeaveConditions {
+  intent: SchedulerLeaveIntent;
   dirty: boolean;
 }
 
@@ -16,8 +23,8 @@ export const SCHEDULER_DIRTY_CLOSE_CONFIRM: SchedulerCloseConfirm = {
   confirmLabelKey: "Discard",
 };
 
-export function selectSchedulerCloseConfirm(
-  conditions: SchedulerCloseConditions,
+export function selectSchedulerLeaveConfirm(
+  conditions: SchedulerLeaveConditions,
 ): SchedulerCloseConfirm | null {
   return conditions.dirty ? SCHEDULER_DIRTY_CLOSE_CONFIRM : null;
 }

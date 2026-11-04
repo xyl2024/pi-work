@@ -91,6 +91,7 @@ import {
   type PanelViewLifecycleStore,
 } from "@/hooks/usePanelViewLifecycleSync";
 import { mcpPanel } from "@/lib/client/mcp-panel";
+import { requestSchedulerLeave, setSchedulerLeaveConfirm } from "@/lib/client/scheduler-panel";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { AssistantConversation } from "../assistant/AssistantConversation";
@@ -397,10 +398,11 @@ export function AppShell() {
     if (activeMainViewKind !== null) setMainViewVisited(true);
   }, [activeMainViewKind]);
   const mainViewBodiesMounted = shouldMountMainViewBody(activeMainViewKind, mainViewVisited);
-  const setMainView = useCallback((kind: MainViewKind) => {
+  const setMainView = useCallback(async (kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
     const exits = selectToggleExits(current, kind);
+    if (exits && !(await requestSchedulerLeave("leave_main_view"))) return;
     dispatchMainView({ type: "toggle", kind, panelMode });
     setPanelMode(exits ? panelMode : "closed");
   }, [setPanelMode]);
@@ -417,6 +419,10 @@ export function AppShell() {
     dispatchMainView({ type: "activate_chat" });
     setPanelMode(current.returnPanelMode);
   }, [setPanelMode]);
+  const handleLeaveMainView = useCallback(async () => {
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    leaveMainView();
+  }, [leaveMainView]);
   const openTabs = panelTabsState.tabs;
   const activeFileTabId = panelTabsState.activeId;
   const activePanelTab = selectActiveTab(panelTabsState);
@@ -549,7 +555,7 @@ export function AppShell() {
 
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
 
-  const handleCwdPicked = useCallback((cwd: string) => {
+  const handleCwdPicked = useCallback(async (cwd: string) => {
     if (!cwd || !activeTabId) return;
     if (activeTab?.kind === "draft") {
       if (cwd !== activeTab.cwd) {
@@ -557,6 +563,7 @@ export function AppShell() {
       }
       return;
     }
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     const draft = workspaceRef.current.tabOrder
       .map((id) => workspaceRef.current.tabs[id])
       .find((tab) => tab.kind === "draft");
@@ -578,11 +585,12 @@ export function AppShell() {
     dispatchWorkspace({ type: "set_draft_cwd", tabId: draft.tabId, cwd: recentCwds[0] });
   }, [initialSessionRestored, recentCwds, workspace.tabOrder, workspace.tabs]);
 
-  const handleSelectSession = useCallback((
+  const handleSelectSession = useCallback(async (
     session: SessionInfo,
     isRestoreOrScroll?: boolean | string | null,
     scrollEntryId?: string | null,
   ) => {
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     const targetScrollEntryId = scrollEntryId ?? (typeof isRestoreOrScroll === "string" ? isRestoreOrScroll : null);
     dispatchWorkspace({ type: "open_session", session });
     setInitialSessionRestored(true);
@@ -609,8 +617,9 @@ export function AppShell() {
     handleSelectSession(sessionInfo, false, result.firstMatchEntryId ?? null);
   }, [handleSelectSession]);
 
-  const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
+  const handleNewSession = useCallback(async (_sessionId: string, cwd: string) => {
     if (!cwd) return;
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     const current = workspaceRef.current;
     const draft = current.tabOrder
       .map((id) => current.tabs[id])
@@ -687,6 +696,7 @@ export function AppShell() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json() as { cwd?: string };
       if (!data.cwd) throw new Error("Missing cwd");
+      if (!(await requestSchedulerLeave("leave_main_view"))) return;
       const current = workspaceRef.current;
       const existingDraft = current.tabOrder
         .map((id) => current.tabs[id])
@@ -709,7 +719,8 @@ export function AppShell() {
     }
   }, [closeTopPanel, t, toast]);
 
-  const handleOpenAssistant = useCallback(() => {
+  const handleOpenAssistant = useCallback(async () => {
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     dispatchWorkspace({ type: "open_assistant" });
     closeTopPanel();
   }, [closeTopPanel]);
@@ -718,7 +729,8 @@ export function AppShell() {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
   }, []);
 
-  const handleOpenScheduledSession = useCallback((sessionId: string) => {
+  const handleOpenScheduledSession = useCallback(async (sessionId: string) => {
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     dispatchWorkspace({ type: "open_session_by_id", sessionId });
     closeTopPanel();
   }, [closeTopPanel]);
@@ -948,6 +960,11 @@ export function AppShell() {
       }),
     [confirm, t],
   );
+
+  useEffect(() => {
+    setSchedulerLeaveConfirm((guard) => askPanelClose(guard));
+    return () => setSchedulerLeaveConfirm(null);
+  }, [askPanelClose]);
 
   const confirmDropPanelTabs = useCallback(
     async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
@@ -1340,7 +1357,7 @@ export function AppShell() {
   const mainViewBodyCtx: Omit<MainViewBodyCtx, "visible"> = {
     cwd: selectedCwd,
     openSessionById: handleOpenScheduledSession,
-    onExit: leaveMainView,
+    onExit: handleLeaveMainView,
   };
   const mainViewBadges = renderMainViewBadges();
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
@@ -1361,7 +1378,7 @@ export function AppShell() {
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0, height: 34, padding: "0 8px" }}>
         <button
           type="button"
-          onClick={leaveMainView}
+          onClick={() => void handleLeaveMainView()}
           style={{
             display: "flex",
             alignItems: "center",
