@@ -13,6 +13,15 @@ const RETIRED_KEYS = [
   "View runs",
   "Copy output",
   "Prompt (sent to agent at trigger time)",
+  "Concise description, e.g. daily report",
+  "Full prompt sent to agent at trigger time",
+  "The cwd the agent runs in; must exist",
+  "Scheduler field required",
+  "all: all tools, none: chat only, custom: comma-separated tool names",
+  "Cron examples hint",
+  "Max lifetime hint",
+  "Timezone hint",
+  "Select a run to see its output",
 ] as const;
 
 describe("scheduler main-view copy", () => {

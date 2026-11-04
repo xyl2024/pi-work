@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useContainerWidth } from "@/hooks/useContainerWidth";
 import {
@@ -10,6 +10,7 @@ import {
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
 import { resolveSchedulerLayout, SCHEDULER_LIST_WIDTH } from "@/lib/shared/scheduler-layout";
+import { useInjectMainViewHeader } from "@/lib/client/main-view-header";
 import { SchedulerTaskList } from "./scheduler/SchedulerTaskList";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
@@ -36,6 +37,12 @@ export function SchedulerPanel({
   const page = schedulerPanel.currentPage();
   const { loaded, tasks, selectedTaskId } = view;
   const layout = resolveSchedulerLayout(width);
+
+  const formTitleKey = page.kind === "form" ? (page.taskId === null ? "New task" : "Edit task") : null;
+  const backToBrowse = useCallback(() => {
+    void requestSchedulerLeave("back_to_browse");
+  }, []);
+  useInjectMainViewHeader(formTitleKey, page.kind === "form" ? backToBrowse : null);
 
   useEffect(() => {
     if (!visible) return;

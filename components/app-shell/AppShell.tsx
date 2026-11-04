@@ -40,7 +40,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useExternalLinks } from "@/hooks/useExternalLinks";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
-import { ICONS } from "../ui/icons";
+import { ArrowLeftIcon, ICONS } from "../ui/icons";
 import { MENU, PANEL_LEFT } from "@/lib/client/icon-paths";
 import { ExpandLeftIcon } from "../panels/right-bar/icons";
 import { ExpandRightIcon } from "../ui/animated-icons";
@@ -83,6 +83,7 @@ import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { renderMainViewBadges } from "@/lib/client/main-view-badges";
+import { useMainViewHeader } from "@/lib/client/main-view-header";
 import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
@@ -1363,6 +1364,8 @@ export function AppShell() {
   const mainViewBadges = renderMainViewBadges();
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
   const mainViewBackLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].backLabelKey;
+  const mainViewHeader = useMainViewHeader();
+  const mainViewTitle = mainViewHeader.titleKey === null ? null : t(mainViewHeader.titleKey);
   const mainViewCard = (
     <div
       style={{
@@ -1376,27 +1379,51 @@ export function AppShell() {
         background: "var(--bg)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", flexShrink: 0, height: 34, padding: "0 8px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, height: 34, padding: "0 10px" }}>
         <button
           type="button"
-          onClick={() => void handleLeaveMainView()}
+          onClick={() => {
+            if (mainViewHeader.onBack) {
+              mainViewHeader.onBack();
+              return;
+            }
+            void handleLeaveMainView();
+          }}
+          aria-label={t(mainViewHeader.onBack === null && mainViewBackLabelKey !== null ? mainViewBackLabelKey : "Back")}
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
+            width: 22,
+            height: 22,
             padding: 0,
             background: "none",
             border: "none",
+            borderRadius: 5,
             color: "var(--text-muted)",
             cursor: "pointer",
-            font: "inherit",
-            fontSize: 12,
             flexShrink: 0,
           }}
           onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
         >
-          {mainViewBackLabelKey === null ? "" : `← ${t(mainViewBackLabelKey)}`}
+          <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
         </button>
+        {mainViewTitle !== null && (
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text)",
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {mainViewTitle}
+          </span>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
         {mainViewBodiesMounted && MAIN_VIEW_KINDS.map((kind) => (

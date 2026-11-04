@@ -5,8 +5,8 @@ import { RUNNER_DEFAULT_MAX_LIFETIME_MS } from "./scheduler-form";
 export type SchedulerDetailSection = "prompt" | "config";
 
 export const SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN: Record<SchedulerDetailSection, boolean> = {
-  prompt: false,
-  config: false,
+  prompt: true,
+  config: true,
 };
 
 export const SCHEDULER_RUNS_MIN_HEIGHT = 360;

@@ -129,7 +129,7 @@ describe("buildSchedulerConfigRows", () => {
 });
 
 describe("SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN", () => {
-  it("starts both prompt and execution config collapsed", () => {
-    expect(SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN).toEqual({ prompt: false, config: false });
+  it("starts both prompt and execution config expanded", () => {
+    expect(SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN).toEqual({ prompt: true, config: true });
   });
 });

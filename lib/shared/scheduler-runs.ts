@@ -53,17 +53,9 @@ export function computeSchedulerRunStats(runs: TaskRun[]): SchedulerRunStats {
   };
 }
 
-export function selectMostRecentRunId(runs: TaskRun[]): string | null {
-  let latest: TaskRun | null = null;
-  for (const run of runs) {
-    if (latest === null || run.startedAt > latest.startedAt) latest = run;
-  }
-  return latest?.id ?? null;
-}
-
 export function resolveSchedulerRunSelection(runs: TaskRun[], selectedRunId: string | null): string | null {
-  if (selectedRunId !== null && runs.some((run) => run.id === selectedRunId)) return selectedRunId;
-  return selectMostRecentRunId(runs);
+  if (selectedRunId === null) return null;
+  return runs.some((run) => run.id === selectedRunId) ? selectedRunId : null;
 }
 
 export function schedulerRunDurationMs(run: TaskRun, now: number): number | null {

@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { CollapsiblePanel } from "@/components/ui/CollapsiblePanel";
 import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
 import { formatDuration, formatRelative } from "./utils";
@@ -27,7 +28,7 @@ interface Props {
   filter: RunFilter;
   onFilterChange: (f: RunFilter) => void;
   selectedRunId: string | null;
-  onSelectRun: (runId: string) => void;
+  onSelectRun: (runId: string | null) => void;
   onOpenSession: (sessionId: string) => void;
 }
 
@@ -49,7 +50,6 @@ export function TaskRunsTab({
   const filtered = useMemo(() => filterSchedulerRuns(runs, filter), [runs, filter]);
   const stats = useMemo(() => computeSchedulerRunStats(runs), [runs]);
   const inFlight = runs.some((run) => run.status === "running");
-  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
@@ -113,26 +113,29 @@ export function TaskRunsTab({
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}>
-        <div data-scroll-inset style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          {loading && runs.length === 0 && <RunHint text={t("Loading...")} />}
-          {!loading && runs.length === 0 && <RunHint text={t("No runs yet")} />}
-          {!loading && runs.length > 0 && filtered.length === 0 && (
-            <RunHint text={t("No runs match this filter")} />
-          )}
-          {filtered.map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              now={now}
-              selected={run.id === selectedRunId}
-              onSelect={() => onSelectRun(run.id)}
-              onOpenSession={onOpenSession}
-            />
-          ))}
-        </div>
-
-        <RunOutputPanel run={selectedRun} now={now} onOpenSession={onOpenSession} />
+      <div data-scroll-inset style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        {loading && runs.length === 0 && <RunHint text={t("Loading...")} />}
+        {!loading && runs.length === 0 && <RunHint text={t("No runs yet")} />}
+        {!loading && runs.length > 0 && filtered.length === 0 && (
+          <RunHint text={t("No runs match this filter")} />
+        )}
+        {filtered.map((run) => {
+          const expanded = run.id === selectedRunId;
+          return (
+            <div key={run.id}>
+              <RunRow
+                run={run}
+                now={now}
+                expanded={expanded}
+                onToggle={() => onSelectRun(expanded ? null : run.id)}
+                onOpenSession={onOpenSession}
+              />
+              <CollapsiblePanel open={expanded}>
+                <RunOutput run={run} />
+              </CollapsiblePanel>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -154,14 +157,14 @@ function RunHint({ text }: { text: string }) {
 function RunRow({
   run,
   now,
-  selected,
-  onSelect,
+  expanded,
+  onToggle,
   onOpenSession,
 }: {
   run: TaskRun;
   now: number;
-  selected: boolean;
-  onSelect: () => void;
+  expanded: boolean;
+  onToggle: () => void;
   onOpenSession: (sessionId: string) => void;
 }) {
   const { t, locale } = useI18n();
@@ -173,12 +176,12 @@ function RunRow({
       data-run-row={run.id}
       role="button"
       tabIndex={0}
-      aria-pressed={selected}
-      onClick={onSelect}
+      aria-expanded={expanded}
+      onClick={onToggle}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onSelect();
+          onToggle();
         }
       }}
       style={{
@@ -191,8 +194,8 @@ function RunRow({
         margin: "0 10px",
         borderRadius: 6,
         cursor: "pointer",
-        background: selected ? "var(--bg-selected)" : "transparent",
-        borderBottom: "1px solid var(--border)",
+        background: expanded ? "var(--bg-selected)" : "transparent",
+        borderBottom: expanded ? "none" : "1px solid var(--border)",
         boxSizing: "border-box",
       }}
     >
@@ -200,7 +203,7 @@ function RunRow({
       <span
         style={{
           fontSize: 13,
-          color: selected ? "var(--text)" : "var(--text-muted)",
+          color: expanded ? "var(--text)" : "var(--text-muted)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -265,8 +268,8 @@ function RunRow({
         height={12}
         aria-hidden="true"
         style={{
-          color: selected ? "var(--accent)" : "var(--text-dim)",
-          transform: selected ? "rotate(0deg)" : "rotate(-90deg)",
+          color: expanded ? "var(--accent)" : "var(--text-dim)",
+          transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
           transition: "transform 0.15s",
         }}
       />
@@ -274,130 +277,61 @@ function RunRow({
   );
 }
 
-function RunOutputPanel({
-  run,
-  now,
-  onOpenSession,
-}: {
-  run: TaskRun | null;
-  now: number;
-  onOpenSession: (sessionId: string) => void;
-}) {
-  const { t, locale } = useI18n();
+function RunOutput({ run }: { run: TaskRun }) {
+  const { t } = useI18n();
   const markdownComponents = useMarkdownComponents(false);
 
   return (
-    <div data-run-output style={outputPanelStyle}>
-      {run !== null && (
-        <div style={outputHeaderStyle}>
-          <StatusBadge status={run.status} size="sm" />
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {formatRelative(now, run.startedAt, locale)}
-          </span>
-          <span style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {formatDuration(schedulerRunDurationMs(run, now)) ?? "—"}
-          </span>
-          {run.sessionId && (
-            <button
-              type="button"
-              onClick={() => onOpenSession(run.sessionId!)}
-              style={{
-                marginLeft: "auto",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "2px 7px",
-                fontSize: 12,
-                background: "transparent",
-                border: "none",
-                color: "var(--accent)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {t("Open session")}
-              <ExternalLinkIcon width={10} height={10} />
-            </button>
-          )}
+    <div
+      data-run-output={run.id}
+      data-scroll-inset
+      className={run.replyText?.trim() ? "markdown-body" : undefined}
+      style={outputBodyStyle}
+    >
+      {run.error && (
+        <div
+          style={{
+            fontSize: 13,
+            color:
+              run.status === "timeout" || run.status === "interrupted" ? "var(--warning)" : "var(--error)",
+            fontFamily: "var(--font-mono)",
+            background:
+              run.status === "timeout" || run.status === "interrupted" ? "var(--warning-bg)" : "var(--error-bg)",
+            padding: "6px 10px",
+            borderRadius: 4,
+            marginBottom: run.replyText?.trim() ? 10 : 0,
+            wordBreak: "break-word",
+          }}
+        >
+          {t(run.error)}
         </div>
       )}
-
-      <div
-        data-scroll-inset
-        className={run?.replyText?.trim() ? "markdown-body" : undefined}
-        style={outputBodyStyle}
-      >
-        {run === null ? (
-          <RunHint text={t("Select a run to see its output")} />
-        ) : (
-          <>
-            {run.error && (
-              <div
-                style={{
-                  fontSize: 13,
-                  color:
-                    run.status === "timeout" || run.status === "interrupted"
-                      ? "var(--warning)"
-                      : "var(--error)",
-                  fontFamily: "var(--font-mono)",
-                  background:
-                    run.status === "timeout" || run.status === "interrupted"
-                      ? "var(--warning-bg)"
-                      : "var(--error-bg)",
-                  padding: "6px 10px",
-                  borderRadius: 4,
-                  marginBottom: run.replyText?.trim() ? 10 : 0,
-                  wordBreak: "break-word",
-                }}
-              >
-                {t(run.error)}
-              </div>
-            )}
-            {run.replyText?.trim() ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                {run.replyText}
-              </ReactMarkdown>
-            ) : (
-              !run.error && (
-                <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                  {run.status === "running"
-                    ? t("Waiting for output…")
-                    : run.status === "success"
-                      ? t("(no reply content)")
-                      : t("No output")}
-                </div>
-              )
-            )}
-          </>
-        )}
-      </div>
+      {run.replyText?.trim() ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {run.replyText}
+        </ReactMarkdown>
+      ) : (
+        !run.error && (
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            {run.status === "running"
+              ? t("Waiting for output…")
+              : run.status === "success"
+                ? t("(no reply content)")
+                : t("No output")}
+          </div>
+        )
+      )}
     </div>
   );
 }
 
-const outputPanelStyle: CSSProperties = {
-  flex: "0 0 45%",
-  minHeight: 200,
-  maxHeight: "60%",
-  display: "flex",
-  flexDirection: "column",
-  minWidth: 0,
-  borderTop: "1px solid var(--border)",
-  overflow: "hidden",
-};
-
-const outputHeaderStyle: CSSProperties = {
-  flexShrink: 0,
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "8px 10px 6px",
-};
-
 const outputBodyStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
+  maxHeight: 360,
   overflowY: "auto",
   overflowX: "hidden",
+  boxSizing: "border-box",
+  margin: "0 10px 8px",
   padding: "10px 12px",
+  background: "var(--bg-subtle)",
+  borderRadius: 6,
 };

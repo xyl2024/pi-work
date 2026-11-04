@@ -12,7 +12,6 @@ import { fetchWechatChannels, type SchedulerChannel } from "@/lib/client/schedul
 import {
   requestSchedulerLeave,
   saveSchedulerForm,
-  schedulerPanel,
   updateSchedulerForm,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
@@ -22,7 +21,6 @@ import {
   SchedulerThinkingSelect,
   SchedulerToolsSelect,
 } from "./SchedulerFormFields";
-import { PanelBackButton } from "../PanelBackButton";
 import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, sectionTitleStyle, textareaStyle } from "@/components/scheduler/styles";
 import {
   listTimezones,
@@ -130,7 +128,7 @@ export function SchedulerFormPage() {
 
   const basicSection = (
     <Section title={t("Basic config")} first grow={split}>
-      <Field label={t("Task name")} hint={t("Concise description, e.g. daily report")} error={nameError}>
+      <Field label={t("Task name")} error={nameError}>
         <input
           value={form.name}
           onChange={(e) => update({ name: e.target.value })}
@@ -140,7 +138,7 @@ export function SchedulerFormPage() {
           style={inputStyle}
         />
       </Field>
-      <Field label={t("Prompt")} hint={t("Full prompt sent to agent at trigger time")} error={promptError} grow={split}>
+      <Field label={t("Prompt")} error={promptError} grow={split}>
         <textarea
           value={form.prompt}
           onChange={(e) => update({ prompt: e.target.value })}
@@ -150,7 +148,7 @@ export function SchedulerFormPage() {
           style={split ? { ...textareaStyle, flex: "1 1 0%", minHeight: 160, resize: "none" } : textareaStyle}
         />
       </Field>
-      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
+      <Field label={t("Working directory")} error={cwdError}>
         <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
       </Field>
       <SchedulerModelSelect form={form} update={update} meta={meta} error={modelError} />
@@ -195,13 +193,13 @@ export function SchedulerFormPage() {
 
   const scheduleSection = (
     <Section title={t("Schedule")} first={split}>
-      <Field label={t("Cron expression")} hint={t("Cron examples hint")} error={cronError}>
+      <Field label={t("Cron expression")} error={cronError}>
         <CronBuilder
           value={form.cron}
           onChange={(cron, valid) => update({ cron, cronValid: valid })}
         />
       </Field>
-      <Field label={t("Max lifetime")} hint={t("Max lifetime hint")} error={maxLifetimeError}>
+      <Field label={t("Max lifetime")} error={maxLifetimeError}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <NumberStepper
             value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
@@ -214,7 +212,7 @@ export function SchedulerFormPage() {
           <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("minutes")}</span>
         </div>
       </Field>
-      <Field label={t("Timezone")} hint={t("Timezone hint")}>
+      <Field label={t("Timezone")}>
         <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
           {timezones.map((zone) => (
             <option key={zone} value={zone}>
@@ -243,28 +241,38 @@ export function SchedulerFormPage() {
       ref={containerRef}
       style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 20px 8px", flexShrink: 0 }}>
-        <PanelBackButton
-          panel={schedulerPanel}
-          onBack={async () => {
-            await requestSchedulerLeave("back_to_browse");
-          }}
-        />
-        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-          {formTaskId ? t("Edit task") : t("New task")}
-        </span>
-      </div>
-
       {split ? (
         <div
           ref={scrollRef}
           data-scroll-wide
-          style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: "8px 20px 20px", overflow: "hidden" }}
+          style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: "14px 20px 20px", overflow: "hidden" }}
         >
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          <div
+            data-scroll-wide
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}
+          >
             {basicSection}
           </div>
-          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          <div
+            data-scroll-wide
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}
+          >
             {scheduleSection}
             {notificationsSection}
           </div>
@@ -273,7 +281,7 @@ export function SchedulerFormPage() {
         <div
           ref={scrollRef}
           data-scroll-wide
-          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 20px 20px" }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px 20px" }}
         >
           {basicSection}
           {scheduleSection}
@@ -328,7 +336,7 @@ function Section({
         flexDirection: "column",
         gap: 16,
         marginTop: first ? 0 : 24,
-        ...(grow ? { flex: "1 1 0%", minHeight: 0 } : null),
+        flex: grow ? "1 0 auto" : "0 0 auto",
       }}
     >
       <div style={sectionTitleStyle}>{title}</div>

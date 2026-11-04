@@ -17,7 +17,6 @@ import {
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
 import {
-  countSchedulerTasks,
   filterSchedulerTasks,
   isSchedulerErrorStatus,
   stepSchedulerSelection,
@@ -128,7 +127,6 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
       <div style={{ padding: "0 16px 12px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.id;
-          const count = countSchedulerTasks(tasks, f.id);
           return (
             <button
               key={f.id}
@@ -150,7 +148,6 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
               }}
             >
               {t(f.label)}
-              {count > 0 && <span style={{ fontSize: 12 }}>{count}</span>}
             </button>
           );
         })}
@@ -261,11 +258,10 @@ function TaskRow({
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        gap: 1,
-        minHeight: 38,
+        gap: 3,
         boxSizing: "border-box",
-        margin: "0 8px",
-        padding: "2px 10px",
+        margin: "2px 8px",
+        padding: "7px 10px",
         cursor: "pointer",
         background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderRadius: 6,

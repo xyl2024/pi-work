@@ -7,7 +7,6 @@ import {
   isSchedulerLongRunning,
   resolveSchedulerRunSelection,
   schedulerRunDurationMs,
-  selectMostRecentRunId,
 } from "@/lib/shared/scheduler-runs";
 import type { TaskRun } from "@/lib/shared/scheduler";
 
@@ -107,27 +106,17 @@ describe("computeSchedulerRunStats", () => {
   });
 });
 
-describe("selectMostRecentRunId", () => {
-  it("picks the run that started last, not the first in the list", () => {
-    expect(selectMostRecentRunId(runs)).toBe("running-run");
-  });
-
-  it("returns null when there is nothing to select", () => {
-    expect(selectMostRecentRunId([])).toBeNull();
-  });
-});
-
 describe("resolveSchedulerRunSelection", () => {
   it("keeps an explicitly selected run that still exists", () => {
     expect(resolveSchedulerRunSelection(runs, "success-run")).toBe("success-run");
   });
 
-  it("falls back to the most recent run when nothing is selected", () => {
-    expect(resolveSchedulerRunSelection(runs, null)).toBe("running-run");
+  it("expands nothing until a run is clicked", () => {
+    expect(resolveSchedulerRunSelection(runs, null)).toBeNull();
   });
 
-  it("falls back when the selected run is gone", () => {
-    expect(resolveSchedulerRunSelection(runs, "run-from-another-task")).toBe("running-run");
+  it("collapses when the selected run is gone", () => {
+    expect(resolveSchedulerRunSelection(runs, "run-from-another-task")).toBeNull();
   });
 
   it("selects nothing when the task has no runs", () => {
