@@ -1,34 +1,5 @@
 import type { SchedulerTaskForm } from "./scheduler";
 
-export type SchedulerLeaveIntent =
-  | "back_to_browse"
-  | "select_task"
-  | "new_task"
-  | "leave_main_view";
-
-export interface SchedulerLeaveConditions {
-  intent: SchedulerLeaveIntent;
-  dirty: boolean;
-}
-
-export interface SchedulerCloseConfirm {
-  titleKey: string;
-  descriptionKey: string;
-  confirmLabelKey: string;
-}
-
-export const SCHEDULER_DIRTY_CLOSE_CONFIRM: SchedulerCloseConfirm = {
-  titleKey: "Discard unsaved changes?",
-  descriptionKey: "Your scheduled task changes will be lost.",
-  confirmLabelKey: "Discard",
-};
-
-export function selectSchedulerLeaveConfirm(
-  conditions: SchedulerLeaveConditions,
-): SchedulerCloseConfirm | null {
-  return conditions.dirty ? SCHEDULER_DIRTY_CLOSE_CONFIRM : null;
-}
-
 export function isSchedulerFormDirty(
   form: SchedulerTaskForm | null,
   baseline: SchedulerTaskForm | null,

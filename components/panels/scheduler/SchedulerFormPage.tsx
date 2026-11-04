@@ -10,11 +10,11 @@ import { CronBuilder } from "@/components/scheduler/CronBuilder";
 import { listToolsForCwd } from "@/lib/client/agent-client";
 import { fetchWechatChannels, type SchedulerChannel } from "@/lib/client/scheduler-io";
 import {
-  requestSchedulerLeave,
   saveSchedulerForm,
   updateSchedulerForm,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
+import { requestMainViewLeave } from "@/lib/client/main-view-leave";
 import {
   Field,
   SchedulerModelSelect,
@@ -306,7 +306,7 @@ export function SchedulerFormPage() {
           </span>
         )}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-          <button type="button" onClick={() => void requestSchedulerLeave("back_to_browse")} disabled={saving} style={btnGhost}>
+          <button type="button" onClick={() => void requestMainViewLeave({ view: "scheduler", intent: "back_to_browse" })} disabled={saving} style={btnGhost}>
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
