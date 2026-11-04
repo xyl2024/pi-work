@@ -6,21 +6,17 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
-  MEMORY_TAB_ID,
-  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
 
 export interface PanelTabParams {
   favorites: undefined;
   translate: undefined;
-  tokens: undefined;
   gitDiff: undefined;
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
   mcp: undefined;
-  memory: undefined;
   file: { path: string };
 }
 
@@ -128,19 +124,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       },
     ],
   },
-  tokens: {
-    kind: "tokens",
-    tabId: TOKENS_TAB_ID,
-    labelKey: "Token audit",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open token audit",
-        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
-      },
-    ],
-  },
   llmAudit: {
     kind: "llmAudit",
     tabId: LLM_AUDIT_TAB_ID,
@@ -173,19 +156,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Conversation Tree",
     defaultMode: "normal",
     sessionBound: true,
-  },
-  memory: {
-    kind: "memory",
-    tabId: MEMORY_TAB_ID,
-    labelKey: "Memory",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open memory",
-        keywords: ["memory", "memories", "remember", "记忆", "记住"],
-      },
-    ],
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

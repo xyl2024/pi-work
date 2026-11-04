@@ -4,8 +4,6 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
-  MEMORY_TAB_ID,
-  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
 import {
@@ -136,21 +134,21 @@ describe("panelTabs open", () => {
 
 describe("panelTabs toggle", () => {
   it("opens the panel when its tab is not active", () => {
-    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "tokens" });
+    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "gitDiff" });
 
     expect(selectIsOpen(state)).toBe(true);
-    expect(selectActiveKind(state)).toBe("tokens");
-    expect(openCount(state, TOKENS_TAB_ID)).toBe(1);
+    expect(selectActiveKind(state)).toBe("gitDiff");
+    expect(openCount(state, GIT_DIFF_TAB_ID)).toBe(1);
   });
 
   it("collapses the panel when the toggled tab is active and the panel is open", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
-      { type: "toggle", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
+      { type: "toggle", kind: "gitDiff" },
     );
 
-    expect(kinds(state)).toEqual(["tokens"]);
+    expect(kinds(state)).toEqual(["gitDiff"]);
     expect(state.mode).toBe("closed");
     expect(selectIsOpen(state)).toBe(false);
     expect(selectActiveKind(state)).toBe(null);
@@ -159,19 +157,19 @@ describe("panelTabs toggle", () => {
   it("reopens an already open tab whose panel was collapsed", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "set_mode", mode: "closed" },
-      { type: "toggle", kind: "tokens" },
+      { type: "toggle", kind: "gitDiff" },
     );
 
     expect(state.mode).toBe("normal");
-    expect(openCount(state, TOKENS_TAB_ID)).toBe(2);
+    expect(openCount(state, GIT_DIFF_TAB_ID)).toBe(2);
   });
 
   it("toggles a different panel view instead of collapsing the active one", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "toggle", kind: "translate" },
     );
 
@@ -231,7 +229,7 @@ describe("panelTabs batch close", () => {
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "open", kind: "llmAudit" },
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
@@ -241,7 +239,7 @@ describe("panelTabs batch close", () => {
   it("close_left drops the tabs left of the reference tab", () => {
     const state = reduce(strip(), { type: "close_left", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
+    expect(kinds(state)).toEqual(["llmAudit", "gitDiff"]);
   });
 
   it("close_left re-activates the reference tab when the active one was dropped", () => {
@@ -251,7 +249,7 @@ describe("panelTabs batch close", () => {
       { type: "close_left", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
+    expect(kinds(state)).toEqual(["llmAudit", "gitDiff"]);
     expect(state.activeId).toBe(LLM_AUDIT_TAB_ID);
     expect(selectActiveKind(state)).toBe("llmAudit");
   });
@@ -265,7 +263,7 @@ describe("panelTabs batch close", () => {
   it("close_right re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
-      { type: "activate", id: TOKENS_TAB_ID },
+      { type: "activate", id: GIT_DIFF_TAB_ID },
       { type: "close_right", id: FAVORITES_TAB_ID },
     );
 
@@ -381,24 +379,8 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "llmAudit",
         "mcp",
-        "memory",
-        "tokens",
         "translate",
       ].sort(),
-    );
-  });
-
-  it("registers the memory panel as a global read-only button with a bilingual command", () => {
-    const memory = PANEL_TAB_SPECS.find((spec) => spec.kind === "memory");
-
-    expect(memory?.tabId).toBe(MEMORY_TAB_ID);
-    expect(memory?.labelKey).toBe("Memory");
-    expect(memory?.sessionBound).toBe(false);
-    expect(memory?.defaultMode).toBe("normal");
-    expect(memory?.commands).toHaveLength(1);
-    expect(memory?.commands?.[0]?.labelKey).toBe("Open memory");
-    expect(memory?.commands?.[0]?.keywords).toEqual(
-      expect.arrayContaining(["memory", "remember", "记忆"]),
     );
   });
 
@@ -417,7 +399,7 @@ describe("panelTabs registry", () => {
   });
 
   it("no longer carries main views", () => {
-    for (const kind of ["scheduler", "modelsConfig", "skills", "channels"]) {
+    for (const kind of ["scheduler", "modelsConfig", "skills", "channels", "memory", "tokens"]) {
       expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
       expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(kind);
       expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(kind)).toBe(false);
@@ -494,7 +476,7 @@ describe("panelTabs open count selector", () => {
     const once = reduce(createPanelTabsState(), { type: "open", kind: "gitDiff" });
     const twice = reduce(once, { type: "open", kind: "gitDiff" });
 
-    expect(selectOpenCount(twice, "tokens")).toBe(0);
+    expect(selectOpenCount(twice, "context")).toBe(0);
     expect(selectOpenCount(once, "gitDiff")).toBe(1);
     expect(selectOpenCount(twice, "gitDiff")).toBe(2);
   });
@@ -636,8 +618,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.mcp",
-        "panel.memory",
-        "panel.tokens",
         "panel.translate",
       ].sort(),
     );
@@ -685,13 +665,6 @@ describe("panelTabs registry → command palette", () => {
 
     expect(entered).toEqual(["skills"]);
     expect(toggled).toEqual([]);
-  });
-
-  it("reaches the memory panel through english and chinese keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.memory");
-
-    expect(cmd?.title).toBe("Open memory");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["memory", "remember", "记忆"]));
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {
@@ -748,6 +721,26 @@ describe("panelTabs registry → command palette", () => {
     for (const cmd of commands) cmd.run(ctx);
 
     expect(entered).toEqual(["channels"]);
+    expect(toggled).toEqual([]);
+  });
+
+  it("reaches memory and token usage through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
+
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open memory" || cmd.title === "Open token audit",
+    );
+
+    expect(commands.map((cmd) => cmd.id)).toEqual(["mainView.memory", "mainView.tokens"]);
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["memory", "tokens"]);
     expect(toggled).toEqual([]);
   });
 

@@ -5,6 +5,8 @@ export interface MainViewParams {
   modelsConfig: undefined;
   skills: undefined;
   channels: undefined;
+  memory: undefined;
+  tokens: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -69,6 +71,30 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       {
         labelKey: "Open channels",
         keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
+      },
+    ],
+  },
+  memory: {
+    kind: "memory",
+    navPriority: 5,
+    labelKey: "Memory",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open memory",
+        keywords: ["memory", "memories", "remember", "记忆", "记住"],
+      },
+    ],
+  },
+  tokens: {
+    kind: "tokens",
+    navPriority: 6,
+    labelKey: "Token audit",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open token audit",
+        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
       },
     ],
   },

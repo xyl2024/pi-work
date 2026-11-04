@@ -138,7 +138,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   translate: () => <TranslatePanel />,
-  tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => (
     <ContextInsightPanel sessionId={ctx.selectedSessionId} visible={ctx.rightPanelState !== "closed"} />
@@ -166,7 +165,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onNewSession={ctx.onNewSession}
     />
   ),
-  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
@@ -179,6 +177,7 @@ const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = Object.values(PANE
 
 interface MainViewBodyCtx {
   cwd: string | null;
+  selectedSessionId: string | null;
   openSessionById: (sessionId: string) => void;
   onExit: () => void;
   visible: boolean;
@@ -196,6 +195,8 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
   modelsConfig: (ctx) => <ModelsConfigPanel onExit={ctx.onExit} visible={ctx.visible} />,
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onExit={ctx.onExit} visible={ctx.visible} />,
   channels: (ctx) => <ChannelsMainView onExit={ctx.onExit} visible={ctx.visible} />,
+  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
+  tokens: () => <TokensPanel />,
 };
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
@@ -879,8 +880,8 @@ export function AppShell() {
 
   const handleOpenMemoryPanel = useCallback(() => {
     setSettingsConfigOpen(false);
-    dispatchPanelTabs({ type: "open", kind: "memory" });
-  }, []);
+    void enterMainView("memory");
+  }, [enterMainView]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1351,6 +1352,7 @@ export function AppShell() {
 
   const mainViewBodyCtx: Omit<MainViewBodyCtx, "visible"> = {
     cwd: selectedCwd,
+    selectedSessionId,
     openSessionById: handleOpenScheduledSession,
     onExit: handleLeaveMainView,
   };

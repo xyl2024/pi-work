@@ -137,6 +137,18 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
   });
 
+  it("orders the six registered main views by navigation priority", () => {
+    expect(MAIN_VIEW_SPECS.map((spec) => spec.kind)).toEqual([
+      "scheduler",
+      "modelsConfig",
+      "skills",
+      "channels",
+      "memory",
+      "tokens",
+    ]);
+    expect(MAIN_VIEW_SPECS.map((spec) => spec.navPriority)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
   it("orders models config right after scheduled tasks in the navigation", () => {
     expect(MAIN_VIEW_KINDS.indexOf("modelsConfig")).toBe(
       MAIN_VIEW_KINDS.indexOf("scheduler") + 1,
@@ -156,6 +168,14 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.channels.commands?.[0]?.keywords).toEqual(
       expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
     );
+  });
+
+  it("registers memory and token usage as later main views", () => {
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.navPriority).toBe(5);
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(6);
+    expect(MAIN_VIEW_KINDS.indexOf("memory")).toBeLessThan(MAIN_VIEW_KINDS.indexOf("tokens"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory");
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.labelKey).toBe("Token audit");
   });
 
   it("keeps every main view out of the panel registry", () => {

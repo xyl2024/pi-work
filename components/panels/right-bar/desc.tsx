@@ -10,10 +10,8 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import {
-  Brain,
   Eye,
   ChartColumn,
-  ChartSpline,
   GitGraph,
   Languages,
   PanelRight,
@@ -127,10 +125,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
       <Star size={size} fill={active ? "var(--accent)" : "none"} />
     ),
   }),
-  tokens: panelButton("tokens", {
-    labelKey: "Open token audit",
-    icon: ({ size }) => <ChartSpline size={size} />,
-  }),
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
@@ -139,10 +133,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "mcp.open",
     icon: ({ size }) => <McpIcon size={size} />,
     badge: (ctx) => (ctx.mcpDirty ? <CornerBadge /> : null),
-  }),
-  memory: panelButton("memory", {
-    labelKey: "Open memory",
-    icon: ({ size }) => <Brain size={size} />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",
