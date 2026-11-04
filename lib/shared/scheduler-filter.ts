@@ -36,3 +36,17 @@ export function countSchedulerTasks(tasks: ScheduledTask[], filter: SchedulerFil
       return tasks.filter((task) => isSchedulerErrorStatus(task.lastRunStatus)).length;
   }
 }
+
+export type SchedulerSelectionStep = "next" | "previous";
+
+export function stepSchedulerSelection(
+  ids: readonly string[],
+  currentId: string | null,
+  step: SchedulerSelectionStep,
+): string | null {
+  if (ids.length === 0) return null;
+  const index = currentId === null ? -1 : ids.indexOf(currentId);
+  if (index === -1) return step === "next" ? ids[0] : ids[ids.length - 1];
+  const delta = step === "next" ? 1 : -1;
+  return ids[Math.min(ids.length - 1, Math.max(0, index + delta))];
+}

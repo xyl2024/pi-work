@@ -28,6 +28,7 @@ import {
 } from "@/lib/client/scheduler-panel";
 import {
   SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN,
+  SCHEDULER_RUNS_MIN_HEIGHT,
   type SchedulerDetailSection,
 } from "@/lib/shared/scheduler-detail";
 import type { TaskRun } from "@/lib/shared/scheduler";
@@ -241,38 +242,42 @@ export function SchedulerDetailPage({
         </div>
       </div>
 
-      <div style={disclosureRegionStyle}>
-        <Disclosure
-          label={t("Prompt")}
-          open={openSections.prompt}
-          onToggle={() => toggleSection("prompt")}
-        >
-          <TaskPromptTab task={task} />
-        </Disclosure>
-        <Disclosure
-          label={t("Execution config")}
-          open={openSections.config}
-          onToggle={() => toggleSection("config")}
-        >
-          <SchedulerExecutionConfig
-            task={task}
-            channelMeta={channelMeta}
-            modelIcons={meta?.modelIcons}
-            modelIconPreferences={meta?.modelIconPreferences}
-          />
-        </Disclosure>
-      </div>
+      <div style={detailBodyStyle}>
+        <div style={disclosureRegionStyle}>
+          <Disclosure
+            label={t("Prompt")}
+            open={openSections.prompt}
+            onToggle={() => toggleSection("prompt")}
+          >
+            <TaskPromptTab task={task} />
+          </Disclosure>
+          <Disclosure
+            label={t("Execution config")}
+            open={openSections.config}
+            onToggle={() => toggleSection("config")}
+          >
+            <SchedulerExecutionConfig
+              task={task}
+              channelMeta={channelMeta}
+              modelIcons={meta?.modelIcons}
+              modelIconPreferences={meta?.modelIconPreferences}
+            />
+          </Disclosure>
+        </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "16px 20px" }}>
-        <TaskRunsTab
-          runs={runs}
-          loading={runsLoading}
-          filter={runFilter}
-          onFilterChange={setRunFilter}
-          selectedRunId={selectedRunId}
-          onSelectRun={setSchedulerRunSelected}
-          onOpenSession={onOpenSession}
-        />
+        <div style={runsSectionStyle}>
+          <div style={runsFillStyle}>
+            <TaskRunsTab
+              runs={runs}
+              loading={runsLoading}
+              filter={runFilter}
+              onFilterChange={setRunFilter}
+              selectedRunId={selectedRunId}
+              onSelectRun={setSchedulerRunSelected}
+              onOpenSession={onOpenSession}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -336,13 +341,35 @@ const titleStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const disclosureRegionStyle: CSSProperties = {
-  flexShrink: 0,
-  maxHeight: "40%",
+const detailBodyStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
   overflowY: "auto",
   display: "flex",
   flexDirection: "column",
+};
+
+const disclosureRegionStyle: CSSProperties = {
+  flexShrink: 0,
+  display: "flex",
+  flexDirection: "column",
   padding: "8px 0",
+};
+
+const runsSectionStyle: CSSProperties = {
+  flex: "1 0 auto",
+  minHeight: SCHEDULER_RUNS_MIN_HEIGHT,
+  display: "flex",
+  flexDirection: "column",
+  padding: "16px 20px",
+  boxSizing: "border-box",
+};
+
+const runsFillStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
 };
 
 const disclosureButtonStyle: CSSProperties = {

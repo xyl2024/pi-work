@@ -65,6 +65,14 @@ export interface SchedulerViewState {
 
 const ROOT_PAGE: SchedulerPage = { kind: "browse" };
 
+const CLEARED_FORM_STATE: Partial<SchedulerViewState> = {
+  form: null,
+  formTaskId: null,
+  formBaseline: null,
+  saveError: null,
+  runsVisible: false,
+};
+
 const INITIAL: SchedulerViewState = {
   loading: false,
   loaded: false,
@@ -173,13 +181,7 @@ export function setSchedulerLeaveConfirm(confirm: SchedulerLeaveConfirm | null):
 function discardSchedulerForm(): void {
   const state = schedulerPanel.get();
   if (state.form !== null || state.formBaseline !== null || state.saveError !== null) {
-    schedulerPanel.patch({
-      form: null,
-      formTaskId: null,
-      formBaseline: null,
-      saveError: null,
-      runsVisible: false,
-    });
+    schedulerPanel.patch(CLEARED_FORM_STATE);
   }
   if (schedulerPanel.currentPage().kind === "form") schedulerPanel.resetPages();
 }
@@ -293,10 +295,8 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     });
     schedulerPanel.resetPages();
     scope.patch({
+      ...CLEARED_FORM_STATE,
       tasks: upsertTask(scope.get().tasks, saved),
-      form: null,
-      formTaskId: null,
-      formBaseline: null,
     });
     return { ok: true };
   } catch (e) {
@@ -333,10 +333,10 @@ export async function removeSchedulerTask(taskId: string): Promise<void> {
   try {
     await deleteScheduledTask(taskId);
     scope.patch({
+      ...CLEARED_FORM_STATE,
       tasks: scope.get().tasks.filter((task) => task.id !== taskId),
       selectedTaskId: null,
       selectedRunId: null,
-      runsVisible: false,
     });
     schedulerPanel.resetPages();
   } finally {
@@ -398,7 +398,7 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
   },
   afterBack({ popped, writer }) {
     if (popped?.kind === "form") {
-      writer.patch({ form: null, formTaskId: null, formBaseline: null, saveError: null });
+      writer.patch(CLEARED_FORM_STATE);
     }
     writer.patch({ runsVisible: false });
   },
