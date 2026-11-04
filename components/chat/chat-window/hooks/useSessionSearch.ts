@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
 import { decideSearchJump, type ChatTimeline } from "@/lib/shared/chat-timeline";
+import { canToggleSessionSearch } from "@/lib/shared/chat-shortcuts";
 import { HIGHLIGHT_DURATION_MS } from "./useJumpHighlight";
 
 const NO_MATCHES: ReadonlySet<string> = new Set<string>();
 
 export interface UseSessionSearchOptions {
   isActive: boolean;
+  foreground: boolean;
   sessionId: string | null;
   timeline: ChatTimeline;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
@@ -28,6 +30,7 @@ export interface UseSessionSearchResult {
 
 export function useSessionSearch({
   isActive,
+  foreground,
   sessionId,
   timeline,
   scrollContainerRef,
@@ -42,7 +45,7 @@ export function useSessionSearch({
   const [pendingJumpEntryId, setPendingJumpEntryId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isActive || !sessionId) return;
+    if (!canToggleSessionSearch({ foreground, tabActive: isActive, sessionId })) return;
     const handleKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "f") {
         event.preventDefault();
@@ -51,7 +54,7 @@ export function useSessionSearch({
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [isActive, sessionId]);
+  }, [foreground, isActive, sessionId]);
 
   const clearMatches = useCallback(() => {
     setKeywords([]);
