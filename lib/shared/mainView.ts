@@ -14,6 +14,7 @@ export interface MainViewCommand {
 
 export interface MainViewSpec<K extends MainViewKind = MainViewKind> {
   kind: K;
+  navPriority: number;
   labelKey: string;
   backLabelKey: string;
   commands?: readonly MainViewCommand[];
@@ -22,6 +23,7 @@ export interface MainViewSpec<K extends MainViewKind = MainViewKind> {
 export const MAIN_VIEW_SPEC_BY_KIND = {
   scheduler: {
     kind: "scheduler",
+    navPriority: 0,
     labelKey: "Scheduled tasks",
     backLabelKey: "Back to chat",
     commands: [
@@ -33,7 +35,9 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
   },
 } as const satisfies { [K in MainViewKind]: MainViewSpec<K> };
 
-export const MAIN_VIEW_SPECS: readonly MainViewSpec[] = Object.values(MAIN_VIEW_SPEC_BY_KIND);
+export const MAIN_VIEW_SPECS: readonly MainViewSpec[] = Object.values(MAIN_VIEW_SPEC_BY_KIND).sort(
+  (a, b) => a.navPriority - b.navPriority,
+);
 
 export const MAIN_VIEW_KINDS: readonly MainViewKind[] = MAIN_VIEW_SPECS.map((spec) => spec.kind);
 
@@ -73,11 +77,4 @@ export function selectMainViewKind(state: MainViewState): MainViewKind | null {
 
 export function selectToggleExits(state: MainViewState, kind: MainViewKind): boolean {
   return state.active === kind;
-}
-
-export function shouldMountMainViewBody(
-  active: MainViewKind | null,
-  visited: boolean,
-): boolean {
-  return visited || active !== null;
 }

@@ -8,7 +8,6 @@ import {
   mainViewReducer,
   selectMainViewKind,
   selectToggleExits,
-  shouldMountMainViewBody,
   type MainViewAction,
   type MainViewState,
 } from "@/lib/shared/mainView";
@@ -127,25 +126,14 @@ describe("mainView toggle exits", () => {
   });
 });
 
-describe("mainView body mount", () => {
-  it("keeps every body unmounted until the main view is first entered", () => {
-    expect(shouldMountMainViewBody(null, false)).toBe(false);
-  });
-
-  it("mounts the body on the first entry", () => {
-    expect(shouldMountMainViewBody("scheduler", false)).toBe(true);
-    expect(shouldMountMainViewBody("scheduler", true)).toBe(true);
-  });
-
-  it("keeps the body mounted after returning to chat", () => {
-    expect(shouldMountMainViewBody(null, true)).toBe(true);
-  });
-});
-
 describe("mainView registry", () => {
-  it("declares exactly one main view: scheduled tasks", () => {
-    expect([...MAIN_VIEW_KINDS]).toEqual(["scheduler"]);
-    expect(MAIN_VIEW_SPECS.map((spec) => spec.kind)).toEqual(["scheduler"]);
+  it("orders the navigation by a unique priority starting with scheduled tasks", () => {
+    const priorities = MAIN_VIEW_SPECS.map((spec) => spec.navPriority);
+
+    expect(MAIN_VIEW_KINDS[0]).toBe("scheduler");
+    expect([...priorities]).toEqual([...priorities].sort((a, b) => a - b));
+    expect(new Set(priorities).size).toBe(priorities.length);
+    expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
   });
 
   it("labels the scheduled-tasks main view with the sidebar wording", () => {
