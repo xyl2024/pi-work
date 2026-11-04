@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { selectTabByKind, type PanelTabsState, type PanelViewKind } from "@/lib/shared/panelTabs";
+import type { PanelTabsState } from "@/lib/shared/panelTabs";
+import type { ViewKind } from "@/lib/client/panel-view-store";
 import type { PanelViewCloseGuard } from "@/lib/client/panel-view-store";
 
 export interface PanelViewLifecycleStore {
-  readonly kind: PanelViewKind;
+  readonly kind: ViewKind;
   guard(): PanelViewCloseGuard | null;
   requestClose(confirm: () => boolean): Promise<boolean>;
   release(): void;
@@ -17,7 +18,8 @@ export function usePanelViewLifecycleSync(
 ): void {
   useEffect(() => {
     for (const store of stores) {
-      if (selectTabByKind(panelTabsState, store.kind) === null) store.release();
+      const open = panelTabsState.tabs.some((tab) => tab.kind === store.kind);
+      if (!open) store.release();
     }
   }, [panelTabsState, stores]);
 }

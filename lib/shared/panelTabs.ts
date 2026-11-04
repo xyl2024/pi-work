@@ -8,7 +8,6 @@ import {
   MCP_TAB_ID,
   MEMORY_TAB_ID,
   MODELS_CONFIG_TAB_ID,
-  SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
@@ -26,7 +25,6 @@ export interface PanelTabParams {
   mcp: undefined;
   memory: undefined;
   skills: undefined;
-  scheduler: undefined;
   channels: undefined;
   file: { path: string };
 }
@@ -197,19 +195,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open skills",
         keywords: ["skills", "extensions", "skill", "技能", "扩展"],
-      },
-    ],
-  },
-  scheduler: {
-    kind: "scheduler",
-    tabId: SCHEDULER_TAB_ID,
-    labelKey: "Scheduled tasks",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open scheduled tasks",
-        keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
       },
     ],
   },
