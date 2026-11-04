@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import {
   MAIN_VIEW_KINDS,
   MAIN_VIEW_SPECS,
@@ -160,6 +161,19 @@ describe("mainView registry", () => {
         for (const keyword of entry.keywords) expect(keyword).toBeTruthy();
       }
     }
+  });
+
+  it("points the header back button at chat rather than at the view's own name", () => {
+    expect(MAIN_VIEW_SPEC_BY_KIND.scheduler.labelKey).toBe("Scheduled tasks");
+    expect(MAIN_VIEW_SPEC_BY_KIND.scheduler.backLabelKey).toBe("Back to chat");
+    expect(ZH_TRANSLATIONS["Back to chat"]).toBe("会话");
+    expect(EN_TRANSLATIONS["Back to chat"]).toBe("Back to chat");
+  });
+
+  it("names the sidebar's session-draft entry apart from the scheduler's New task", () => {
+    expect(ZH_TRANSLATIONS["New session"]).toBe("新建会话");
+    expect(ZH_TRANSLATIONS["New task"]).toBe("新建任务");
+    expect(ZH_TRANSLATIONS["New session"]).not.toBe(ZH_TRANSLATIONS["New task"]);
   });
 
   it("reaches scheduled tasks through english and chinese keywords", () => {

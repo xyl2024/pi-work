@@ -41,7 +41,7 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
-  onNewTask?: () => void;
+  onCreateSessionDraft?: () => void;
   onOpenAssistant?: () => void;
   onOpenMainView?: (kind: MainViewKind) => void;
   activeMainView?: MainViewKind | null;
@@ -190,7 +190,7 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onCreateSessionDraft, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -774,13 +774,13 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       </div>
       <div style={{ height: 1, flexShrink: 0, background: "var(--border)" }} />
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-        {onNewTask && (
-          <SidebarNavButton onClick={onNewTask}>
+        {onCreateSessionDraft && (
+          <SidebarNavButton onClick={onCreateSessionDraft}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
               <rect x="3" y="3" width="18" height="18" rx="4" />
               <path d="M12 8v8M8 12h8" />
             </svg>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("New task")}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("New session")}</span>
           </SidebarNavButton>
         )}
         {onOpenAssistant && (
