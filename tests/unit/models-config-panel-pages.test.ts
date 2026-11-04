@@ -25,7 +25,6 @@ import {
   openModelsConfigFillModel,
   openModelsConfigModel,
   openModelsConfigOAuth,
-  openModelsConfigProvider,
   selectModelsConfigProvider,
   setModelsConfigProviderFilter,
 } from "@/lib/client/models-config-panel";
@@ -96,7 +95,7 @@ describe("models config page stacks", () => {
 
 describe("models config browse state", () => {
   it("treats the selected provider as view state, not as a page", () => {
-    openModelsConfigProvider("openai");
+    selectModelsConfigProvider("openai");
 
     expect(modelsConfigPanel.pages()).toEqual([root]);
     expect(modelsConfigPanel.get().selectedProvider).toBe("openai");
@@ -108,7 +107,7 @@ describe("models config browse state", () => {
 
   it("keeps the provider filter when the selection moves", () => {
     setModelsConfigProviderFilter("endpoint");
-    openModelsConfigProvider("my-endpoint");
+    selectModelsConfigProvider("my-endpoint");
     selectModelsConfigProvider("openai");
 
     expect(modelsConfigPanel.get().providerFilter).toBe("endpoint");
@@ -116,7 +115,7 @@ describe("models config browse state", () => {
 
   it("clears the selection without touching the filter", () => {
     setModelsConfigProviderFilter("open");
-    openModelsConfigProvider("openai");
+    selectModelsConfigProvider("openai");
 
     clearModelsConfigProvider();
 

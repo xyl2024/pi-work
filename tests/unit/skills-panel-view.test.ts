@@ -83,6 +83,19 @@ describe("skills leave guard", () => {
     expect(asked).toEqual([]);
   });
 
+  it("opens the install form mid-install without a leave confirmation", async () => {
+    patchRunningInstall();
+    const asked: MainViewLeaveConfirm[] = [];
+    setMainViewLeaveConfirm((confirm) => {
+      asked.push(confirm);
+      return true;
+    });
+
+    expect(await openSkillsForm()).toBe(true);
+    expect(asked).toEqual([]);
+    expect(skillsPanel.currentPage()).toEqual(FORM);
+  });
+
   it("asks once while an install is running", async () => {
     patchRunningInstall();
     const asked: MainViewLeaveConfirm[] = [];

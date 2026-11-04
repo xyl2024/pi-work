@@ -12,12 +12,13 @@ export interface MainViewLeaveConfirm {
 }
 
 export const MAIN_VIEW_LEAVE_CONFIRM: MainViewLeaveConfirm = {
-  titleKey: "Discard unsaved changes?",
-  descriptionKey: "Your unsaved changes will be lost.",
-  confirmLabelKey: "Discard",
+  titleKey: "Leave while work is in progress?",
+  descriptionKey:
+    "Unsaved changes will be lost. Work in progress will either stop or keep running in the background.",
+  confirmLabelKey: "Leave",
 };
 
-const SWITCHING_INTENTS: ReadonlySet<MainViewLeaveIntent> = new Set([
+export const SWITCHING_INTENTS: ReadonlySet<MainViewLeaveIntent> = new Set([
   "leave_main_view",
   "switch_main_view",
   "select_task",

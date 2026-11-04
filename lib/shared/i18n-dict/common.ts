@@ -6,7 +6,10 @@ export const common = {
   "Provider name cannot be empty": "提供商名称不能为空",
 
   "Cancel": "取消",
-  "Your unsaved changes will be lost.": "你未保存的更改将会丢失。",
+  "Leave while work is in progress?": "工作尚未完成，确认离开？",
+  "Unsaved changes will be lost. Work in progress will either stop or keep running in the background.":
+    "未保存的更改将会丢失；进行中的工作可能会停止，也可能在后台继续。",
+  "Leave": "离开",
   "Save": "保存",
   "Saving...": "正在保存...",
   "Saved": "已保存",

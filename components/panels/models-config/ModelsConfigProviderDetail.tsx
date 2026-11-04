@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
 import { ModelEntryCard } from "@/components/settings/models-config/ModelEntryCard";
 import { SectionTitle } from "@/components/settings/models-config/form-fields";
@@ -14,7 +15,7 @@ import {
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
 
-export function ModelsConfigProviderDetail() {
+export function ModelsConfigProviderDetail({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
   const { view: state } = useModelsConfigPanel();
   const { config, providerNames, selectedProvider } = state;
@@ -56,6 +57,16 @@ export function ModelsConfigProviderDetail() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={t("Back")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+          >
+            <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
+          </button>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {providerNames[name] ?? name}

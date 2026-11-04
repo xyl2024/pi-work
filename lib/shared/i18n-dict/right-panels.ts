@@ -214,8 +214,4 @@ export const rightPanels = {
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
 
-  "Close while installing?": "安装尚未完成，确认关闭？",
-  "The installation keeps running in the background, but its log will be lost.":
-    "安装会在后台继续，但本次安装日志将不再显示。",
-
 } as const;

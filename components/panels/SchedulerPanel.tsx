@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
-import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import {
   clearSchedulerSelection,
   discardSchedulerForm,
@@ -40,28 +39,6 @@ export function SchedulerPanel({
     discardSchedulerForm();
   }, []);
 
-  useEffect(() => {
-    if (!visible) return;
-    const el = containerRef.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page, selectedTaskId, visible, containerRef]);
-
-  usePanelEscapeGuard(
-    containerRef,
-    () => {
-      if (page.kind === "form") {
-        discardSchedulerForm();
-        return;
-      }
-      if (selectedTaskId !== null) {
-        clearSchedulerSelection();
-        return;
-      }
-      onExit?.();
-    },
-    visible,
-  );
-
   const renderDetail = (onBack?: () => void) =>
     loaded && tasks.length === 0 ? (
       <SchedulerCreateGuide cwd={cwd} />
@@ -86,6 +63,9 @@ export function SchedulerPanel({
       detail={renderDetail}
       hasDetail={selectedTaskId !== null}
       onClearDetail={clearSchedulerSelection}
+      onExit={onExit}
+      visible={visible}
+      focusKey={`${page.kind}:${selectedTaskId ?? ""}`}
     />
   );
 }

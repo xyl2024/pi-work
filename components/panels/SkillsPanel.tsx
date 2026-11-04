@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import {
   clearSkillSelection,
   closeSkillsForm,
@@ -37,35 +36,13 @@ export function SkillsPanel({
     void closeSkillsForm();
   }, []);
 
-  useEffect(() => {
-    if (!visible) return;
-    const el = containerRef.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page, selectedFilePath, visible, containerRef]);
-
-  usePanelEscapeGuard(
-    containerRef,
-    () => {
-      if (page.kind === "form") {
-        void closeSkillsForm();
-        return;
-      }
-      if (selectedFilePath !== null) {
-        clearSkillSelection();
-        return;
-      }
-      onExit?.();
-    },
-    visible,
-  );
-
-  const renderDetail = () =>
+  const renderDetail = (onBack?: () => void) =>
     loaded && skills.length === 0 ? (
       <SkillsInstallGuide />
     ) : selectedFilePath === null ? (
       <SkillSelectHint />
     ) : (
-      <SkillDetailPage key={selectedFilePath} filePath={selectedFilePath} />
+      <SkillDetailPage key={selectedFilePath} filePath={selectedFilePath} onBack={onBack} />
     );
 
   return (
@@ -78,6 +55,9 @@ export function SkillsPanel({
       detail={renderDetail}
       hasDetail={selectedFilePath !== null}
       onClearDetail={clearSkillSelection}
+      onExit={onExit}
+      visible={visible}
+      focusKey={`${page.kind}:${selectedFilePath ?? ""}`}
     />
   );
 }

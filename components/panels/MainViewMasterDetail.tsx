@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode, RefObject } from "react";
+import { useEffect, type ReactNode, type RefObject } from "react";
 import { useContainerWidth } from "@/hooks/useContainerWidth";
+import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useInjectMainViewHeader } from "@/lib/client/main-view-header";
 import { resolveSchedulerLayout, SCHEDULER_LIST_WIDTH } from "@/lib/shared/scheduler-layout";
 
@@ -14,6 +15,9 @@ export interface MainViewMasterDetailProps {
   detail: (onBack?: () => void) => ReactNode;
   hasDetail: boolean;
   onClearDetail: () => void;
+  onExit?: () => void;
+  visible?: boolean;
+  focusKey?: string | null;
 }
 
 export function MainViewMasterDetail({
@@ -25,10 +29,35 @@ export function MainViewMasterDetail({
   detail,
   hasDetail,
   onClearDetail,
+  onExit,
+  visible = true,
+  focusKey = null,
 }: MainViewMasterDetailProps) {
   const { ref, width } = useContainerWidth<HTMLDivElement>(containerRef);
   const layout = resolveSchedulerLayout(width);
   useInjectMainViewHeader(titleKey, onBack);
+
+  useEffect(() => {
+    if (!visible) return;
+    const el = ref.current;
+    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+  }, [focusKey, visible, ref]);
+
+  usePanelEscapeGuard(
+    containerRef,
+    () => {
+      if (full != null) {
+        onBack?.();
+        return;
+      }
+      if (hasDetail) {
+        onClearDetail();
+        return;
+      }
+      onExit?.();
+    },
+    visible,
+  );
 
   return (
     <div

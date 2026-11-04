@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import {
   MODELS_CONFIG_ROOT_PAGE,
   clearModelsConfigProvider,
@@ -53,23 +52,6 @@ export function ModelsConfigPanel({
     scrollRef.current?.scrollTo({ top: 0 });
   }, [page]);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page, selectedProvider]);
-
-  usePanelEscapeGuard(
-    containerRef,
-    () => {
-      if (formPage) {
-        modelsConfigPanel.back();
-        return;
-      }
-      onExit?.();
-    },
-    visible,
-  );
-
   if (loadError) {
     return (
       <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--error)", fontSize: 12 }}>
@@ -106,9 +88,12 @@ export function ModelsConfigPanel({
             ) : null
           }
           list={<ModelsConfigProviderList />}
-          detail={() => <ModelsConfigProviderDetail />}
+          detail={(onBack) => <ModelsConfigProviderDetail onBack={onBack} />}
           hasDetail={selectedProvider !== null}
           onClearDetail={clearModelsConfigProvider}
+          onExit={onExit}
+          visible={visible}
+          focusKey={`${page.kind}:${selectedProvider ?? ""}`}
         />
       </div>
       {(formPage !== null || dirty) && <ModelsConfigSaveBar />}

@@ -3,12 +3,11 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
 } from "./panel-view-store";
 import { fetchSkills, installSkill, patchSkillInvocation } from "./skills-io";
 import { errorMessage } from "@/lib/shared/error-message";
-import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
+import { isSkillInstallRunning } from "@/lib/shared/skills-close";
 import { registerMainViewLeaveGuard, requestMainViewLeave } from "./main-view-leave";
 import type {
   Skill,
@@ -159,7 +158,6 @@ export function setSkillsQuery(query: string): void {
 }
 
 export async function openSkillsForm(): Promise<boolean> {
-  if (!(await requestMainViewLeave({ view: "skills", intent: "new_task" }))) return false;
   skillsPanel.openPage({ kind: "form" });
   return true;
 }
@@ -203,11 +201,6 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
     installAbort?.abort();
     installAbort = null;
   },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectSkillsCloseConfirm({ installPhase: state.install.phase });
-    if (!confirm) return null;
-    return { ...confirm, discard: discardSkillsForm };
-  },
   status(state) {
     return state.install.phase === "running";
   },
@@ -217,9 +210,8 @@ export const skillsPanel: PanelViewStore<SkillsViewState, SkillsPage, string | n
   createPanelViewStore(skillsAdapter);
 
 registerMainViewLeaveGuard("skills", {
-  dirty: () =>
-    selectSkillsCloseConfirm({ installPhase: skillsPanel.get().install.phase }) !== null,
-  discard: discardSkillsForm,
+  dirty: () => isSkillInstallRunning(skillsPanel.get().install.phase),
+  discard: () => {},
 });
 
 export function useSkillsPanel() {

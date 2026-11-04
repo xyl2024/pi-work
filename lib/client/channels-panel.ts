@@ -3,7 +3,6 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
   type PanelViewWriter,
 } from "./panel-view-store";
@@ -19,7 +18,6 @@ import {
 } from "./channels-io";
 import { isChannelsLeaveGuarded } from "@/lib/shared/channels-close";
 import { isLoginInProgress, type LoginPhase } from "@/lib/shared/channels-login";
-import { selectMainViewLeaveConfirm } from "@/lib/shared/main-view-leave";
 import { registerMainViewLeaveGuard } from "./main-view-leave";
 import { errorMessage } from "@/lib/shared/error-message";
 import type { ChannelRecord, ChannelsPage } from "@/lib/shared/channels/types";
@@ -84,6 +82,12 @@ function stopLoginPoll(): void {
     clearTimeout(loginPollTimer);
     loginPollTimer = null;
   }
+}
+
+function stopChannelsRuntime(): void {
+  stopLoginPoll();
+  loginGeneration += 1;
+  loginPollWriter = null;
 }
 
 function scheduleLoginPoll(): void {
@@ -316,15 +320,6 @@ function replaceChannel(channels: ChannelRecord[], next: ChannelRecord): Channel
   return channels.map((channel) => (channel.id === next.id ? next : channel));
 }
 
-function loginCloseGuard(state: ChannelsViewState): PanelViewCloseGuard | null {
-  const confirm = selectMainViewLeaveConfirm({
-    intent: "leave_main_view",
-    dirty: isChannelsLeaveGuarded(state.login.phase),
-  });
-  if (!confirm) return null;
-  return { ...confirm, discard: stopLogin };
-}
-
 const channelsAdapter: PanelViewAdapter<ChannelsViewState, ChannelsPage, void, string> = {
   kind: "channels",
   initial: INITIAL,
@@ -344,19 +339,8 @@ const channelsAdapter: PanelViewAdapter<ChannelsViewState, ChannelsPage, void, s
     loginPollWriter = writer;
     scheduleLoginPoll();
   },
-  stop() {
-    stopLoginPoll();
-    loginGeneration += 1;
-    loginPollWriter = null;
-  },
-  release() {
-    stopLoginPoll();
-    loginGeneration += 1;
-    loginPollWriter = null;
-  },
-  guard(state): PanelViewCloseGuard | null {
-    return loginCloseGuard(state);
-  },
+  stop: stopChannelsRuntime,
+  release: stopChannelsRuntime,
   status(state) {
     return isLoginInProgress(state.login.phase);
   },

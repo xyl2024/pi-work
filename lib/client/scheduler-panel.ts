@@ -3,7 +3,6 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
   type PanelViewWriter,
 } from "./panel-view-store";
@@ -17,7 +16,7 @@ import {
   updateScheduledTask,
 } from "./scheduler-io";
 import { isSchedulerFormDirty } from "@/lib/shared/scheduler-close";
-import { selectMainViewLeaveConfirm, type MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
+import type { MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
 import { registerMainViewLeaveGuard, requestMainViewLeave } from "./main-view-leave";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
 import type { SchedulerFilter } from "@/lib/shared/scheduler-filter";
@@ -380,14 +379,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
       writer.patch(CLEARED_FORM_STATE);
     }
     writer.patch({ runsVisible: false });
-  },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectMainViewLeaveConfirm({
-      intent: "leave_main_view",
-      dirty: isSchedulerFormDirty(state.form, state.formBaseline),
-    });
-    if (!confirm) return null;
-    return { ...confirm, discard: discardSchedulerForm };
   },
   status(state) {
     return state.tasks.some((task) => task.lastRunStatus === "running");

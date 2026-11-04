@@ -3,7 +3,6 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
   type PanelViewWriter,
 } from "./panel-view-store";
@@ -30,7 +29,6 @@ import {
   type ModelsConfigProblem,
   type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
-import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import { registerMainViewLeaveGuard } from "./main-view-leave";
 import { errorMessage } from "@/lib/shared/error-message";
 import type {
@@ -231,17 +229,6 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
   afterBack({ writer }) {
     writer.patch({ rawEdit: null });
   },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectModelsConfigCloseConfirm({
-      dirty: selectModelsConfigDirty(state),
-      oauthInProgress: state.oauthInProgress,
-    });
-    if (!confirm) return null;
-    return { ...confirm, discard: discardModelsConfigDraft };
-  },
-  status(state) {
-    return selectModelsConfigDirty(state);
-  },
   isSiblingPage(next, current) {
     return next.kind !== "root" && next.kind === current.kind;
   },
@@ -350,8 +337,6 @@ export function selectModelsConfigProvider(name: string): void {
   modelsConfigPanel.patch({ selectedProvider: name, rawEdit: null });
   if (modelsConfigPanel.currentPage().kind !== "root") modelsConfigPanel.resetPages();
 }
-
-export const openModelsConfigProvider = selectModelsConfigProvider;
 
 export function openModelsConfigProviderForm(name: string): void {
   openPanelPage({ kind: "provider", name });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import {
   channelsPanel,
   clearChannelSelection,
@@ -32,28 +31,6 @@ export function ChannelsMainView({
   const page = channelsPanel.currentPage();
   const { channels, loaded, selectedChannelId } = view;
 
-  useEffect(() => {
-    if (!visible) return;
-    const el = containerRef.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page, selectedChannelId, visible]);
-
-  usePanelEscapeGuard(
-    containerRef,
-    () => {
-      if (page.kind === "form") {
-        discardChannelForm();
-        return;
-      }
-      if (selectedChannelId !== null) {
-        clearChannelSelection();
-        return;
-      }
-      onExit?.();
-    },
-    visible,
-  );
-
   const backToBrowse = () => {
     void requestMainViewLeave({ view: "channels", intent: "back_to_browse" }).then((left) => {
       if (left) discardChannelForm();
@@ -79,6 +56,9 @@ export function ChannelsMainView({
       detail={renderDetail}
       hasDetail={selectedChannelId !== null}
       onClearDetail={clearChannelSelection}
+      onExit={onExit}
+      visible={visible}
+      focusKey={`${page.kind}:${selectedChannelId ?? ""}`}
     />
   );
 }
