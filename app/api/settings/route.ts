@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readConfig, writeConfig } from "@/lib/server/config";
+import { mergeRightSideBar, readConfig, writeConfig } from "@/lib/server/config";
 import { applyNetworkProxy, checkProxyUrl } from "@/lib/server/network-proxy";
 import {
   FILE_VIEWER_LIMITS,
@@ -288,7 +288,12 @@ export async function PUT(req: Request) {
     const next: PiWorkConfig = {
       ...onDisk,
       ...(isObject(body.right_side_bar)
-        ? { right_side_bar: body.right_side_bar as unknown as PiWorkConfig["right_side_bar"] }
+        ? {
+            right_side_bar: mergeRightSideBar(
+              onDisk.right_side_bar,
+              body.right_side_bar as unknown as PiWorkConfig["right_side_bar"],
+            ),
+          }
         : {}),
       ...(isObject(body.append_system)
         ? { append_system: body.append_system as unknown as PiWorkConfig["append_system"] }

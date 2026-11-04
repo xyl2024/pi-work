@@ -6,7 +6,6 @@ import {
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
   MEMORY_TAB_ID,
-  SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
@@ -25,11 +24,13 @@ import {
   selectHasTabs,
   selectIsOpen,
   selectOpenCount,
+  selectTabByKind,
   type PanelTabsAction,
   type PanelTabsState,
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import { buildCommands, type CommandContext } from "@/lib/client/commands";
+import { type MainViewKind } from "@/lib/shared/mainView";
 import {
   PANEL_COMMAND_ICON_BY_KIND,
   PANEL_TAB_ICON_BY_KIND,
@@ -51,6 +52,15 @@ function kinds(state: PanelTabsState): string[] {
 function openCount(state: PanelTabsState, id: string): number | undefined {
   return state.tabs.find((tab) => tab.id === id)?.openCount;
 }
+
+describe("selectTabByKind", () => {
+  it("finds no panel tab for a main view kind", () => {
+    const state = reduce(createPanelTabsState(), { type: "open", kind: "translate" });
+
+    expect(selectTabByKind(state, "scheduler")).toBe(null);
+    expect(selectTabByKind(state, "translate")?.kind).toBe("translate");
+  });
+});
 
 describe("panelTabs open", () => {
   it("opens a panel view once, activating it and opening the strip", () => {
@@ -377,7 +387,6 @@ describe("panelTabs registry", () => {
         "mcp",
         "memory",
         "modelsConfig",
-        "scheduler",
         "skills",
         "tokens",
         "translate",
@@ -399,7 +408,7 @@ describe("panelTabs registry", () => {
     );
   });
 
-  it("registers skills between the MCP panel and the scheduled-tasks panel", () => {
+  it("registers skills right after the MCP panel", () => {
     const order = PANEL_TAB_KINDS as readonly string[];
     const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
 
@@ -407,8 +416,7 @@ describe("panelTabs registry", () => {
     expect(skills?.labelKey).toBe("Skills");
     expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
     expect(skills?.sessionBound).toBe(false);
-    expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
-    expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
+    expect(order.indexOf("channels")).toBe(order.indexOf("skills") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
   });
 
@@ -427,14 +435,11 @@ describe("panelTabs registry", () => {
     expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
   });
 
-  it("registers the scheduled-tasks panel as a global button before the conversation tree", () => {
-    const scheduler = PANEL_TAB_SPECS.find((spec) => spec.kind === "scheduler");
-
-    expect(scheduler?.tabId).toBe(SCHEDULER_TAB_ID);
-    expect(scheduler?.labelKey).toBe("Scheduled tasks");
-    expect(scheduler?.sessionBound).toBe(false);
-    expect(scheduler?.commands?.[0]?.labelKey).toBe("Open scheduled tasks");
-    expect(scheduler?.commands?.[0]?.keywords).toContain("定时");
+  it("no longer carries scheduled tasks", () => {
+    expect(PANEL_TAB_KINDS as readonly string[]).not.toContain("scheduler");
+    expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain("scheduler");
+    expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has("scheduler")).toBe(false);
+    expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain("scheduler");
   });
 
   it("registers the channels panel as a global button before the conversation tree", () => {
@@ -448,7 +453,6 @@ describe("panelTabs registry", () => {
     expect(channels?.commands?.[0]?.keywords).toEqual(
       expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
     );
-    expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
   });
 
@@ -573,7 +577,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       selectedCwd: null,
       modelsConfigDirty: false,
       skillsInstalling: false,
-      schedulerRunning: false,
       mcpDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
@@ -618,7 +621,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
   });
 
-  it("presents skills as a global button alongside models config, scheduled tasks and channels", () => {
+  it("presents skills as a global button alongside models config and channels", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
     if (!descriptor) throw new Error("skills descriptor missing");
     expect(isSessionBoundDescriptor(descriptor)).toBe(false);
@@ -628,7 +631,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       return candidate !== undefined && !isSessionBoundDescriptor(candidate);
     });
     expect(globalIds).toEqual(
-      expect.arrayContaining(["skills", "modelsConfig", "scheduler", "channels"]),
+      expect.arrayContaining(["skills", "modelsConfig", "channels"]),
     );
     expect(globalIds).not.toContain("context");
   });
@@ -673,6 +676,7 @@ describe("panelTabs registry → command palette", () => {
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
       togglePanel: () => {},
+      enterMainView: () => {},
       agentControls: null,
       hasSession: false,
       ...overrides,
@@ -713,7 +717,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.mcp",
         "panel.memory",
         "panel.modelsConfig",
-        "panel.scheduler",
         "panel.skills",
         "panel.tokens",
         "panel.translate",
@@ -755,6 +758,28 @@ describe("panelTabs registry → command palette", () => {
     commands.forEach((cmd, index) => {
       expect(cmd.keywords).not.toBe(optInCommands[index].keywords);
     });
+  });
+
+  it("reaches scheduled tasks through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
+
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open scheduled tasks",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].id).toBe("mainView.scheduler");
+    expect(commands[0].keywords).toEqual(expect.arrayContaining(["scheduler", "定时任务"]));
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["scheduler"]);
+    expect(toggled).toEqual([]);
   });
 
   it("routes every palette entry through the shared panel toggle rule", () => {

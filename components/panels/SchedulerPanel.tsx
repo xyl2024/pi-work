@@ -10,11 +10,13 @@ import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
 export function SchedulerPanel({
   cwd,
   onOpenSession,
-  onCloseTab,
+  onExit,
+  visible = true,
 }: {
   cwd: string | null;
   onOpenSession: (sessionId: string) => void;
-  onCloseTab?: () => void;
+  onExit?: () => void;
+  visible?: boolean;
 }) {
   useSchedulerPanel();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -26,13 +28,14 @@ export function SchedulerPanel({
   const page = schedulerPanel.currentPage();
 
   useEffect(() => {
+    if (!visible) return;
     const el = containerRef.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page]);
+  }, [page, visible]);
 
   usePanelEscapeGuard(containerRef, () => {
-    if (schedulerPanel.back().closePanel) onCloseTab?.();
-  });
+    if (schedulerPanel.back().closePanel) onExit?.();
+  }, visible);
 
   return (
     <div

@@ -14,7 +14,6 @@ import {
   Eye,
   ChartColumn,
   ChartSpline,
-  Clock,
   GitGraph,
   Languages,
   PanelRight,
@@ -36,7 +35,6 @@ export interface RightBarCtx {
   selectedCwd: string | null;
   modelsConfigDirty: boolean;
   skillsInstalling: boolean;
-  schedulerRunning: boolean;
   mcpDirty: boolean;
   t: (key: string) => string;
 
@@ -149,11 +147,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Open skills",
     icon: ({ size }) => <ToolIcon size={size} />,
     badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
-  }),
-  scheduler: panelButton("scheduler", {
-    labelKey: "Open scheduled tasks",
-    icon: ({ size }) => <Clock size={size} />,
-    badge: (ctx) => (ctx.schedulerRunning ? <CornerBadge /> : null),
   }),
   mcp: panelButton("mcp", {
     labelKey: "mcp.open",

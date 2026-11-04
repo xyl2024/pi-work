@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { selectTabByKind, type PanelTabsState, type PanelViewKind } from "@/lib/shared/panelTabs";
+import { selectTabByKind, type PanelTabsState } from "@/lib/shared/panelTabs";
+import type { ViewKind } from "@/lib/client/panel-view-store";
 import type { PanelViewCloseGuard } from "@/lib/client/panel-view-store";
 
 export interface PanelViewLifecycleStore {
-  readonly kind: PanelViewKind;
+  readonly kind: ViewKind;
   guard(): PanelViewCloseGuard | null;
   requestClose(confirm: () => boolean): Promise<boolean>;
   release(): void;

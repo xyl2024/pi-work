@@ -12,6 +12,7 @@ import {
 } from "@/lib/shared/permission-mode";
 import { ICONS } from "@/components/ui/icons";
 import { PANEL_TAB_SPECS, type PanelViewKind } from "@/lib/shared/panelTabs";
+import { MAIN_VIEW_SPECS, type MainViewKind } from "@/lib/shared/mainView";
 import {
   Languages,
   LetterText,
@@ -78,6 +79,7 @@ export interface CommandContext {
   toggleRightPanel: () => void;
 
   togglePanel: (kind: PanelViewKind) => void;
+  enterMainView: (kind: MainViewKind) => void;
 
   agentControls: AgentControls | null;
 
@@ -101,10 +103,28 @@ function buildPanelCommands(
   );
 }
 
+function buildMainViewCommands(
+  ctx: CommandContext,
+  t: (key: string) => string,
+  icons: Partial<Record<MainViewKind, ReactNode>>,
+): Command[] {
+  return MAIN_VIEW_SPECS.flatMap((spec): Command[] =>
+    (spec.commands ?? []).map((entry) => ({
+      id: entry.id ? `mainView.${spec.kind}.${entry.id}` : `mainView.${spec.kind}`,
+      title: t(entry.labelKey),
+      group: "View",
+      keywords: [...entry.keywords],
+      icon: icons[spec.kind] ?? null,
+      run: () => ctx.enterMainView(spec.kind),
+    })),
+  );
+}
+
 export function buildCommands(
   ctx: CommandContext,
   t: (key: string) => string,
   panelIcons: Partial<Record<PanelViewKind, ReactNode>> = {},
+  mainViewIcons: Partial<Record<MainViewKind, ReactNode>> = {},
 ): Command[] {
   const cmds: Command[] = [];
 
@@ -195,6 +215,7 @@ export function buildCommands(
     shortcut: "⌘⌥B",
     run: () => ctx.toggleRightPanel(),
   });
+  cmds.push(...buildMainViewCommands(ctx, t, mainViewIcons));
   cmds.push(...buildPanelCommands(ctx, t, panelIcons));
   cmds.push({
     id: "modal.settings",

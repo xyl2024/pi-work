@@ -17,6 +17,8 @@ import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
+import { MAIN_VIEW_SPECS, type MainViewKind } from "@/lib/shared/mainView";
+import { MAIN_VIEW_NAV_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
   SESSION_PAGE_SIZE_GROUPED,
@@ -41,6 +43,9 @@ interface Props {
   onNewSession?: (cwd?: string) => void;
   onNewTask?: () => void;
   onOpenAssistant?: () => void;
+  onOpenMainView?: (kind: MainViewKind) => void;
+  activeMainView?: MainViewKind | null;
+  mainViewBadges?: Partial<Record<MainViewKind, ReactNode>>;
   assistantActive?: boolean;
   assistantCwd?: string | null;
   selectedCwd?: string | null;
@@ -148,10 +153,12 @@ function PiAgentTitle() {
   );
 }
 
-function SidebarNavButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function SidebarNavButton({ onClick, active = false, badge, children }: { onClick: () => void; active?: boolean; badge?: ReactNode; children: ReactNode }) {
+  const restBackground = active ? "var(--bg-selected)" : "transparent";
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       style={{
         display: "flex", alignItems: "center", gap: 6,
         justifyContent: "flex-start",
@@ -159,7 +166,7 @@ function SidebarNavButton({ onClick, children }: { onClick: () => void; children
         height: SESSION_ROW_HEIGHT_PX,
         padding: "0 8px 0 0",
         borderRadius: 8,
-        background: "transparent",
+        background: restBackground,
         border: "none",
         color: "var(--text)",
         cursor: "pointer",
@@ -173,16 +180,17 @@ function SidebarNavButton({ onClick, children }: { onClick: () => void; children
         e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.background = restBackground;
         e.currentTarget.style.boxShadow = "none";
       }}
     >
       {children}
+      {badge && <span style={{ marginLeft: "auto", display: "flex", flexShrink: 0 }}>{badge}</span>}
     </button>
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -784,6 +792,19 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("Assistant")}</span>
           </SidebarNavButton>
         )}
+        {onOpenMainView && MAIN_VIEW_SPECS.map((spec) => (
+          <SidebarNavButton
+            key={spec.kind}
+            onClick={() => onOpenMainView(spec.kind)}
+            active={activeMainView === spec.kind}
+            badge={mainViewBadges[spec.kind]}
+          >
+            <span style={{ display: "flex", flexShrink: 0, color: "var(--text-muted)" }}>
+              {MAIN_VIEW_NAV_ICON_BY_KIND[spec.kind] ?? null}
+            </span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(spec.labelKey)}</span>
+          </SidebarNavButton>
+        ))}
       </div>
 
       {!assistantActive && (
