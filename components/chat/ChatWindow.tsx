@@ -70,6 +70,7 @@ import { TextSelectionToolbar } from "./text-selection-toolbar";
 interface Props {
   tabId?: string;
   isActive?: boolean;
+  foreground?: boolean;
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
@@ -105,7 +106,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, usageSendSignal = 0, takePendingUsageSend, restorePendingUsageSend, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, foreground = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onUsageRequest, usageSendSignal = 0, takePendingUsageSend, restorePendingUsageSend, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onOpenSkillsPanel, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -387,6 +388,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const search = useSessionSearch({
     isActive,
+    foreground,
     sessionId: session?.id ?? null,
     timeline,
     scrollContainerRef,

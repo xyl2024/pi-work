@@ -51,6 +51,7 @@ import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
+import { canFocusChatInput } from "@/lib/shared/chat-shortcuts";
 import {
   createPanelTabsState,
   panelButtonIdForKind,
@@ -229,6 +230,7 @@ function findDeepestLeafEntryId(
 interface WorkspaceChatTabProps {
   tab: SessionTab;
   isActive: boolean;
+  foreground: boolean;
   registerChatInputRef: (tabId: string, ref: RefObject<ChatInputHandle | null> | null) => void;
   onAgentEnd: (tabId: string) => void;
   onSessionCreated: (tabId: string, session: SessionInfo) => void;
@@ -255,6 +257,7 @@ interface WorkspaceChatTabProps {
 function WorkspaceChatTabView({
   tab,
   isActive,
+  foreground,
   registerChatInputRef,
   onAgentEnd,
   onSessionCreated,
@@ -296,6 +299,7 @@ function WorkspaceChatTabView({
       <ChatWindow
         tabId={tab.tabId}
         isActive={isActive}
+        foreground={foreground}
         session={tab.kind === "session" ? tab.session : null}
         newSessionCwd={tab.kind === "draft" ? tab.cwd : null}
         onAgentEnd={() => onAgentEnd(tab.tabId)}
@@ -328,6 +332,7 @@ function WorkspaceChatTabView({
 const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.tab === next.tab &&
   previous.isActive === next.isActive &&
+  previous.foreground === next.foreground &&
   previous.modelsRefreshKey === next.modelsRefreshKey &&
   previous.scrollToEntryId === next.scrollToEntryId &&
   previous.usageSendSignal === next.usageSendSignal &&
@@ -368,6 +373,7 @@ export function AppShell() {
   const mainViewRef = useRef(mainViewState);
   mainViewRef.current = mainViewState;
   const activeMainViewKind = selectMainViewKind(mainViewState);
+  const chatForeground = mainViewState.active === "chat";
   const setMainView = useCallback((kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
@@ -500,9 +506,10 @@ export function AppShell() {
   const rightWidth = `${RIGHT_PANEL_RATIO * 100}%`;
 
   const getActiveChatInput = useCallback(() => {
+    if (!canFocusChatInput({ foreground: chatForeground })) return null;
     if (!activeTabId) return null;
     return chatInputRefs.current.get(activeTabId)?.current ?? null;
-  }, [activeTabId]);
+  }, [activeTabId, chatForeground]);
 
   const handleRightPanelQuote = useCallback((text: string) => {
     getActiveChatInput()?.insertText(`> ${text}\n\n`);
@@ -876,6 +883,7 @@ export function AppShell() {
         e.key === " " &&
         !e.ctrlKey && !e.metaKey && !e.altKey &&
         !paletteOpen &&
+        canFocusChatInput({ foreground: chatForeground }) &&
         getActiveChatInput()
       ) {
         if (!isEditable) {
@@ -886,7 +894,7 @@ export function AppShell() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, openPalette, getActiveChatInput]);
+  }, [paletteOpen, openPalette, getActiveChatInput, chatForeground]);
 
   const handleConversationTreeCardClick = useCallback((cardId: string) => {
     if (agentRunning) return;
@@ -1221,7 +1229,7 @@ export function AppShell() {
   ) : null;
 
   const chatHiddenByTerminalFullscreen = terminalFullscreen;
-  const mainViewInForeground = activeMainViewKind !== null;
+  const mainViewInForeground = !chatForeground;
   const chatHidden = chatHiddenByTerminalFullscreen || mainViewInForeground;
   const chatCard = (
     <div
@@ -1269,6 +1277,7 @@ export function AppShell() {
               key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
               tab={tab}
               isActive={tab.tabId === activeTabId}
+              foreground={chatForeground}
               registerChatInputRef={registerChatInputRef}
               onAgentEnd={handleAgentEnd}
               onSessionCreated={handleSessionCreated}
