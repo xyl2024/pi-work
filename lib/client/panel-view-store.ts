@@ -1,8 +1,11 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { MainViewKind } from "@/lib/shared/mainView";
 import type { PanelViewKind } from "@/lib/shared/panelTabs";
 import { isContentEqual } from "./shallowEqual";
+
+export type ViewKind = PanelViewKind | MainViewKind;
 
 export type PanelViewLoadPolicy = "once" | "on-open" | "on-visible";
 
@@ -41,7 +44,7 @@ export interface PanelViewPagesEvent<S, P> {
 }
 
 export interface PanelViewAdapter<S, P, C, K> {
-  kind: PanelViewKind;
+  kind: ViewKind;
   initial: S;
   rootPage: P;
   loadPolicy: PanelViewLoadPolicy;
@@ -68,7 +71,7 @@ export interface PanelViewBackResult {
 }
 
 export interface PanelViewStore<S, P, C = void> {
-  readonly kind: PanelViewKind;
+  readonly kind: ViewKind;
   get(): S;
   patch(partial: Partial<S>): void;
   scope(): PanelViewWriter<S, P>;
