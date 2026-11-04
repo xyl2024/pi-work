@@ -136,6 +136,14 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
   });
 
+  it("registers memory and token usage as later main views", () => {
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.navPriority).toBe(5);
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(6);
+    expect(MAIN_VIEW_KINDS.indexOf("memory")).toBeLessThan(MAIN_VIEW_KINDS.indexOf("tokens"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory");
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.labelKey).toBe("Token audit");
+  });
+
   it("labels the scheduled-tasks main view with the sidebar wording", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.scheduler.labelKey).toBe("Scheduled tasks");
   });

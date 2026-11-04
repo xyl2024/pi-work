@@ -2,6 +2,8 @@ import type { PanelMode } from "./panelTabs";
 
 export interface MainViewParams {
   scheduler: undefined;
+  memory: undefined;
+  tokens: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -30,6 +32,30 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       {
         labelKey: "Open scheduled tasks",
         keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
+      },
+    ],
+  },
+  memory: {
+    kind: "memory",
+    navPriority: 5,
+    labelKey: "Memory",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open memory",
+        keywords: ["memory", "memories", "remember", "记忆", "记住"],
+      },
+    ],
+  },
+  tokens: {
+    kind: "tokens",
+    navPriority: 6,
+    labelKey: "Token audit",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open token audit",
+        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
       },
     ],
   },

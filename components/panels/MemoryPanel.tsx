@@ -8,6 +8,12 @@ import { DangerButton } from "@/components/settings/controls";
 import { useI18n } from "@/hooks/useI18n";
 import { MemorySnapshotRow } from "./MemorySnapshotRow";
 import {
+  applyMemoryResponse,
+  memoryEntriesUrl,
+  openMemory,
+  useMemoryPanel,
+} from "@/lib/client/memory-panel";
+import {
   formatMemoryCharCounts,
   MEMORY_TARGETS,
   MEMORY_TARGET_TITLE_KEYS,
@@ -176,30 +182,15 @@ export function MemoryPanel({ sessionId, cwd }: { sessionId: string | null; cwd:
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
-  const [response, setResponse] = useState<MemoryEntriesResponse | null>(null);
-  const [failed, setFailed] = useState(false);
+  const { view } = useMemoryPanel();
+  const response = view.response;
+  const failed = view.loadError !== null;
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
-  const entriesUrl = cwd === null ? "/api/memory/entries" : `/api/memory/entries?cwd=${encodeURIComponent(cwd)}`;
+  const entriesUrl = memoryEntriesUrl(cwd);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch(entriesUrl)
-      .then(async (result) => {
-        const body = (await result.json().catch(() => ({}))) as
-          & Partial<MemoryEntriesResponse>
-          & { error?: string };
-        if (!result.ok || body.error || !body.memory || !body.user) {
-          throw new Error(body.error ?? `HTTP ${result.status}`);
-        }
-        if (!cancelled) setResponse(body as MemoryEntriesResponse);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [entriesUrl]);
+    openMemory({ cwd });
+  }, [cwd]);
 
   function failureMessage(body: { error?: unknown; code?: unknown }): string {
     const key = typeof body.code === "string" ? DELETE_FAILURE_KEYS[body.code] : undefined;
@@ -243,7 +234,7 @@ export function MemoryPanel({ sessionId, cwd }: { sessionId: string | null; cwd:
         toast.show({ kind: "error", message: failureMessage(body) });
         return;
       }
-      setResponse(body as MemoryEntriesResponse);
+      applyMemoryResponse(body as MemoryEntriesResponse);
       toast.show({
         kind: "success",
         message: entry.oversized

@@ -1,17 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useToast } from "../ui/Toast";
 import { EchartsChart } from "@/components/renderers/EchartsChart";
 import { useTheme } from "@/hooks/useTheme";
-import type {
-  Range,
-  SummaryBucket,
-  SummarizeResult,
-} from "@/lib/shared/token-audit-types";
+import {
+  openTokens,
+  setTokensCategoryMetric,
+  setTokensCwd,
+  setTokensRange,
+  useTokensPanel,
+  type TokenCategoryMetric,
+} from "@/lib/client/tokens-panel";
+import type { Range, SummaryBucket } from "@/lib/shared/token-audit-types";
 
 const RANGES: Range[] = ["today", "7d", "30d", "all"];
 
@@ -115,62 +119,22 @@ function useChartTheme() {
   }, [preset, isDark]);
 }
 
-interface FetchState {
-  time: SummarizeResult | null;
-  model: SummarizeResult | null;
-  heatmap: SummarizeResult | null;
-}
-
 export function TokensPanel() {
   const { t } = useI18n();
   const toast = useToast();
-
-  const [range, setRange] = useState<Range>("7d");
-  const [cwdFilter, setCwdFilter] = useState<string | null>(null);
-  const [cwds, setCwds] = useState<string[]>([]);
-  const [categoryMetric, setCategoryMetric] = useState<CategoryMetric>("cost");
-  const [state, setState] = useState<FetchState>({
-    time: null,
-    model: null,
-    heatmap: null,
-  });
-
-  const timeGroupBy: "hour" | "day" = range === "today" ? "hour" : "day";
+  const { view } = useTokensPanel();
+  const { range, cwdFilter, cwds, categoryMetric, time, model, heatmap, loadError } = view;
 
   useEffect(() => {
-    void fetch("/api/workspaces?limit=10000")
-      .then((res) => res.ok ? res.json() as Promise<{ workspaces?: Array<{ cwd?: string }> }> : Promise.reject(new Error("failed to load cwds")))
-      .then((data) => setCwds((data.workspaces ?? []).map((workspace) => workspace.cwd).filter((cwd): cwd is string => !!cwd)))
-      .catch(() => {});
+    openTokens();
   }, []);
 
-  const reload = useCallback(async () => {
-    try {
-      const cwdParam = cwdFilter ? `&cwd=${encodeURIComponent(cwdFilter)}` : "";
-      const [timeRes, modelRes, heatmapRes] = await Promise.all([
-        fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}${cwdParam}`),
-        fetch(`/api/token-audit/summary?range=${range}&groupBy=model${cwdParam}`),
-        fetch(`/api/token-audit/summary?range=30d&groupBy=day${cwdParam}`),
-      ]);
-      if (!timeRes.ok || !modelRes.ok || !heatmapRes.ok) {
-        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${heatmapRes.status}`);
-      }
-      const [time, model, heatmap] = (await Promise.all([
-        timeRes.json(),
-        modelRes.json(),
-        heatmapRes.json(),
-      ])) as [SummarizeResult, SummarizeResult, SummarizeResult];
-      setState({ time, model, heatmap });
-    } catch (e) {
-      toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
-    }
-  }, [range, timeGroupBy, cwdFilter, toast, t]);
-
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (loadError === null) return;
+    toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${loadError}` });
+  }, [loadError, toast, t]);
 
-  const totals = state.time?.totals;
+  const totals = time?.totals;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "transparent" }}>
@@ -178,29 +142,30 @@ export function TokensPanel() {
         range={range}
         cwdFilter={cwdFilter}
         cwds={cwds}
-        onChangeRange={setRange}
-        onChangeCwd={setCwdFilter}
+        onChangeRange={setTokensRange}
+        onChangeCwd={setTokensCwd}
       />
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         <KpiStrip totals={totals} />
 
+        <ChartCard>
+          <CostOverTimeChart range={range} buckets={time?.buckets ?? []} />
+        </ChartCard>
+
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: 12,
           }}
         >
           <ChartCard>
-            <CostOverTimeChart range={range} buckets={state.time?.buckets ?? []} />
+            <TokenHeatmapChart buckets={heatmap?.buckets ?? []} />
           </ChartCard>
-          <ChartCard>
-            <TokenHeatmapChart buckets={state.heatmap?.buckets ?? []} />
-          </ChartCard>
-          <ChartCard headerRight={<CostMetricToggle metric={categoryMetric} onChange={setCategoryMetric} />}>
+          <ChartCard headerRight={<CostMetricToggle metric={categoryMetric} onChange={setTokensCategoryMetric} />}>
             <CostByCategoryChart
-              buckets={state.model?.buckets ?? []}
-              totalCost={state.model?.totals.costTotal ?? 0}
+              buckets={model?.buckets ?? []}
+              totalCost={model?.totals.costTotal ?? 0}
               metric={categoryMetric}
               labelKey={modelLabelKey}
               unknownLabel={t("Unknown")}
@@ -303,7 +268,7 @@ function KpiStrip({ totals }: KpiStripProps) {
 
 const kpiGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: 8,
 };
 
@@ -476,7 +441,6 @@ function TokenHeatmapChart({ buckets }: { buckets: SummaryBucket[] }) {
 function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryBucket[] }) {
   const { t } = useI18n();
   const theme = useChartTheme();
-  const { formatCost } = useFormatCurrency();
   const series = useMemo(() => padTimeBuckets(range, buckets), [range, buckets]);
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     const xs = series.map((p) => (range === "today" ? fmtHour(p.ts) : fmtMonthDay(p.ts)));
@@ -548,16 +512,14 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
         },
       ],
     };
-  }, [series, theme, t, range, formatCost]);
+  }, [series, theme, t, range]);
   return <EchartsChart option={option} height={220} ariaLabel={t("Trend")} />;
 }
-
-type CategoryMetric = "cost" | "tokens";
 
 const bucketTokens = (b: SummaryBucket): number =>
   b.inputTokens + b.outputTokens + b.cacheReadTokens + b.cacheWriteTokens;
 
-function CostMetricToggle({ metric, onChange }: { metric: CategoryMetric; onChange: (m: CategoryMetric) => void }) {
+function CostMetricToggle({ metric, onChange }: { metric: TokenCategoryMetric; onChange: (m: TokenCategoryMetric) => void }) {
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", gap: 4 }}>
@@ -576,7 +538,7 @@ function CostByCategoryChart({
 }: {
   buckets: SummaryBucket[];
   totalCost: number;
-  metric: CategoryMetric;
+  metric: TokenCategoryMetric;
   labelKey: (b: SummaryBucket) => string;
   unknownLabel: string;
 }) {
