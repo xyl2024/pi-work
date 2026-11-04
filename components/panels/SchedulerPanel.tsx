@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
+import { requestSchedulerLeave, schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
 import { SchedulerTaskList } from "./scheduler/SchedulerTaskList";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
@@ -39,7 +39,7 @@ export function SchedulerPanel({
     containerRef,
     () => {
       if (page.kind === "form") {
-        schedulerPanel.back();
+        void requestSchedulerLeave("back_to_browse");
         return;
       }
       if (selectedTaskId !== null) {

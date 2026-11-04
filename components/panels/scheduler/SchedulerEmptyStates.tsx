@@ -50,7 +50,7 @@ export function SchedulerCreateGuide({ cwd }: { cwd: string | null }) {
       </div>
       <button
         type="button"
-        onClick={() => openSchedulerForm(null, cwd)}
+        onClick={() => void openSchedulerForm(null, cwd)}
         style={{
           display: "inline-flex",
           alignItems: "center",

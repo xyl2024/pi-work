@@ -57,7 +57,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
         </span>
         <button
           type="button"
-          onClick={() => openSchedulerForm(null, cwd)}
+          onClick={() => void openSchedulerForm(null, cwd)}
           style={{
             marginLeft: "auto",
             display: "inline-flex",
@@ -182,7 +182,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
             task={task}
             now={now}
             selected={task.id === selectedTaskId}
-            onSelect={() => openSchedulerTask(task.id)}
+            onSelect={() => void openSchedulerTask(task.id)}
           />
         ))}
       </div>

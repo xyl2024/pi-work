@@ -183,7 +183,7 @@ export function SchedulerDetailPage({
           <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="md" />
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <ToggleSwitch on={task.enabled} onChange={(next) => void handleToggle(next)} size="sm" label={t("Enabled")} />
-            <button type="button" onClick={() => openSchedulerForm(task, null)} style={actionButtonStyle}>
+            <button type="button" onClick={() => void openSchedulerForm(task, null)} style={actionButtonStyle}>
               <EditIcon width={11} height={11} />
               {t("Edit")}
             </button>

@@ -12,11 +12,13 @@ export function PanelBackButton({
   labelKey = "Back",
   ariaLabelKey = "Back",
   variant = "boxed",
+  onBack,
 }: {
   panel: PanelBackSource;
   labelKey?: string;
   ariaLabelKey?: string;
   variant?: "boxed" | "inline";
+  onBack?: () => void | Promise<void>;
 }) {
   const { t } = useI18n();
   const { pages } = panel.useSnapshot();
@@ -26,6 +28,10 @@ export function PanelBackButton({
     <button
       type="button"
       onClick={() => {
+        if (onBack) {
+          void onBack();
+          return;
+        }
         panel.back();
       }}
       disabled={!enabled}
