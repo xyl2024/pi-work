@@ -15,6 +15,7 @@ export interface MainViewCommand {
 export interface MainViewSpec<K extends MainViewKind = MainViewKind> {
   kind: K;
   labelKey: string;
+  backLabelKey: string;
   commands?: readonly MainViewCommand[];
 }
 
@@ -22,6 +23,7 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
   scheduler: {
     kind: "scheduler",
     labelKey: "Scheduled tasks",
+    backLabelKey: "Back to chat",
     commands: [
       {
         labelKey: "Open scheduled tasks",

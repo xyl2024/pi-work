@@ -138,6 +138,7 @@ export const EN_TRANSLATIONS = {
   "Type / to select a skill, @ to select a file": "Type / to select a skill, @ to select a file",
   "The scan will be interrupted and you'll need a new QR code.": "The scan will be interrupted and you'll need a new QR code.",
   "Back to channels": "Back to channels",
+  "Back to chat": "Back to chat",
   "channels.healthWorker": "Worker",
   "channels.healthFailures": "{n} consecutive failures",
   "channels.healthNextRetry": "Next retry {s}",
