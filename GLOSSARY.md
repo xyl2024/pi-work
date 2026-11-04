@@ -60,11 +60,11 @@ _Avoid_: 用「面板」指代它；把已搬到会话列的主视图仍叫面�
 _Avoid_: 与「上下文窗口」混用（那是送入模型的上下文内容与容量）；与「上下文构成」混用（那是上下文窗口的来源占比，token 用量归它）
 
 **模型配置（Models config）**：
-右侧面板里的一个面板视图，用来编辑用户 `~/.pi/agent/models.json`：有哪些 provider、各自怎么接（Base URL、API Key、OAuth），以及每个 provider 下的模型条目。
-_Avoid_: 与「会话内选当前模型」混用（那是「这个会话用哪个模型」，这是磁盘上有哪些 provider / 模型）；用「Models」指代它
+会话列里的一个**主视图**，用来编辑用户 `~/.pi/agent/models.json`：有哪些 provider、各自怎么接（Base URL、API Key、OAuth），以及每个 provider 下的模型条目。浏览态是主从双栏——左列是 provider 列表，右列是选中 provider 的摘要、它的模型列表与编辑 / 删除入口；新增 / 编辑 provider、新增 / 编辑模型、按关键词填充、OAuth 登录、API Key 填写与模型目录都占满整块主视图，页栈只有浏览与表单两级。
+_Avoid_: 与「会话内选当前模型」混用（那是「这个会话用哪个模型」，这是磁盘上有哪些 provider / 模型）；用「Models」指代它；把它当作面板视图或右侧按钮列上的一项
 
 **模型目录（Model catalog）**：
-Pi Work 掌握的全部可用模型数据，即 pi runtime 探测到的模型清单；在模型配置面板视图里既能只读浏览，也被添加 / 填充模型的表单用来按关键词检索。
+Pi Work 掌握的全部可用模型数据，即 pi runtime 探测到的模型清单；在模型配置主视图里既能只读浏览，也被添加 / 填充模型的表单用来按关键词检索。
 _Avoid_: 把它当作独立的面板视图或右侧按钮；用它指代已经配置好的 provider / 模型
 
 **图标库（Icon library）**：
