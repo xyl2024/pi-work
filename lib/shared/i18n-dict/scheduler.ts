@@ -5,6 +5,7 @@ export const scheduler = {
   "Config": "配置",
   "Basic config": "基本配置",
   "Scheduler": "调度器",
+  "Schedule": "调度",
   "Create & enable": "创建并启用",
   "Please enter a task name": "请输入任务名称",
   "Please enter a working directory": "请输入工作目录",
