@@ -30,7 +30,7 @@ export function StatusBadge({ status, size = "sm", bare = false, className, styl
   const { fg, bg } = statusVar(status);
   const icon = iconFor(status);
   const padding = size === "md" ? "3px 9px" : "2px 7px";
-  const fontSize = size === "md" ? 12 : 10;
+  const fontSize = size === "md" ? 13 : 12;
   const isLive = status === "running" && !bare;
 
   return (

@@ -3,6 +3,7 @@ import { Cron } from "croner";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useI18n } from "@/hooks/useI18n";
 import { cronHumanize, isOnceCron } from "./utils";
+import { codePillStyle } from "./styles";
 
 interface Props {
   cron: string;
@@ -48,17 +49,17 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezo
 
   const previewBlock = (
     <div style={{ padding: "8px 10px", maxWidth: 260, lineHeight: 1.55 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
         {upcoming.length > 0 ? t("Next run") : doneOnce ? t("This time has passed") : t("Invalid cron expression")}
       </div>
       {upcoming.map((ts) => (
-        <div key={ts} style={{ fontSize: 11, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
+        <div key={ts} style={{ fontSize: 12, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
           {formatTs(ts)}
         </div>
       ))}
       {showCode && isValid && (
-        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", paddingTop: 6 }}>
-          {cron}
+        <div style={{ marginTop: 8, paddingTop: 6 }}>
+          <code style={codePillStyle}>{cron}</code>
         </div>
       )}
     </div>
@@ -71,7 +72,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezo
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
-          fontSize: 11,
+          fontSize: 12,
           color: isValid ? "var(--text-muted)" : doneOnce ? "var(--text-dim)" : "var(--error)",
           cursor: "help",
           whiteSpace: "nowrap",
@@ -82,20 +83,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezo
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{human}</span>
         {showCode && isValid && (
-          <code
-            style={{
-              fontSize: 10,
-              padding: "1px 5px",
-              borderRadius: 3,
-              background: "var(--bg-subtle)",
-              border: "1px solid var(--border)",
-              color: "var(--text-dim)",
-              fontFamily: "var(--font-mono)",
-              flexShrink: 0,
-            }}
-          >
-            {cron}
-          </code>
+          <code style={{ ...codePillStyle, color: "var(--text-dim)", flexShrink: 0 }}>{cron}</code>
         )}
       </span>
     </Tooltip>

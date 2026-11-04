@@ -52,8 +52,8 @@ export function TaskRunsTab({
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, rowGap: 4, flexWrap: "wrap" }}>
           <RunStat label={t("Total runs")} value={String(stats.total)} />
           <RunStat
@@ -68,7 +68,7 @@ export function TaskRunsTab({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 5,
-                fontSize: 11,
+                fontSize: 12,
                 color: "var(--info)",
               }}
             >
@@ -91,8 +91,8 @@ export function TaskRunsTab({
                 type="button"
                 onClick={() => onFilterChange(id)}
                 style={{
-                  padding: "3px 9px",
-                  fontSize: 11,
+                  padding: "3px 10px",
+                  fontSize: 12,
                   border: "1px solid",
                   borderColor: active ? "var(--accent)" : "var(--border)",
                   background: active ? "var(--bg-selected)" : "transparent",
@@ -106,14 +106,14 @@ export function TaskRunsTab({
                 }}
               >
                 {t(FILTER_LABELS[id])}
-                {count > 0 && <span style={{ fontSize: 11 }}>{count}</span>}
+                {count > 0 && <span style={{ fontSize: 12 }}>{count}</span>}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 12 }}>
         <div data-scroll-inset style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           {loading && runs.length === 0 && <RunHint text={t("Loading...")} />}
           {!loading && runs.length === 0 && <RunHint text={t("No runs yet")} />}
@@ -140,8 +140,8 @@ export function TaskRunsTab({
 
 function RunStat({ label, value }: { label: string; value: string }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, fontSize: 12 }}>
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, fontSize: 13 }}>
+      <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{label}</span>
       <span style={{ color: "var(--text)", fontWeight: 600, fontFamily: "var(--font-mono)" }}>{value}</span>
     </span>
   );
@@ -199,7 +199,7 @@ function RunRow({
       <StatusBadge status={run.status} size="sm" />
       <span
         style={{
-          fontSize: 12,
+          fontSize: 13,
           color: selected ? "var(--text)" : "var(--text-muted)",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -223,7 +223,7 @@ function RunRow({
                 background: "var(--warning-bg)",
                 color: "var(--warning)",
                 borderRadius: 999,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 lineHeight: 1.4,
               }}
@@ -290,10 +290,10 @@ function RunOutputPanel({
       {run !== null && (
         <div style={outputHeaderStyle}>
           <StatusBadge status={run.status} size="sm" />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
             {formatRelative(now, run.startedAt, locale)}
           </span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
             {formatDuration(schedulerRunDurationMs(run, now)) ?? "—"}
           </span>
           {run.sessionId && (
@@ -306,7 +306,7 @@ function RunOutputPanel({
                 alignItems: "center",
                 gap: 4,
                 padding: "2px 7px",
-                fontSize: 11,
+                fontSize: 12,
                 background: "transparent",
                 border: "none",
                 color: "var(--accent)",
@@ -333,7 +333,7 @@ function RunOutputPanel({
             {run.error && (
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 13,
                   color:
                     run.status === "timeout" || run.status === "interrupted"
                       ? "var(--warning)"
@@ -358,7 +358,7 @@ function RunOutputPanel({
               </ReactMarkdown>
             ) : (
               !run.error && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
                   {run.status === "running"
                     ? t("Waiting for output…")
                     : run.status === "success"
@@ -381,8 +381,7 @@ const outputPanelStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   minWidth: 0,
-  background: "var(--bg-subtle)",
-  borderRadius: 8,
+  borderTop: "1px solid var(--border)",
   overflow: "hidden",
 };
 
@@ -391,8 +390,7 @@ const outputHeaderStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "6px 10px",
-  borderBottom: "1px solid var(--border)",
+  padding: "8px 10px 6px",
 };
 
 const outputBodyStyle: CSSProperties = {

@@ -2,8 +2,8 @@ import type { CSSProperties } from "react";
 
 export const inputStyle: CSSProperties = {
   width: "100%",
-  fontSize: 12,
-  padding: "6px 9px",
+  fontSize: 13,
+  padding: "7px 10px",
   border: "1px solid var(--scheduler-input-border, var(--border))",
   borderRadius: 6,
   background: "var(--bg)",
@@ -26,25 +26,38 @@ export const textareaStyle: CSSProperties = {
 };
 
 export const fieldLabelStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 600,
   color: "var(--text-muted)",
-  marginBottom: 4,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  marginBottom: 6,
 };
 
 export const fieldHintStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   color: "var(--text-muted)",
-  marginTop: 5,
+  marginTop: 6,
   lineHeight: 1.45,
 };
 
 export const fieldErrorStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   color: "var(--error)",
-  marginTop: 4,
+  marginTop: 5,
+};
+
+export const sectionTitleStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "var(--text)",
+};
+
+export const codePillStyle: CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  padding: "1px 6px",
+  background: "var(--bg-subtle)",
+  borderRadius: 4,
+  color: "var(--text)",
 };
 
 export const btnPrimary: CSSProperties = {
@@ -52,8 +65,8 @@ export const btnPrimary: CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 6,
-  padding: "6px 14px",
-  fontSize: 12,
+  padding: "7px 14px",
+  fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
   fontFamily: "inherit",
@@ -64,8 +77,8 @@ export const btnGhost: CSSProperties = {
   color: "var(--text-muted)",
   border: "1px solid var(--border)",
   borderRadius: 6,
-  padding: "5px 10px",
-  fontSize: 11,
+  padding: "6px 12px",
+  fontSize: 12,
   fontWeight: 500,
   cursor: "pointer",
   fontFamily: "inherit",

@@ -132,7 +132,7 @@ export function SchedulerDetailPage({
           alignItems: "center",
           justifyContent: "center",
           color: "var(--text-muted)",
-          fontSize: 12,
+          fontSize: 13,
         }}
       >
         {t("Task not found")}
@@ -263,7 +263,7 @@ export function SchedulerDetailPage({
         </Disclosure>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "10px 18px 14px" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "16px 20px" }}>
         <TaskRunsTab
           runs={runs}
           loading={runsLoading}
@@ -280,8 +280,8 @@ export function SchedulerDetailPage({
 
 function SummaryMeta({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, fontSize: 12, color: "var(--text)" }}>
-      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, fontSize: 13, color: "var(--text)" }}>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
       <span>{children}</span>
     </span>
   );
@@ -310,7 +310,7 @@ function Disclosure({
         {label}
       </button>
       <CollapsiblePanel open={open}>
-        <div style={{ padding: "0 18px 12px" }}>{children}</div>
+        <div style={{ padding: "0 20px 16px" }}>{children}</div>
       </CollapsiblePanel>
     </div>
   );
@@ -320,8 +320,8 @@ const summaryStyle: CSSProperties = {
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
-  gap: 7,
-  padding: "13px 18px 11px",
+  gap: 8,
+  padding: "16px 20px",
   borderBottom: "1px solid var(--border)",
 };
 
@@ -342,18 +342,18 @@ const disclosureRegionStyle: CSSProperties = {
   overflowY: "auto",
   display: "flex",
   flexDirection: "column",
-  padding: "4px 0",
+  padding: "8px 0",
 };
 
 const disclosureButtonStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  padding: "7px 18px",
+  padding: "8px 20px",
   background: "transparent",
   border: "none",
   color: "var(--text-muted)",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
   fontFamily: "inherit",

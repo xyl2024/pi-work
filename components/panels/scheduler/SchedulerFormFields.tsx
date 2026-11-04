@@ -27,7 +27,7 @@ export function pillTriggerStyle(open: boolean): CSSProperties {
     borderRadius: 9,
     color: "var(--text-muted)",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "inherit",
     transition: "background 0.12s, color 0.12s",
     overflow: "hidden",
@@ -57,7 +57,7 @@ export function dropdownOptionStyle(active: boolean): CSSProperties {
     border: "none",
     color: active ? "var(--text)" : "var(--text-muted)",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "left",
     fontWeight: active ? 600 : 400,
     whiteSpace: "nowrap",
@@ -241,7 +241,7 @@ export function SchedulerThinkingSelect({
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[lvl], flexShrink: 0 }} />
                 <span style={{ flex: 1 }}>{label}</span>
                 {mappedVal != null && mappedVal !== lvl && (
-                  <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
+                  <span style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
                 )}
               </button>
             );

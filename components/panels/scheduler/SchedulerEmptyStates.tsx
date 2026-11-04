@@ -15,11 +15,11 @@ export function SchedulerSelectHint() {
         justifyContent: "center",
         padding: 24,
         textAlign: "center",
-        fontSize: 12,
+        fontSize: 13,
         color: "var(--text-muted)",
       }}
     >
-      {t("Select a task from the list on the left")}
+      {t("Select a task to see its details")}
     </div>
   );
 }
@@ -40,10 +40,10 @@ export function SchedulerCreateGuide({ cwd }: { cwd: string | null }) {
       }}
     >
       <ClockIcon size={56} strokeWidth={1.2} style={{ color: "var(--text-muted)", margin: "0 auto 12px", display: "block" }} />
-      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
         {t("No scheduled tasks yet")}
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 16 }}>
         {t("Let the agent run any task automatically at a scheduled time")}
         <br />
         {t("e.g. daily report, hourly checks")}
@@ -59,8 +59,8 @@ export function SchedulerCreateGuide({ cwd }: { cwd: string | null }) {
           color: "#fff",
           border: "none",
           borderRadius: 6,
-          padding: "6px 14px",
-          fontSize: 12,
+          padding: "7px 14px",
+          fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
           fontFamily: "inherit",

@@ -19,7 +19,7 @@ export function ThinkingBadge({ level }: { level: string }) {
         borderRadius: 999,
         background: `color-mix(in srgb, ${color} 14%, transparent)`,
         color,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         lineHeight: 1.2,
       }}
