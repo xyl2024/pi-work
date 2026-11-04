@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useContainerWidth } from "@/hooks/useContainerWidth";
 import {
