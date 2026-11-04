@@ -65,6 +65,13 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
+import {
+  MAIN_VIEW_SPEC_BY_KIND,
+  createMainViewState,
+  mainViewReducer,
+  selectMainViewKind,
+  type MainViewKind,
+} from "@/lib/shared/mainView";
 import type { ChatInputHandle } from "../chat/ChatInput";
 import { buildCommands, type Command, type CommandContext } from "@/lib/client/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
@@ -353,6 +360,27 @@ export function AppShell() {
   const setPanelMode = useCallback((mode: PanelMode) => {
     dispatchPanelTabs({ type: "set_mode", mode });
   }, []);
+  const [mainViewState, dispatchMainView] = useReducer(
+    mainViewReducer,
+    undefined,
+    createMainViewState,
+  );
+  const mainViewRef = useRef(mainViewState);
+  mainViewRef.current = mainViewState;
+  const activeMainViewKind = selectMainViewKind(mainViewState);
+  const setMainView = useCallback((kind: MainViewKind) => {
+    const current = mainViewRef.current;
+    const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
+    const next = mainViewReducer(current, { type: "toggle", kind, panelMode });
+    dispatchMainView({ type: "toggle", kind, panelMode });
+    setPanelMode(next.active === "chat" ? panelMode : "closed");
+  }, [setPanelMode]);
+  const leaveMainView = useCallback(() => {
+    const current = mainViewRef.current;
+    if (current.active === "chat") return;
+    dispatchMainView({ type: "activate_chat" });
+    setPanelMode(current.returnPanelMode);
+  }, [setPanelMode]);
   const openTabs = panelTabsState.tabs;
   const activeFileTabId = panelTabsState.activeId;
   const activePanelTab = selectActiveTab(panelTabsState);
@@ -433,7 +461,9 @@ export function AppShell() {
     setSettingsConfigOpen(false);
     setPaletteOpen(true);
   }, []);
-  const closeTopPanel = useCallback(() => {}, []);
+  const closeTopPanel = useCallback(() => {
+    leaveMainView();
+  }, [leaveMainView]);
 
   const { branchTree, branchActiveLeafId, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
@@ -1191,12 +1221,14 @@ export function AppShell() {
   ) : null;
 
   const chatHiddenByTerminalFullscreen = terminalFullscreen;
+  const mainViewInForeground = activeMainViewKind !== null;
+  const chatHidden = chatHiddenByTerminalFullscreen || mainViewInForeground;
   const chatCard = (
     <div
       style={{
-        flex: chatHiddenByTerminalFullscreen ? "0 0 0%" : "1 1 0%",
-        minHeight: chatHiddenByTerminalFullscreen ? 0 : MIN_CHAT_HEIGHT,
-        display: chatHiddenByTerminalFullscreen ? "none" : "flex",
+        flex: chatHidden ? "0 0 0%" : "1 1 0%",
+        minHeight: chatHidden ? 0 : MIN_CHAT_HEIGHT,
+        display: chatHidden ? "none" : "flex",
         flexDirection: "column",
         overflow: "hidden",
         borderRadius: "var(--panel-radius)",
@@ -1270,6 +1302,47 @@ export function AppShell() {
     </div>
   );
 
+  const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
+  const mainViewLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].labelKey;
+  const mainViewCard = (
+    <div
+      style={{
+        flex: mainViewHidden ? "0 0 0%" : "1 1 0%",
+        minHeight: mainViewHidden ? 0 : MIN_CHAT_HEIGHT,
+        display: mainViewHidden ? "none" : "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        borderRadius: "var(--panel-radius)",
+        border: "1px solid var(--panel-border)",
+        background: "var(--bg)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", flexShrink: 0, height: 34, padding: "0 8px" }}>
+        <button
+          type="button"
+          onClick={leaveMainView}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: 0,
+            background: "none",
+            border: "none",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 12,
+            flexShrink: 0,
+          }}
+          onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          {mainViewLabelKey === null ? "" : `← ${t(mainViewLabelKey)}`}
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }} />
+    </div>
+  );
+
   const panelCard = (
     <>
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
@@ -1324,6 +1397,8 @@ export function AppShell() {
       onNewSession={handleSlashNew}
       onNewTask={handleNewTask}
       onOpenAssistant={assistantSidebarEntryEnabled ? handleOpenAssistant : undefined}
+      onOpenMainView={setMainView}
+      activeMainView={activeMainViewKind}
       assistantActive={assistantActive}
       assistantCwd={assistantCwd}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
@@ -1378,6 +1453,7 @@ export function AppShell() {
 
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
         {chatCard}
+        {mainViewCard}
 
         <div
           onMouseDown={(e) => {
