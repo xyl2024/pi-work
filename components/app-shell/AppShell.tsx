@@ -681,7 +681,7 @@ export function AppShell() {
     handleNewSession("draft", cwd);
   }, [selectedSession?.cwd, newSessionCwd, handleNewSession]);
 
-  const handleNewTask = useCallback(async () => {
+  const handleSessionDraftCreate = useCallback(async () => {
     try {
       const response = await fetch("/api/default-cwd", { method: "POST" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1344,7 +1344,7 @@ export function AppShell() {
   };
   const mainViewBadges = renderMainViewBadges();
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
-  const mainViewLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].labelKey;
+  const mainViewBackLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].backLabelKey;
   const mainViewCard = (
     <div
       style={{
@@ -1377,7 +1377,7 @@ export function AppShell() {
           onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
           onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
         >
-          {mainViewLabelKey === null ? "" : `← ${t(mainViewLabelKey)}`}
+          {mainViewBackLabelKey === null ? "" : `← ${t(mainViewBackLabelKey)}`}
         </button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
@@ -1454,7 +1454,7 @@ export function AppShell() {
       onSessionDeleted={handleSessionDeleted}
       onSessionRenamed={handleSidebarSessionRenamed}
       onNewSession={handleSlashNew}
-      onNewTask={handleNewTask}
+      onCreateSessionDraft={handleSessionDraftCreate}
       onOpenAssistant={assistantSidebarEntryEnabled ? handleOpenAssistant : undefined}
       onOpenMainView={setMainView}
       activeMainView={activeMainViewKind}
