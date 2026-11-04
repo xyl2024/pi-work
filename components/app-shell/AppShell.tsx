@@ -73,7 +73,6 @@ import {
   mainViewReducer,
   selectMainViewKind,
   selectToggleExits,
-  shouldMountMainViewBody,
   type MainViewKind,
 } from "@/lib/shared/mainView";
 import type { ChatInputHandle } from "../chat/ChatInput";
@@ -394,11 +393,6 @@ export function AppShell() {
   mainViewRef.current = mainViewState;
   const activeMainViewKind = selectMainViewKind(mainViewState);
   const chatForeground = mainViewState.active === "chat";
-  const [mainViewVisited, setMainViewVisited] = useState(false);
-  useEffect(() => {
-    if (activeMainViewKind !== null) setMainViewVisited(true);
-  }, [activeMainViewKind]);
-  const mainViewBodiesMounted = shouldMountMainViewBody(activeMainViewKind, mainViewVisited);
   const setMainView = useCallback(async (kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
@@ -1426,23 +1420,22 @@ export function AppShell() {
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
-        {mainViewBodiesMounted && MAIN_VIEW_KINDS.map((kind) => (
+        {activeMainViewKind !== null && (
           <div
-            key={kind}
             style={{
               position: "absolute",
               inset: 0,
-              display: activeMainViewKind === kind ? "flex" : "none",
+              display: "flex",
               flexDirection: "column",
               overflow: "hidden",
             }}
           >
-            {MAIN_VIEW_BODY_BY_KIND[kind]({
+            {MAIN_VIEW_BODY_BY_KIND[activeMainViewKind]({
               ...mainViewBodyCtx,
-              visible: activeMainViewKind === kind,
+              visible: true,
             })}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
