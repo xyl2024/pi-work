@@ -1,3 +1,4 @@
+import type { MainViewKind } from "./mainView";
 import {
   CHANNELS_TAB_ID,
   CONTEXT_TAB_ID,
@@ -378,7 +379,10 @@ export function selectActiveTab(state: PanelTabsState): AnyPanelTab | null {
   return state.activeId === null ? null : selectTab(state, state.activeId);
 }
 
-export function selectTabByKind(state: PanelTabsState, kind: PanelViewKind): AnyPanelTab | null {
+export function selectTabByKind(
+  state: PanelTabsState,
+  kind: PanelViewKind | MainViewKind,
+): AnyPanelTab | null {
   return state.tabs.find((tab) => tab.kind === kind) ?? null;
 }
 

@@ -1,20 +1,17 @@
-export type SchedulerPollTier = "runs" | "panel" | "collapsed";
+export type SchedulerPollTier = "runs" | "idle";
 
 export const SCHEDULER_POLL_MS: Record<SchedulerPollTier, number> = {
   runs: 2_000,
-  panel: 10_000,
-  collapsed: 30_000,
+  idle: 10_000,
 };
 
 export interface SchedulerPollConditions {
-  panelOpen: boolean;
   runsVisible: boolean;
   hidden: boolean;
 }
 
 export function schedulerPollTier(conditions: SchedulerPollConditions): SchedulerPollTier {
-  if (!conditions.panelOpen) return "collapsed";
-  return conditions.runsVisible ? "runs" : "panel";
+  return conditions.runsVisible ? "runs" : "idle";
 }
 
 export function schedulerPollDelayMs(conditions: SchedulerPollConditions): number | null {

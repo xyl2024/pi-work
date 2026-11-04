@@ -6,6 +6,8 @@ import {
   createMainViewState,
   mainViewReducer,
   selectMainViewKind,
+  selectToggleExits,
+  shouldMountMainViewBody,
   type MainViewAction,
   type MainViewState,
 } from "@/lib/shared/mainView";
@@ -112,6 +114,30 @@ describe("mainView activate chat", () => {
     const state = createMainViewState();
 
     expect(reduce(state, { type: "activate_chat" })).toEqual({ active: "chat" });
+  });
+});
+
+describe("mainView toggle exits", () => {
+  it("reports an exit only for the kind already in front", () => {
+    expect(selectToggleExits({ active: "chat" }, "scheduler")).toBe(false);
+    expect(
+      selectToggleExits({ active: "scheduler", returnPanelMode: "normal" }, "scheduler"),
+    ).toBe(true);
+  });
+});
+
+describe("mainView body mount", () => {
+  it("keeps every body unmounted until the main view is first entered", () => {
+    expect(shouldMountMainViewBody(null, false)).toBe(false);
+  });
+
+  it("mounts the body on the first entry", () => {
+    expect(shouldMountMainViewBody("scheduler", false)).toBe(true);
+    expect(shouldMountMainViewBody("scheduler", true)).toBe(true);
+  });
+
+  it("keeps the body mounted after returning to chat", () => {
+    expect(shouldMountMainViewBody(null, true)).toBe(true);
   });
 });
 
