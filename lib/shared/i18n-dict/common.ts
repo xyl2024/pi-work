@@ -6,6 +6,7 @@ export const common = {
   "Provider name cannot be empty": "提供商名称不能为空",
 
   "Cancel": "取消",
+  "Your unsaved changes will be lost.": "你未保存的更改将会丢失。",
   "Save": "保存",
   "Saving...": "正在保存...",
   "Saved": "已保存",

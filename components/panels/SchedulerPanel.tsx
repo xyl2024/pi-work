@@ -5,10 +5,10 @@ import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useContainerWidth } from "@/hooks/useContainerWidth";
 import {
   clearSchedulerSelection,
-  requestSchedulerLeave,
   schedulerPanel,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
+import { requestMainViewLeave } from "@/lib/client/main-view-leave";
 import { resolveSchedulerLayout, SCHEDULER_LIST_WIDTH } from "@/lib/shared/scheduler-layout";
 import { useInjectMainViewHeader } from "@/lib/client/main-view-header";
 import { SchedulerTaskList } from "./scheduler/SchedulerTaskList";
@@ -40,7 +40,7 @@ export function SchedulerPanel({
 
   const formTitleKey = page.kind === "form" ? (page.taskId === null ? "New task" : "Edit task") : null;
   const backToBrowse = useCallback(() => {
-    void requestSchedulerLeave("back_to_browse");
+    void requestMainViewLeave({ view: "scheduler", intent: "back_to_browse" });
   }, []);
   useInjectMainViewHeader(formTitleKey, page.kind === "form" ? backToBrowse : null);
 
@@ -54,7 +54,7 @@ export function SchedulerPanel({
     containerRef,
     () => {
       if (page.kind === "form") {
-        void requestSchedulerLeave("back_to_browse");
+        void requestMainViewLeave({ view: "scheduler", intent: "back_to_browse" });
         return;
       }
       if (selectedTaskId !== null) {

@@ -1,44 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
-import {
-  SCHEDULER_DIRTY_CLOSE_CONFIRM,
-  isSchedulerFormDirty,
-  selectSchedulerLeaveConfirm,
-  type SchedulerLeaveIntent,
-} from "@/lib/shared/scheduler-close";
+import { isSchedulerFormDirty } from "@/lib/shared/scheduler-close";
 import { EMPTY_SCHEDULER_FORM, newSchedulerForm } from "@/lib/shared/scheduler-form";
-
-const LEAVE_INTENTS: readonly SchedulerLeaveIntent[] = [
-  "back_to_browse",
-  "select_task",
-  "new_task",
-  "leave_main_view",
-];
-
-describe("selectSchedulerLeaveConfirm", () => {
-  it("lets every exit through silently when the form is clean", () => {
-    for (const intent of LEAVE_INTENTS) {
-      expect(selectSchedulerLeaveConfirm({ intent, dirty: false })).toBeNull();
-    }
-  });
-
-  it("asks the same single confirmation for every exit while the form is dirty", () => {
-    for (const intent of LEAVE_INTENTS) {
-      expect(selectSchedulerLeaveConfirm({ intent, dirty: true })).toEqual(SCHEDULER_DIRTY_CLOSE_CONFIRM);
-    }
-  });
-
-  it("labels the confirm button Discard, not Close", () => {
-    expect(SCHEDULER_DIRTY_CLOSE_CONFIRM.confirmLabelKey).toBe("Discard");
-  });
-
-  it("has Chinese copy for every line of the prompt", () => {
-    const dict = ZH_TRANSLATIONS as Record<string, string>;
-    expect(dict[SCHEDULER_DIRTY_CLOSE_CONFIRM.titleKey]).toBeTruthy();
-    expect(dict[SCHEDULER_DIRTY_CLOSE_CONFIRM.descriptionKey]).toBeTruthy();
-    expect(dict[SCHEDULER_DIRTY_CLOSE_CONFIRM.confirmLabelKey]).toBeTruthy();
-  });
-});
 
 describe("isSchedulerFormDirty", () => {
   it("is false when there is no form", () => {
