@@ -17,8 +17,6 @@ interface Props {
   loading: boolean;
   filter: RunFilter;
   onFilterChange: (f: RunFilter) => void;
-  triggering: boolean;
-  onTrigger: () => void;
   onOpenSession: (sessionId: string) => void;
 }
 
@@ -32,8 +30,7 @@ const FILTERS: { id: RunFilter; label: string }[] = [
 ];
 
 export function TaskRunsTab({
-  runs, loading, filter, onFilterChange,
-  triggering, onTrigger, onOpenSession,
+  runs, loading, filter, onFilterChange, onOpenSession,
 }: Props) {
   const { t } = useI18n();
   const now = useNow(2_000);
@@ -46,8 +43,10 @@ export function TaskRunsTab({
   const inFlight = runs.some((r) => r.status === "running");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{t("Runs")}</span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{runs.length}</span>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {FILTERS.map((f) => {
             const active = filter === f.id;
@@ -77,31 +76,12 @@ export function TaskRunsTab({
             );
           })}
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <button
-            onClick={onTrigger}
-            disabled={triggering}
-            style={{
-              padding: "4px 12px",
-              fontSize: 11,
-              fontWeight: 600,
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: triggering ? "default" : "pointer",
-              opacity: triggering ? 0.6 : 1,
-              fontFamily: "inherit",
-            }}
-          >
-            {triggering ? t("Triggering...") : t("Run now")}
-          </button>
-        </div>
       </div>
 
       {inFlight && (
         <div
           style={{
+            flexShrink: 0,
             padding: "6px 12px",
             background: "var(--info-bg)",
             color: "var(--info)",
@@ -117,7 +97,10 @@ export function TaskRunsTab({
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        data-scroll-inset
+        style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflowY: "auto" }}
+      >
         {loading && runs.length === 0 && (
           <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
             {t("Loading...")}
