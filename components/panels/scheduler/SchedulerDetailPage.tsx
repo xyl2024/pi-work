@@ -18,13 +18,11 @@ import { fetchTaskRuns, fetchWechatChannels } from "@/lib/client/scheduler-io";
 import {
   openSchedulerForm,
   removeSchedulerTask,
-  schedulerPanel,
   setSchedulerRunsVisible,
   toggleSchedulerTask,
   triggerSchedulerTaskNow,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
-import { PanelBackButton } from "../PanelBackButton";
 import type { SchedulerDetailBlock, TaskRun } from "@/lib/shared/scheduler";
 import { EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
 
@@ -118,13 +116,17 @@ export function SchedulerDetailPage({
 
   if (task === null) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        <div style={{ padding: "12px 14px", flexShrink: 0 }}>
-          <PanelBackButton panel={schedulerPanel} />
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
-          {t("Task not found")}
-        </div>
+      <div
+        style={{
+          display: "flex",
+          height: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          fontSize: 12,
+        }}
+      >
+        {t("Task not found")}
       </div>
     );
   }
@@ -168,7 +170,6 @@ export function SchedulerDetailPage({
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ padding: "10px 14px 8px", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <PanelBackButton panel={schedulerPanel} />
           <h2
             style={{
               margin: 0,
