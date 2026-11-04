@@ -48,6 +48,7 @@ export interface SchedulerViewState {
   loadError: string | null;
   tasks: ScheduledTask[];
   selectedTaskId: string | null;
+  selectedRunId: string | null;
   filter: SchedulerFilter;
   query: string;
   meta: SchedulerModelMeta | null;
@@ -68,6 +69,7 @@ const INITIAL: SchedulerViewState = {
   loadError: null,
   tasks: [],
   selectedTaskId: null,
+  selectedRunId: null,
   filter: "all",
   query: "",
   meta: null,
@@ -171,7 +173,11 @@ export function setSchedulerQuery(query: string): void {
 }
 
 export function openSchedulerTask(taskId: string): void {
-  schedulerPanel.patch({ selectedTaskId: taskId });
+  schedulerPanel.patch({ selectedTaskId: taskId, selectedRunId: null });
+}
+
+export function setSchedulerRunSelected(selectedRunId: string | null): void {
+  schedulerPanel.patch({ selectedRunId });
 }
 
 export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null): void {
@@ -232,7 +238,13 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     const saved = formTaskId
       ? await updateScheduledTask({ id: formTaskId, ...base } satisfies TaskUpdatePayload)
       : await createScheduledTask(base satisfies TaskCreatePayload);
-    scope.patch({ saving: false, selectedTaskId: saved.id, saveError: null, runsVisible: false });
+    scope.patch({
+      saving: false,
+      selectedTaskId: saved.id,
+      selectedRunId: null,
+      saveError: null,
+      runsVisible: false,
+    });
     schedulerPanel.resetPages();
     scope.patch({
       tasks: upsertTask(scope.get().tasks, saved),
@@ -277,6 +289,7 @@ export async function removeSchedulerTask(taskId: string): Promise<void> {
     scope.patch({
       tasks: scope.get().tasks.filter((task) => task.id !== taskId),
       selectedTaskId: null,
+      selectedRunId: null,
       runsVisible: false,
     });
     schedulerPanel.resetPages();

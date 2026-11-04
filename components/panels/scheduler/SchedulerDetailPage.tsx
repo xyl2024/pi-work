@@ -14,9 +14,13 @@ import { TaskPromptTab } from "@/components/scheduler/TaskPromptTab";
 import { isOnceDone, formatRelative } from "@/components/scheduler/utils";
 import { useNow } from "@/components/scheduler/useNow";
 import { fetchTaskRuns, fetchWechatChannels } from "@/lib/client/scheduler-io";
+import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
+import { resolveSchedulerRunSelection } from "@/lib/shared/scheduler-runs";
 import {
   openSchedulerForm,
   removeSchedulerTask,
+  schedulerPanel,
+  setSchedulerRunSelected,
   setSchedulerRunsVisible,
   toggleSchedulerTask,
   triggerSchedulerTaskNow,
@@ -45,7 +49,7 @@ export function SchedulerDetailPage({
   const toast = useToast();
   const confirm = useConfirm();
   const { view } = useSchedulerPanel();
-  const { tasks, meta, triggering } = view;
+  const { tasks, meta, triggering, selectedRunId } = view;
   const task = tasks.find((item) => item.id === taskId) ?? null;
   const now = useNow(30_000);
 
@@ -60,7 +64,11 @@ export function SchedulerDetailPage({
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
     try {
-      setRuns(await fetchTaskRuns(taskId));
+      const next = await fetchTaskRuns(taskId);
+      if (schedulerPanel.get().selectedTaskId !== taskId) return;
+      setRuns(next);
+      const resolved = resolveSchedulerRunSelection(next, schedulerPanel.get().selectedRunId);
+      if (resolved !== schedulerPanel.get().selectedRunId) setSchedulerRunSelected(resolved);
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to load runs") });
     } finally {
@@ -80,31 +88,25 @@ export function SchedulerDetailPage({
   }, []);
 
   useEffect(() => {
-    if (!runs.some((run) => run.status === "running")) return;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const start = () => {
-      if (timer === null) timer = setInterval(() => void loadRuns(), 2_000);
-    };
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer);
-        timer = null;
-      }
-    };
-    const onVisibility = () => {
-      if (document.hidden) stop();
-      else {
-        void loadRuns();
-        start();
-      }
-    };
-    if (!document.hidden) start();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+    const delay = schedulerPollDelayMs({
+      runsVisible: runs.some((run) => run.status === "running"),
+      hidden: typeof document !== "undefined" && document.hidden,
+    });
+    if (delay === null) return;
+    const timer = setTimeout(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void loadRuns();
+    }, delay);
+    return () => clearTimeout(timer);
   }, [runs, loadRuns]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) void loadRuns();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [loadRuns]);
 
   useEffect(() => {
     let alive = true;
@@ -259,6 +261,8 @@ export function SchedulerDetailPage({
           loading={runsLoading}
           filter={runFilter}
           onFilterChange={setRunFilter}
+          selectedRunId={selectedRunId}
+          onSelectRun={setSchedulerRunSelected}
           onOpenSession={onOpenSession}
         />
       </div>
