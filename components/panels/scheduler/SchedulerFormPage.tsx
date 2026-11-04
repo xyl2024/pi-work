@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
+import { useContainerWidth } from "@/hooks/useContainerWidth";
 import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { CronBuilder } from "@/components/scheduler/CronBuilder";
@@ -27,6 +28,7 @@ import {
   parseMaxLifetimeMinutes,
   RUNNER_DEFAULT_MAX_LIFETIME_MS,
 } from "@/lib/shared/scheduler-form";
+import { resolveSchedulerFormLayout } from "@/lib/shared/scheduler-form-layout";
 import type { SchedulerTaskForm } from "@/lib/shared/scheduler";
 import type { ToolInfo } from "@/lib/shared/types";
 
@@ -35,6 +37,9 @@ export function SchedulerFormPage() {
   const toast = useToast();
   const { view } = useSchedulerPanel();
   const { form, formTaskId, meta, saving, saveError } = view;
+
+  const { ref: containerRef, width } = useContainerWidth<HTMLDivElement>();
+  const split = resolveSchedulerFormLayout(width) === "split";
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [channels, setChannels] = useState<SchedulerChannel[]>([]);
@@ -122,8 +127,121 @@ export function SchedulerFormPage() {
     }
   };
 
+  const basicSection = (
+    <Section title={t("Basic config")} first grow={split}>
+      <Field label={t("Task name")} hint={t("Concise description, e.g. daily report")} error={nameError}>
+        <input
+          value={form.name}
+          onChange={(e) => update({ name: e.target.value })}
+          placeholder={t("e.g. daily report")}
+          autoFocus
+          className="scheduler-text-input"
+          style={inputStyle}
+        />
+      </Field>
+      <Field label={t("Prompt")} hint={t("Full prompt sent to agent at trigger time")} error={promptError} grow={split}>
+        <textarea
+          value={form.prompt}
+          onChange={(e) => update({ prompt: e.target.value })}
+          rows={8}
+          placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
+          className="scheduler-text-input"
+          style={split ? { ...textareaStyle, flex: "1 1 0%", minHeight: 160, resize: "none" } : textareaStyle}
+        />
+      </Field>
+      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
+        <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
+      </Field>
+      <SchedulerModelSelect form={form} update={update} meta={meta} error={modelError} />
+      <SchedulerThinkingSelect form={form} update={update} meta={meta} error={thinkingError} />
+      <SchedulerToolsSelect
+        form={form}
+        update={update}
+        availableTools={availableTools}
+        toolsLoading={toolsLoading}
+        toolsError={toolsError}
+        customExpanded={customExpanded}
+        onToggleCustomExpanded={() => setCustomExpanded((value) => !value)}
+        onRetry={async () => {
+          if (!form.cwd.trim()) return;
+          setToolsLoading(true);
+          setToolsError(null);
+          try {
+            setAvailableTools(await listToolsForCwd(form.cwd.trim()));
+          } catch (error) {
+            setToolsError(error instanceof Error ? error.message : "Failed to load tools");
+          } finally {
+            setToolsLoading(false);
+          }
+        }}
+      />
+      <Field label={t("Dangerous commands")}>
+        <select
+          value={form.permissionMode}
+          onChange={(e) =>
+            update({
+              permissionMode: e.target.value === "full_access" ? "full_access" : "auto_deny",
+            })
+          }
+          style={inputStyle}
+        >
+          <option value="auto_deny">{t("Auto-deny")}</option>
+          <option value="full_access">{t("Full access")}</option>
+        </select>
+      </Field>
+    </Section>
+  );
+
+  const scheduleSection = (
+    <Section title={t("Schedule")} first={split}>
+      <Field label={t("Cron expression")} hint={t("Cron examples hint")} error={cronError}>
+        <CronBuilder
+          value={form.cron}
+          onChange={(cron, valid) => update({ cron, cronValid: valid })}
+        />
+      </Field>
+      <Field label={t("Max lifetime")} hint={t("Max lifetime hint")} error={maxLifetimeError}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <NumberStepper
+            value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
+            onChange={(minutes) => update({ maxLifetimeMinutes: Number.isInteger(minutes) ? String(minutes) : "" })}
+            min={1}
+            max={1440}
+            ariaLabel={t("Max lifetime")}
+            placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
+          />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
+        </div>
+      </Field>
+      <Field label={t("Timezone")} hint={t("Timezone hint")}>
+        <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
+          {timezones.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </Section>
+  );
+
+  const notificationsSection = (
+    <Section title={t("Notifications")}>
+      <NotificationsSection
+        form={form}
+        update={update}
+        channels={channels}
+        channelError={channelError}
+        recipientError={recipientError}
+      />
+    </Section>
+  );
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div
+      ref={containerRef}
+      style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
         <PanelBackButton panel={schedulerPanel} />
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
@@ -131,115 +249,31 @@ export function SchedulerFormPage() {
         </span>
       </div>
 
-      <div
-        ref={scrollRef}
-        data-scroll-wide
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 14px 16px" }}
-      >
-        <Section title={t("Basic config")}>
-          <Field label={t("Task name")} hint={t("Concise description, e.g. daily report")} error={nameError}>
-            <input
-              value={form.name}
-              onChange={(e) => update({ name: e.target.value })}
-              placeholder={t("e.g. daily report")}
-              autoFocus
-              className="scheduler-text-input"
-              style={inputStyle}
-            />
-          </Field>
-          <Field label={t("Prompt")} hint={t("Full prompt sent to agent at trigger time")} error={promptError}>
-            <textarea
-              value={form.prompt}
-              onChange={(e) => update({ prompt: e.target.value })}
-              rows={8}
-              placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
-              className="scheduler-text-input"
-              style={textareaStyle}
-            />
-          </Field>
-          <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
-            <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
-          </Field>
-          <SchedulerModelSelect form={form} update={update} meta={meta} error={modelError} />
-          <SchedulerThinkingSelect form={form} update={update} meta={meta} error={thinkingError} />
-          <SchedulerToolsSelect
-            form={form}
-            update={update}
-            availableTools={availableTools}
-            toolsLoading={toolsLoading}
-            toolsError={toolsError}
-            customExpanded={customExpanded}
-            onToggleCustomExpanded={() => setCustomExpanded((value) => !value)}
-            onRetry={async () => {
-              if (!form.cwd.trim()) return;
-              setToolsLoading(true);
-              setToolsError(null);
-              try {
-                setAvailableTools(await listToolsForCwd(form.cwd.trim()));
-              } catch (error) {
-                setToolsError(error instanceof Error ? error.message : "Failed to load tools");
-              } finally {
-                setToolsLoading(false);
-              }
-            }}
-          />
-          <Field label={t("Dangerous commands")}>
-            <select
-              value={form.permissionMode}
-              onChange={(e) =>
-                update({
-                  permissionMode: e.target.value === "full_access" ? "full_access" : "auto_deny",
-                })
-              }
-              style={inputStyle}
-            >
-              <option value="auto_deny">{t("Auto-deny")}</option>
-              <option value="full_access">{t("Full access")}</option>
-            </select>
-          </Field>
-        </Section>
-
-        <Section title={t("Scheduler")}>
-          <Field label={t("Cron expression")} hint={t("Cron examples hint")} error={cronError}>
-            <CronBuilder
-              value={form.cron}
-              onChange={(cron, valid) => update({ cron, cronValid: valid })}
-            />
-          </Field>
-          <Field label={t("Max lifetime")} hint={t("Max lifetime hint")} error={maxLifetimeError}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <NumberStepper
-                value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
-                onChange={(minutes) => update({ maxLifetimeMinutes: Number.isInteger(minutes) ? String(minutes) : "" })}
-                min={1}
-                max={1440}
-                ariaLabel={t("Max lifetime")}
-                placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
-              />
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
-            </div>
-          </Field>
-          <Field label={t("Timezone")} hint={t("Timezone hint")}>
-            <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
-              {timezones.map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </Section>
-
-        <Section title={t("Notifications")}>
-          <NotificationsSection
-            form={form}
-            update={update}
-            channels={channels}
-            channelError={channelError}
-            recipientError={recipientError}
-          />
-        </Section>
-      </div>
+      {split ? (
+        <div
+          ref={scrollRef}
+          data-scroll-wide
+          style={{ flex: 1, minHeight: 0, display: "flex", gap: 24, padding: "4px 14px 16px", overflow: "hidden" }}
+        >
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+            {basicSection}
+          </div>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+            {scheduleSection}
+            {notificationsSection}
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          data-scroll-wide
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 14px 16px" }}
+        >
+          {basicSection}
+          {scheduleSection}
+          {notificationsSection}
+        </div>
+      )}
 
       <div
         style={{
@@ -270,9 +304,27 @@ export function SchedulerFormPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  first = false,
+  grow = false,
+  children,
+}: {
+  title: string;
+  first?: boolean;
+  grow?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 18 }}>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        marginTop: first ? 0 : 18,
+        ...(grow ? { flex: "1 1 0%", minHeight: 0 } : null),
+      }}
+    >
       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
         {title}
       </div>

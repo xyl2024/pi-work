@@ -94,15 +94,17 @@ export function Field({
   label,
   hint,
   error,
+  grow = false,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string | null;
+  grow?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div>
+    <div style={grow ? { flex: "1 1 0%", minHeight: 0, display: "flex", flexDirection: "column" } : undefined}>
       <div style={fieldLabelStyle}>{label}</div>
       {children}
       {error && (
