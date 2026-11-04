@@ -266,7 +266,8 @@ function RunRow({
         aria-hidden="true"
         style={{
           color: selected ? "var(--accent)" : "var(--text-dim)",
-          transform: "rotate(-90deg)",
+          transform: selected ? "rotate(0deg)" : "rotate(-90deg)",
+          transition: "transform 0.15s",
         }}
       />
     </div>

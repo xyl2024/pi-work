@@ -9,6 +9,8 @@ export const SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN: Record<SchedulerDetailSectio
   config: false,
 };
 
+export const SCHEDULER_RUNS_MIN_HEIGHT = 360;
+
 export type SchedulerConfigRowId =
   | "provider"
   | "model"

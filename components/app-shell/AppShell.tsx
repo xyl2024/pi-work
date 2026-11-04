@@ -692,11 +692,11 @@ export function AppShell() {
 
   const handleSessionDraftCreate = useCallback(async () => {
     try {
+      if (!(await requestSchedulerLeave("leave_main_view"))) return;
       const response = await fetch("/api/default-cwd", { method: "POST" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json() as { cwd?: string };
       if (!data.cwd) throw new Error("Missing cwd");
-      if (!(await requestSchedulerLeave("leave_main_view"))) return;
       const current = workspaceRef.current;
       const existingDraft = current.tabOrder
         .map((id) => current.tabs[id])
@@ -766,10 +766,11 @@ export function AppShell() {
     }
   }, [recentCwds]);
 
-  const handleSessionDeleted = useCallback((sessionId: string) => {
+  const handleSessionDeleted = useCallback(async (sessionId: string) => {
     setRefreshKey((k) => k + 1);
     dispatchWorkspace({ type: "close_session", sessionId });
     removeSessionPermissionRequests(sessionId);
+    if (!(await requestSchedulerLeave("leave_main_view"))) return;
     closeTopPanel();
   }, [closeTopPanel, removeSessionPermissionRequests]);
 

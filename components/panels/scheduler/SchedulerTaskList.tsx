@@ -20,7 +20,9 @@ import {
   countSchedulerTasks,
   filterSchedulerTasks,
   isSchedulerErrorStatus,
+  stepSchedulerSelection,
   type SchedulerFilter,
+  type SchedulerSelectionStep,
 } from "@/lib/shared/scheduler-filter";
 import type { ScheduledTask } from "@/lib/shared/scheduler";
 import { AlertIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
@@ -47,6 +49,15 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
     const row = listRef.current.querySelector(`[data-task-row="${selectedTaskId}"]`) as HTMLElement | null;
     if (row) row.scrollIntoView({ block: "nearest" });
   }, [selectedTaskId]);
+
+  const moveSelection = (fromId: string, step: SchedulerSelectionStep) => {
+    const nextId = stepSchedulerSelection(filtered.map((task) => task.id), fromId, step);
+    if (nextId === null || nextId === fromId) return;
+    void openSchedulerTask(nextId).then((opened) => {
+      if (!opened) return;
+      listRef.current?.querySelector<HTMLElement>(`[data-task-row="${nextId}"]`)?.focus();
+    });
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -183,6 +194,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
             now={now}
             selected={task.id === selectedTaskId}
             onSelect={() => void openSchedulerTask(task.id)}
+            onMove={(step) => moveSelection(task.id, step)}
           />
         ))}
       </div>
@@ -195,11 +207,13 @@ function TaskRow({
   now,
   selected,
   onSelect,
+  onMove,
 }: {
   task: ScheduledTask;
   now: number;
   selected: boolean;
   onSelect: () => void;
+  onMove: (step: SchedulerSelectionStep) => void;
 }) {
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -229,6 +243,11 @@ function TaskRow({
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          onMove(event.key === "ArrowDown" ? "next" : "previous");
+          return;
+        }
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onSelect();
@@ -242,18 +261,18 @@ function TaskRow({
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        gap: 2,
-        minHeight: 40,
+        gap: 1,
+        minHeight: 38,
         boxSizing: "border-box",
         margin: "0 8px",
-        padding: "4px 10px",
+        padding: "2px 10px",
         cursor: "pointer",
         background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderRadius: 6,
         transition: "background 0.12s",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, lineHeight: 1.25 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, lineHeight: 1.3 }}>
         <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="sm" bare />
         <span
           style={{
@@ -291,7 +310,7 @@ function TaskRow({
           />
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.25 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.3 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           <CronHumanizer cron={task.cron} showCode={false} timezone={task.timezone} />
         </span>

@@ -3,6 +3,7 @@ import {
   countSchedulerTasks,
   filterSchedulerTasks,
   isSchedulerErrorStatus,
+  stepSchedulerSelection,
 } from "@/lib/shared/scheduler-filter";
 import type { ScheduledTask, TaskRunStatus } from "@/lib/shared/scheduler";
 
@@ -104,5 +105,34 @@ describe("countSchedulerTasks", () => {
 
   it("counts an empty list as zero", () => {
     expect(countSchedulerTasks([], "all")).toBe(0);
+  });
+});
+
+describe("stepSchedulerSelection", () => {
+  const order = ["a", "b", "c"];
+
+  it("enters the list from either end when nothing is selected", () => {
+    expect(stepSchedulerSelection(order, null, "next")).toBe("a");
+    expect(stepSchedulerSelection(order, null, "previous")).toBe("c");
+  });
+
+  it("moves one row in the requested direction", () => {
+    expect(stepSchedulerSelection(order, "a", "next")).toBe("b");
+    expect(stepSchedulerSelection(order, "c", "previous")).toBe("b");
+  });
+
+  it("stops at the ends instead of wrapping around", () => {
+    expect(stepSchedulerSelection(order, "c", "next")).toBe("c");
+    expect(stepSchedulerSelection(order, "a", "previous")).toBe("a");
+  });
+
+  it("re-enters from an end when the selection fell out of the filtered list", () => {
+    expect(stepSchedulerSelection(order, "gone", "next")).toBe("a");
+    expect(stepSchedulerSelection(order, "gone", "previous")).toBe("c");
+  });
+
+  it("has nothing to move to in an empty list", () => {
+    expect(stepSchedulerSelection([], null, "next")).toBeNull();
+    expect(stepSchedulerSelection([], "a", "previous")).toBeNull();
   });
 });
