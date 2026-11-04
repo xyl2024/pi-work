@@ -1,7 +1,8 @@
-import { Fragment, type CSSProperties, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderGearIcon, ProviderIcon, resolveProviderIcon } from "@/components/ui/icons";
 import { ThinkingBadge } from "@/components/scheduler/ThinkingBadge";
+import { codePillStyle } from "@/components/scheduler/styles";
 import {
   buildSchedulerConfigRows,
   type ChannelMeta,
@@ -39,7 +40,7 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
       return (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <code style={codePillStyle}>{value.text}</code>
-          {value.isDefault && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("default")}</span>}
+          {value.isDefault && <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("default")}</span>}
         </span>
       );
     }
@@ -73,10 +74,10 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
   };
 
   return (
-    <dl style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "7px 12px", margin: 0, fontSize: 12 }}>
+    <dl style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px 16px", margin: 0, fontSize: 13 }}>
       {rows.map((row) => (
         <Fragment key={row.id}>
-          <dt style={{ color: "var(--text-muted)", minWidth: 0 }}>{t(row.labelKey)}</dt>
+          <dt style={{ color: "var(--text-muted)", minWidth: 0, fontSize: 12 }}>{t(row.labelKey)}</dt>
           <dd style={{ margin: 0, color: "var(--text)", minWidth: 0, wordBreak: "break-word" }}>
             {renderValue(row.value, row.id)}
           </dd>
@@ -87,14 +88,6 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
 }
 
 function Missing({ children }: { children: ReactNode }) {
-  return <span style={{ color: "var(--error)", fontSize: 11 }}>{children}</span>;
+  return <span style={{ color: "var(--error)", fontSize: 12 }}>{children}</span>;
 }
 
-const codePillStyle: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  padding: "1px 5px",
-  background: "var(--bg-subtle)",
-  borderRadius: 4,
-  color: "var(--text)",
-};

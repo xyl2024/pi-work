@@ -23,7 +23,7 @@ import {
   SchedulerToolsSelect,
 } from "./SchedulerFormFields";
 import { PanelBackButton } from "../PanelBackButton";
-import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, textareaStyle } from "@/components/scheduler/styles";
+import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, sectionTitleStyle, textareaStyle } from "@/components/scheduler/styles";
 import {
   listTimezones,
   parseMaxLifetimeMinutes,
@@ -71,7 +71,7 @@ export function SchedulerFormPage() {
         if (!cancelled) setAvailableTools(tools);
       })
       .catch((error) => {
-        if (!cancelled) setToolsError(error instanceof Error ? error.message : "Failed to load tools");
+        if (!cancelled) setToolsError(error instanceof Error ? error.message : t("Failed to load tools"));
       })
       .finally(() => {
         if (!cancelled) setToolsLoading(false);
@@ -79,7 +79,7 @@ export function SchedulerFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [formCwd]);
+  }, [formCwd, t]);
 
   if (form === null) return null;
 
@@ -170,7 +170,7 @@ export function SchedulerFormPage() {
           try {
             setAvailableTools(await listToolsForCwd(form.cwd.trim()));
           } catch (error) {
-            setToolsError(error instanceof Error ? error.message : "Failed to load tools");
+            setToolsError(error instanceof Error ? error.message : t("Failed to load tools"));
           } finally {
             setToolsLoading(false);
           }
@@ -211,7 +211,7 @@ export function SchedulerFormPage() {
             ariaLabel={t("Max lifetime")}
             placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
           />
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("minutes")}</span>
         </div>
       </Field>
       <Field label={t("Timezone")} hint={t("Timezone hint")}>
@@ -243,14 +243,14 @@ export function SchedulerFormPage() {
       ref={containerRef}
       style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 20px 8px", flexShrink: 0 }}>
         <PanelBackButton
           panel={schedulerPanel}
           onBack={async () => {
             await requestSchedulerLeave("back_to_browse");
           }}
         />
-        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
           {formTaskId ? t("Edit task") : t("New task")}
         </span>
       </div>
@@ -259,7 +259,7 @@ export function SchedulerFormPage() {
         <div
           ref={scrollRef}
           data-scroll-wide
-          style={{ flex: 1, minHeight: 0, display: "flex", gap: 24, padding: "4px 14px 16px", overflow: "hidden" }}
+          style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: "8px 20px 20px", overflow: "hidden" }}
         >
           <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
             {basicSection}
@@ -273,7 +273,7 @@ export function SchedulerFormPage() {
         <div
           ref={scrollRef}
           data-scroll-wide
-          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 14px 16px" }}
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 20px 20px" }}
         >
           {basicSection}
           {scheduleSection}
@@ -286,14 +286,14 @@ export function SchedulerFormPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 14px",
+          padding: "12px 20px",
           borderTop: "1px solid var(--border)",
           background: "var(--bg)",
           flexShrink: 0,
         }}
       >
         {saveError && (
-          <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--error)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--error)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {saveError}
           </span>
         )}
@@ -326,14 +326,12 @@ function Section({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 14,
-        marginTop: first ? 0 : 18,
+        gap: 16,
+        marginTop: first ? 0 : 24,
         ...(grow ? { flex: "1 1 0%", minHeight: 0 } : null),
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        {title}
-      </div>
+      <div style={sectionTitleStyle}>{title}</div>
       {children}
     </section>
   );
@@ -356,7 +354,7 @@ function NotificationsSection({
   const contacts = channels.map((channel) => channel.userId).filter((id): id is string => Boolean(id));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
         <input
           type="checkbox"
@@ -423,7 +421,7 @@ function NotificationsSection({
                 </datalist>
               )}
               {contacts.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
                   {t("Known contacts")}: {contacts.slice(0, 5).join(", ")}
                   {contacts.length > 5 ? "…" : ""}
                 </span>

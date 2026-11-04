@@ -50,9 +50,9 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px 8px", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 16px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("Scheduled tasks")}</span>
-        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
           {tasks.length > 0 ? t("{n} tasks", { n: tasks.length }) : ""}
         </span>
         <button
@@ -63,7 +63,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 5,
-            padding: "5px 11px",
+            padding: "6px 12px",
             background: "var(--accent)",
             color: "#fff",
             border: "none",
@@ -80,7 +80,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
         </button>
       </div>
 
-      <div style={{ padding: "0 14px 8px", flexShrink: 0 }}>
+      <div style={{ padding: "0 16px 8px", flexShrink: 0 }}>
         <div style={{ position: "relative" }}>
           <SearchIcon
             width={11}
@@ -101,8 +101,8 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
             className="scheduler-text-input"
             style={{
               width: "100%",
-              padding: "5px 10px 5px 26px",
-              fontSize: 12,
+              padding: "6px 10px 6px 26px",
+              fontSize: 13,
               border: "1px solid var(--scheduler-input-border, var(--border))",
               borderRadius: 6,
               background: "var(--bg)",
@@ -114,7 +114,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
         </div>
       </div>
 
-      <div style={{ padding: "0 14px 8px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
+      <div style={{ padding: "0 16px 12px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.id;
           const count = countSchedulerTasks(tasks, f.id);
@@ -124,8 +124,8 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
               type="button"
               onClick={() => setSchedulerFilter(f.id)}
               style={{
-                padding: "3px 9px",
-                fontSize: 11,
+                padding: "3px 10px",
+                fontSize: 12,
                 border: "1px solid",
                 borderColor: active ? "var(--accent)" : "var(--border)",
                 background: active ? "var(--bg-selected)" : "transparent",
@@ -139,7 +139,7 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
               }}
             >
               {t(f.label)}
-              {count > 0 && <span style={{ fontSize: 11 }}>{count}</span>}
+              {count > 0 && <span style={{ fontSize: 12 }}>{count}</span>}
             </button>
           );
         })}
@@ -148,11 +148,11 @@ export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
       {runningCount > 0 && (
         <div
           style={{
-            margin: "0 14px 8px",
-            padding: "5px 10px",
+            margin: "0 16px 8px",
+            padding: "6px 10px",
             background: "var(--info-bg)",
             color: "var(--info)",
-            fontSize: 11,
+            fontSize: 12,
             borderRadius: 6,
             display: "flex",
             alignItems: "center",
@@ -239,15 +239,21 @@ function TaskRow({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={{
-        margin: "2px 10px",
-        padding: "9px 11px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: 2,
+        minHeight: 40,
+        boxSizing: "border-box",
+        margin: "0 8px",
+        padding: "4px 10px",
         cursor: "pointer",
         background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderRadius: 8,
+        borderRadius: 6,
         transition: "background 0.12s",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, lineHeight: 1.25 }}>
         <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="sm" bare />
         <span
           style={{
@@ -285,7 +291,7 @@ function TaskRow({
           />
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.25 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           <CronHumanizer cron={task.cron} showCode={false} timezone={task.timezone} />
         </span>
