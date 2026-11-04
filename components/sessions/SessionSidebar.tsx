@@ -44,6 +44,7 @@ interface Props {
   onOpenAssistant?: () => void;
   onOpenMainView?: (kind: MainViewKind) => void;
   activeMainView?: MainViewKind | null;
+  mainViewBadges?: Partial<Record<MainViewKind, ReactNode>>;
   assistantActive?: boolean;
   assistantCwd?: string | null;
   selectedCwd?: string | null;
@@ -188,7 +189,7 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, onOpenMainView, activeMainView = null, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onNewTask, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -795,6 +796,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             key={spec.kind}
             onClick={() => onOpenMainView(spec.kind)}
             active={activeMainView === spec.kind}
+            badge={mainViewBadges[spec.kind]}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
               <circle cx="12" cy="12" r="9" />

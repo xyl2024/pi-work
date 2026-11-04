@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { load } from "js-yaml";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
@@ -10,6 +11,7 @@ const configPath = join(root, "config.yaml");
 
 let readConfig: () => PiWorkConfig;
 let writeConfig: (config: PiWorkConfig) => PiWorkConfig;
+let mergeRightSideBar: typeof import("@/lib/server/config").mergeRightSideBar;
 
 beforeAll(async () => {
   process.env.PI_WORK_DATA_DIR = root;
@@ -17,6 +19,7 @@ beforeAll(async () => {
   const mod = await import("@/lib/server/config");
   readConfig = mod.readConfig;
   writeConfig = mod.writeConfig;
+  mergeRightSideBar = mod.mergeRightSideBar;
 });
 
 beforeEach(() => {
@@ -79,5 +82,36 @@ describe("config: in-process cache", () => {
 
   it("owns the memory settings key", () => {
     expect(isSettingsOwnedKey("memory")).toBe(true);
+  });
+});
+
+describe("config: right-side-bar keys that left the registry", () => {
+  it("keeps the legacy scheduler key through a read/write round trip", () => {
+    writeFileSync(
+      configPath,
+      "right_side_bar:\n  scheduler: false\n  skills: false\n",
+      "utf8",
+    );
+
+    const config = readConfig();
+    expect(config.right_side_bar.scheduler).toBe(false);
+    expect(config.right_side_bar.skills).toBe(false);
+
+    writeConfig(config);
+
+    const written = load(readFileSync(configPath, "utf8")) as {
+      right_side_bar: Record<string, unknown>;
+    };
+    expect(written.right_side_bar.scheduler).toBe(false);
+    expect(readConfig().right_side_bar.scheduler).toBe(false);
+  });
+
+  it("merges an incoming block over the stored one so unknown keys survive a save", () => {
+    const merged = mergeRightSideBar(
+      { scheduler: false, skills: false, session_bound_alignment: "bottom" },
+      { skills: true },
+    );
+
+    expect(merged).toEqual({ scheduler: false, skills: true, session_bound_alignment: "bottom" });
   });
 });

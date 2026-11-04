@@ -66,6 +66,7 @@ import {
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
 import {
+  MAIN_VIEW_KINDS,
   MAIN_VIEW_SPEC_BY_KIND,
   createMainViewState,
   mainViewReducer,
@@ -77,6 +78,7 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
+import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { schedulerPanel, setSchedulerPanelOpen } from "@/lib/client/scheduler-panel";
 import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
@@ -162,9 +164,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
-  scheduler: (ctx) => (
-    <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
-  ),
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
   memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
@@ -173,13 +172,30 @@ const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycle
   mcp: mcpPanel,
   channels: channelsPanel,
   skills: skillsPanel,
-  scheduler: schedulerPanel,
   modelsConfig: modelsConfigPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
 
 const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = Object.values(PANEL_VIEW_STORE_BY_KIND);
+
+interface MainViewBodyCtx {
+  cwd: string | null;
+  openSessionById: (sessionId: string) => void;
+  onExit: () => void;
+  visible: boolean;
+}
+
+const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => ReactNode> = {
+  scheduler: (ctx) => (
+    <SchedulerPanel
+      cwd={ctx.cwd}
+      onOpenSession={ctx.openSessionById}
+      onExit={ctx.onExit}
+      visible={ctx.visible}
+    />
+  ),
+};
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   const closing = new Set(tabs.map((tab) => tab.kind));
@@ -375,6 +391,13 @@ export function AppShell() {
     dispatchMainView({ type: "toggle", kind, panelMode });
     setPanelMode(next.active === "chat" ? panelMode : "closed");
   }, [setPanelMode]);
+  const enterMainView = useCallback((kind: MainViewKind) => {
+    const current = mainViewRef.current;
+    const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
+    if (current.active === kind) return;
+    dispatchMainView({ type: "enter", kind, panelMode });
+    setPanelMode("closed");
+  }, [setPanelMode]);
   const leaveMainView = useCallback(() => {
     const current = mainViewRef.current;
     if (current.active === "chat") return;
@@ -445,8 +468,8 @@ export function AppShell() {
   const skillsInstalling = skillsPanel.useStatus() === true;
   const schedulerRunning = schedulerPanel.useStatus() === true;
   useEffect(() => {
-    setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
-  }, [activeRightPanelKind, rightPanelState]);
+    setSchedulerPanelOpen(true);
+  }, []);
   usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
   const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -1057,7 +1080,6 @@ export function AppShell() {
     selectedCwd,
     modelsConfigDirty,
     skillsInstalling,
-    schedulerRunning,
     mcpDirty,
     t,
     toggleRightPanel: () =>
@@ -1147,18 +1169,20 @@ export function AppShell() {
       mode: panelTabsRef.current.mode === "closed" ? "normal" : "closed",
     }),
     togglePanel: handleTogglePanel,
+    enterMainView,
     agentControls,
     hasSession: selectedSession !== null || newSessionCwd !== null,
   }), [
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
     handleTogglePanel,
+    enterMainView,
     agentControls,
     selectedSession, newSessionCwd,
   ]);
 
   const commands = useMemo<Command[]>(
-    () => buildCommands(commandContext, t, PANEL_COMMAND_ICON_BY_KIND),
+    () => buildCommands(commandContext, t, PANEL_COMMAND_ICON_BY_KIND, MAIN_VIEW_COMMAND_ICON_BY_KIND),
     [commandContext, t],
   );
 
@@ -1302,6 +1326,19 @@ export function AppShell() {
     </div>
   );
 
+  const mainViewBodyCtx: Omit<MainViewBodyCtx, "visible"> = {
+    cwd: selectedCwd,
+    openSessionById: handleOpenScheduledSession,
+    onExit: leaveMainView,
+  };
+  const mainViewBadges: Partial<Record<MainViewKind, ReactNode>> = {
+    scheduler: schedulerRunning ? (
+      <span
+        aria-hidden="true"
+        style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
+      />
+    ) : null,
+  };
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;
   const mainViewLabelKey = activeMainViewKind === null ? null : MAIN_VIEW_SPEC_BY_KIND[activeMainViewKind].labelKey;
   const mainViewCard = (
@@ -1339,7 +1376,25 @@ export function AppShell() {
           {mainViewLabelKey === null ? "" : `← ${t(mainViewLabelKey)}`}
         </button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }} />
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+        {MAIN_VIEW_KINDS.map((kind) => (
+          <div
+            key={kind}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: activeMainViewKind === kind ? "flex" : "none",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {MAIN_VIEW_BODY_BY_KIND[kind]({
+              ...mainViewBodyCtx,
+              visible: activeMainViewKind === kind,
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
@@ -1399,6 +1454,7 @@ export function AppShell() {
       onOpenAssistant={assistantSidebarEntryEnabled ? handleOpenAssistant : undefined}
       onOpenMainView={setMainView}
       activeMainView={activeMainViewKind}
+      mainViewBadges={mainViewBadges}
       assistantActive={assistantActive}
       assistantCwd={assistantCwd}
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}

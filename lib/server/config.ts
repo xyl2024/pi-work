@@ -159,10 +159,33 @@ function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
   return { rules, timeout_ms, full_access_by_default };
 }
 
+const RESERVED_RIGHT_SIDEBAR_KEYS: ReadonlySet<string> = new Set([
+  "order",
+  "session_bound_alignment",
+]);
+
+function legacyRightSideBarKeys(obj: Record<string, unknown>): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value !== "boolean") continue;
+    if (RESERVED_RIGHT_SIDEBAR_KEYS.has(key)) continue;
+    if ((CONFIGURABLE_BUTTON_IDS as readonly string[]).includes(key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+export function mergeRightSideBar(
+  stored: RightSideBarConfig | undefined,
+  incoming: RightSideBarConfig,
+): RightSideBarConfig {
+  return { ...stored, ...incoming };
+}
+
 function parseRightSideBar(raw: unknown): RightSideBarConfig {
-  const out: RightSideBarConfig = { ...DEFAULT_RIGHT_SIDE_BAR };
-  if (!raw || typeof raw !== "object") return out;
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_RIGHT_SIDE_BAR };
   const obj = raw as Record<string, unknown>;
+  const out: RightSideBarConfig = { ...DEFAULT_RIGHT_SIDE_BAR, ...legacyRightSideBarKeys(obj) };
   for (const id of CONFIGURABLE_BUTTON_IDS) {
     const v = obj[id];
     if (typeof v === "boolean") out[id] = v;
