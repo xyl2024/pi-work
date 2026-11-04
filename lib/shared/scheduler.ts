@@ -83,8 +83,6 @@ export interface TaskUpdatePayload {
   notification?: TaskNotification | null;
 }
 
-export type SchedulerDetailBlock = "overview" | "runs" | "prompt" | "config";
-
 export interface SchedulerModelMeta {
   modelList: { id: string; name: string; provider: string }[];
   thinkingLevels: Record<string, string[]>;

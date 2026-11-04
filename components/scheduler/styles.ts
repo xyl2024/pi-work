@@ -70,25 +70,3 @@ export const btnGhost: CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
 };
-
-export const tabBarStyle: CSSProperties = {
-  display: "flex",
-  gap: 4,
-  padding: "4px 4px",
-  background: "var(--bg)",
-};
-
-export function tabItemStyle(active: boolean): CSSProperties {
-  return {
-    padding: "5px 12px",
-    fontSize: 12,
-    fontWeight: active ? 600 : 400,
-    color: active ? "var(--text)" : "var(--text-muted)",
-    background: "transparent",
-    border: "none",
-    borderRadius: "6px 6px 0 0",
-    cursor: "pointer",
-    fontFamily: "inherit",
-    transition: "color 0.12s",
-  };
-}
