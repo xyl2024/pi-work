@@ -21,6 +21,7 @@ import {
   selectSchedulerCloseConfirm,
 } from "@/lib/shared/scheduler-close";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
+import type { SchedulerFilter } from "@/lib/shared/scheduler-filter";
 import {
   browserTimezone,
   newSchedulerForm,
@@ -39,7 +40,7 @@ import type {
 } from "@/lib/shared/scheduler";
 import type { TaskNotification } from "@/lib/shared/notifications";
 
-export type SchedulerFilter = "all" | "enabled" | "disabled" | "error";
+export type { SchedulerFilter };
 
 export interface SchedulerViewState {
   loading: boolean;
@@ -59,7 +60,7 @@ export interface SchedulerViewState {
   runsVisible: boolean;
 }
 
-const ROOT_PAGE: SchedulerPage = { kind: "root" };
+const ROOT_PAGE: SchedulerPage = { kind: "browse" };
 
 const INITIAL: SchedulerViewState = {
   loading: false,
@@ -170,8 +171,7 @@ export function setSchedulerQuery(query: string): void {
 }
 
 export function openSchedulerTask(taskId: string): void {
-  schedulerPanel.openPage({ kind: "detail", taskId });
-  schedulerPanel.patch({ selectedTaskId: taskId, runsVisible: false });
+  schedulerPanel.patch({ selectedTaskId: taskId });
 }
 
 export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null): void {
@@ -234,7 +234,6 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
       : await createScheduledTask(base satisfies TaskCreatePayload);
     scope.patch({ saving: false, selectedTaskId: saved.id, saveError: null, runsVisible: false });
     schedulerPanel.resetPages();
-    schedulerPanel.openPage({ kind: "detail", taskId: saved.id });
     scope.patch({
       tasks: upsertTask(scope.get().tasks, saved),
       form: null,
@@ -353,9 +352,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
   },
   status(state) {
     return state.tasks.some((task) => task.lastRunStatus === "running");
-  },
-  isSiblingPage(next, current) {
-    return next.kind === "detail" && current.kind === "detail";
   },
 };
 

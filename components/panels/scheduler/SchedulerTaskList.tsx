@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "@/components/ui/Toast";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { StatusBadge } from "@/components/scheduler/StatusBadge";
 import { CronHumanizer } from "@/components/scheduler/CronHumanizer";
 import { useNow } from "@/components/scheduler/useNow";
@@ -11,20 +13,33 @@ import {
   openSchedulerTask,
   setSchedulerFilter,
   setSchedulerQuery,
+  toggleSchedulerTask,
   useSchedulerPanel,
-  type SchedulerFilter,
 } from "@/lib/client/scheduler-panel";
-import type { ScheduledTask, TaskRunStatus } from "@/lib/shared/scheduler";
-import { AlertIcon, ClockIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import {
+  countSchedulerTasks,
+  filterSchedulerTasks,
+  isSchedulerErrorStatus,
+  type SchedulerFilter,
+} from "@/lib/shared/scheduler-filter";
+import type { ScheduledTask } from "@/lib/shared/scheduler";
+import { AlertIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
-export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
+const FILTERS: { id: SchedulerFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "enabled", label: "Enabled" },
+  { id: "disabled", label: "Paused" },
+  { id: "error", label: "Has errors" },
+];
+
+export function SchedulerTaskList({ cwd }: { cwd: string | null }) {
   const { t } = useI18n();
   const { view } = useSchedulerPanel();
   const { tasks, loaded, loadError, filter, query, selectedTaskId } = view;
   const now = useNow(30_000);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const filtered = useMemo(() => filterTasks(tasks, filter, query), [tasks, filter, query]);
+  const filtered = useMemo(() => filterSchedulerTasks(tasks, filter, query), [tasks, filter, query]);
   const runningCount = tasks.filter((task) => task.lastRunStatus === "running").length;
 
   useEffect(() => {
@@ -102,7 +117,7 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
       <div style={{ padding: "0 14px 8px", display: "flex", gap: 4, flexWrap: "wrap", flexShrink: 0 }}>
         {FILTERS.map((f) => {
           const active = filter === f.id;
-          const count = filterCount(tasks, f.id);
+          const count = countSchedulerTasks(tasks, f.id);
           return (
             <button
               key={f.id}
@@ -157,9 +172,7 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
       <div ref={listRef} data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {!loaded && !loadError && <EmptyHint text={t("Loading...")} />}
         {loadError && <EmptyHint text={t("Failed to load: {error}", { error: loadError })} variant="error" />}
-        {loaded && !loadError && tasks.length === 0 && (
-          <EmptyState onCreate={() => openSchedulerForm(null, cwd)} />
-        )}
+        {loaded && !loadError && tasks.length === 0 && <EmptyHint text={t("No scheduled tasks yet")} />}
         {loaded && !loadError && tasks.length > 0 && filtered.length === 0 && (
           <EmptyHint text={t("No matching tasks")} />
         )}
@@ -177,44 +190,6 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
   );
 }
 
-const FILTERS: { id: SchedulerFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "enabled", label: "Enabled" },
-  { id: "disabled", label: "Paused" },
-  { id: "error", label: "Has errors" },
-];
-
-function isErrorStatus(status: TaskRunStatus | null): boolean {
-  return status === "error" || status === "timeout" || status === "interrupted";
-}
-
-function filterTasks(tasks: ScheduledTask[], filter: SchedulerFilter, query: string): ScheduledTask[] {
-  const q = query.trim().toLowerCase();
-  return tasks.filter((task) => {
-    if (filter === "enabled" && !task.enabled) return false;
-    if (filter === "disabled" && task.enabled) return false;
-    if (filter === "error" && !isErrorStatus(task.lastRunStatus)) return false;
-    if (q.length > 0) {
-      const haystack = `${task.name} ${task.cron} ${task.prompt}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
-}
-
-function filterCount(tasks: ScheduledTask[], filter: SchedulerFilter): number {
-  switch (filter) {
-    case "all":
-      return tasks.length;
-    case "enabled":
-      return tasks.filter((t) => t.enabled).length;
-    case "disabled":
-      return tasks.filter((t) => !t.enabled).length;
-    case "error":
-      return tasks.filter((t) => isErrorStatus(t.lastRunStatus)).length;
-  }
-}
-
 function TaskRow({
   task,
   now,
@@ -227,13 +202,25 @@ function TaskRow({
   onSelect: () => void;
 }) {
   const { t, locale } = useI18n();
-  const showErrorBadge = isErrorStatus(task.lastRunStatus);
+  const toast = useToast();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const showErrorBadge = isSchedulerErrorStatus(task.lastRunStatus);
+  const actionsVisible = hovered || focused || selected;
 
   const nextLabel = !task.enabled
     ? t("Paused")
     : isOnceDone(task)
       ? t("Executed")
       : t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) });
+
+  const handleToggle = async (enabled: boolean) => {
+    try {
+      await toggleSchedulerTask(task.id, enabled);
+    } catch (e) {
+      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to toggle task") });
+    }
+  };
 
   return (
     <div
@@ -247,11 +234,15 @@ function TaskRow({
           onSelect();
         }
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       style={{
         margin: "2px 10px",
         padding: "9px 11px",
         cursor: "pointer",
-        background: selected ? "var(--bg-selected)" : "transparent",
+        background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderRadius: 8,
         transition: "background 0.12s",
       }}
@@ -261,6 +252,7 @@ function TaskRow({
         <span
           style={{
             flex: 1,
+            minWidth: 0,
             fontSize: 13,
             color: "var(--text)",
             fontWeight: 500,
@@ -284,6 +276,14 @@ function TaskRow({
             }}
           />
         )}
+        <span style={{ visibility: actionsVisible ? "visible" : "hidden", display: "inline-flex", flexShrink: 0 }}>
+          <ToggleSwitch
+            on={task.enabled}
+            onChange={(next) => void handleToggle(next)}
+            size="sm"
+            label={t("Enabled")}
+          />
+        </span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -308,44 +308,6 @@ function EmptyHint({ text, variant = "muted" }: { text: string; variant?: "muted
       }}
     >
       {text}
-    </div>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  const { t } = useI18n();
-  return (
-    <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)" }}>
-      <ClockIcon size={56} strokeWidth={1.2} style={{ color: "var(--text-muted)", margin: "0 auto 12px", display: "block" }} />
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
-        {t("No scheduled tasks yet")}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 14 }}>
-        {t("Let the agent run any task automatically at a scheduled time")}
-        <br />
-        {t("e.g. daily report, hourly checks")}
-      </div>
-      <button
-        type="button"
-        onClick={onCreate}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          background: "var(--accent)",
-          color: "#fff",
-          border: "none",
-          borderRadius: 6,
-          padding: "6px 14px",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: "pointer",
-          fontFamily: "inherit",
-        }}
-      >
-        <PlusIcon width={11} height={11} />
-        {t("New task")}
-      </button>
     </div>
   );
 }

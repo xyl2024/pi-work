@@ -1,6 +1,5 @@
 export type SchedulerPage =
-  | { kind: "root" }
-  | { kind: "detail"; taskId: string }
+  | { kind: "browse" }
   | { kind: "form"; taskId: string | null };
 
 import type { TaskNotification } from "./notifications";
