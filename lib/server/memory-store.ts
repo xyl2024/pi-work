@@ -4,6 +4,10 @@ import { join } from "node:path";
 import {
   MEMORY_ENTRY_SEPARATOR,
   MEMORY_TARGET_FILES,
+  memoryEntriesUsage,
+  memoryEntryViews,
+  memoryLibraryView,
+  type MemoryLibraryView,
   type MemoryStoreStatus,
   type MemoryTarget,
   type MemoryUsageReport,
@@ -50,6 +54,8 @@ export type MemoryWriteFailureCode =
   | "no_match"
   | "ambiguous"
   | "budget"
+  | "out_of_range"
+  | "stale_entry"
   | "busy";
 
 export interface MemoryWriteFailure {
@@ -95,7 +101,7 @@ function joinEntries(entries: readonly string[]): string {
 }
 
 function usageOf(entries: readonly string[]): number {
-  return joinEntries(entries).length;
+  return memoryEntriesUsage(entries);
 }
 
 export function readMemory(target: MemoryTarget): MemorySnapshot {
@@ -114,6 +120,10 @@ export function readMemory(target: MemoryTarget): MemorySnapshot {
   return { target, status: "ok", entries, used: usageOf(entries), limit };
 }
 
+export function readMemoryView(target: MemoryTarget): MemoryLibraryView {
+  return memoryLibraryView(readMemory(target));
+}
+
 export function readMemoryUsage(): MemoryUsageReport {
   return {
     memory: storeUsage("memory"),
@@ -122,12 +132,12 @@ export function readMemoryUsage(): MemoryUsageReport {
 }
 
 function storeUsage(target: MemoryTarget): MemoryUsageReport[MemoryTarget] {
-  const snapshot = readMemory(target);
+  const view = readMemoryView(target);
   return {
-    file: MEMORY_TARGET_FILES[target],
-    status: snapshot.status,
-    used: snapshot.used,
-    limit: snapshot.limit,
+    file: view.file,
+    status: view.status,
+    used: view.used,
+    limit: view.limit,
   };
 }
 
@@ -175,6 +185,8 @@ const FAILURE_MESSAGES: Record<MemoryWriteFailureCode, string> = {
   no_match: "没有条目匹配 old_text，请对照最接近的条目改写。",
   ambiguous: "old_text 命中多个位置，请给出更精确的 old_text。",
   budget: "记忆库超出字符预算，请一次批量删旧加新。",
+  out_of_range: "条目索引越界，记忆库可能已被改动，请刷新后再删。",
+  stale_entry: "条目在你确认前已被改动，已拒绝删除，请刷新后再试。",
   busy: "记忆库正被其它会话写入，请稍后重试。",
 };
 
@@ -430,6 +442,57 @@ export async function applyMemoryOperations(
     }
     writeFileAtomic(storePath(target), joinEntries(entries));
     return { ok: true, target, entries, used, limit: snapshot.limit };
+  } finally {
+    await release();
+  }
+}
+
+async function snapshotDeletedRaw(target: MemoryTarget, raw: string): Promise<void> {
+  const path = storePath(target);
+  const seconds = Math.floor(Date.now() / 1000);
+  for (let suffix = 0; ; suffix += 1) {
+    const name =
+      suffix === 0
+        ? `${path}.${seconds}.bak`
+        : `${path}.${seconds}.${String(suffix).padStart(2, "0")}.bak`;
+    try {
+      const handle = await open(name, "wx");
+      try {
+        await handle.writeFile(raw, "utf8");
+      } finally {
+        await handle.close();
+      }
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+}
+
+export async function deleteMemoryEntry(
+  target: MemoryTarget,
+  index: number,
+  hash: string,
+): Promise<MemoryWriteResult> {
+  const release = await acquireLock();
+  if (release === null) return failure(target, "busy", index, []);
+  try {
+    const snapshot = readMemory(target);
+    if (snapshot.status === "unreadable") return failure(target, "unreadable", index, []);
+    const views = memoryEntryViews(snapshot.entries, snapshot.limit);
+    const view = Number.isInteger(index) && index >= 0 ? views[index] : undefined;
+    if (view === undefined) {
+      return failure(target, "out_of_range", index, snapshot.entries);
+    }
+    if (view.hash !== hash) {
+      return failure(target, "stale_entry", index, snapshot.entries);
+    }
+    if (view.oversized) {
+      await snapshotDeletedRaw(target, readFileSync(storePath(target), "utf8"));
+    }
+    const entries = snapshot.entries.filter((_, at) => at !== index);
+    writeFileAtomic(storePath(target), joinEntries(entries));
+    return { ok: true, target, entries, used: usageOf(entries), limit: snapshot.limit };
   } finally {
     await release();
   }

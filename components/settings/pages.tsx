@@ -30,6 +30,7 @@ export interface SettingsPageContext {
   reportDirty: DirtyReporter;
   pageCache: SettingsPageDataCache;
   onProfileSaved?: () => void;
+  onOpenMemoryPanel?: () => void;
 }
 
 export type SettingsPageRenderer = (context: SettingsPageContext) => ReactNode;
@@ -54,8 +55,13 @@ export const SETTINGS_PAGES = {
       pageCache={pageCache}
     />
   ),
-  memory: ({ config, apply, pageCache }) => (
-    <MemorySection config={config} apply={apply} pageCache={pageCache} />
+  memory: ({ config, apply, pageCache, onOpenMemoryPanel }) => (
+    <MemorySection
+      config={config}
+      apply={apply}
+      pageCache={pageCache}
+      onOpenMemoryPanel={onOpenMemoryPanel}
+    />
   ),
   "dangerous-commands": ({ config, pageCache, reportDirty }) => (
     <DangerousCommandsSection
