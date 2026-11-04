@@ -8,14 +8,13 @@ import {
   openModelsConfigOAuth,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
-import { PanelBackButton } from "../PanelBackButton";
 
 export function ModelsConfigAddProviderPage() {
   const { oauthProviders, apiKeyProviders } = useModelsConfigPanel().view;
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <AddProviderPickerBody
-        backButton={<PanelBackButton panel={modelsConfigPanel} />}
+        backButton={null}
         oauthProviders={oauthProviders}
         apiKeyProviders={apiKeyProviders}
         onSelectOAuth={openModelsConfigOAuth}

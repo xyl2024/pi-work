@@ -386,7 +386,6 @@ describe("panelTabs registry", () => {
         "llmAudit",
         "mcp",
         "memory",
-        "modelsConfig",
         "skills",
         "tokens",
         "translate",
@@ -431,15 +430,16 @@ describe("panelTabs registry", () => {
     expect(mcp?.commands?.[0]?.keywords).toEqual(
       expect.arrayContaining(["mcp", "servers", "model context protocol", "服务器", "工具"]),
     );
-    expect(order.indexOf("mcp")).toBe(order.indexOf("modelsConfig") + 1);
     expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
   });
 
-  it("no longer carries scheduled tasks", () => {
-    expect(PANEL_TAB_KINDS as readonly string[]).not.toContain("scheduler");
-    expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain("scheduler");
-    expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has("scheduler")).toBe(false);
-    expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain("scheduler");
+  it("no longer carries scheduled tasks or models config", () => {
+    for (const moved of ["scheduler", "modelsConfig"]) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(moved);
+      expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(moved);
+      expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(moved)).toBe(false);
+      expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain(moved);
+    }
   });
 
   it("registers the channels panel as a global button before the conversation tree", () => {
@@ -575,7 +575,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
-      modelsConfigDirty: false,
       skillsInstalling: false,
       mcpDirty: false,
       t: (key) => key,
@@ -592,14 +591,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("badges the models-config button only while the draft is dirty", () => {
-    const ctx = barCtx({ rightPanelState: "closed" });
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig");
-
-    expect(descriptor?.badge?.(ctx)).toBeFalsy();
-    expect(descriptor?.badge?.({ ...ctx, modelsConfigDirty: true })).toBeTruthy();
-  });
-
   it("badges the skills button while an install is running, collapsed or not", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
 
@@ -608,7 +599,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
     ).toBeTruthy();
     expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
   });
 
   it("badges the MCP button while any cwd holds an unsaved draft", () => {
@@ -617,11 +607,9 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed", mcpDirty: true }))).toBeTruthy();
     expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ mcpDirty: true }))).toBeFalsy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
   });
 
-  it("presents skills as a global button alongside models config and channels", () => {
+  it("presents skills as a global button alongside channels", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
     if (!descriptor) throw new Error("skills descriptor missing");
     expect(isSessionBoundDescriptor(descriptor)).toBe(false);
@@ -631,25 +619,21 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       return candidate !== undefined && !isSessionBoundDescriptor(candidate);
     });
     expect(globalIds).toEqual(
-      expect.arrayContaining(["skills", "modelsConfig", "channels"]),
+      expect.arrayContaining(["skills", "channels"]),
     );
     expect(globalIds).not.toContain("context");
   });
 
-  it("routes the models-config / skills / MCP badges through the one shared corner-dot hook", () => {
-    const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
-      barCtx({ modelsConfigDirty: true }),
-    );
+  it("routes the skills / MCP badges through the one shared corner-dot hook", () => {
     const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
       barCtx({ skillsInstalling: true }),
     );
     const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
 
-    expect(dirty).toEqual(installing);
-    expect(dirty).toEqual(mcpDirty);
+    expect(installing).toEqual(mcpDirty);
 
     const rendered = (
-      dirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
+      installing as unknown as { type: () => { props: { style: Record<string, unknown> } } }
     ).type();
     expect(rendered.props.style.borderRadius).toBe("50%");
   });
@@ -716,7 +700,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.llmAudit",
         "panel.mcp",
         "panel.memory",
-        "panel.modelsConfig",
         "panel.skills",
         "panel.tokens",
         "panel.translate",
@@ -724,11 +707,26 @@ describe("panelTabs registry → command palette", () => {
     );
   });
 
-  it("reaches the models-config panel through the palette keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.modelsConfig");
+  it("reaches models config through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
 
-    expect(cmd?.title).toBe("Open models config");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open models config",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].id).toBe("mainView.modelsConfig");
+    expect(commands[0].keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["modelsConfig"]);
+    expect(toggled).toEqual([]);
   });
 
   it("reaches the skills panel through english and chinese keywords", () => {

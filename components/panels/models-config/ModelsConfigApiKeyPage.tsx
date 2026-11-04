@@ -2,8 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { ApiKeyDetail } from "@/components/settings/models-config/runtime";
-import { modelsConfigPanel, reloadModelsConfigApiKeyProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
-import { PanelBackButton } from "../PanelBackButton";
+import { reloadModelsConfigApiKeyProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
@@ -14,7 +13,6 @@ export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <PanelBackButton panel={modelsConfigPanel} />
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
           {provider?.displayName ?? providerId}
         </span>

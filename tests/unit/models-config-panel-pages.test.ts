@@ -15,6 +15,8 @@ vi.mock("@/lib/client/oauth-login-store", () => ({
 }));
 
 import {
+  clearModelsConfigProvider,
+  fillModelsConfigModelFromCatalog,
   modelsConfigPanel,
   openModelsConfigAddModelName,
   openModelsConfigAddProvider,
@@ -24,6 +26,8 @@ import {
   openModelsConfigModel,
   openModelsConfigOAuth,
   openModelsConfigProvider,
+  selectModelsConfigProvider,
+  setModelsConfigProviderFilter,
 } from "@/lib/client/models-config-panel";
 
 const root = { kind: "root" } as const;
@@ -33,53 +37,90 @@ beforeEach(() => {
 });
 
 describe("models config page stacks", () => {
-  it("opens a provider from any depth as root + provider", () => {
-    openModelsConfigProvider("openai");
-    expect(modelsConfigPanel.pages()).toEqual([root, { kind: "provider", name: "openai" }]);
-
-    openModelsConfigProvider("anthropic");
-    expect(modelsConfigPanel.pages()).toEqual([root, { kind: "provider", name: "anthropic" }]);
-  });
-
-  it("builds the root + provider base for a model and an added model name", () => {
-    openModelsConfigProvider("openai");
+  it("keeps the browse page underneath every form", () => {
     openModelsConfigModel("openai", 2);
     expect(modelsConfigPanel.pages()).toEqual([
       root,
-      { kind: "provider", name: "openai" },
       { kind: "model", providerName: "openai", index: 2 },
     ]);
 
     openModelsConfigAddModelName("anthropic");
     expect(modelsConfigPanel.pages()).toEqual([
       root,
-      { kind: "provider", name: "anthropic" },
       { kind: "addModelName", providerName: "anthropic" },
     ]);
-  });
 
-  it("builds the three-level base for the catalog fill page", () => {
-    openModelsConfigModel("openai", 1);
     openModelsConfigFillModel("openai", 1);
     expect(modelsConfigPanel.pages()).toEqual([
       root,
-      { kind: "provider", name: "openai" },
-      { kind: "model", providerName: "openai", index: 1 },
       { kind: "fillModel", providerName: "openai", index: 1 },
     ]);
   });
 
-  it("replaces the whole stack when leaving the add-provider page for an OAuth or API key page", () => {
+  it("replaces the form in place when moving between forms", () => {
     openModelsConfigAddProvider();
+    expect(modelsConfigPanel.pages()).toEqual([root, { kind: "addProvider" }]);
+
     openModelsConfigOAuth("openai");
     expect(modelsConfigPanel.pages()).toEqual([root, { kind: "oauth", providerId: "openai" }]);
 
-    openModelsConfigAddProvider();
     openModelsConfigApiKey("openai");
     expect(modelsConfigPanel.pages()).toEqual([root, { kind: "apikey", providerId: "openai" }]);
 
-    openModelsConfigAddProvider();
     openModelsConfigCatalog();
     expect(modelsConfigPanel.pages()).toEqual([root, { kind: "catalog" }]);
+  });
+
+  it("returns from a catalog fill to the model form instead of stacking a third level", () => {
+    openModelsConfigFillModel("openai", 1);
+
+    fillModelsConfigModelFromCatalog("openai", 1, {
+      id: "gpt-x",
+      name: "GPT X",
+      provider: "openai",
+      api: "openai-completions",
+      baseUrl: "",
+      reasoning: false,
+      input: [],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 1,
+      maxTokens: 1,
+    });
+
+    expect(modelsConfigPanel.pages()).toEqual([
+      root,
+      { kind: "model", providerName: "openai", index: 1 },
+    ]);
+  });
+});
+
+describe("models config browse state", () => {
+  it("treats the selected provider as view state, not as a page", () => {
+    openModelsConfigProvider("openai");
+
+    expect(modelsConfigPanel.pages()).toEqual([root]);
+    expect(modelsConfigPanel.get().selectedProvider).toBe("openai");
+
+    selectModelsConfigProvider("anthropic");
+    expect(modelsConfigPanel.pages()).toEqual([root]);
+    expect(modelsConfigPanel.get().selectedProvider).toBe("anthropic");
+  });
+
+  it("keeps the provider filter when the selection moves", () => {
+    setModelsConfigProviderFilter("endpoint");
+    openModelsConfigProvider("my-endpoint");
+    selectModelsConfigProvider("openai");
+
+    expect(modelsConfigPanel.get().providerFilter).toBe("endpoint");
+  });
+
+  it("clears the selection without touching the filter", () => {
+    setModelsConfigProviderFilter("open");
+    openModelsConfigProvider("openai");
+
+    clearModelsConfigProvider();
+
+    expect(modelsConfigPanel.get().selectedProvider).toBeNull();
+    expect(modelsConfigPanel.get().providerFilter).toBe("open");
   });
 });

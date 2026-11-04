@@ -31,6 +31,7 @@ import {
   type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
+import { registerMainViewLeaveGuard } from "./main-view-leave";
 import { errorMessage } from "@/lib/shared/error-message";
 import type {
   ApiKeyProvider,
@@ -71,6 +72,8 @@ export interface ModelsConfigViewState {
   oauthLogin: OAuthLoginState;
   oauthInProgress: boolean;
   modelIconPreferences: ModelIconPreferences;
+  selectedProvider: string | null;
+  providerFilter: string;
 }
 
 const EMPTY_CONFIG: ModelsJson = { providers: {} };
@@ -92,6 +95,8 @@ const INITIAL: ModelsConfigViewState = {
   oauthLogin: OAUTH_LOGIN_IDLE,
   oauthInProgress: false,
   modelIconPreferences: {},
+  selectedProvider: null,
+  providerFilter: "",
 };
 
 export function selectModelsConfigDirty(state: ModelsConfigViewState): boolean {
@@ -117,24 +122,6 @@ export function selectModelsConfigProblem(
   return modelsConfigProblem(state.rawEdit?.text);
 }
 
-function baseStackFor(page: ModelsConfigPage): ModelsConfigPage[] {
-  switch (page.kind) {
-    case "root":
-      return [];
-    case "model":
-    case "addModelName":
-      return [MODELS_CONFIG_ROOT_PAGE, { kind: "provider", name: page.providerName }];
-    case "fillModel":
-      return [
-        MODELS_CONFIG_ROOT_PAGE,
-        { kind: "provider", name: page.providerName },
-        { kind: "model", providerName: page.providerName, index: page.index },
-      ];
-    default:
-      return [MODELS_CONFIG_ROOT_PAGE];
-  }
-}
-
 function sameStack(pages: readonly ModelsConfigPage[], stack: readonly ModelsConfigPage[]): boolean {
   if (pages.length !== stack.length) return false;
   return pages.every((page, index) => isContentEqual(page, stack[index]));
@@ -146,12 +133,27 @@ function replacePages(pages: readonly ModelsConfigPage[]): void {
   for (const page of pages.slice(1)) modelsConfigPanel.openPage(page);
 }
 
+function pageProviderName(page: ModelsConfigPage): string | null {
+  switch (page.kind) {
+    case "provider":
+      return page.name;
+    case "model":
+    case "addModelName":
+    case "fillModel":
+      return page.providerName;
+    default:
+      return null;
+  }
+}
+
 function openPanelPage(page: ModelsConfigPage): void {
+  const selectedProvider = pageProviderName(page) ?? modelsConfigPanel.get().selectedProvider;
+  modelsConfigPanel.patch({ selectedProvider });
   if (page.kind === "root") {
     modelsConfigPanel.resetPages();
     return;
   }
-  replacePages([...baseStackFor(page), page]);
+  replacePages([MODELS_CONFIG_ROOT_PAGE, page]);
 }
 
 function renameProviderPage(
@@ -235,7 +237,7 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
       oauthInProgress: state.oauthInProgress,
     });
     if (!confirm) return null;
-    return { ...confirm, discard: cancelActiveOAuthLogins };
+    return { ...confirm, discard: discardModelsConfigDraft };
   },
   status(state) {
     return selectModelsConfigDirty(state);
@@ -247,6 +249,28 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
 
 export const modelsConfigPanel: PanelViewStore<ModelsConfigViewState, ModelsConfigPage, void> =
   createPanelViewStore(modelsConfigAdapter);
+
+export function discardModelsConfigDraft(): void {
+  const state = modelsConfigPanel.get();
+  cancelActiveOAuthLogins();
+  modelsConfigPanel.patch({
+    config: state.baseline,
+    providerNames: {},
+    rawEdit: null,
+    saving: false,
+    savedOk: false,
+    saveError: null,
+  });
+  modelsConfigPanel.resetPages();
+}
+
+registerMainViewLeaveGuard("modelsConfig", {
+  dirty: () => {
+    const state = modelsConfigPanel.get();
+    return selectModelsConfigDirty(state) || state.oauthInProgress;
+  },
+  discard: discardModelsConfigDraft,
+});
 
 export function useModelsConfigPanel() {
   return modelsConfigPanel.useSnapshot();
@@ -295,10 +319,12 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     let config = latest.config;
     let pages = modelsConfigPanel.pages();
     let rawEdit = latest.rawEdit;
+    let selectedProvider = latest.selectedProvider;
     const providerNames = { ...latest.providerNames };
     for (const [name, nextName] of renames) {
       config = withRenamedProvider(config, name, nextName);
       pages = renameProviderPage(pages, name, nextName);
+      if (selectedProvider === name) selectedProvider = nextName;
       if (rawEdit?.providerName === name) rawEdit = { ...rawEdit, providerName: nextName };
       const currentText = providerNames[name];
       delete providerNames[name];
@@ -309,7 +335,7 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     for (const [name, text] of Object.entries(pendingNames)) {
       if (text.trim() === name && providerNames[name] === text) delete providerNames[name];
     }
-    scope.patch({ config, rawEdit, providerNames, saving: false, savedOk: true, saveError: null, baseline: payload });
+    scope.patch({ config, rawEdit, providerNames, selectedProvider, saving: false, savedOk: true, saveError: null, baseline: payload });
     replacePages(pages);
     setTimeout(() => modelsConfigPanel.patch({ savedOk: false }), 2000);
     return { ok: true };
@@ -320,9 +346,24 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
   }
 }
 
-export function openModelsConfigProvider(name: string): void {
+export function selectModelsConfigProvider(name: string): void {
+  modelsConfigPanel.patch({ selectedProvider: name, rawEdit: null });
+  if (modelsConfigPanel.currentPage().kind !== "root") modelsConfigPanel.resetPages();
+}
+
+export const openModelsConfigProvider = selectModelsConfigProvider;
+
+export function openModelsConfigProviderForm(name: string): void {
   openPanelPage({ kind: "provider", name });
   modelsConfigPanel.patch({ rawEdit: null });
+}
+
+export function clearModelsConfigProvider(): void {
+  modelsConfigPanel.patch({ selectedProvider: null, rawEdit: null });
+}
+
+export function setModelsConfigProviderFilter(query: string): void {
+  modelsConfigPanel.patch({ providerFilter: query });
 }
 
 export function openModelsConfigModel(providerName: string, index: number): void {
@@ -390,6 +431,7 @@ export function deleteModelsConfigProvider(name: string): void {
     providerNames,
     config: withoutProvider(state.config, name),
     rawEdit: null,
+    selectedProvider: state.selectedProvider === name ? null : state.selectedProvider,
   });
   modelsConfigPanel.resetPages();
 }
@@ -429,7 +471,7 @@ export function fillModelsConfigModelFromCatalog(
   modelsConfigPanel.patch({
     config: withModel(state.config, providerName, index, cloneModelFromCatalog(source)),
   });
-  modelsConfigPanel.back();
+  openPanelPage({ kind: "model", providerName, index });
 }
 
 export function removeModelsConfigModel(providerName: string, index: number): void {

@@ -43,13 +43,12 @@ vi.mock("@/lib/client/oauth-login-store", () => ({
 
 import {
   modelsConfigPanel,
+  openModelsConfigModel,
+  selectModelsConfigProvider,
   updateModelsConfigProvider,
 } from "@/lib/client/models-config-panel";
-import {
-  MODELS_CONFIG_DIRTY_AND_OAUTH_CLOSE_CONFIRM,
-  MODELS_CONFIG_DIRTY_CLOSE_CONFIRM,
-  MODELS_CONFIG_OAUTH_CLOSE_CONFIRM,
-} from "@/lib/shared/models-config-close";
+import { requestMainViewLeave, setMainViewLeaveConfirm } from "@/lib/client/main-view-leave";
+import { MAIN_VIEW_LEAVE_CONFIRM } from "@/lib/shared/main-view-leave";
 
 async function openPanel(): Promise<void> {
   modelsConfigPanel.open();
@@ -61,56 +60,92 @@ async function openPanel(): Promise<void> {
 beforeEach(async () => {
   modelsConfigPanel.release();
   oauth.setActive(false);
+  setMainViewLeaveConfirm(null);
   await openPanel();
 });
 
-describe("models config panel close guard", () => {
-  it("closes silently when the draft is clean and no login is running", async () => {
-    expect(modelsConfigPanel.guard()).toBeNull();
-    await expect(modelsConfigPanel.requestClose(async () => true)).resolves.toBe(true);
-    expect(modelsConfigPanel.isReleased()).toBe(true);
+describe("models config leave guard", () => {
+  it("leaves silently when the draft is clean and no login is running", async () => {
+    const confirm = vi.fn(async () => true);
+    setMainViewLeaveConfirm(confirm);
+
+    await expect(
+      requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" }),
+    ).resolves.toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("asks once before discarding an unsaved draft and keeps it when cancelled", async () => {
+  it("asks once before discarding a dirty draft and keeps it when cancelled", async () => {
+    const confirm = vi.fn<(confirm: unknown) => Promise<boolean>>(async () => false);
+    setMainViewLeaveConfirm(confirm);
+    selectModelsConfigProvider("openai");
     updateModelsConfigProvider("openai", { api: "openai-completions" });
-    expect(modelsConfigPanel.guard()).toMatchObject(MODELS_CONFIG_DIRTY_CLOSE_CONFIRM);
-    await expect(modelsConfigPanel.requestClose(async () => false)).resolves.toBe(false);
-    expect(modelsConfigPanel.isReleased()).toBe(false);
+
+    await expect(
+      requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" }),
+    ).resolves.toBe(false);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith(MAIN_VIEW_LEAVE_CONFIRM);
     expect(modelsConfigPanel.get().config.providers).toHaveProperty("openai");
   });
 
-  it("asks once while an authorization is running and cancels the login when confirmed", async () => {
-    oauth.setActive(true);
-    expect(modelsConfigPanel.guard()).toMatchObject(MODELS_CONFIG_OAUTH_CLOSE_CONFIRM);
-    await expect(modelsConfigPanel.requestClose(async () => true)).resolves.toBe(true);
-    expect(oauth.hasActive()).toBe(false);
-    expect(modelsConfigPanel.isReleased()).toBe(true);
+  it("asks the same single question for leaving and for switching to another main view", async () => {
+    selectModelsConfigProvider("openai");
+    updateModelsConfigProvider("openai", { api: "openai-completions" });
+    const confirm = vi.fn<(confirm: unknown) => Promise<boolean>>(async () => true);
+    setMainViewLeaveConfirm(confirm);
+
+    await requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" });
+    updateModelsConfigProvider("openai", { api: "openai-completions" });
+    await requestMainViewLeave({ view: "modelsConfig", intent: "switch_main_view" });
+
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm.mock.calls[0][0]).toEqual(MAIN_VIEW_LEAVE_CONFIRM);
+    expect(confirm.mock.calls[1][0]).toEqual(MAIN_VIEW_LEAVE_CONFIRM);
   });
 
-  it("merges a dirty draft and a running login into a single prompt", async () => {
-    oauth.setActive(true);
+  it("discards the dirty draft after confirming", async () => {
+    setMainViewLeaveConfirm(async () => true);
+    openModelsConfigModel("openai", 0);
     updateModelsConfigProvider("openai", { api: "openai-completions" });
-    expect(modelsConfigPanel.guard()).toMatchObject(MODELS_CONFIG_DIRTY_AND_OAUTH_CLOSE_CONFIRM);
+
+    await requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" });
+
+    expect(modelsConfigPanel.get().config.providers).toEqual({});
+    expect(modelsConfigPanel.pages()).toEqual([{ kind: "root" }]);
+    expect(modelsConfigPanel.get().selectedProvider).toBe("openai");
+  });
+
+  it("asks while an authorization is running and cancels the login when confirmed", async () => {
+    oauth.setActive(true);
     const confirm = vi.fn(async () => true);
-    await expect(modelsConfigPanel.requestClose(confirm)).resolves.toBe(true);
+    setMainViewLeaveConfirm(confirm);
+
+    await expect(
+      requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" }),
+    ).resolves.toBe(true);
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(oauth.hasActive()).toBe(false);
-    expect(modelsConfigPanel.isReleased()).toBe(true);
-    expect(modelsConfigPanel.get().config.providers).toEqual({});
   });
 
-  it("does not block a second close with the login it already cancelled", async () => {
-    oauth.setActive(true);
-    await modelsConfigPanel.requestClose(async () => true);
-    await openPanel();
-    expect(modelsConfigPanel.guard()).toBeNull();
+  it("never asks when the user only backs out of a form page", async () => {
+    const confirm = vi.fn(async () => true);
+    setMainViewLeaveConfirm(confirm);
+    updateModelsConfigProvider("openai", { api: "openai-completions" });
+    openModelsConfigModel("openai", 0);
+
+    await requestMainViewLeave({ view: "modelsConfig", intent: "back_to_browse" });
+
+    expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("stops subscribing to the login store once released", async () => {
-    expect(oauth.listenerCount()).toBe(1);
-    modelsConfigPanel.release();
-    expect(oauth.listenerCount()).toBe(0);
-    await openPanel();
-    expect(oauth.listenerCount()).toBe(1);
+  it("keeps unsaved edits when backing out of a form page", () => {
+    openModelsConfigModel("openai", 0);
+    updateModelsConfigProvider("openai", { api: "openai-completions" });
+
+    modelsConfigPanel.back();
+
+    expect(modelsConfigPanel.pages()).toEqual([{ kind: "root" }]);
+    expect(modelsConfigPanel.get().config.providers).toHaveProperty("openai");
   });
 });
