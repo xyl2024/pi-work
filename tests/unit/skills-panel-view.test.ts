@@ -111,13 +111,18 @@ describe("skills leave guard", () => {
     expect(await requestMainViewLeave({ view: "skills", intent: "leave_main_view" })).toBe(false);
   });
 
-  it("returns the form to the browse page when the leave is confirmed", async () => {
+  it("never asks when a secondary page goes back inside the view", async () => {
     await openSkillsForm();
     patchRunningInstall();
-    setMainViewLeaveConfirm(() => true);
+    const asked: MainViewLeaveConfirm[] = [];
+    setMainViewLeaveConfirm((confirm) => {
+      asked.push(confirm);
+      return true;
+    });
 
     expect(await requestMainViewLeave({ view: "skills", intent: "back_to_browse" })).toBe(true);
-    expect(skillsPanel.currentPage()).toEqual(BROWSE);
+    expect(asked).toEqual([]);
+    expect(skillsPanel.currentPage()).toEqual(FORM);
   });
 });
 

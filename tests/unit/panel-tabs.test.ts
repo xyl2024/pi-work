@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CHANNELS_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
@@ -376,7 +375,6 @@ describe("panelTabs registry", () => {
   it("covers exactly the panel views the shell knows about", () => {
     expect([...PANEL_TAB_KINDS].sort()).toEqual(
       [
-        "channels",
         "context",
         "conversationTree",
         "favorites",
@@ -418,34 +416,13 @@ describe("panelTabs registry", () => {
     expect(order.indexOf("mcp")).toBe(order.indexOf("llmAudit") + 1);
   });
 
-  it("no longer carries scheduled tasks or models config", () => {
-    for (const moved of ["scheduler", "modelsConfig"]) {
-      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(moved);
-      expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(moved);
-      expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(moved)).toBe(false);
-      expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain(moved);
+  it("no longer carries main views", () => {
+    for (const kind of ["scheduler", "modelsConfig", "skills", "channels"]) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
+      expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(kind);
+      expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(kind)).toBe(false);
+      expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain(kind);
     }
-  });
-
-  it("no longer carries skills in the right rail", () => {
-    expect(PANEL_TAB_KINDS as readonly string[]).not.toContain("skills");
-    expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain("skills");
-    expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has("skills")).toBe(false);
-    expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain("skills");
-  });
-
-  it("registers the channels panel as a global button before the conversation tree", () => {
-    const order = PANEL_TAB_KINDS as readonly string[];
-    const channels = PANEL_TAB_SPECS.find((spec) => spec.kind === "channels");
-
-    expect(channels?.tabId).toBe(CHANNELS_TAB_ID);
-    expect(channels?.labelKey).toBe("Channels");
-    expect(channels?.sessionBound).toBe(false);
-    expect(channels?.commands?.[0]?.labelKey).toBe("Open channels");
-    expect(channels?.commands?.[0]?.keywords).toEqual(
-      expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
-    );
-    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
@@ -655,7 +632,6 @@ describe("panelTabs registry → command palette", () => {
         .sort(),
     ).toEqual(
       [
-        "panel.channels",
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
@@ -751,6 +727,27 @@ describe("panelTabs registry → command palette", () => {
     for (const cmd of commands) cmd.run(ctx);
 
     expect(entered).toEqual(["scheduler"]);
+    expect(toggled).toEqual([]);
+  });
+
+  it("reaches channels through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
+
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open channels",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].id).toBe("mainView.channels");
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["channels"]);
     expect(toggled).toEqual([]);
   });
 

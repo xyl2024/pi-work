@@ -1,6 +1,5 @@
 import type { MainViewKind } from "./mainView";
 import {
-  CHANNELS_TAB_ID,
   CONTEXT_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
@@ -22,7 +21,6 @@ export interface PanelTabParams {
   context: undefined;
   mcp: undefined;
   memory: undefined;
-  channels: undefined;
   file: { path: string };
 }
 
@@ -166,19 +164,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "mcp.open",
         keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
-      },
-    ],
-  },
-  channels: {
-    kind: "channels",
-    tabId: CHANNELS_TAB_ID,
-    labelKey: "Channels",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open channels",
-        keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
       },
     ],
   },

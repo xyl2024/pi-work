@@ -4,10 +4,10 @@ import { useEffect, useCallback, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import {
   clearSchedulerSelection,
+  discardSchedulerForm,
   schedulerPanel,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
-import { requestMainViewLeave } from "@/lib/client/main-view-leave";
 import { MainViewMasterDetail } from "./MainViewMasterDetail";
 import { SchedulerTaskList } from "./scheduler/SchedulerTaskList";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
@@ -37,7 +37,7 @@ export function SchedulerPanel({
 
   const formTitleKey = page.kind === "form" ? (page.taskId === null ? "New task" : "Edit task") : null;
   const backToBrowse = useCallback(() => {
-    void requestMainViewLeave({ view: "scheduler", intent: "back_to_browse" });
+    discardSchedulerForm();
   }, []);
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export function SchedulerPanel({
     containerRef,
     () => {
       if (page.kind === "form") {
-        void requestMainViewLeave({ view: "scheduler", intent: "back_to_browse" });
+        discardSchedulerForm();
         return;
       }
       if (selectedTaskId !== null) {

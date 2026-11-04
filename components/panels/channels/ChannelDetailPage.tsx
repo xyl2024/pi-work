@@ -5,9 +5,9 @@ import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { fetchChannelStatus, fetchRecentCwds, type ChannelStatusDetail } from "@/lib/client/channels-io";
 import {
-  channelsPanel,
   refreshLoginQr,
   removeChannel,
   renameChannel,
@@ -20,7 +20,6 @@ import {
 } from "@/lib/client/channels-panel";
 import { loginPhaseLabelKey } from "@/lib/shared/channels-login";
 import { ChannelActivityFeed } from "@/components/channels/ChannelActivityFeed";
-import { PanelBackButton } from "../PanelBackButton";
 import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
 function shortenPath(p: string, max = 36): string {
@@ -41,7 +40,43 @@ function retryIn(retryInMs: number | null): string {
   return retryInMs >= 1000 ? `${Math.round(retryInMs / 1000)}s` : `${Math.round(retryInMs)}ms`;
 }
 
-export function ChannelDetailPage({ channelId }: { channelId: string }) {
+const sectionStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: 12,
+  borderRadius: 8,
+  background: "var(--bg)",
+} as const;
+
+const primaryButtonStyle = {
+  padding: "5px 12px",
+  background: "var(--accent)",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  fontSize: 12,
+  fontWeight: 600,
+  fontFamily: "inherit",
+} as const;
+
+const ghostButtonStyle = {
+  padding: "5px 12px",
+  background: "transparent",
+  color: "var(--text-muted)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  fontSize: 12,
+  fontFamily: "inherit",
+} as const;
+
+export function ChannelDetailPage({
+  channelId,
+  onBack,
+}: {
+  channelId: string;
+  onBack?: () => void;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
@@ -50,7 +85,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
   const channel = channels.find((item) => item.id === channelId) ?? null;
   const login = loginState.channelId === channelId ? loginState : null;
 
-  const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(channel?.name ?? "");
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
@@ -99,19 +133,15 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
     }
   }, [loginPhase, refreshStatus, toast, t]);
 
-  const saveRename = useCallback(async () => {
+  const submitRename = useCallback(async () => {
     if (!channel) return;
     const trimmed = nameDraft.trim();
-    if (!trimmed || trimmed === channel.name) {
-      setRenaming(false);
-      return;
-    }
+    if (!trimmed || trimmed === channel.name) return;
     const result = await renameChannel(channel.id, trimmed);
     if (!result.ok) {
       toast.show({ kind: "error", message: t("channels.renameFailed") });
       return;
     }
-    setRenaming(false);
     toast.show({ kind: "success", message: t("channels.renamed") });
   }, [channel, nameDraft, toast, t]);
 
@@ -165,302 +195,210 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
 
   if (!channel) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        <div style={{ padding: "10px 14px", flexShrink: 0 }}>
-          <PanelBackButton panel={channelsPanel} ariaLabelKey="Back to channels" />
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
-          {t("channels.unavailable")}
-        </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
+        {t("channels.unavailable")}
       </div>
     );
   }
 
   const userId = status?.userId ?? channel.userId;
-  const accountId = status?.accountId ?? channel.accountId;
   const workspace = status?.currentWorkspaceId ?? channel.workspaceId;
   const workspaceBroken = status?.workspaceAvailable === false;
   const health = status?.health;
-  const lastPollLine = health?.lastPollAt
-    ? `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(health.lastPollAt) })}`
-    : `${t("channels.healthLastPoll")} —`;
-  const failuresLine = t("channels.healthFailures", { n: health?.consecutiveFailures ?? 0 });
-  const nextRetryLine = t("channels.healthNextRetry", {
-    s: health?.backingOff && health.retryInMs != null ? retryIn(health.retryInMs) : "—",
-  });
+  const healthLines = [
+    status?.monitorRunning ? t("channels.statusLive") : t("channels.statusIdle"),
+    health?.lastPollAt
+      ? `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(health.lastPollAt) })}`
+      : `${t("channels.healthLastPoll")} —`,
+    t("channels.healthFailures", { n: health?.consecutiveFailures ?? 0 }),
+    t("channels.healthNextRetry", {
+      s: health?.backingOff && health.retryInMs != null ? retryIn(health.retryInMs) : "—",
+    }),
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ padding: "10px 14px 8px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        <PanelBackButton panel={channelsPanel} ariaLabelKey="Back to channels" />
-        {renaming ? (
-          <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px 8px", flexShrink: 0 }}>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={t("Back")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+          >
+            <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
+          </button>
+        )}
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: channelStatusColor(channel.status), flexShrink: 0 }} />
+        <strong style={{ flex: 1, minWidth: 0, color: "var(--text)", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {channel.name}
+        </strong>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
+          {t(channelStatusLabelKey(channel.status))}
+        </span>
+      </div>
+
+      <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, padding: "0 16px 18px" }}>
+        <section style={sectionStyle}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "6px 12px", fontSize: 12 }}>
+            <span style={{ color: "var(--text-muted)" }}>{t("channels.boundUser")}</span>
+            <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userId ?? t("channels.notScanned")}</code>
+            <span style={{ color: "var(--text-muted)" }}>{t("channels.currentWorkspace")}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: workspaceBroken ? "#ef4444" : "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={workspace ?? undefined}>
+              {workspace ? shortenPath(workspace) : t("channels.notSet")}
+              {workspaceBroken ? ` (${t("channels.workspaceUnavailable")})` : ""}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {channel.status === "connected" ? (
+              <button type="button" onClick={() => void toggleEnabled()} disabled={busy} style={{ ...ghostButtonStyle, cursor: busy ? "not-allowed" : "pointer" }}>
+                {t("channels.disable")}
+              </button>
+            ) : channel.status === "disabled" ? (
+              <button type="button" onClick={() => void toggleEnabled()} disabled={busy} style={{ ...primaryButtonStyle, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
+                {t("channels.enable")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void deleteChannel()}
+              disabled={busy}
+              style={{ ...ghostButtonStyle, marginLeft: "auto", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", cursor: busy ? "not-allowed" : "pointer" }}
+            >
+              {t("channels.delete")}
+            </button>
+          </div>
+        </section>
+
+        <section style={sectionStyle}>
+          <label style={{ fontSize: 12, color: "var(--text-muted)" }} htmlFor="channel-rename">
+            {t("channels.rename")}
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
+              id="channel-rename"
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void saveRename();
-              }}
-              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") void submitRename(); }}
               maxLength={50}
               placeholder={t("channels.channelName")}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: "4px 8px",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                background: "var(--bg)",
-                color: "var(--text)",
-                fontSize: 13,
-                fontFamily: "inherit",
-              }}
+              style={{ flex: 1, minWidth: 0, padding: "5px 8px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }}
             />
             <button
               type="button"
-              onClick={() => void saveRename()}
-              disabled={busy || !nameDraft.trim()}
-              style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, flexShrink: 0, cursor: busy || !nameDraft.trim() ? "not-allowed" : "pointer", opacity: busy || !nameDraft.trim() ? 0.6 : 1, fontFamily: "inherit" }}
+              onClick={() => void submitRename()}
+              disabled={busy || !nameDraft.trim() || nameDraft.trim() === channel.name}
+              style={{ ...primaryButtonStyle, flexShrink: 0, cursor: busy || !nameDraft.trim() || nameDraft.trim() === channel.name ? "not-allowed" : "pointer", opacity: busy || !nameDraft.trim() || nameDraft.trim() === channel.name ? 0.6 : 1 }}
             >
               {t("channels.save")}
             </button>
-            <button
-              type="button"
-              onClick={() => setRenaming(false)}
-              disabled={busy}
-              style={{ padding: "4px 12px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, flexShrink: 0, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-            >
-              {t("channels.cancel")}
-            </button>
-          </>
-        ) : (
-          <>
-            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: channelStatusColor(channel.status), flexShrink: 0 }} />
-            <strong style={{ flex: 1, minWidth: 0, color: "var(--text)", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {channel.name}
-            </strong>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
-              {t(channelStatusLabelKey(channel.status))}
-            </span>
-            <button
-              type="button"
-              onClick={() => setRenaming(true)}
-              style={{ padding: "3px 10px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11, flexShrink: 0, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              {t("channels.rename")}
-            </button>
-          </>
-        )}
-      </div>
-
-      <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, padding: "0 14px 18px" }}>
-        <section style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "4px 12px", padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
-          <span style={{ color: "var(--text-muted)" }}>{t("channels.channelId")}</span>
-          <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{channel.id}</code>
-          <span style={{ color: "var(--text-muted)" }}>{t("channels.boundUser")}</span>
-          <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userId ?? t("channels.notScanned")}</code>
-          <span style={{ color: "var(--text-muted)" }}>{t("channels.accountId")}</span>
-          <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountId ?? "—"}</code>
-        </section>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: 6, padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.healthWorker")}</span>
-            <span style={{ color: status?.monitorRunning ? "var(--accent)" : "var(--text-dim)" }}>
-              {status?.monitorRunning ? t("channels.statusLive") : t("channels.statusIdle")}
-            </span>
-          </div>
-          <div style={{ color: "var(--text-muted)" }}>{lastPollLine}</div>
-          <div style={{ color: "var(--text-muted)" }}>
-            {failuresLine} · {nextRetryLine}
           </div>
         </section>
 
-        <section ref={workspaceMenuRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 8, background: "var(--bg)" }}>
+        <section ref={workspaceMenuRef} style={{ ...sectionStyle, position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-            <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.currentWorkspace")}:</span>
-            {workspace ? (
-              <button
-                type="button"
-                onClick={() => setWorkspaceMenuOpen((v) => !v)}
-                title={workspace}
-                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, color: workspaceBroken ? "#ef4444" : "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", textAlign: "left", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              >
-                {shortenPath(workspace)}
-                {workspaceBroken ? ` (${t("channels.workspaceUnavailable")})` : ""}
-              </button>
-            ) : (
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("channels.notSet")}</span>
-            )}
+            <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.switchWorkspace")}</span>
             <button
               type="button"
               onClick={() => setWorkspaceMenuOpen((v) => !v)}
-              style={{ background: "var(--bg-hover)", border: "1px solid var(--border)", color: "var(--text-muted)", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
+              style={{ marginLeft: "auto", background: "var(--bg-hover)", border: "1px solid var(--border)", color: "var(--text-muted)", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
             >
-              {t("channels.switchWorkspace")}
+              {t("channels.recent")}
             </button>
           </div>
           {workspaceMenuOpen && (
             <div
               data-scroll-inset
-              style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                right: 0,
-                zIndex: 10,
-                marginTop: 4,
-                background: "var(--bg)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                maxHeight: 240,
-                overflowY: "auto",
-              }}
+              style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 240, overflowY: "auto" }}
             >
               {recentCwds.length === 0 ? (
                 <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{t("channels.noWorkspaces")}</div>
               ) : (
-                <>
-                  <div style={{ padding: "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase" }}>
-                    {t("channels.recent")}
-                  </div>
-                  {recentCwds.map((cwd) => (
-                    <button
-                      key={`r-${cwd}`}
-                      type="button"
-                      onClick={() => void switchWorkspace(cwd)}
-                      title={cwd}
-                      style={{ display: "block", width: "100%", padding: "6px 10px", background: cwd === workspace ? "var(--bg-selected)" : "none", border: "none", textAlign: "left", cursor: "pointer", color: cwd === workspace ? "var(--text)" : "var(--text-muted)", fontSize: 11, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    >
-                      {shortenPath(cwd, 40)}
-                    </button>
-                  ))}
-                </>
+                recentCwds.map((cwd) => (
+                  <button
+                    key={cwd}
+                    type="button"
+                    onClick={() => void switchWorkspace(cwd)}
+                    title={cwd}
+                    style={{ display: "block", width: "100%", padding: "6px 10px", background: cwd === workspace ? "var(--bg-selected)" : "none", border: "none", textAlign: "left", cursor: "pointer", color: cwd === workspace ? "var(--text)" : "var(--text-muted)", fontSize: 11, fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {shortenPath(cwd, 40)}
+                  </button>
+                ))
               )}
             </div>
           )}
         </section>
 
-        <section style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {channel.status === "connected" ? (
-            <button
-              type="button"
-              onClick={() => void toggleEnabled()}
-              disabled={busy}
-              style={{ padding: "5px 12px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-            >
-              {t("channels.disable")}
-            </button>
-          ) : channel.status === "disabled" ? (
-            <button
-              type="button"
-              onClick={() => void toggleEnabled()}
-              disabled={busy}
-              style={{ padding: "5px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit" }}
-            >
-              {t("channels.enable")}
-            </button>
-          ) : null}
+        <section style={{ ...sectionStyle, alignItems: "center" }}>
           {(channel.status === "pending" || channel.status === "expired") && (
-            <button
-              type="button"
-              onClick={() => void startScan()}
-              disabled={busy}
-              style={{ padding: "5px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "inherit" }}
-            >
+            <button type="button" onClick={() => void startScan()} disabled={busy} style={{ ...primaryButtonStyle, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
               {t("channels.scanToConnect")}
             </button>
           )}
           {channel.status === "connected" && (
-            <button
-              type="button"
-              onClick={() => void startScan()}
-              disabled={busy}
-              style={{ padding: "5px 12px", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-            >
+            <button type="button" onClick={() => void startScan()} disabled={busy} style={{ ...ghostButtonStyle, cursor: busy ? "not-allowed" : "pointer" }}>
               {t("channels.rescan")}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => void deleteChannel()}
-            disabled={busy}
-            style={{ marginLeft: "auto", padding: "5px 12px", background: "transparent", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 6, fontSize: 12, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-          >
-            {t("channels.delete")}
-          </button>
+          {login && login.sessionKey && (
+            <>
+              {login.qrDataUrl && (
+                <div style={{ padding: 10, background: "#fff", borderRadius: 8, border: "1px solid var(--border)", maxWidth: "100%", boxSizing: "border-box" }}>
+                  <SmartImage src={login.qrDataUrl} alt="" loaderSize={96} width={224} height={224} style={{ display: "block", width: 224, maxWidth: "100%", height: "auto" }} />
+                </div>
+              )}
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5, textAlign: "center" }}>
+                {t("channels.scanHint")}
+              </p>
+              {login.qrUrl && (
+                <a href={login.qrUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "var(--accent)", fontFamily: "var(--font-mono)", wordBreak: "break-all", textAlign: "center" }}>
+                  {login.qrUrl}
+                </a>
+              )}
+              {login.phase && (
+                <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg-hover)", borderRadius: 4, textAlign: "center", maxWidth: "100%" }}>
+                  {t(loginPhaseLabelKey(login.phase))}
+                  {login.phaseMessage ? ` — ${t(login.phaseMessage)}` : ""}
+                </div>
+              )}
+              {login.phase === "verifying" && (
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+                  <input
+                    type="text"
+                    value={login.code}
+                    onChange={(e) => setLoginCode(e.target.value)}
+                    placeholder={t("channels.pairingCode")}
+                    autoFocus
+                    inputMode="numeric"
+                    style={{ width: 140, height: 28, padding: "4px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void submitCode()}
+                    disabled={login.busy || !login.code.trim()}
+                    style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, cursor: login.busy || !login.code.trim() ? "not-allowed" : "pointer", opacity: login.busy || !login.code.trim() ? 0.5 : 1, fontFamily: "inherit" }}
+                  >
+                    {t("channels.submit")}
+                  </button>
+                </div>
+              )}
+              {(login.phase === "expired" || login.phase === "error" || login.phase === "verify_blocked") && (
+                <button type="button" onClick={() => refreshLoginQr(channel.id)} disabled={login.busy} style={{ ...ghostButtonStyle, cursor: login.busy ? "not-allowed" : "pointer" }}>
+                  {t("channels.refreshQr")}
+                </button>
+              )}
+            </>
+          )}
         </section>
 
-        {login && login.sessionKey && (
-          <section style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center", padding: 12, borderRadius: 8, background: "var(--bg)" }}>
-            {login.qrDataUrl && (
-              <div style={{ padding: 10, background: "#fff", borderRadius: 8, border: "1px solid var(--border)", maxWidth: "100%", boxSizing: "border-box" }}>
-                <SmartImage
-                  src={login.qrDataUrl}
-                  alt=""
-                  loaderSize={96}
-                  width={224}
-                  height={224}
-                  style={{ display: "block", width: 224, maxWidth: "100%", height: "auto" }}
-                />
-              </div>
-            )}
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5, textAlign: "center" }}>
-              {t("channels.scanHint")}
-            </p>
-            {login.qrUrl && (
-              <a
-                href={login.qrUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: 11, color: "var(--accent)", fontFamily: "var(--font-mono)", wordBreak: "break-all", textAlign: "center" }}
-              >
-                {login.qrUrl}
-              </a>
-            )}
-
-            {login.phase && (
-              <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg-hover)", borderRadius: 4, textAlign: "center", maxWidth: "100%" }}>
-                {t(loginPhaseLabelKey(login.phase))}
-                {login.phaseMessage ? ` — ${t(login.phaseMessage)}` : ""}
-              </div>
-            )}
-
-            {login.phase === "verifying" && (
-              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
-                <input
-                  type="text"
-                  value={login.code}
-                  onChange={(e) => setLoginCode(e.target.value)}
-                  placeholder={t("channels.pairingCode")}
-                  autoFocus
-                  inputMode="numeric"
-                  style={{ width: 140, height: 28, padding: "4px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void submitCode()}
-                  disabled={login.busy || !login.code.trim()}
-                  style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, cursor: login.busy || !login.code.trim() ? "not-allowed" : "pointer", opacity: login.busy || !login.code.trim() ? 0.5 : 1, fontFamily: "inherit" }}
-                >
-                  {t("channels.submit")}
-                </button>
-              </div>
-            )}
-
-            {(login.phase === "expired" || login.phase === "error" || login.phase === "verify_blocked") && channel && (
-              <button
-                type="button"
-                onClick={() => refreshLoginQr(channel.id)}
-                disabled={login.busy}
-                style={{ padding: "6px 14px", background: "transparent", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, cursor: login.busy ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-              >
-                {t("channels.refreshQr")}
-              </button>
-            )}
-          </section>
-        )}
+        <section style={sectionStyle}>
+          {healthLines.map((line, index) => (
+            <div key={index} style={{ fontSize: 12, color: index === 0 ? "var(--text)" : "var(--text-muted)" }}>
+              {line}
+            </div>
+          ))}
+        </section>
 
         <ChannelActivityFeed channelId={channel.id} />
       </div>

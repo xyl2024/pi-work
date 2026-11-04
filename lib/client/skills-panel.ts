@@ -165,7 +165,9 @@ export async function openSkillsForm(): Promise<boolean> {
 }
 
 export async function closeSkillsForm(): Promise<boolean> {
-  return requestMainViewLeave({ view: "skills", intent: "back_to_browse" });
+  if (!(await requestMainViewLeave({ view: "skills", intent: "back_to_browse" }))) return false;
+  discardSkillsForm();
+  return true;
 }
 
 function discardSkillsForm(): void {

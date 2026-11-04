@@ -1,77 +1,35 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/ui/Toast";
+import { PlusIcon } from "@/components/ui/icons";
 import {
-  createChannelInStore,
   openChannelDetail,
+  openChannelForm,
   reloadChannels,
-  setChannelsNameDraft,
   useChannelsPanel,
 } from "@/lib/client/channels-panel";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
-export function ChannelsRootPage() {
+export function ChannelsListPage() {
   const { t } = useI18n();
-  const toast = useToast();
   const { view } = useChannelsPanel();
-  const { channels, loaded, loadError, nameDraft, busy, selectedChannelId } = view;
-
-  async function create() {
-    const result = await createChannelInStore();
-    if (!result.ok && result.error && result.error !== "name_required") {
-      toast.show({ kind: "error", message: t("channels.operationFailed") });
-    }
-  }
+  const { channels, loaded, loadError, selectedChannelId } = view;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 8px", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 16px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("Channels")}</span>
-        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
           {channels.length > 0 ? String(channels.length) : ""}
         </span>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, padding: "0 14px 10px", flexShrink: 0 }}>
-        <input
-          value={nameDraft}
-          onChange={(e) => setChannelsNameDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") void create(); }}
-          placeholder={t("channels.channelName")}
-          maxLength={50}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: "6px 10px",
-            fontSize: 12,
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            background: "var(--bg)",
-            color: "var(--text)",
-            fontFamily: "inherit",
-          }}
-        />
         <button
           type="button"
-          disabled={busy || !nameDraft.trim()}
-          onClick={() => void create()}
-          style={{
-            padding: "6px 12px",
-            background: "var(--accent)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: busy || !nameDraft.trim() ? "not-allowed" : "pointer",
-            opacity: busy || !nameDraft.trim() ? 0.6 : 1,
-            flexShrink: 0,
-            fontFamily: "inherit",
-          }}
+          onClick={openChannelForm}
+          aria-label={t("New channel")}
+          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
         >
-          {busy ? t("channels.creating") : t("channels.newChannel")}
+          <PlusIcon width={12} height={12} />
         </button>
       </div>
 
@@ -83,17 +41,7 @@ export function ChannelsRootPage() {
             <button
               type="button"
               onClick={reloadChannels}
-              style={{
-                marginTop: 6,
-                padding: "4px 10px",
-                fontSize: 12,
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                background: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
+              style={{ marginTop: 6, padding: "4px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, background: "none", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" }}
             >
               {t("Retry")}
             </button>
@@ -128,6 +76,7 @@ function ChannelRow({
       data-channel-row={channel.id}
       role="button"
       tabIndex={0}
+      aria-pressed={selected}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -171,7 +120,5 @@ function ChannelRow({
 }
 
 function Hint({ text }: { text: string }) {
-  return (
-    <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "10px 6px" }}>{text}</div>
-  );
+  return <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "10px 6px" }}>{text}</div>;
 }

@@ -4,6 +4,7 @@ export interface MainViewParams {
   scheduler: undefined;
   modelsConfig: undefined;
   skills: undefined;
+  channels: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -56,6 +57,18 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       {
         labelKey: "Open skills",
         keywords: ["skills", "skill", "extensions", "技能", "扩展"],
+      },
+    ],
+  },
+  channels: {
+    kind: "channels",
+    navPriority: 4,
+    labelKey: "Channels",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open channels",
+        keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
       },
     ],
   },
