@@ -6,7 +6,6 @@ import {
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
   MEMORY_TAB_ID,
-  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
@@ -37,7 +36,6 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTOR_BY_ID,
   RIGHT_BAR_DESCRIPTORS,
-  isSessionBoundDescriptor,
   type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
@@ -386,7 +384,6 @@ describe("panelTabs registry", () => {
         "llmAudit",
         "mcp",
         "memory",
-        "skills",
         "tokens",
         "translate",
       ].sort(),
@@ -407,19 +404,7 @@ describe("panelTabs registry", () => {
     );
   });
 
-  it("registers skills right after the MCP panel", () => {
-    const order = PANEL_TAB_KINDS as readonly string[];
-    const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
-
-    expect(skills?.tabId).toBe(SKILLS_TAB_ID);
-    expect(skills?.labelKey).toBe("Skills");
-    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
-    expect(skills?.sessionBound).toBe(false);
-    expect(order.indexOf("channels")).toBe(order.indexOf("skills") + 1);
-    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
-  });
-
-  it("registers the MCP panel as a session-bound button between models config and skills", () => {
+  it("registers the MCP panel as a session-bound button after LLM audit", () => {
     const order = PANEL_TAB_KINDS as readonly string[];
     const mcp = PANEL_TAB_SPECS.find((spec) => spec.kind === "mcp");
 
@@ -430,7 +415,7 @@ describe("panelTabs registry", () => {
     expect(mcp?.commands?.[0]?.keywords).toEqual(
       expect.arrayContaining(["mcp", "servers", "model context protocol", "服务器", "工具"]),
     );
-    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
+    expect(order.indexOf("mcp")).toBe(order.indexOf("llmAudit") + 1);
   });
 
   it("no longer carries scheduled tasks or models config", () => {
@@ -440,6 +425,13 @@ describe("panelTabs registry", () => {
       expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(moved)).toBe(false);
       expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain(moved);
     }
+  });
+
+  it("no longer carries skills in the right rail", () => {
+    expect(PANEL_TAB_KINDS as readonly string[]).not.toContain("skills");
+    expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain("skills");
+    expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has("skills")).toBe(false);
+    expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain("skills");
   });
 
   it("registers the channels panel as a global button before the conversation tree", () => {
@@ -575,7 +567,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
-      skillsInstalling: false,
       mcpDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
@@ -591,16 +582,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("badges the skills button while an install is running, collapsed or not", () => {
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
-
-    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
-    expect(
-      descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
-    ).toBeTruthy();
-    expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
-  });
-
   it("badges the MCP button while any cwd holds an unsaved draft", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp");
 
@@ -609,31 +590,11 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
   });
 
-  it("presents skills as a global button alongside channels", () => {
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
-    if (!descriptor) throw new Error("skills descriptor missing");
-    expect(isSessionBoundDescriptor(descriptor)).toBe(false);
-
-    const globalIds = RIGHT_BAR_BUTTON_IDS.filter((id) => {
-      const candidate = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id);
-      return candidate !== undefined && !isSessionBoundDescriptor(candidate);
-    });
-    expect(globalIds).toEqual(
-      expect.arrayContaining(["skills", "channels"]),
-    );
-    expect(globalIds).not.toContain("context");
-  });
-
-  it("routes the skills / MCP badges through the one shared corner-dot hook", () => {
-    const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
-      barCtx({ skillsInstalling: true }),
-    );
+  it("routes the MCP badge through the shared corner-dot hook", () => {
     const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
 
-    expect(installing).toEqual(mcpDirty);
-
     const rendered = (
-      installing as unknown as { type: () => { props: { style: Record<string, unknown> } } }
+      mcpDirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
     ).type();
     expect(rendered.props.style.borderRadius).toBe("50%");
   });
@@ -700,7 +661,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.llmAudit",
         "panel.mcp",
         "panel.memory",
-        "panel.skills",
         "panel.tokens",
         "panel.translate",
       ].sort(),
@@ -729,12 +689,26 @@ describe("panelTabs registry → command palette", () => {
     expect(toggled).toEqual([]);
   });
 
-  it("reaches the skills panel through english and chinese keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.skills");
+  it("reaches skills through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
 
-    expect(cmd?.title).toBe("Open skills");
-    expect(cmd?.group).toBe("Panel");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.id === "mainView.skills",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].title).toBe("Open skills");
+    expect(commands[0].keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["skills"]);
+    expect(toggled).toEqual([]);
   });
 
   it("reaches the memory panel through english and chinese keywords", () => {

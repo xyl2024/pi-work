@@ -1,7 +1,4 @@
-export type SkillsPage =
-  | { kind: "root" }
-  | { kind: "detail"; filePath: string }
-  | { kind: "add" };
+export type SkillsPage = { kind: "browse" } | { kind: "form" };
 
 export interface Skill {
   name: string;

@@ -82,7 +82,6 @@ import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-ba
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { renderMainViewBadges } from "@/lib/client/main-view-badges";
 import { useMainViewHeader } from "@/lib/client/main-view-header";
-import { skillsPanel } from "@/lib/client/skills-panel";
 import { channelsPanel } from "@/lib/client/channels-panel";
 import {
   usePanelViewLifecycleSync,
@@ -168,7 +167,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onNewSession={ctx.onNewSession}
     />
   ),
-  skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
   channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
   memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
@@ -176,7 +174,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   mcp: mcpPanel,
   channels: channelsPanel,
-  skills: skillsPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
@@ -200,6 +197,7 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
     />
   ),
   modelsConfig: (ctx) => <ModelsConfigPanel onExit={ctx.onExit} visible={ctx.visible} />,
+  skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onExit={ctx.onExit} visible={ctx.visible} />,
 };
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
@@ -485,7 +483,6 @@ export function AppShell() {
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  const skillsInstalling = skillsPanel.useStatus() === true;
   usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
   const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -879,8 +876,8 @@ export function AppShell() {
   }, []);
 
   const handleOpenSkillsPanel = useCallback(() => {
-    dispatchPanelTabs({ type: "open", kind: "skills" });
-  }, []);
+    void enterMainView("skills");
+  }, [enterMainView]);
 
   const handleOpenMemoryPanel = useCallback(() => {
     setSettingsConfigOpen(false);
@@ -1107,7 +1104,6 @@ export function AppShell() {
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
-    skillsInstalling,
     mcpDirty,
     t,
     toggleRightPanel: () =>

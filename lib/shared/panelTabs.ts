@@ -8,7 +8,6 @@ import {
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
   MEMORY_TAB_ID,
-  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
@@ -23,7 +22,6 @@ export interface PanelTabParams {
   context: undefined;
   mcp: undefined;
   memory: undefined;
-  skills: undefined;
   channels: undefined;
   file: { path: string };
 }
@@ -168,19 +166,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "mcp.open",
         keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
-      },
-    ],
-  },
-  skills: {
-    kind: "skills",
-    tabId: SKILLS_TAB_ID,
-    labelKey: "Skills",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open skills",
-        keywords: ["skills", "extensions", "skill", "技能", "扩展"],
       },
     ],
   },

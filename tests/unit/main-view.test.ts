@@ -138,7 +138,9 @@ describe("mainView registry", () => {
   });
 
   it("orders models config right after scheduled tasks in the navigation", () => {
-    expect(MAIN_VIEW_KINDS).toEqual(["scheduler", "modelsConfig"]);
+    expect(MAIN_VIEW_KINDS.indexOf("modelsConfig")).toBe(
+      MAIN_VIEW_KINDS.indexOf("scheduler") + 1,
+    );
     expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.navPriority).toBe(2);
     expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.labelKey).toBe("Models config");
     expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.backLabelKey).toBe("Back to chat");
@@ -176,6 +178,20 @@ describe("mainView registry", () => {
     expect(ZH_TRANSLATIONS["New session"]).toBe("新建会话");
     expect(ZH_TRANSLATIONS["New task"]).toBe("新建任务");
     expect(ZH_TRANSLATIONS["New session"]).not.toBe(ZH_TRANSLATIONS["New task"]);
+  });
+
+  it("registers skills third in the sidebar navigation", () => {
+    const ordered = MAIN_VIEW_SPECS.map((spec) => spec.kind);
+
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.navPriority).toBe(3);
+    expect(ordered.indexOf("skills")).toBe(ordered.indexOf("modelsConfig") + 1);
+    expect(ordered.indexOf("skills")).toBeGreaterThan(ordered.indexOf("scheduler"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.labelKey).toBe("Skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.backLabelKey).toBe("Back to chat");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.labelKey).toBe("Open skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["skills", "技能"]),
+    );
   });
 
   it("reaches scheduled tasks through english and chinese keywords", () => {

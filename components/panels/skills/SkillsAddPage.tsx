@@ -7,9 +7,8 @@ import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import { shortenPath } from "@/lib/client/paths";
 import { searchSkills } from "@/lib/client/skills-io";
-import { skillsPanel, startSkillInstall, useSkillsPanel } from "@/lib/client/skills-panel";
+import { closeSkillsForm, startSkillInstall, useSkillsPanel } from "@/lib/client/skills-panel";
 import type { SkillInstallRequest, SkillInstallScope, SkillSearchResult } from "@/lib/shared/skills";
-import { PanelBackButton } from "../PanelBackButton";
 
 const PAGE_SIZE = 6;
 const SCROLL_THRESHOLD_PX = 240;
@@ -271,12 +270,27 @@ export function SkillsAddPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "12px 12px 8px",
+          padding: "0 16px 10px",
           flexShrink: 0,
         }}
       >
-        <PanelBackButton panel={skillsPanel} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Add Skill")}</span>
+        <button
+          type="button"
+          onClick={() => void closeSkillsForm()}
+          style={{
+            marginLeft: "auto",
+            flexShrink: 0,
+            padding: "4px 12px",
+            fontSize: 12,
+            borderRadius: 6,
+            border: "1px solid var(--border)",
+            background: "none",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+          }}
+        >
+          {t("Cancel")}
+        </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 12px 10px", flexShrink: 0 }}>

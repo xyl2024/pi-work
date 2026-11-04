@@ -119,6 +119,8 @@ export const models = {
   "No providers configured": "还没有配置任何提供商",
 
   "Add Skill": "添加技能",
+  "No skills yet": "暂无技能",
+  "{n} skills": "{n} 个技能",
   "Search skills...": "搜索技能...",
   "Select a skill": "选择一个技能",
   "Search skills hint": "搜索 skills.sh，为你的 Agent 发现并安装技能。",
