@@ -26,19 +26,16 @@ export function TaskPromptTab({ task }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {t("Prompt (sent to agent at trigger time)")}
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={() => void copy()}
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: 4,
-            padding: "3px 9px",
-            fontSize: 11,
+            padding: "4px 10px",
+            fontSize: 12,
             background: "transparent",
             borderRadius: 5,
             color: copied ? "var(--success)" : "var(--text-muted)",
@@ -51,20 +48,18 @@ export function TaskPromptTab({ task }: Props) {
         </button>
       </div>
       <pre
+        data-scroll-inset
         style={{
-          flex: 1,
           margin: 0,
-          padding: "12px 14px",
+          padding: "10px 12px",
           fontFamily: "var(--font-mono)",
-          fontSize: 12,
+          fontSize: 13,
           lineHeight: 1.6,
-          background: "var(--bg)",
-          borderRadius: 8,
+          background: "var(--bg-subtle)",
           color: "var(--text)",
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           overflowY: "auto",
-          minHeight: 120,
         }}
       >
         {task.prompt}

@@ -1,32 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
+import { CollapsiblePanel } from "@/components/ui/CollapsiblePanel";
 import { StatusBadge } from "@/components/scheduler/StatusBadge";
 import { CronHumanizer } from "@/components/scheduler/CronHumanizer";
-import { TaskOverviewTab } from "@/components/scheduler/TaskOverviewTab";
 import { TaskRunsTab, type RunFilter } from "@/components/scheduler/TaskRunsTab";
 import { TaskPromptTab } from "@/components/scheduler/TaskPromptTab";
-import { TaskConfigTab } from "@/components/scheduler/TaskConfigTab";
-import { isOnceDone } from "@/components/scheduler/utils";
-import { tabBarStyle, tabItemStyle } from "@/components/scheduler/styles";
+import { isOnceDone, formatRelative } from "@/components/scheduler/utils";
+import { useNow } from "@/components/scheduler/useNow";
 import { fetchTaskRuns, fetchWechatChannels } from "@/lib/client/scheduler-io";
+import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
+import { resolveSchedulerRunSelection } from "@/lib/shared/scheduler-runs";
 import {
   openSchedulerForm,
   removeSchedulerTask,
   schedulerPanel,
+  setSchedulerRunSelected,
   setSchedulerRunsVisible,
   toggleSchedulerTask,
   triggerSchedulerTaskNow,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
-import { PanelBackButton } from "../PanelBackButton";
-import type { SchedulerDetailBlock, TaskRun } from "@/lib/shared/scheduler";
-import { EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
+import {
+  SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN,
+  SCHEDULER_RUNS_MIN_HEIGHT,
+  type SchedulerDetailSection,
+} from "@/lib/shared/scheduler-detail";
+import type { TaskRun } from "@/lib/shared/scheduler";
+import { ChevronDownIcon, ChevronLeftIcon, EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
+import { SchedulerExecutionConfig } from "./SchedulerExecutionConfig";
 
 interface ChannelMeta {
   [channelId: string]: { name: string; status: string };
@@ -35,18 +42,23 @@ interface ChannelMeta {
 export function SchedulerDetailPage({
   taskId,
   onOpenSession,
+  onBack,
 }: {
   taskId: string;
   onOpenSession: (sessionId: string) => void;
+  onBack?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const { view } = useSchedulerPanel();
-  const { tasks, meta, triggering } = view;
+  const { tasks, meta, triggering, selectedRunId } = view;
   const task = tasks.find((item) => item.id === taskId) ?? null;
+  const now = useNow(30_000);
 
-  const [block, setBlock] = useState<SchedulerDetailBlock>("overview");
+  const [openSections, setOpenSections] = useState<Record<SchedulerDetailSection, boolean>>(
+    SCHEDULER_DETAIL_SECTION_DEFAULT_OPEN,
+  );
   const [runs, setRuns] = useState<TaskRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runFilter, setRunFilter] = useState<RunFilter>("all");
@@ -55,7 +67,11 @@ export function SchedulerDetailPage({
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
     try {
-      setRuns(await fetchTaskRuns(taskId));
+      const next = await fetchTaskRuns(taskId);
+      if (schedulerPanel.get().selectedTaskId !== taskId) return;
+      setRuns(next);
+      const resolved = resolveSchedulerRunSelection(next, schedulerPanel.get().selectedRunId);
+      if (resolved !== schedulerPanel.get().selectedRunId) setSchedulerRunSelected(resolved);
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to load runs") });
     } finally {
@@ -64,44 +80,36 @@ export function SchedulerDetailPage({
   }, [taskId, toast, t]);
 
   useEffect(() => {
-    setBlock("overview");
     setRuns([]);
     setRunFilter("all");
     void loadRuns();
   }, [taskId, loadRuns]);
 
   useEffect(() => {
-    setSchedulerRunsVisible(block === "runs");
+    setSchedulerRunsVisible(true);
     return () => setSchedulerRunsVisible(false);
-  }, [block]);
+  }, []);
 
   useEffect(() => {
-    if (block !== "runs") return;
-    if (!runs.some((run) => run.status === "running")) return;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const start = () => {
-      if (timer === null) timer = setInterval(() => void loadRuns(), 2_000);
-    };
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer);
-        timer = null;
-      }
-    };
+    const delay = schedulerPollDelayMs({
+      runsVisible: runs.some((run) => run.status === "running"),
+      hidden: typeof document !== "undefined" && document.hidden,
+    });
+    if (delay === null) return;
+    const timer = setTimeout(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void loadRuns();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [runs, loadRuns]);
+
+  useEffect(() => {
     const onVisibility = () => {
-      if (document.hidden) stop();
-      else {
-        void loadRuns();
-        start();
-      }
+      if (typeof document !== "undefined" && !document.hidden) void loadRuns();
     };
-    if (!document.hidden) start();
     document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [block, runs, loadRuns]);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [loadRuns]);
 
   useEffect(() => {
     let alive = true;
@@ -118,13 +126,17 @@ export function SchedulerDetailPage({
 
   if (task === null) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        <div style={{ padding: "12px 14px", flexShrink: 0 }}>
-          <PanelBackButton panel={schedulerPanel} />
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
-          {t("Task not found")}
-        </div>
+      <div
+        style={{
+          display: "flex",
+          height: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          fontSize: 13,
+        }}
+      >
+        {t("Task not found")}
       </div>
     );
   }
@@ -164,102 +176,231 @@ export function SchedulerDetailPage({
     }
   };
 
+  const toggleSection = (section: SchedulerDetailSection) => {
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ padding: "10px 14px 8px", display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <PanelBackButton panel={schedulerPanel} />
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 15,
-              fontWeight: 700,
-              color: "var(--text)",
-              flex: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {task.name}
-          </h2>
+      <div style={summaryStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          {onBack && (
+            <button type="button" onClick={onBack} style={backButtonStyle}>
+              <ChevronLeftIcon width={12} height={12} aria-hidden="true" />
+              {t("Back")}
+            </button>
+          )}
+          <h2 style={titleStyle}>{task.name}</h2>
           <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="md" />
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--text-muted)" }}>
-          <CronHumanizer cron={task.cron} previewCount={5} showCode timezone={task.timezone} />
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <ToggleSwitch on={task.enabled} onChange={(next) => void handleToggle(next)} size="sm" label={t("Enabled")} />
-          <button
-            type="button"
-            onClick={() => openSchedulerForm(task, null)}
-            style={actionButtonStyle}
-          >
-            <EditIcon width={11} height={11} />
-            {t("Edit")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleTrigger()}
-            disabled={triggering}
-            style={{ ...actionButtonStyle, cursor: triggering ? "default" : "pointer", opacity: triggering ? 0.6 : 1 }}
-          >
-            <PlayIcon width={11} height={11} />
-            {triggering ? t("Triggering...") : t("Run now")}
-          </button>
-          <Tooltip content={t("Delete task")}>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <ToggleSwitch on={task.enabled} onChange={(next) => void handleToggle(next)} size="sm" label={t("Enabled")} />
+            <button type="button" onClick={() => void openSchedulerForm(task, null)} style={actionButtonStyle}>
+              <EditIcon width={11} height={11} />
+              {t("Edit")}
+            </button>
             <button
               type="button"
-              onClick={() => void handleDelete()}
-              aria-label={t("Delete task")}
-              style={{ ...iconButtonStyle, color: "var(--error)" }}
+              onClick={() => void handleTrigger()}
+              disabled={triggering}
+              style={{ ...actionButtonStyle, cursor: triggering ? "default" : "pointer", opacity: triggering ? 0.6 : 1 }}
             >
-              <TrashIcon width={12} height={12} />
+              <PlayIcon width={11} height={11} />
+              {triggering ? t("Triggering...") : t("Run now")}
             </button>
-          </Tooltip>
+            <Tooltip content={t("Delete task")}>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                aria-label={t("Delete task")}
+                style={{ ...iconButtonStyle, color: "var(--error)" }}
+              >
+                <TrashIcon width={12} height={12} />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 20, rowGap: 6, flexWrap: "wrap", minWidth: 0 }}>
+          <CronHumanizer cron={task.cron} previewCount={5} showCode timezone={task.timezone} />
+          <SummaryMeta label={t("Next run")}>
+            {task.enabled
+              ? task.nextRunAt
+                ? formatRelative(now, task.nextRunAt, locale)
+                : "—"
+              : t("Paused, will not trigger")}
+          </SummaryMeta>
+          <SummaryMeta label={t("Last run")}>
+            {task.lastRunAt ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {formatRelative(now, task.lastRunAt, locale)}
+                {task.lastRunStatus && <StatusBadge status={task.lastRunStatus} size="sm" />}
+              </span>
+            ) : (
+              t("Never run")
+            )}
+          </SummaryMeta>
         </div>
       </div>
 
-      <div style={{ ...tabBarStyle, flexWrap: "wrap" }}>
-        {(
-          [
-            { id: "overview", label: t("Overview") },
-            { id: "runs", label: `${t("Runs")} (${runs.length})` },
-            { id: "prompt", label: t("Prompt") },
-            { id: "config", label: t("Config") },
-          ] as const
-        ).map((item) => (
-          <button key={item.id} type="button" onClick={() => setBlock(item.id)} style={tabItemStyle(block === item.id)}>
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <div style={detailBodyStyle}>
+        <div style={disclosureRegionStyle}>
+          <Disclosure
+            label={t("Prompt")}
+            open={openSections.prompt}
+            onToggle={() => toggleSection("prompt")}
+          >
+            <TaskPromptTab task={task} />
+          </Disclosure>
+          <Disclosure
+            label={t("Execution config")}
+            open={openSections.config}
+            onToggle={() => toggleSection("config")}
+          >
+            <SchedulerExecutionConfig
+              task={task}
+              channelMeta={channelMeta}
+              modelIcons={meta?.modelIcons}
+              modelIconPreferences={meta?.modelIconPreferences}
+            />
+          </Disclosure>
+        </div>
 
-      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 14px" }}>
-        {block === "overview" && (
-          <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} modelIcons={meta?.modelIcons} modelIconPreferences={meta?.modelIconPreferences} />
-        )}
-        {block === "runs" && (
-          <TaskRunsTab
-            runs={runs}
-            loading={runsLoading}
-            filter={runFilter}
-            onFilterChange={setRunFilter}
-            triggering={triggering}
-            onTrigger={() => void handleTrigger()}
-            onOpenSession={onOpenSession}
-          />
-        )}
-        {block === "prompt" && <TaskPromptTab task={task} />}
-        {block === "config" && (
-          <TaskConfigTab task={task} modelIcons={meta?.modelIcons} modelIconPreferences={meta?.modelIconPreferences} channelMeta={channelMeta} onEdit={() => openSchedulerForm(task, null)} />
-        )}
+        <div style={runsSectionStyle}>
+          <div style={runsFillStyle}>
+            <TaskRunsTab
+              runs={runs}
+              loading={runsLoading}
+              filter={runFilter}
+              onFilterChange={setRunFilter}
+              selectedRunId={selectedRunId}
+              onSelectRun={setSchedulerRunSelected}
+              onOpenSession={onOpenSession}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
+function SummaryMeta({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, fontSize: 13, color: "var(--text)" }}>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</span>
+      <span>{children}</span>
+    </span>
+  );
+}
+
+function Disclosure({
+  label,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <button type="button" onClick={onToggle} aria-expanded={open} style={disclosureButtonStyle}>
+        <ChevronDownIcon
+          width={12}
+          height={12}
+          aria-hidden="true"
+          style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}
+        />
+        {label}
+      </button>
+      <CollapsiblePanel open={open}>
+        <div style={{ padding: "0 20px 16px" }}>{children}</div>
+      </CollapsiblePanel>
+    </div>
+  );
+}
+
+const summaryStyle: CSSProperties = {
+  flexShrink: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "16px 20px",
+  borderBottom: "1px solid var(--border)",
+};
+
+const titleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 15,
+  fontWeight: 700,
+  color: "var(--text)",
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const detailBodyStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const disclosureRegionStyle: CSSProperties = {
+  flexShrink: 0,
+  display: "flex",
+  flexDirection: "column",
+  padding: "8px 0",
+};
+
+const runsSectionStyle: CSSProperties = {
+  flex: "1 0 auto",
+  minHeight: SCHEDULER_RUNS_MIN_HEIGHT,
+  display: "flex",
+  flexDirection: "column",
+  padding: "16px 20px",
+  boxSizing: "border-box",
+};
+
+const runsFillStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+};
+
+const disclosureButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 20px",
+  background: "transparent",
+  border: "none",
+  color: "var(--text-muted)",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  textAlign: "left",
+};
+
+const backButtonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  padding: "3px 8px 3px 5px",
+  background: "transparent",
+  border: "1px solid var(--border)",
+  borderRadius: 5,
+  color: "var(--text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  flexShrink: 0,
+} as const;
 
 const actionButtonStyle = {
   display: "inline-flex",

@@ -58,7 +58,7 @@ export interface PanelViewAdapter<S, P, C, K> {
   guard(state: S): PanelViewCloseGuard | null;
   status(state: S): PanelViewStatus;
   isRootPage?(pages: readonly P[]): boolean;
-  isSiblingPage(next: P, current: P): boolean;
+  isSiblingPage?(next: P, current: P): boolean;
 }
 
 export interface PanelViewSnapshot<S, P> {
@@ -248,7 +248,7 @@ export function createPanelViewStore<S, P, C = void, K = string>(
 
   function openPage(page: P): void {
     const pages = snapshot.pages;
-    const next = adapter.isSiblingPage(page, currentPage())
+    const next = adapter.isSiblingPage?.(page, currentPage())
       ? [...pages.slice(0, -1), page]
       : [...pages, page];
     snapshot = { ...snapshot, pages: next };

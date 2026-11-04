@@ -3,7 +3,7 @@ import { Cron } from "croner";
 import { useI18n, type Locale } from "@/hooks/useI18n";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker, type TimeValue } from "@/components/ui/TimePicker";
-import { inputStyle } from "./styles";
+import { codePillStyle, inputStyle } from "./styles";
 import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 
@@ -194,7 +194,7 @@ function DayChips({ days, onChange, invalid }: { days: number[]; onChange: (d: n
         })}
       </div>
       {invalid && (
-        <span style={{ fontSize: 11, color: "var(--error)" }}>{t("At least one day required")}</span>
+        <span style={{ fontSize: 12, color: "var(--error)" }}>{t("At least one day required")}</span>
       )}
     </div>
   );
@@ -403,12 +403,12 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
             style={{
               ...inputStyle,
               fontFamily: "var(--font-mono)",
-              fontSize: 12.5,
+              fontSize: 13,
               borderColor: advancedValid ? "var(--border)" : "var(--error)",
             }}
           />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginRight: 4 }}>
               {t("Presets")}
             </span>
             {PRESETS.map((p) => (
@@ -417,8 +417,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
                 type="button"
                 onClick={() => applyPreset(p.cron)}
                 style={{
-                  padding: "3px 9px",
-                  fontSize: 11,
+                  padding: "3px 10px",
+                  fontSize: 12,
                   background: value === p.cron ? "var(--bg-selected)" : "transparent",
                   border: "1px solid var(--border)",
                   borderColor: value === p.cron ? "var(--accent)" : "var(--border)",
@@ -437,11 +437,9 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
 
       <div
         style={{
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-muted)",
           background: "var(--bg-subtle)",
-          border: "1px solid var(--border)",
-          borderRadius: 6,
           padding: "8px 10px",
           display: "flex",
           flexDirection: "column",
@@ -450,16 +448,11 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <code
-            style={{
-              fontFamily: "var(--font-mono)",
-              padding: "2px 7px",
-              borderRadius: 4,
-              background: cronValid ? "var(--bg)" : "var(--error-bg)",
-              color: cronValid ? "var(--text)" : "var(--error)",
-              border: "1px solid",
-              borderColor: cronValid ? "var(--border)" : "var(--error)",
-              fontSize: 11,
-            }}
+            style={
+              cronValid
+                ? codePillStyle
+                : { ...codePillStyle, background: "var(--error-bg)", color: "var(--error)" }
+            }
           >
             {value}
           </code>

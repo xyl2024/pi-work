@@ -1,6 +1,5 @@
 export type SchedulerPage =
-  | { kind: "root" }
-  | { kind: "detail"; taskId: string }
+  | { kind: "browse" }
   | { kind: "form"; taskId: string | null };
 
 import type { TaskNotification } from "./notifications";
@@ -83,8 +82,6 @@ export interface TaskUpdatePayload {
   timezone?: string;
   notification?: TaskNotification | null;
 }
-
-export type SchedulerDetailBlock = "overview" | "runs" | "prompt" | "config";
 
 export interface SchedulerModelMeta {
   modelList: { id: string; name: string; provider: string }[];

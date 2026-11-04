@@ -18,9 +18,12 @@ import {
 } from "./scheduler-io";
 import {
   isSchedulerFormDirty,
-  selectSchedulerCloseConfirm,
+  selectSchedulerLeaveConfirm,
+  type SchedulerCloseConfirm,
+  type SchedulerLeaveIntent,
 } from "@/lib/shared/scheduler-close";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
+import type { SchedulerFilter } from "@/lib/shared/scheduler-filter";
 import {
   browserTimezone,
   newSchedulerForm,
@@ -39,7 +42,7 @@ import type {
 } from "@/lib/shared/scheduler";
 import type { TaskNotification } from "@/lib/shared/notifications";
 
-export type SchedulerFilter = "all" | "enabled" | "disabled" | "error";
+export type { SchedulerFilter };
 
 export interface SchedulerViewState {
   loading: boolean;
@@ -47,6 +50,7 @@ export interface SchedulerViewState {
   loadError: string | null;
   tasks: ScheduledTask[];
   selectedTaskId: string | null;
+  selectedRunId: string | null;
   filter: SchedulerFilter;
   query: string;
   meta: SchedulerModelMeta | null;
@@ -59,7 +63,15 @@ export interface SchedulerViewState {
   runsVisible: boolean;
 }
 
-const ROOT_PAGE: SchedulerPage = { kind: "root" };
+const ROOT_PAGE: SchedulerPage = { kind: "browse" };
+
+const CLEARED_FORM_STATE: Partial<SchedulerViewState> = {
+  form: null,
+  formTaskId: null,
+  formBaseline: null,
+  saveError: null,
+  runsVisible: false,
+};
 
 const INITIAL: SchedulerViewState = {
   loading: false,
@@ -67,6 +79,7 @@ const INITIAL: SchedulerViewState = {
   loadError: null,
   tasks: [],
   selectedTaskId: null,
+  selectedRunId: null,
   filter: "all",
   query: "",
   meta: null,
@@ -157,6 +170,36 @@ function clearPollingResources(): void {
   unsubscribeIconPreferences = null;
 }
 
+export type SchedulerLeaveConfirm = (confirm: SchedulerCloseConfirm) => boolean | Promise<boolean>;
+
+let schedulerLeaveConfirm: SchedulerLeaveConfirm | null = null;
+
+export function setSchedulerLeaveConfirm(confirm: SchedulerLeaveConfirm | null): void {
+  schedulerLeaveConfirm = confirm;
+}
+
+function discardSchedulerForm(): void {
+  const state = schedulerPanel.get();
+  if (state.form !== null || state.formBaseline !== null || state.saveError !== null) {
+    schedulerPanel.patch(CLEARED_FORM_STATE);
+  }
+  if (schedulerPanel.currentPage().kind === "form") schedulerPanel.resetPages();
+}
+
+export async function requestSchedulerLeave(intent: SchedulerLeaveIntent): Promise<boolean> {
+  const state = schedulerPanel.get();
+  const confirm = selectSchedulerLeaveConfirm({
+    intent,
+    dirty: isSchedulerFormDirty(state.form, state.formBaseline),
+  });
+  if (confirm) {
+    if (!schedulerLeaveConfirm) return false;
+    if (!(await schedulerLeaveConfirm(confirm))) return false;
+  }
+  discardSchedulerForm();
+  return true;
+}
+
 export function setSchedulerRunsVisible(runsVisible: boolean): void {
   schedulerPanel.patch({ runsVisible });
 }
@@ -169,12 +212,22 @@ export function setSchedulerQuery(query: string): void {
   schedulerPanel.patch({ query });
 }
 
-export function openSchedulerTask(taskId: string): void {
-  schedulerPanel.openPage({ kind: "detail", taskId });
-  schedulerPanel.patch({ selectedTaskId: taskId, runsVisible: false });
+export async function openSchedulerTask(taskId: string): Promise<boolean> {
+  if (!(await requestSchedulerLeave("select_task"))) return false;
+  schedulerPanel.patch({ selectedTaskId: taskId, selectedRunId: null });
+  return true;
 }
 
-export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null): void {
+export function clearSchedulerSelection(): void {
+  schedulerPanel.patch({ selectedTaskId: null, selectedRunId: null, runsVisible: false });
+}
+
+export function setSchedulerRunSelected(selectedRunId: string | null): void {
+  schedulerPanel.patch({ selectedRunId });
+}
+
+export async function openSchedulerForm(task: ScheduledTask | null, cwd: string | null): Promise<boolean> {
+  if (!(await requestSchedulerLeave("new_task"))) return false;
   const form = task ? schedulerFormFromTask(task) : newSchedulerForm(cwd);
   const page: SchedulerPage = { kind: "form", taskId: task?.id ?? null };
   if (page.taskId === null) schedulerPanel.resetPages();
@@ -186,6 +239,7 @@ export function openSchedulerForm(task: ScheduledTask | null, cwd: string | null
     saveError: null,
     runsVisible: false,
   });
+  return true;
 }
 
 export function updateSchedulerForm(partial: Partial<SchedulerTaskForm>): void {
@@ -232,14 +286,17 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     const saved = formTaskId
       ? await updateScheduledTask({ id: formTaskId, ...base } satisfies TaskUpdatePayload)
       : await createScheduledTask(base satisfies TaskCreatePayload);
-    scope.patch({ saving: false, selectedTaskId: saved.id, saveError: null, runsVisible: false });
-    schedulerPanel.resetPages();
-    schedulerPanel.openPage({ kind: "detail", taskId: saved.id });
     scope.patch({
+      saving: false,
+      selectedTaskId: saved.id,
+      selectedRunId: null,
+      saveError: null,
+      runsVisible: false,
+    });
+    schedulerPanel.resetPages();
+    scope.patch({
+      ...CLEARED_FORM_STATE,
       tasks: upsertTask(scope.get().tasks, saved),
-      form: null,
-      formTaskId: null,
-      formBaseline: null,
     });
     return { ok: true };
   } catch (e) {
@@ -276,9 +333,10 @@ export async function removeSchedulerTask(taskId: string): Promise<void> {
   try {
     await deleteScheduledTask(taskId);
     scope.patch({
+      ...CLEARED_FORM_STATE,
       tasks: scope.get().tasks.filter((task) => task.id !== taskId),
       selectedTaskId: null,
-      runsVisible: false,
+      selectedRunId: null,
     });
     schedulerPanel.resetPages();
   } finally {
@@ -340,22 +398,20 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
   },
   afterBack({ popped, writer }) {
     if (popped?.kind === "form") {
-      writer.patch({ form: null, formTaskId: null, formBaseline: null, saveError: null });
+      writer.patch(CLEARED_FORM_STATE);
     }
     writer.patch({ runsVisible: false });
   },
   guard(state): PanelViewCloseGuard | null {
-    const confirm = selectSchedulerCloseConfirm({
+    const confirm = selectSchedulerLeaveConfirm({
+      intent: "leave_main_view",
       dirty: isSchedulerFormDirty(state.form, state.formBaseline),
     });
     if (!confirm) return null;
-    return { ...confirm, discard: () => {} };
+    return { ...confirm, discard: discardSchedulerForm };
   },
   status(state) {
     return state.tasks.some((task) => task.lastRunStatus === "running");
-  },
-  isSiblingPage(next, current) {
-    return next.kind === "detail" && current.kind === "detail";
   },
 };
 

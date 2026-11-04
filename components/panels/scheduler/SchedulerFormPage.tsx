@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
+import { useContainerWidth } from "@/hooks/useContainerWidth";
 import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { CronBuilder } from "@/components/scheduler/CronBuilder";
 import { listToolsForCwd } from "@/lib/client/agent-client";
 import { fetchWechatChannels, type SchedulerChannel } from "@/lib/client/scheduler-io";
 import {
+  requestSchedulerLeave,
   saveSchedulerForm,
-  schedulerPanel,
   updateSchedulerForm,
   useSchedulerPanel,
 } from "@/lib/client/scheduler-panel";
@@ -20,13 +21,13 @@ import {
   SchedulerThinkingSelect,
   SchedulerToolsSelect,
 } from "./SchedulerFormFields";
-import { PanelBackButton } from "../PanelBackButton";
-import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, textareaStyle } from "@/components/scheduler/styles";
+import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, sectionTitleStyle, textareaStyle } from "@/components/scheduler/styles";
 import {
   listTimezones,
   parseMaxLifetimeMinutes,
   RUNNER_DEFAULT_MAX_LIFETIME_MS,
 } from "@/lib/shared/scheduler-form";
+import { resolveSchedulerFormLayout } from "@/lib/shared/scheduler-form-layout";
 import type { SchedulerTaskForm } from "@/lib/shared/scheduler";
 import type { ToolInfo } from "@/lib/shared/types";
 
@@ -35,6 +36,9 @@ export function SchedulerFormPage() {
   const toast = useToast();
   const { view } = useSchedulerPanel();
   const { form, formTaskId, meta, saving, saveError } = view;
+
+  const { ref: containerRef, width } = useContainerWidth<HTMLDivElement>();
+  const split = resolveSchedulerFormLayout(width) === "split";
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [channels, setChannels] = useState<SchedulerChannel[]>([]);
@@ -65,7 +69,7 @@ export function SchedulerFormPage() {
         if (!cancelled) setAvailableTools(tools);
       })
       .catch((error) => {
-        if (!cancelled) setToolsError(error instanceof Error ? error.message : "Failed to load tools");
+        if (!cancelled) setToolsError(error instanceof Error ? error.message : t("Failed to load tools"));
       })
       .finally(() => {
         if (!cancelled) setToolsLoading(false);
@@ -73,7 +77,7 @@ export function SchedulerFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [formCwd]);
+  }, [formCwd, t]);
 
   if (form === null) return null;
 
@@ -122,143 +126,187 @@ export function SchedulerFormPage() {
     }
   };
 
+  const basicSection = (
+    <Section title={t("Basic config")} first grow={split}>
+      <Field label={t("Task name")} error={nameError}>
+        <input
+          value={form.name}
+          onChange={(e) => update({ name: e.target.value })}
+          placeholder={t("e.g. daily report")}
+          autoFocus
+          className="scheduler-text-input"
+          style={inputStyle}
+        />
+      </Field>
+      <Field label={t("Prompt")} error={promptError} grow={split}>
+        <textarea
+          value={form.prompt}
+          onChange={(e) => update({ prompt: e.target.value })}
+          rows={8}
+          placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
+          className="scheduler-text-input"
+          style={split ? { ...textareaStyle, flex: "1 1 0%", minHeight: 160, resize: "none" } : textareaStyle}
+        />
+      </Field>
+      <Field label={t("Working directory")} error={cwdError}>
+        <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
+      </Field>
+      <SchedulerModelSelect form={form} update={update} meta={meta} error={modelError} />
+      <SchedulerThinkingSelect form={form} update={update} meta={meta} error={thinkingError} />
+      <SchedulerToolsSelect
+        form={form}
+        update={update}
+        availableTools={availableTools}
+        toolsLoading={toolsLoading}
+        toolsError={toolsError}
+        customExpanded={customExpanded}
+        onToggleCustomExpanded={() => setCustomExpanded((value) => !value)}
+        onRetry={async () => {
+          if (!form.cwd.trim()) return;
+          setToolsLoading(true);
+          setToolsError(null);
+          try {
+            setAvailableTools(await listToolsForCwd(form.cwd.trim()));
+          } catch (error) {
+            setToolsError(error instanceof Error ? error.message : t("Failed to load tools"));
+          } finally {
+            setToolsLoading(false);
+          }
+        }}
+      />
+      <Field label={t("Dangerous commands")}>
+        <select
+          value={form.permissionMode}
+          onChange={(e) =>
+            update({
+              permissionMode: e.target.value === "full_access" ? "full_access" : "auto_deny",
+            })
+          }
+          style={inputStyle}
+        >
+          <option value="auto_deny">{t("Auto-deny")}</option>
+          <option value="full_access">{t("Full access")}</option>
+        </select>
+      </Field>
+    </Section>
+  );
+
+  const scheduleSection = (
+    <Section title={t("Schedule")} first={split}>
+      <Field label={t("Cron expression")} error={cronError}>
+        <CronBuilder
+          value={form.cron}
+          onChange={(cron, valid) => update({ cron, cronValid: valid })}
+        />
+      </Field>
+      <Field label={t("Max lifetime")} error={maxLifetimeError}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <NumberStepper
+            value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
+            onChange={(minutes) => update({ maxLifetimeMinutes: Number.isInteger(minutes) ? String(minutes) : "" })}
+            min={1}
+            max={1440}
+            ariaLabel={t("Max lifetime")}
+            placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
+          />
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("minutes")}</span>
+        </div>
+      </Field>
+      <Field label={t("Timezone")}>
+        <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
+          {timezones.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </Section>
+  );
+
+  const notificationsSection = (
+    <Section title={t("Notifications")}>
+      <NotificationsSection
+        form={form}
+        update={update}
+        channels={channels}
+        channelError={channelError}
+        recipientError={recipientError}
+      />
+    </Section>
+  );
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", flexShrink: 0 }}>
-        <PanelBackButton panel={schedulerPanel} />
-        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-          {formTaskId ? t("Edit task") : t("New task")}
-        </span>
-      </div>
-
-      <div
-        ref={scrollRef}
-        data-scroll-wide
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 14px 16px" }}
-      >
-        <Section title={t("Basic config")}>
-          <Field label={t("Task name")} hint={t("Concise description, e.g. daily report")} error={nameError}>
-            <input
-              value={form.name}
-              onChange={(e) => update({ name: e.target.value })}
-              placeholder={t("e.g. daily report")}
-              autoFocus
-              className="scheduler-text-input"
-              style={inputStyle}
-            />
-          </Field>
-          <Field label={t("Prompt")} hint={t("Full prompt sent to agent at trigger time")} error={promptError}>
-            <textarea
-              value={form.prompt}
-              onChange={(e) => update({ prompt: e.target.value })}
-              rows={8}
-              placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
-              className="scheduler-text-input"
-              style={textareaStyle}
-            />
-          </Field>
-          <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
-            <CwdPicker cwd={form.cwd || null} onCwdChange={(value) => update({ cwd: value })} fill />
-          </Field>
-          <SchedulerModelSelect form={form} update={update} meta={meta} error={modelError} />
-          <SchedulerThinkingSelect form={form} update={update} meta={meta} error={thinkingError} />
-          <SchedulerToolsSelect
-            form={form}
-            update={update}
-            availableTools={availableTools}
-            toolsLoading={toolsLoading}
-            toolsError={toolsError}
-            customExpanded={customExpanded}
-            onToggleCustomExpanded={() => setCustomExpanded((value) => !value)}
-            onRetry={async () => {
-              if (!form.cwd.trim()) return;
-              setToolsLoading(true);
-              setToolsError(null);
-              try {
-                setAvailableTools(await listToolsForCwd(form.cwd.trim()));
-              } catch (error) {
-                setToolsError(error instanceof Error ? error.message : "Failed to load tools");
-              } finally {
-                setToolsLoading(false);
-              }
+    <div
+      ref={containerRef}
+      style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
+    >
+      {split ? (
+        <div
+          ref={scrollRef}
+          data-scroll-wide
+          style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: "14px 20px 20px", overflow: "hidden" }}
+        >
+          <div
+            data-scroll-wide
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
+              overflowX: "hidden",
             }}
-          />
-          <Field label={t("Dangerous commands")}>
-            <select
-              value={form.permissionMode}
-              onChange={(e) =>
-                update({
-                  permissionMode: e.target.value === "full_access" ? "full_access" : "auto_deny",
-                })
-              }
-              style={inputStyle}
-            >
-              <option value="auto_deny">{t("Auto-deny")}</option>
-              <option value="full_access">{t("Full access")}</option>
-            </select>
-          </Field>
-        </Section>
-
-        <Section title={t("Scheduler")}>
-          <Field label={t("Cron expression")} hint={t("Cron examples hint")} error={cronError}>
-            <CronBuilder
-              value={form.cron}
-              onChange={(cron, valid) => update({ cron, cronValid: valid })}
-            />
-          </Field>
-          <Field label={t("Max lifetime")} hint={t("Max lifetime hint")} error={maxLifetimeError}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <NumberStepper
-                value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
-                onChange={(minutes) => update({ maxLifetimeMinutes: Number.isInteger(minutes) ? String(minutes) : "" })}
-                min={1}
-                max={1440}
-                ariaLabel={t("Max lifetime")}
-                placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
-              />
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
-            </div>
-          </Field>
-          <Field label={t("Timezone")} hint={t("Timezone hint")}>
-            <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
-              {timezones.map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </Section>
-
-        <Section title={t("Notifications")}>
-          <NotificationsSection
-            form={form}
-            update={update}
-            channels={channels}
-            channelError={channelError}
-            recipientError={recipientError}
-          />
-        </Section>
-      </div>
+          >
+            {basicSection}
+          </div>
+          <div
+            data-scroll-wide
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
+              overflowX: "hidden",
+            }}
+          >
+            {scheduleSection}
+            {notificationsSection}
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          data-scroll-wide
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px 20px" }}
+        >
+          {basicSection}
+          {scheduleSection}
+          {notificationsSection}
+        </div>
+      )}
 
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 14px",
+          padding: "12px 20px",
           borderTop: "1px solid var(--border)",
           background: "var(--bg)",
           flexShrink: 0,
         }}
       >
         {saveError && (
-          <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--error)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--error)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {saveError}
           </span>
         )}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-          <button type="button" onClick={() => schedulerPanel.back()} disabled={saving} style={btnGhost}>
+          <button type="button" onClick={() => void requestSchedulerLeave("back_to_browse")} disabled={saving} style={btnGhost}>
             {t("Cancel")}
           </button>
           <button type="button" onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
@@ -270,12 +318,28 @@ export function SchedulerFormPage() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  first = false,
+  grow = false,
+  children,
+}: {
+  title: string;
+  first?: boolean;
+  grow?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 18 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        {title}
-      </div>
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+        marginTop: first ? 0 : 24,
+        flex: grow ? "1 0 auto" : "0 0 auto",
+      }}
+    >
+      <div style={sectionTitleStyle}>{title}</div>
       {children}
     </section>
   );
@@ -298,7 +362,7 @@ function NotificationsSection({
   const contacts = channels.map((channel) => channel.userId).filter((id): id is string => Boolean(id));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
         <input
           type="checkbox"
@@ -365,7 +429,7 @@ function NotificationsSection({
                 </datalist>
               )}
               {contacts.length > 0 && (
-                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
                   {t("Known contacts")}: {contacts.slice(0, 5).join(", ")}
                   {contacts.length > 5 ? "…" : ""}
                 </span>

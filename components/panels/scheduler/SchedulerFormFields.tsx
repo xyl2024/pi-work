@@ -27,7 +27,7 @@ export function pillTriggerStyle(open: boolean): CSSProperties {
     borderRadius: 9,
     color: "var(--text-muted)",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "inherit",
     transition: "background 0.12s, color 0.12s",
     overflow: "hidden",
@@ -57,7 +57,7 @@ export function dropdownOptionStyle(active: boolean): CSSProperties {
     border: "none",
     color: active ? "var(--text)" : "var(--text-muted)",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "left",
     fontWeight: active ? 600 : 400,
     whiteSpace: "nowrap",
@@ -94,15 +94,17 @@ export function Field({
   label,
   hint,
   error,
+  grow = false,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string | null;
+  grow?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div>
+    <div style={grow ? { flex: "1 0 auto", minHeight: 0, display: "flex", flexDirection: "column" } : undefined}>
       <div style={fieldLabelStyle}>{label}</div>
       {children}
       {error && (
@@ -140,7 +142,7 @@ export function SchedulerModelSelect({
   const triggerIconId = resolveProviderIcon(current?.provider, current?.id, modelIcons, modelIconPreferences);
 
   return (
-    <Field label={t("Model")} hint={t("Scheduler field required")} error={error}>
+    <Field label={t("Model")} error={error}>
       <div style={{ position: "relative" }}>
         <button
           type="button"
@@ -203,7 +205,7 @@ export function SchedulerThinkingSelect({
     : t("Select a thinking level");
 
   return (
-    <Field label={t("Thinking level")} hint={t("Scheduler field required")} error={error}>
+    <Field label={t("Thinking level")} error={error}>
       <div ref={rootRef} style={{ position: "relative" }}>
         <button
           type="button"
@@ -239,7 +241,7 @@ export function SchedulerThinkingSelect({
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[lvl], flexShrink: 0 }} />
                 <span style={{ flex: 1 }}>{label}</span>
                 {mappedVal != null && mappedVal !== lvl && (
-                  <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
+                  <span style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
                 )}
               </button>
             );
@@ -283,7 +285,7 @@ export function SchedulerToolsSelect({
         : t("Custom selection ({count}/{total})", { count: selectedCount, total: availableTools.length });
 
   return (
-    <Field label={t("Tool set")} hint={t("all: all tools, none: chat only, custom: comma-separated tool names")}>
+    <Field label={t("Tool set")}>
       <div ref={rootRef} style={{ position: "relative" }}>
         <button type="button" onClick={() => setOpen((v) => !v)} style={pillTriggerStyle(open)}>
           <ToolIcon size={11} style={{ flexShrink: 0 }} />

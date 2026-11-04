@@ -1,64 +1,98 @@
-import { useMemo, useState } from "react";
+import { useMemo, type CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { CollapsiblePanel } from "@/components/ui/CollapsiblePanel";
 import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
 import { formatDuration, formatRelative } from "./utils";
 import type { TaskRun } from "@/lib/shared/scheduler";
+import {
+  computeSchedulerRunStats,
+  countSchedulerRuns,
+  filterSchedulerRuns,
+  isSchedulerLongRunning,
+  schedulerRunDurationMs,
+  SCHEDULER_RUN_FILTERS,
+  type SchedulerRunFilter,
+} from "@/lib/shared/scheduler-runs";
 import { AlertIcon, ChevronDownIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 
-export type RunFilter = "all" | "success" | "error" | "timeout" | "interrupted" | "running";
+export type RunFilter = SchedulerRunFilter;
 
 interface Props {
   runs: TaskRun[];
   loading: boolean;
   filter: RunFilter;
   onFilterChange: (f: RunFilter) => void;
-  triggering: boolean;
-  onTrigger: () => void;
+  selectedRunId: string | null;
+  onSelectRun: (runId: string | null) => void;
   onOpenSession: (sessionId: string) => void;
 }
 
-const FILTERS: { id: RunFilter; label: string }[] = [
-  { id: "all",     label: "All" },
-  { id: "success", label: "Success" },
-  { id: "error",   label: "Errors" },
-  { id: "timeout", label: "Timeout" },
-  { id: "interrupted", label: "Interrupted" },
-  { id: "running", label: "Running" },
-];
+const FILTER_LABELS: Record<RunFilter, string> = {
+  all: "All",
+  success: "Success",
+  error: "Errors",
+  timeout: "Timeout",
+  interrupted: "Interrupted",
+  running: "Running",
+};
 
 export function TaskRunsTab({
-  runs, loading, filter, onFilterChange,
-  triggering, onTrigger, onOpenSession,
+  runs, loading, filter, onFilterChange, selectedRunId, onSelectRun, onOpenSession,
 }: Props) {
   const { t } = useI18n();
   const now = useNow(2_000);
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return runs;
-    return runs.filter((r) => r.status === filter);
-  }, [runs, filter]);
-
-  const inFlight = runs.some((r) => r.status === "running");
+  const filtered = useMemo(() => filterSchedulerRuns(runs, filter), [runs, filter]);
+  const stats = useMemo(() => computeSchedulerRunStats(runs), [runs]);
+  const inFlight = runs.some((run) => run.status === "running");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, rowGap: 4, flexWrap: "wrap" }}>
+          <RunStat label={t("Total runs")} value={String(stats.total)} />
+          <RunStat
+            label={t("Success rate")}
+            value={stats.completed === 0 ? "—" : `${Math.round(stats.successRate * 100)}%`}
+          />
+          <RunStat label={t("Avg duration")} value={formatDuration(stats.avgDurationMs) ?? "—"} />
+          {inFlight && (
+            <span
+              style={{
+                marginLeft: "auto",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                color: "var(--info)",
+              }}
+            >
+              <span
+                data-running-pulse="true"
+                style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }}
+              />
+              {t("Task running, auto-refreshing…")}
+            </span>
+          )}
+        </div>
+
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {FILTERS.map((f) => {
-            const active = filter === f.id;
-            const count = countByStatus(runs, f.id);
+          {SCHEDULER_RUN_FILTERS.map((id) => {
+            const active = filter === id;
+            const count = countSchedulerRuns(runs, id);
             return (
               <button
-                key={f.id}
-                onClick={() => onFilterChange(f.id)}
+                key={id}
+                type="button"
+                onClick={() => onFilterChange(id)}
                 style={{
-                  padding: "3px 9px",
-                  fontSize: 11,
+                  padding: "3px 10px",
+                  fontSize: 12,
                   border: "1px solid",
                   borderColor: active ? "var(--accent)" : "var(--border)",
                   background: active ? "var(--bg-selected)" : "transparent",
@@ -71,130 +105,128 @@ export function TaskRunsTab({
                   gap: 4,
                 }}
               >
-                {t(f.label)}
-                {count > 0 && <span style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
+                {t(FILTER_LABELS[id])}
+                {count > 0 && <span style={{ fontSize: 12 }}>{count}</span>}
               </button>
             );
           })}
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <button
-            onClick={onTrigger}
-            disabled={triggering}
-            style={{
-              padding: "4px 12px",
-              fontSize: 11,
-              fontWeight: 600,
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: triggering ? "default" : "pointer",
-              opacity: triggering ? 0.6 : 1,
-              fontFamily: "inherit",
-            }}
-          >
-            {triggering ? t("Triggering...") : t("Run now")}
-          </button>
-        </div>
       </div>
 
-      {inFlight && (
-        <div
-          style={{
-            padding: "6px 12px",
-            background: "var(--info-bg)",
-            color: "var(--info)",
-            fontSize: 11,
-            borderRadius: 6,
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <span data-running-pulse="true" style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          {t("Task running, auto-refreshing…")}
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {loading && runs.length === 0 && (
-          <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("Loading...")}
-          </div>
-        )}
-        {!loading && runs.length === 0 && (
-          <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("No runs yet")}
-          </div>
-        )}
+      <div data-scroll-inset style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        {loading && runs.length === 0 && <RunHint text={t("Loading...")} />}
+        {!loading && runs.length === 0 && <RunHint text={t("No runs yet")} />}
         {!loading && runs.length > 0 && filtered.length === 0 && (
-          <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("No runs match this filter")}
-          </div>
+          <RunHint text={t("No runs match this filter")} />
         )}
-        {filtered.map((run) => (
-          <RunCard
-            key={run.id}
-            run={run}
-            now={now}
-            onOpenSession={onOpenSession}
-          />
-        ))}
+        {filtered.map((run) => {
+          const expanded = run.id === selectedRunId;
+          return (
+            <div key={run.id}>
+              <RunRow
+                run={run}
+                now={now}
+                expanded={expanded}
+                onToggle={() => onSelectRun(expanded ? null : run.id)}
+                onOpenSession={onOpenSession}
+              />
+              <CollapsiblePanel open={expanded}>
+                <RunOutput run={run} />
+              </CollapsiblePanel>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-const LONG_RUNNING_THRESHOLD_MS = 10 * 60 * 1000;
+function RunStat({ label, value }: { label: string; value: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, fontSize: 13 }}>
+      <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{label}</span>
+      <span style={{ color: "var(--text)", fontWeight: 600, fontFamily: "var(--font-mono)" }}>{value}</span>
+    </span>
+  );
+}
 
-function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpenSession: (id: string) => void }) {
+function RunHint({ text }: { text: string }) {
+  return <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>{text}</div>;
+}
+
+function RunRow({
+  run,
+  now,
+  expanded,
+  onToggle,
+  onOpenSession,
+}: {
+  run: TaskRun;
+  now: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpenSession: (sessionId: string) => void;
+}) {
   const { t, locale } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const markdownComponents = useMarkdownComponents(false);
-  const hasReply = !!run.replyText?.trim();
-
-  const isRunning = run.status === "running";
-  const elapsedMs = isRunning ? Math.max(0, now - run.startedAt) : null;
-  const isLongRunning = elapsedMs !== null && elapsedMs >= LONG_RUNNING_THRESHOLD_MS;
+  const durationMs = schedulerRunDurationMs(run, now);
+  const longRunning = isSchedulerLongRunning(run, now);
 
   return (
     <div
+      data-run-row={run.id}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle();
+        }
+      }}
       style={{
-        background: "var(--bg)",
-        borderRadius: 8,
-        padding: "10px 12px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
+        display: "grid",
+        gridTemplateColumns: "auto minmax(0, 1fr) auto auto auto auto",
+        alignItems: "center",
+        gap: 10,
+        height: 38,
+        padding: "0 10px",
+        margin: "0 10px",
+        borderRadius: 6,
+        cursor: "pointer",
+        background: expanded ? "var(--bg-selected)" : "transparent",
+        borderBottom: expanded ? "none" : "1px solid var(--border)",
+        boxSizing: "border-box",
       }}
     >
-      <div
-        role={hasReply ? "button" : undefined}
-        tabIndex={hasReply ? 0 : undefined}
-        aria-expanded={hasReply ? expanded : undefined}
-        onClick={hasReply ? () => setExpanded((value) => !value) : undefined}
-        onKeyDown={hasReply ? (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setExpanded((value) => !value);
-          }
-        } : undefined}
-        style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", cursor: hasReply ? "pointer" : "default" }}
+      <StatusBadge status={run.status} size="sm" />
+      <span
+        style={{
+          fontSize: 13,
+          color: expanded ? "var(--text)" : "var(--text-muted)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
       >
-        <StatusBadge status={run.status} size="md" />
-        {isLongRunning && (
+        {formatRelative(now, run.startedAt, locale)}
+      </span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+        {formatDuration(durationMs) ?? "—"}
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center" }}>
+        {longRunning && (
           <Tooltip content={t("Long-running run warning")}>
             <span
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 4,
-                padding: "2px 7px",
+                gap: 3,
+                padding: "2px 6px",
                 background: "var(--warning-bg)",
                 color: "var(--warning)",
                 borderRadius: 999,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 600,
                 lineHeight: 1.4,
               }}
@@ -204,94 +236,102 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
             </span>
           </Tooltip>
         )}
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {formatRelative(now, run.startedAt, locale)}
-        </span>
-        {run.durationMs !== null && (
-          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {formatDuration(run.durationMs)}
-          </span>
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center" }}>
+        {run.sessionId && (
+          <Tooltip content={t("Open session")}>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenSession(run.sessionId!);
+              }}
+              aria-label={t("Open session")}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderRadius: 4,
+                color: "var(--text-muted)",
+                padding: "2px 6px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              <ExternalLinkIcon width={11} height={11} />
+            </button>
+          </Tooltip>
         )}
-        {elapsedMs !== null && (
-          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {formatDuration(elapsedMs)}
-          </span>
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
-          {run.sessionId && (
-            <Tooltip content={t("Open session")}>
-              <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenSession(run.sessionId!);
-                }}
-                aria-label={t("Open session")}
-                style={{
-                  background: "transparent",
-                  borderRadius: 4,
-                  color: "var(--text-muted)",
-                  padding: "2px 6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                }}
-              >
-                <ExternalLinkIcon width={10} height={10} />
-              </button>
-            </Tooltip>
-          )}
-          {hasReply && (
-            <ChevronDownIcon
-              width={13}
-              height={13}
-              aria-hidden="true"
-              style={{ color: "var(--text-muted)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-            />
-          )}
-        </div>
-      </div>
+      </span>
+      <ChevronDownIcon
+        width={12}
+        height={12}
+        aria-hidden="true"
+        style={{
+          color: expanded ? "var(--accent)" : "var(--text-dim)",
+          transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
+          transition: "transform 0.15s",
+        }}
+      />
+    </div>
+  );
+}
 
+function RunOutput({ run }: { run: TaskRun }) {
+  const { t } = useI18n();
+  const markdownComponents = useMarkdownComponents(false);
+
+  return (
+    <div
+      data-run-output={run.id}
+      data-scroll-inset
+      className={run.replyText?.trim() ? "markdown-body" : undefined}
+      style={outputBodyStyle}
+    >
       {run.error && (
         <div
           style={{
-            fontSize: 11,
-            color: run.status === "timeout" || run.status === "interrupted" ? "var(--warning)" : "var(--error)",
+            fontSize: 13,
+            color:
+              run.status === "timeout" || run.status === "interrupted" ? "var(--warning)" : "var(--error)",
             fontFamily: "var(--font-mono)",
-            background: run.status === "timeout" || run.status === "interrupted" ? "var(--warning-bg)" : "var(--error-bg)",
+            background:
+              run.status === "timeout" || run.status === "interrupted" ? "var(--warning-bg)" : "var(--error-bg)",
             padding: "6px 10px",
             borderRadius: 4,
+            marginBottom: run.replyText?.trim() ? 10 : 0,
             wordBreak: "break-word",
           }}
         >
           {t(run.error)}
         </div>
       )}
-      {hasReply && expanded && (
-        <div
-          data-scroll-inset
-          className="markdown-body"
-          style={{
-            height: 320,
-            overflowY: "auto",
-            overflowX: "hidden",
-            padding: "10px 12px",
-            background: "var(--bg-subtle)",
-            borderRadius: 6,
-          }}
-        >
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-            {run.replyText}
-          </ReactMarkdown>
-        </div>
-      )}
-      {run.status === "success" && !hasReply && (
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("(no reply content)")}</div>
+      {run.replyText?.trim() ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {run.replyText}
+        </ReactMarkdown>
+      ) : (
+        !run.error && (
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            {run.status === "running"
+              ? t("Waiting for output…")
+              : run.status === "success"
+                ? t("(no reply content)")
+                : t("No output")}
+          </div>
+        )
       )}
     </div>
   );
 }
 
-function countByStatus(runs: TaskRun[], filter: RunFilter): number {
-  if (filter === "all") return runs.length;
-  return runs.filter((r) => r.status === filter).length;
-}
+const outputBodyStyle: CSSProperties = {
+  maxHeight: 360,
+  overflowY: "auto",
+  overflowX: "hidden",
+  boxSizing: "border-box",
+  margin: "0 10px 8px",
+  padding: "10px 12px",
+  background: "var(--bg-subtle)",
+  borderRadius: 6,
+};

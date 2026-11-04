@@ -3,20 +3,32 @@ import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import {
   SCHEDULER_DIRTY_CLOSE_CONFIRM,
   isSchedulerFormDirty,
-  selectSchedulerCloseConfirm,
+  selectSchedulerLeaveConfirm,
+  type SchedulerLeaveIntent,
 } from "@/lib/shared/scheduler-close";
 import { EMPTY_SCHEDULER_FORM, newSchedulerForm } from "@/lib/shared/scheduler-form";
 
-describe("selectSchedulerCloseConfirm", () => {
-  it("lets the tab close silently when the form is clean", () => {
-    expect(selectSchedulerCloseConfirm({ dirty: false })).toBeNull();
+const LEAVE_INTENTS: readonly SchedulerLeaveIntent[] = [
+  "back_to_browse",
+  "select_task",
+  "new_task",
+  "leave_main_view",
+];
+
+describe("selectSchedulerLeaveConfirm", () => {
+  it("lets every exit through silently when the form is clean", () => {
+    for (const intent of LEAVE_INTENTS) {
+      expect(selectSchedulerLeaveConfirm({ intent, dirty: false })).toBeNull();
+    }
   });
 
-  it("asks before closing while a draft is open", () => {
-    expect(selectSchedulerCloseConfirm({ dirty: true })).toEqual(SCHEDULER_DIRTY_CLOSE_CONFIRM);
+  it("asks the same single confirmation for every exit while the form is dirty", () => {
+    for (const intent of LEAVE_INTENTS) {
+      expect(selectSchedulerLeaveConfirm({ intent, dirty: true })).toEqual(SCHEDULER_DIRTY_CLOSE_CONFIRM);
+    }
   });
 
-  it("labels the close button Discard, not Close", () => {
+  it("labels the confirm button Discard, not Close", () => {
     expect(SCHEDULER_DIRTY_CLOSE_CONFIRM.confirmLabelKey).toBe("Discard");
   });
 

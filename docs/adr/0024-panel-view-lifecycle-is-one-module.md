@@ -43,3 +43,9 @@ module **不拥有**面板的领域概念与保存语义：哪些相位算阻塞
 定时任务迁成主视图后（ADR-0032），它的 adapter 不再属于面板注册表，`kind` 也从 `PanelViewKind` 放宽为 `PanelViewKind | MainViewKind`。这是本文 Decision 里"`kind`（取 `PanelViewKind`）"一句的唯一改动：页栈、保活与释放时机、加载并发、关闭确认、`start` / `stop` 等契约一字未动，module 依然是这些规则的唯一拥有者。
 
 另有一处需要跟着改：本文 Consequences 里那条兜底"标签不存在 → 释放"仍只覆盖面板视图；主视图没有"关闭"动作，所以它的 store 不在这条路径里，随页面刷新一起清空。见 ADR-0032。
+
+## 修订：`isSiblingPage` 变为可选（2026-11-04）
+
+定时任务主视图收缩页栈后（ADR-0033），页栈只剩 `browse` 与 `form`，页与页之间不再有"同级替换"：切换任务改由 `selectedTaskId` 这个视图状态承担，同一层里没有另一个页需要替换。因此 `isSiblingPage` 在 adapter 上从必选变为可选，未声明时 module 视为"没有同级页"，`openPage` 只压栈。
+
+这是对本文 Decision 里 "页栈所需的 `rootPage`、`isSiblingPage`" 一句的改动：`rootPage` 仍必选，`isSiblingPage` 只有真正存在同级页的 adapter 才声明。其余契约一字未动——栈永不为空、`back` 只在非根页出栈、保活与释放时机、加载并发、关闭确认与 `start` / `stop` 仍由 module 拥有。其它面板 adapter 继续声明 `isSiblingPage`，行为不变。
