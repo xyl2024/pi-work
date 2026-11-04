@@ -2,7 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { requestSchedulerLeave, schedulerPanel, useSchedulerPanel } from "@/lib/client/scheduler-panel";
+import { useContainerWidth } from "@/hooks/useContainerWidth";
+import {
+  clearSchedulerSelection,
+  requestSchedulerLeave,
+  schedulerPanel,
+  useSchedulerPanel,
+} from "@/lib/client/scheduler-panel";
+import { resolveSchedulerLayout, SCHEDULER_LIST_WIDTH } from "@/lib/shared/scheduler-layout";
 import { SchedulerTaskList } from "./scheduler/SchedulerTaskList";
 import { SchedulerDetailPage } from "./scheduler/SchedulerDetailPage";
 import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
@@ -20,7 +27,7 @@ export function SchedulerPanel({
   visible?: boolean;
 }) {
   const { view } = useSchedulerPanel();
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const { ref: containerRef, width } = useContainerWidth<HTMLDivElement>();
 
   useEffect(() => {
     schedulerPanel.open();
@@ -28,12 +35,13 @@ export function SchedulerPanel({
 
   const page = schedulerPanel.currentPage();
   const { loaded, tasks, selectedTaskId } = view;
+  const layout = resolveSchedulerLayout(width);
 
   useEffect(() => {
     if (!visible) return;
     const el = containerRef.current;
     if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page, selectedTaskId, visible]);
+  }, [page, selectedTaskId, visible, containerRef]);
 
   usePanelEscapeGuard(
     containerRef,
@@ -43,7 +51,7 @@ export function SchedulerPanel({
         return;
       }
       if (selectedTaskId !== null) {
-        schedulerPanel.patch({ selectedTaskId: null, selectedRunId: null, runsVisible: false });
+        clearSchedulerSelection();
         return;
       }
       onExit?.();
@@ -51,44 +59,48 @@ export function SchedulerPanel({
     visible,
   );
 
-  if (page.kind === "form") {
-    return (
-      <div
-        ref={containerRef}
-        tabIndex={-1}
-        style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
-      >
-        <SchedulerFormPage key={page.taskId ?? "new"} />
-      </div>
+  const renderDetail = (onBack?: () => void) =>
+    loaded && tasks.length === 0 ? (
+      <SchedulerCreateGuide cwd={cwd} />
+    ) : selectedTaskId === null ? (
+      <SchedulerSelectHint />
+    ) : (
+      <SchedulerDetailPage
+        key={selectedTaskId}
+        taskId={selectedTaskId}
+        onOpenSession={onOpenSession}
+        onBack={onBack}
+      />
     );
-  }
 
   return (
     <div
       ref={containerRef}
       tabIndex={-1}
-      style={{ height: "100%", display: "flex", minHeight: 0, outline: "none" }}
+      style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
     >
-      <div
-        style={{
-          width: 300,
-          flexShrink: 0,
-          minHeight: 0,
-          minWidth: 0,
-          borderRight: "1px solid var(--border)",
-        }}
-      >
+      {page.kind === "form" ? (
+        <SchedulerFormPage key={page.taskId ?? "new"} />
+      ) : layout === "split" ? (
+        <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
+          <div
+            style={{
+              width: SCHEDULER_LIST_WIDTH,
+              flexShrink: 0,
+              minHeight: 0,
+              minWidth: 0,
+              borderRight: "1px solid var(--border)",
+            }}
+          >
+            <SchedulerTaskList cwd={cwd} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>{renderDetail()}</div>
+        </div>
+      ) : selectedTaskId === null ? (
         <SchedulerTaskList cwd={cwd} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
-        {loaded && tasks.length === 0 ? (
-          <SchedulerCreateGuide cwd={cwd} />
-        ) : selectedTaskId === null ? (
-          <SchedulerSelectHint />
-        ) : (
-          <SchedulerDetailPage key={selectedTaskId} taskId={selectedTaskId} onOpenSession={onOpenSession} />
-        )}
-      </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>{renderDetail(clearSchedulerSelection)}</div>
+      )}
     </div>
   );
 }
