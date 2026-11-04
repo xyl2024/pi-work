@@ -25,7 +25,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerPanel } from "../panels/SchedulerPanel";
-import { ChannelsPanel } from "../panels/ChannelsPanel";
+import { ChannelsMainView } from "../panels/ChannelsMainView";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { ContextInsightPanel } from "../panels/ContextInsightPanel";
@@ -84,7 +84,6 @@ import { renderMainViewBadges } from "@/lib/client/main-view-badges";
 import { useMainViewHeader } from "@/lib/client/main-view-header";
 import { modelsConfigPanel } from "@/lib/client/models-config-panel";
 import { skillsPanel } from "@/lib/client/skills-panel";
-import { channelsPanel } from "@/lib/client/channels-panel";
 import {
   usePanelViewLifecycleSync,
   type PanelViewLifecycleStore,
@@ -171,13 +170,11 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
-  channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
   memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   mcp: mcpPanel,
-  channels: channelsPanel,
   skills: skillsPanel,
   modelsConfig: modelsConfigPanel,
 };
@@ -202,6 +199,7 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
       visible={ctx.visible}
     />
   ),
+  channels: (ctx) => <ChannelsMainView onExit={ctx.onExit} visible={ctx.visible} />,
 };
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {

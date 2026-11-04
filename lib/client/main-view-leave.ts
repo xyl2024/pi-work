@@ -38,6 +38,6 @@ export async function requestMainViewLeave(request: MainViewLeaveRequest): Promi
     if (!confirmFn) return false;
     if (!(await confirmFn(confirm))) return false;
   }
-  guard?.discard();
+  if (confirm) guard?.discard();
   return true;
 }

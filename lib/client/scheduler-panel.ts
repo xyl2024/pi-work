@@ -167,7 +167,7 @@ function clearPollingResources(): void {
   unsubscribeIconPreferences = null;
 }
 
-function discardSchedulerForm(): void {
+export function discardSchedulerForm(): void {
   const state = schedulerPanel.get();
   if (state.form !== null || state.formBaseline !== null || state.saveError !== null) {
     schedulerPanel.patch(CLEARED_FORM_STATE);

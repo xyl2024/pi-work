@@ -389,4 +389,3 @@ export const MODELS_CONFIG_TAB_ID = "modelsConfig:global";
 export const MCP_TAB_ID = "mcp:global";
 export const MEMORY_TAB_ID = "memory:global";
 export const SKILLS_TAB_ID = "skills:global";
-export const CHANNELS_TAB_ID = "channels:global";

@@ -20,7 +20,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon, McpIcon, ToolIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -156,10 +156,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   memory: panelButton("memory", {
     labelKey: "Open memory",
     icon: ({ size }) => <Brain size={size} />,
-  }),
-  channels: panelButton("channels", {
-    labelKey: "Open channels",
-    icon: ({ size }) => <GlobeIcon size={size} />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

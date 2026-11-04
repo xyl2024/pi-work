@@ -136,6 +136,18 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
   });
 
+  it("registers channels as a main view in the fourth navigation slot", () => {
+    expect(MAIN_VIEW_KINDS).toContain("channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.labelKey).toBe("Channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.backLabelKey).toBe("Back to chat");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.navPriority).toBe(4);
+    expect(ZH_TRANSLATIONS["Channels"]).toBe("频道");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.commands?.[0]?.labelKey).toBe("Open channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
+    );
+  });
+
   it("labels the scheduled-tasks main view with the sidebar wording", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.scheduler.labelKey).toBe("Scheduled tasks");
   });
