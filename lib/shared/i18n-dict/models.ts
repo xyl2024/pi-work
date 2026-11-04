@@ -71,6 +71,10 @@ export const models = {
   "Raw metadata hint": "未在表单中暴露的字段（如 compat）可点击\u201c以 JSON 编辑\u201d直接修改，或手编 ~/.pi/agent/models.json。",
 
   "Provider": "提供商",
+  "Edit provider": "编辑提供商",
+  "Edit model": "编辑模型",
+  "Sign in": "登录",
+  "Select a provider": "选择一个提供商",
   "Model": "模型",
   "Default model": "默认模型",
   "Thinking level map": "推理强度映射",

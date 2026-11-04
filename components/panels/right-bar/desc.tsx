@@ -19,7 +19,6 @@ import {
   PanelRight,
   Star,
 } from "lucide-react";
-import { ProviderGearIcon } from "../../ui/ProviderIcon";
 import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
@@ -33,7 +32,6 @@ export interface RightBarCtx {
   activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
-  modelsConfigDirty: boolean;
   skillsInstalling: boolean;
   mcpDirty: boolean;
   t: (key: string) => string;
@@ -137,11 +135,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
-  }),
-  modelsConfig: panelButton("modelsConfig", {
-    labelKey: "Open models config",
-    icon: ({ size }) => <ProviderGearIcon size={size} color="inherit" />,
-    badge: (ctx) => (ctx.modelsConfigDirty ? <CornerBadge /> : null),
   }),
   skills: panelButton("skills", {
     labelKey: "Open skills",

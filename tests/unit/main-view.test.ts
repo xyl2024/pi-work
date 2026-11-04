@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
+import { PANEL_TAB_KINDS } from "@/lib/shared/panelTabs";
 import {
   MAIN_VIEW_KINDS,
   MAIN_VIEW_SPECS,
@@ -134,6 +135,19 @@ describe("mainView registry", () => {
     expect([...priorities]).toEqual([...priorities].sort((a, b) => a - b));
     expect(new Set(priorities).size).toBe(priorities.length);
     expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
+  });
+
+  it("orders models config right after scheduled tasks in the navigation", () => {
+    expect(MAIN_VIEW_KINDS).toEqual(["scheduler", "modelsConfig"]);
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.navPriority).toBe(2);
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.labelKey).toBe("Models config");
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.backLabelKey).toBe("Back to chat");
+  });
+
+  it("keeps every main view out of the panel registry", () => {
+    for (const kind of MAIN_VIEW_KINDS) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
+    }
   });
 
   it("labels the scheduled-tasks main view with the sidebar wording", () => {

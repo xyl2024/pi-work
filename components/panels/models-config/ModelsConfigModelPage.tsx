@@ -10,7 +10,6 @@ import {
   applyModelsConfigRawEdit,
   beginModelsConfigRawEdit,
   cancelModelsConfigRawEdit,
-  modelsConfigPanel,
   openModelsConfigFillModel,
   removeModelsConfigModel,
   selectModelsConfigProblem,
@@ -20,7 +19,6 @@ import {
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
-import { PanelBackButton } from "../PanelBackButton";
 
 export function ModelsConfigModelPage({ providerName, index }: { providerName: string; index: number }) {
   const { t } = useI18n();
@@ -51,7 +49,6 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <PanelBackButton panel={modelsConfigPanel} />
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)" }}>
           {title}
         </span>

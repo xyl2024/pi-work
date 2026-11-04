@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Clock } from "lucide-react";
+import { Clock, SlidersHorizontal } from "lucide-react";
 import type { MainViewKind } from "@/lib/shared/mainView";
 
 const MAIN_VIEW_ICON_BY_KIND: { [K in MainViewKind]: (props: { size: number }) => ReactNode } = {
   scheduler: ({ size }) => <Clock size={size} />,
+  modelsConfig: ({ size }) => <SlidersHorizontal size={size} />,
 };
 
 function iconsOfSize(size: number): Partial<Record<MainViewKind, ReactNode>> {

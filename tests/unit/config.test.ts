@@ -89,13 +89,14 @@ describe("config: right-side-bar keys that left the registry", () => {
   it("keeps the legacy scheduler key through a read/write round trip", () => {
     writeFileSync(
       configPath,
-      "right_side_bar:\n  scheduler: false\n  skills: false\n",
+      "right_side_bar:\n  scheduler: false\n  skills: false\n  modelsConfig: false\n",
       "utf8",
     );
 
     const config = readConfig();
     expect(config.right_side_bar.scheduler).toBe(false);
     expect(config.right_side_bar.skills).toBe(false);
+    expect(config.right_side_bar.modelsConfig).toBe(false);
 
     writeConfig(config);
 
@@ -103,7 +104,9 @@ describe("config: right-side-bar keys that left the registry", () => {
       right_side_bar: Record<string, unknown>;
     };
     expect(written.right_side_bar.scheduler).toBe(false);
+    expect(written.right_side_bar.modelsConfig).toBe(false);
     expect(readConfig().right_side_bar.scheduler).toBe(false);
+    expect(readConfig().right_side_bar.modelsConfig).toBe(false);
   });
 
   it("merges an incoming block over the stored one so unknown keys survive a save", () => {
