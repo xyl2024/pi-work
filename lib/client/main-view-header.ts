@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 export interface MainViewHeader {
   titleKey: string | null;
@@ -39,9 +39,16 @@ export function useMainViewHeader(): MainViewHeader {
 }
 
 export function useInjectMainViewHeader(titleKey: string | null, onBack: (() => void) | null): void {
+  const latestOnBack = useRef(onBack);
+  const hasBack = onBack !== null;
+  const stableOnBack = useMemo(
+    () => (hasBack ? () => latestOnBack.current?.() : null),
+    [hasBack],
+  );
   useEffect(() => {
-    setMainViewHeader({ titleKey, onBack });
-  }, [titleKey, onBack]);
+    latestOnBack.current = onBack;
+    setMainViewHeader({ titleKey, onBack: stableOnBack });
+  }, [titleKey, onBack, stableOnBack]);
   useEffect(
     () => () => {
       setMainViewHeader(null);

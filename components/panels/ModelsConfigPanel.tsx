@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   MODELS_CONFIG_ROOT_PAGE,
@@ -46,6 +46,9 @@ export function ModelsConfigPanel({
 
   const page = pages.length > 0 ? pages[pages.length - 1] : MODELS_CONFIG_ROOT_PAGE;
   const formPage = isModelsConfigFormPage(page) ? page : null;
+  const backToBrowse = useCallback(() => {
+    modelsConfigPanel.back();
+  }, []);
   const dirty = selectModelsConfigDirty(view) || view.oauthInProgress;
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export function ModelsConfigPanel({
         <MainViewMasterDetail
           containerRef={containerRef}
           titleKey={formPage ? modelsConfigPageTitleKey(formPage) : null}
-          onBack={formPage ? () => modelsConfigPanel.back() : null}
+          onBack={formPage ? backToBrowse : null}
           full={
             formPage ? (
               <div ref={scrollRef} style={{ height: "100%", overflowY: "auto" }}>
