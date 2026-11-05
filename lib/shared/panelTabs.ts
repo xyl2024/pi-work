@@ -1,32 +1,22 @@
 import type { MainViewKind } from "./mainView";
 import {
-  CHANNELS_TAB_ID,
   CONTEXT_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
-  MEMORY_TAB_ID,
-  MODELS_CONFIG_TAB_ID,
-  SKILLS_TAB_ID,
-  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
 
 export interface PanelTabParams {
   favorites: undefined;
   translate: undefined;
-  tokens: undefined;
   gitDiff: undefined;
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
-  modelsConfig: undefined;
   mcp: undefined;
-  memory: undefined;
-  skills: undefined;
-  channels: undefined;
   file: { path: string };
 }
 
@@ -134,19 +124,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       },
     ],
   },
-  tokens: {
-    kind: "tokens",
-    tabId: TOKENS_TAB_ID,
-    labelKey: "Token audit",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open token audit",
-        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
-      },
-    ],
-  },
   llmAudit: {
     kind: "llmAudit",
     tabId: LLM_AUDIT_TAB_ID,
@@ -157,19 +134,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open LLM API audit",
         keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-      },
-    ],
-  },
-  modelsConfig: {
-    kind: "modelsConfig",
-    tabId: MODELS_CONFIG_TAB_ID,
-    labelKey: "Models config",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open models config",
-        keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
       },
     ],
   },
@@ -186,51 +150,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       },
     ],
   },
-  skills: {
-    kind: "skills",
-    tabId: SKILLS_TAB_ID,
-    labelKey: "Skills",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open skills",
-        keywords: ["skills", "extensions", "skill", "技能", "扩展"],
-      },
-    ],
-  },
-  channels: {
-    kind: "channels",
-    tabId: CHANNELS_TAB_ID,
-    labelKey: "Channels",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open channels",
-        keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
-      },
-    ],
-  },
   conversationTree: {
     kind: "conversationTree",
     tabId: CONVERSATION_TREE_TAB_ID,
     labelKey: "Conversation Tree",
     defaultMode: "normal",
     sessionBound: true,
-  },
-  memory: {
-    kind: "memory",
-    tabId: MEMORY_TAB_ID,
-    labelKey: "Memory",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open memory",
-        keywords: ["memory", "memories", "remember", "记忆", "记住"],
-      },
-    ],
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

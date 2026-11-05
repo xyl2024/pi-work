@@ -10,17 +10,14 @@ import {
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import {
-  Brain,
   Eye,
   ChartColumn,
-  ChartSpline,
   GitGraph,
   Languages,
   PanelRight,
   Star,
 } from "lucide-react";
-import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { ConversationTreeGlyphIcon, GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon, McpIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -33,8 +30,6 @@ export interface RightBarCtx {
   activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
-  modelsConfigDirty: boolean;
-  skillsInstalling: boolean;
   mcpDirty: boolean;
   t: (key: string) => string;
 
@@ -130,36 +125,14 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
       <Star size={size} fill={active ? "var(--accent)" : "none"} />
     ),
   }),
-  tokens: panelButton("tokens", {
-    labelKey: "Open token audit",
-    icon: ({ size }) => <ChartSpline size={size} />,
-  }),
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
-  }),
-  modelsConfig: panelButton("modelsConfig", {
-    labelKey: "Open models config",
-    icon: ({ size }) => <ProviderGearIcon size={size} color="inherit" />,
-    badge: (ctx) => (ctx.modelsConfigDirty ? <CornerBadge /> : null),
-  }),
-  skills: panelButton("skills", {
-    labelKey: "Open skills",
-    icon: ({ size }) => <ToolIcon size={size} />,
-    badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
   }),
   mcp: panelButton("mcp", {
     labelKey: "mcp.open",
     icon: ({ size }) => <McpIcon size={size} />,
     badge: (ctx) => (ctx.mcpDirty ? <CornerBadge /> : null),
-  }),
-  memory: panelButton("memory", {
-    labelKey: "Open memory",
-    icon: ({ size }) => <Brain size={size} />,
-  }),
-  channels: panelButton("channels", {
-    labelKey: "Open channels",
-    icon: ({ size }) => <GlobeIcon size={size} />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

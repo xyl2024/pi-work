@@ -7,8 +7,11 @@ export interface ContainerWidth<T extends HTMLElement> {
   width: number | null;
 }
 
-export function useContainerWidth<T extends HTMLElement>(): ContainerWidth<T> {
-  const ref = useRef<T | null>(null);
+export function useContainerWidth<T extends HTMLElement>(
+  externalRef?: React.RefObject<T | null>,
+): ContainerWidth<T> {
+  const ownRef = useRef<T | null>(null);
+  const ref = externalRef ?? ownRef;
   const [width, setWidth] = useState<number | null>(null);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function useContainerWidth<T extends HTMLElement>(): ContainerWidth<T> {
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [ref]);
 
   return { ref, width };
 }

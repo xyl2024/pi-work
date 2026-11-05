@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
+import { PANEL_TAB_KINDS } from "@/lib/shared/panelTabs";
 import {
   MAIN_VIEW_KINDS,
   MAIN_VIEW_SPECS,
@@ -8,7 +9,6 @@ import {
   mainViewReducer,
   selectMainViewKind,
   selectToggleExits,
-  shouldMountMainViewBody,
   type MainViewAction,
   type MainViewState,
 } from "@/lib/shared/mainView";
@@ -127,25 +127,61 @@ describe("mainView toggle exits", () => {
   });
 });
 
-describe("mainView body mount", () => {
-  it("keeps every body unmounted until the main view is first entered", () => {
-    expect(shouldMountMainViewBody(null, false)).toBe(false);
-  });
-
-  it("mounts the body on the first entry", () => {
-    expect(shouldMountMainViewBody("scheduler", false)).toBe(true);
-    expect(shouldMountMainViewBody("scheduler", true)).toBe(true);
-  });
-
-  it("keeps the body mounted after returning to chat", () => {
-    expect(shouldMountMainViewBody(null, true)).toBe(true);
-  });
-});
-
 describe("mainView registry", () => {
-  it("declares exactly one main view: scheduled tasks", () => {
-    expect([...MAIN_VIEW_KINDS]).toEqual(["scheduler"]);
-    expect(MAIN_VIEW_SPECS.map((spec) => spec.kind)).toEqual(["scheduler"]);
+  it("orders the navigation by a unique priority starting with scheduled tasks", () => {
+    const priorities = MAIN_VIEW_SPECS.map((spec) => spec.navPriority);
+
+    expect(MAIN_VIEW_KINDS[0]).toBe("scheduler");
+    expect([...priorities]).toEqual([...priorities].sort((a, b) => a - b));
+    expect(new Set(priorities).size).toBe(priorities.length);
+    expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
+  });
+
+  it("orders the six registered main views by navigation priority", () => {
+    expect(MAIN_VIEW_SPECS.map((spec) => spec.kind)).toEqual([
+      "scheduler",
+      "modelsConfig",
+      "skills",
+      "channels",
+      "memory",
+      "tokens",
+    ]);
+    expect(MAIN_VIEW_SPECS.map((spec) => spec.navPriority)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("orders models config right after scheduled tasks in the navigation", () => {
+    expect(MAIN_VIEW_KINDS.indexOf("modelsConfig")).toBe(
+      MAIN_VIEW_KINDS.indexOf("scheduler") + 1,
+    );
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.navPriority).toBe(2);
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.labelKey).toBe("Models config");
+    expect(MAIN_VIEW_SPEC_BY_KIND.modelsConfig.backLabelKey).toBe("Back to chat");
+  });
+
+  it("registers channels as a main view in the fourth navigation slot", () => {
+    expect(MAIN_VIEW_KINDS).toContain("channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.labelKey).toBe("Channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.backLabelKey).toBe("Back to chat");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.navPriority).toBe(4);
+    expect(ZH_TRANSLATIONS["Channels"]).toBe("频道");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.commands?.[0]?.labelKey).toBe("Open channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
+    );
+  });
+
+  it("registers memory and token usage as later main views", () => {
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.navPriority).toBe(5);
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(6);
+    expect(MAIN_VIEW_KINDS.indexOf("memory")).toBeLessThan(MAIN_VIEW_KINDS.indexOf("tokens"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory");
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.labelKey).toBe("Token audit");
+  });
+
+  it("keeps every main view out of the panel registry", () => {
+    for (const kind of MAIN_VIEW_KINDS) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
+    }
   });
 
   it("labels the scheduled-tasks main view with the sidebar wording", () => {
@@ -174,6 +210,20 @@ describe("mainView registry", () => {
     expect(ZH_TRANSLATIONS["New session"]).toBe("新建会话");
     expect(ZH_TRANSLATIONS["New task"]).toBe("新建任务");
     expect(ZH_TRANSLATIONS["New session"]).not.toBe(ZH_TRANSLATIONS["New task"]);
+  });
+
+  it("registers skills third in the sidebar navigation", () => {
+    const ordered = MAIN_VIEW_SPECS.map((spec) => spec.kind);
+
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.navPriority).toBe(3);
+    expect(ordered.indexOf("skills")).toBe(ordered.indexOf("modelsConfig") + 1);
+    expect(ordered.indexOf("skills")).toBeGreaterThan(ordered.indexOf("scheduler"));
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.labelKey).toBe("Skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.backLabelKey).toBe("Back to chat");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.labelKey).toBe("Open skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["skills", "技能"]),
+    );
   });
 
   it("reaches scheduled tasks through english and chinese keywords", () => {

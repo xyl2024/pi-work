@@ -3,8 +3,8 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
+  type PanelViewWriter,
 } from "./panel-view-store";
 import {
   createChannel,
@@ -16,8 +16,9 @@ import {
   submitWechatLoginCode,
   switchChannelWorkspace,
 } from "./channels-io";
-import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
+import { isChannelsLeaveGuarded } from "@/lib/shared/channels-close";
 import { isLoginInProgress, type LoginPhase } from "@/lib/shared/channels-login";
+import { registerMainViewLeaveGuard } from "./main-view-leave";
 import { errorMessage } from "@/lib/shared/error-message";
 import type { ChannelRecord, ChannelsPage } from "@/lib/shared/channels/types";
 
@@ -52,6 +53,7 @@ export interface ChannelsViewState {
   channels: ChannelRecord[];
   selectedChannelId: string | null;
   nameDraft: string;
+  workspaceDraft: string | null;
   busy: boolean;
   login: ChannelsLoginState;
 }
@@ -63,48 +65,72 @@ const INITIAL: ChannelsViewState = {
   channels: [],
   selectedChannelId: null,
   nameDraft: "",
+  workspaceDraft: null,
   busy: false,
   login: IDLE_LOGIN,
 };
 
-const ROOT_PAGE: ChannelsPage = { kind: "root" };
+const BROWSE_PAGE: ChannelsPage = { kind: "browse" };
+const LOGIN_POLL_MS = 2000;
 
+let loginPollWriter: PanelViewWriter<ChannelsViewState, ChannelsPage> | null = null;
 let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
 let loginGeneration = 0;
 
 function stopLoginPoll(): void {
-  if (loginPollTimer) {
+  if (loginPollTimer !== null) {
     clearTimeout(loginPollTimer);
     loginPollTimer = null;
   }
 }
 
+function stopChannelsRuntime(): void {
+  stopLoginPoll();
+  loginGeneration += 1;
+  loginPollWriter = null;
+}
+
+function scheduleLoginPoll(): void {
+  if (loginPollTimer !== null) return;
+  const writer = loginPollWriter;
+  if (!writer) return;
+  if (!isLoginInProgress(writer.get().login.phase)) return;
+  loginPollTimer = setTimeout(() => {
+    loginPollTimer = null;
+    void pollLogin();
+  }, LOGIN_POLL_MS);
+}
+
 async function pollLogin(): Promise<void> {
-  const scope = channelsPanel.scope();
-  const { channelId, sessionKey } = scope.get().login;
+  const writer = loginPollWriter;
+  if (!writer) return;
+  const { channelId, sessionKey } = writer.get().login;
   if (!channelId || !sessionKey) return;
   const generation = loginGeneration;
-  let phase = scope.get().login.phase;
   try {
     const result = await fetchWechatLoginStatus(channelId, sessionKey);
-    if (generation !== loginGeneration) return;
+    if (generation !== loginGeneration || loginPollWriter !== writer) return;
     if (result.kind === "expired") {
-      const login = scope.get().login;
-      scope.patch({ login: { ...login, phase: "expired", phaseMessage: "channels.sessionExpired" } });
+      writer.patch({
+        login: {
+          ...writer.get().login,
+          phase: "expired",
+          phaseMessage: "channels.sessionExpired",
+        },
+      });
       return;
     }
-    phase = result.phase;
-    scope.patch({ login: { ...scope.get().login, phase, phaseMessage: result.message ?? null } });
-    if (phase === "confirmed") {
+    writer.patch({
+      login: { ...writer.get().login, phase: result.phase, phaseMessage: result.message ?? null },
+    });
+    if (result.phase === "confirmed") {
       channelsPanel.reload();
       return;
     }
   } catch {
   }
   if (generation !== loginGeneration) return;
-  if (isLoginInProgress(phase)) {
-    loginPollTimer = setTimeout(() => void pollLogin(), 2000);
-  }
+  scheduleLoginPoll();
 }
 
 export async function startLogin(channelId: string): Promise<{ ok: boolean; error?: string }> {
@@ -128,7 +154,7 @@ export async function startLogin(channelId: string): Promise<{ ok: boolean; erro
         busy: false,
       },
     });
-    loginPollTimer = setTimeout(() => void pollLogin(), 2000);
+    scheduleLoginPoll();
     return { ok: true };
   } catch (e) {
     if (generation === loginGeneration) scope.patch({ login: IDLE_LOGIN });
@@ -171,30 +197,51 @@ export function setChannelsNameDraft(nameDraft: string): void {
   channelsPanel.patch({ nameDraft });
 }
 
+export function setChannelWorkspaceDraft(workspaceDraft: string | null): void {
+  channelsPanel.patch({ workspaceDraft });
+}
+
 export function reloadChannels(): void {
   channelsPanel.reload();
 }
 
 export function openChannelDetail(channelId: string): void {
-  channelsPanel.openPage({ kind: "detail", channelId });
   channelsPanel.patch({ selectedChannelId: channelId });
+}
+
+export function clearChannelSelection(): void {
+  channelsPanel.patch({ selectedChannelId: null });
+}
+
+export function openChannelForm(): void {
+  channelsPanel.patch({ nameDraft: "", workspaceDraft: null });
+  channelsPanel.openPage({ kind: "form" });
+}
+
+export function discardChannelForm(): void {
+  channelsPanel.patch({ nameDraft: "", workspaceDraft: null });
+  channelsPanel.back();
 }
 
 export async function createChannelInStore(): Promise<{ ok: boolean; error?: string }> {
   const scope = channelsPanel.scope();
-  const name = scope.get().nameDraft.trim();
+  const { nameDraft, workspaceDraft } = scope.get();
+  const name = nameDraft.trim();
   if (!name) return { ok: false, error: "name_required" };
   if (scope.get().busy) return { ok: false };
   scope.patch({ busy: true });
   try {
     const channel = await createChannel(name);
+    if (workspaceDraft) await switchChannelWorkspace(channel.id, workspaceDraft);
     scope.patch({
       channels: [channel, ...scope.get().channels],
       selectedChannelId: channel.id,
       nameDraft: "",
+      workspaceDraft: null,
       busy: false,
     });
-    channelsPanel.openPage({ kind: "detail", channelId: channel.id });
+    channelsPanel.resetPages();
+    if (workspaceDraft) channelsPanel.reload();
     return { ok: true };
   } catch (e) {
     scope.patch({ busy: false });
@@ -262,7 +309,6 @@ export async function removeChannel(channelId: string): Promise<{ ok: boolean; e
       selectedChannelId: null,
       busy: false,
     });
-    channelsPanel.resetPages();
     return { ok: true };
   } catch (e) {
     scope.patch({ busy: false });
@@ -277,7 +323,7 @@ function replaceChannel(channels: ChannelRecord[], next: ChannelRecord): Channel
 const channelsAdapter: PanelViewAdapter<ChannelsViewState, ChannelsPage, void, string> = {
   kind: "channels",
   initial: INITIAL,
-  rootPage: ROOT_PAGE,
+  rootPage: BROWSE_PAGE,
   loadPolicy: "once",
   key: () => "channels",
   async load(_key, { patch, signal }) {
@@ -289,25 +335,24 @@ const channelsAdapter: PanelViewAdapter<ChannelsViewState, ChannelsPage, void, s
       patch({ loading: false, loaded: false, loadError: errorMessage(e) });
     }
   },
-  release() {
-    stopLoginPoll();
-    loginGeneration += 1;
+  start(writer) {
+    loginPollWriter = writer;
+    scheduleLoginPoll();
   },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectChannelsCloseConfirm({ phase: state.login.phase });
-    if (!confirm) return null;
-    return { ...confirm, discard: stopLogin };
-  },
+  stop: stopChannelsRuntime,
+  release: stopChannelsRuntime,
   status(state) {
-    return state.busy;
-  },
-  isSiblingPage(next, current) {
-    return next.kind === "detail" && current.kind === "detail";
+    return isLoginInProgress(state.login.phase);
   },
 };
 
 export const channelsPanel: PanelViewStore<ChannelsViewState, ChannelsPage, void> =
   createPanelViewStore(channelsAdapter);
+
+registerMainViewLeaveGuard("channels", {
+  dirty: () => isChannelsLeaveGuarded(channelsPanel.get().login.phase),
+  discard: stopLogin,
+});
 
 export function useChannelsPanel() {
   return channelsPanel.useSnapshot();

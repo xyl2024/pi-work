@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
-import { skillsPanel, useSkillsPanel } from "@/lib/client/skills-panel";
-import { SkillsRootPage } from "./skills/SkillsRootPage";
+import { useCallback, useEffect, useRef } from "react";
+import {
+  clearSkillSelection,
+  closeSkillsForm,
+  skillsPanel,
+  useSkillsPanel,
+} from "@/lib/client/skills-panel";
+import { MainViewMasterDetail } from "./MainViewMasterDetail";
+import { SkillsList } from "./skills/SkillsList";
 import { SkillDetailPage } from "./skills/SkillDetailPage";
 import { SkillsAddPage } from "./skills/SkillsAddPage";
+import { SkillSelectHint, SkillsInstallGuide } from "./skills/SkillsEmptyStates";
 
 export function SkillsPanel({
   cwd,
-  onCloseTab,
+  onExit,
+  visible = true,
 }: {
   cwd: string | null;
-  onCloseTab?: () => void;
+  onExit?: () => void;
+  visible?: boolean;
 }) {
-  useSkillsPanel();
+  const { view } = useSkillsPanel();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -22,29 +30,34 @@ export function SkillsPanel({
   }, [cwd]);
 
   const page = skillsPanel.currentPage();
+  const { loaded, skills, selectedFilePath } = view;
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
-  }, [page]);
+  const backToBrowse = useCallback(() => {
+    void closeSkillsForm();
+  }, []);
 
-  usePanelEscapeGuard(containerRef, () => {
-    if (skillsPanel.back().closePanel) onCloseTab?.();
-  });
+  const renderDetail = (onBack?: () => void) =>
+    loaded && skills.length === 0 ? (
+      <SkillsInstallGuide />
+    ) : selectedFilePath === null ? (
+      <SkillSelectHint />
+    ) : (
+      <SkillDetailPage key={selectedFilePath} filePath={selectedFilePath} onBack={onBack} />
+    );
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={-1}
-      style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
-    >
-      {page.kind === "detail" ? (
-        <SkillDetailPage key={page.filePath} filePath={page.filePath} />
-      ) : page.kind === "add" ? (
-        <SkillsAddPage />
-      ) : (
-        <SkillsRootPage />
-      )}
-    </div>
+    <MainViewMasterDetail
+      containerRef={containerRef}
+      titleKey={page.kind === "form" ? "Add Skill" : null}
+      onBack={page.kind === "form" ? backToBrowse : null}
+      full={page.kind === "form" ? <SkillsAddPage /> : null}
+      list={<SkillsList />}
+      detail={renderDetail}
+      hasDetail={selectedFilePath !== null}
+      onClearDetail={clearSkillSelection}
+      onExit={onExit}
+      visible={visible}
+      focusKey={`${page.kind}:${selectedFilePath ?? ""}`}
+    />
   );
 }

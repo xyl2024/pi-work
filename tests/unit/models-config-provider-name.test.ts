@@ -12,7 +12,7 @@ import { putModelsConfig } from "@/lib/client/models-config-io";
 import {
   modelsConfigPanel, updateModelsConfigProvider, renameModelsConfigProvider,
   saveModelsConfig, selectModelsConfigDirty,
-  selectModelsConfigProblem, openModelsConfigProvider,
+  selectModelsConfigProblem, selectModelsConfigProvider,
 } from "@/lib/client/models-config-panel";
 
 describe("provider name waits for explicit Save", () => {
@@ -21,7 +21,7 @@ describe("provider name waits for explicit Save", () => {
     vi.mocked(putModelsConfig).mockClear();
     vi.mocked(putModelsConfig).mockResolvedValue({ ok: true });
     updateModelsConfigProvider("original", { api: "openai-completions" });
-    openModelsConfigProvider("original");
+    selectModelsConfigProvider("original");
   });
 
   it("keeps config and navigation unchanged while typing, then renames on Save", async () => {

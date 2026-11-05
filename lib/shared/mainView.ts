@@ -2,6 +2,11 @@ import type { PanelMode } from "./panelTabs";
 
 export interface MainViewParams {
   scheduler: undefined;
+  modelsConfig: undefined;
+  skills: undefined;
+  channels: undefined;
+  memory: undefined;
+  tokens: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -14,6 +19,7 @@ export interface MainViewCommand {
 
 export interface MainViewSpec<K extends MainViewKind = MainViewKind> {
   kind: K;
+  navPriority: number;
   labelKey: string;
   backLabelKey: string;
   commands?: readonly MainViewCommand[];
@@ -22,6 +28,7 @@ export interface MainViewSpec<K extends MainViewKind = MainViewKind> {
 export const MAIN_VIEW_SPEC_BY_KIND = {
   scheduler: {
     kind: "scheduler",
+    navPriority: 1,
     labelKey: "Scheduled tasks",
     backLabelKey: "Back to chat",
     commands: [
@@ -31,9 +38,71 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       },
     ],
   },
+  modelsConfig: {
+    kind: "modelsConfig",
+    navPriority: 2,
+    labelKey: "Models config",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open models config",
+        keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
+      },
+    ],
+  },
+  skills: {
+    kind: "skills",
+    navPriority: 3,
+    labelKey: "Skills",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open skills",
+        keywords: ["skills", "skill", "extensions", "技能", "扩展"],
+      },
+    ],
+  },
+  channels: {
+    kind: "channels",
+    navPriority: 4,
+    labelKey: "Channels",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open channels",
+        keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
+      },
+    ],
+  },
+  memory: {
+    kind: "memory",
+    navPriority: 5,
+    labelKey: "Memory",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open memory",
+        keywords: ["memory", "memories", "remember", "记忆", "记住"],
+      },
+    ],
+  },
+  tokens: {
+    kind: "tokens",
+    navPriority: 6,
+    labelKey: "Token audit",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open token audit",
+        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
+      },
+    ],
+  },
 } as const satisfies { [K in MainViewKind]: MainViewSpec<K> };
 
-export const MAIN_VIEW_SPECS: readonly MainViewSpec[] = Object.values(MAIN_VIEW_SPEC_BY_KIND);
+export const MAIN_VIEW_SPECS: readonly MainViewSpec[] = Object.values(MAIN_VIEW_SPEC_BY_KIND).sort(
+  (a, b) => a.navPriority - b.navPriority,
+);
 
 export const MAIN_VIEW_KINDS: readonly MainViewKind[] = MAIN_VIEW_SPECS.map((spec) => spec.kind);
 
@@ -73,11 +142,4 @@ export function selectMainViewKind(state: MainViewState): MainViewKind | null {
 
 export function selectToggleExits(state: MainViewState, kind: MainViewKind): boolean {
   return state.active === kind;
-}
-
-export function shouldMountMainViewBody(
-  active: MainViewKind | null,
-  visited: boolean,
-): boolean {
-  return visited || active !== null;
 }

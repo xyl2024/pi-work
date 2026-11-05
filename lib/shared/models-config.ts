@@ -9,6 +9,33 @@ export type ModelsConfigPage =
   | { kind: "addModelName"; providerName: string }
   | { kind: "fillModel"; providerName: string; index: number };
 
+export type ModelsConfigFormPage = Exclude<ModelsConfigPage, { kind: "root" }>;
+
+export function isModelsConfigFormPage(page: ModelsConfigPage): page is ModelsConfigFormPage {
+  return page.kind !== "root";
+}
+
+export function modelsConfigPageTitleKey(page: ModelsConfigFormPage): string {
+  switch (page.kind) {
+    case "provider":
+      return "Edit provider";
+    case "model":
+      return "Edit model";
+    case "oauth":
+      return "Sign in";
+    case "apikey":
+      return "API Key";
+    case "catalog":
+      return "All model data";
+    case "addProvider":
+      return "Add provider";
+    case "addModelName":
+      return "Add model";
+    case "fillModel":
+      return "Fill from model catalog";
+  }
+}
+
 export interface OAuthProvider {
   id: string;
   name: string;

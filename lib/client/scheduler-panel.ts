@@ -3,7 +3,6 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
   type PanelViewWriter,
 } from "./panel-view-store";
@@ -16,12 +15,9 @@ import {
   triggerScheduledTask,
   updateScheduledTask,
 } from "./scheduler-io";
-import {
-  isSchedulerFormDirty,
-  selectSchedulerLeaveConfirm,
-  type SchedulerCloseConfirm,
-  type SchedulerLeaveIntent,
-} from "@/lib/shared/scheduler-close";
+import { isSchedulerFormDirty } from "@/lib/shared/scheduler-close";
+import type { MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
+import { registerMainViewLeaveGuard, requestMainViewLeave } from "./main-view-leave";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
 import type { SchedulerFilter } from "@/lib/shared/scheduler-filter";
 import {
@@ -170,15 +166,7 @@ function clearPollingResources(): void {
   unsubscribeIconPreferences = null;
 }
 
-export type SchedulerLeaveConfirm = (confirm: SchedulerCloseConfirm) => boolean | Promise<boolean>;
-
-let schedulerLeaveConfirm: SchedulerLeaveConfirm | null = null;
-
-export function setSchedulerLeaveConfirm(confirm: SchedulerLeaveConfirm | null): void {
-  schedulerLeaveConfirm = confirm;
-}
-
-function discardSchedulerForm(): void {
+export function discardSchedulerForm(): void {
   const state = schedulerPanel.get();
   if (state.form !== null || state.formBaseline !== null || state.saveError !== null) {
     schedulerPanel.patch(CLEARED_FORM_STATE);
@@ -186,18 +174,8 @@ function discardSchedulerForm(): void {
   if (schedulerPanel.currentPage().kind === "form") schedulerPanel.resetPages();
 }
 
-export async function requestSchedulerLeave(intent: SchedulerLeaveIntent): Promise<boolean> {
-  const state = schedulerPanel.get();
-  const confirm = selectSchedulerLeaveConfirm({
-    intent,
-    dirty: isSchedulerFormDirty(state.form, state.formBaseline),
-  });
-  if (confirm) {
-    if (!schedulerLeaveConfirm) return false;
-    if (!(await schedulerLeaveConfirm(confirm))) return false;
-  }
-  discardSchedulerForm();
-  return true;
+function requestSchedulerLeave(intent: MainViewLeaveIntent): Promise<boolean> {
+  return requestMainViewLeave({ view: "scheduler", intent });
 }
 
 export function setSchedulerRunsVisible(runsVisible: boolean): void {
@@ -402,14 +380,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
     }
     writer.patch({ runsVisible: false });
   },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectSchedulerLeaveConfirm({
-      intent: "leave_main_view",
-      dirty: isSchedulerFormDirty(state.form, state.formBaseline),
-    });
-    if (!confirm) return null;
-    return { ...confirm, discard: discardSchedulerForm };
-  },
   status(state) {
     return state.tasks.some((task) => task.lastRunStatus === "running");
   },
@@ -417,6 +387,14 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
 
 export const schedulerPanel: PanelViewStore<SchedulerViewState, SchedulerPage, void> =
   createPanelViewStore(schedulerAdapter);
+
+registerMainViewLeaveGuard("scheduler", {
+  dirty: () => {
+    const state = schedulerPanel.get();
+    return isSchedulerFormDirty(state.form, state.formBaseline);
+  },
+  discard: discardSchedulerForm,
+});
 
 export function useSchedulerPanel() {
   return schedulerPanel.useSnapshot();

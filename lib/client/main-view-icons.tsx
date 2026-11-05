@@ -1,11 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Clock } from "lucide-react";
+import { Brain, ChartSpline, Clock, SlidersHorizontal, Wrench } from "lucide-react";
+import { GlobeIcon } from "@/components/ui/icons";
 import type { MainViewKind } from "@/lib/shared/mainView";
 
 const MAIN_VIEW_ICON_BY_KIND: { [K in MainViewKind]: (props: { size: number }) => ReactNode } = {
   scheduler: ({ size }) => <Clock size={size} />,
+  modelsConfig: ({ size }) => <SlidersHorizontal size={size} />,
+  skills: ({ size }) => <Wrench size={size} />,
+  channels: ({ size }) => <GlobeIcon width={size} height={size} />,
+  memory: ({ size }) => <Brain size={size} />,
+  tokens: ({ size }) => <ChartSpline size={size} />,
 };
 
 function iconsOfSize(size: number): Partial<Record<MainViewKind, ReactNode>> {

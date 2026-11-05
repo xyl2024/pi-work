@@ -17,7 +17,8 @@ import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
-import { MAIN_VIEW_SPECS, type MainViewKind } from "@/lib/shared/mainView";
+import { MAIN_VIEW_SPECS, MAIN_VIEW_SPEC_BY_KIND, type MainViewKind } from "@/lib/shared/mainView";
+import { resolveMainViewNav } from "@/lib/shared/main-view-nav";
 import { MAIN_VIEW_NAV_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
@@ -62,6 +63,8 @@ interface Props {
 }
 
 const SESSIONS_CONTENT_HEIGHT_PX = 1 * 34 + 6 * SESSION_ROW_HEIGHT_PX + 5 * 6 + 4 + 12;
+
+const MAIN_VIEW_NAV_ROWS = 3;
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
@@ -195,6 +198,29 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { t } = useI18n();
   const toast = useToast();
   const [todayOnly, setTodayOnly] = useState(false);
+  const [moreExpanded, setMoreExpanded] = useState(false);
+  const navLayout = resolveMainViewNav({
+    kinds: MAIN_VIEW_SPECS.map((spec) => spec.kind),
+    active: activeMainView,
+    availableRows: MAIN_VIEW_NAV_ROWS,
+  });
+
+  const renderMainViewButton = (kind: MainViewKind) => {
+    const spec = MAIN_VIEW_SPEC_BY_KIND[kind];
+    return (
+      <SidebarNavButton
+        key={spec.kind}
+        onClick={() => onOpenMainView?.(spec.kind)}
+        active={activeMainView === spec.kind}
+        badge={mainViewBadges[spec.kind]}
+      >
+        <span style={{ display: "flex", flexShrink: 0, color: "var(--text-muted)" }}>
+          {MAIN_VIEW_NAV_ICON_BY_KIND[spec.kind] ?? null}
+        </span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(spec.labelKey)}</span>
+      </SidebarNavButton>
+    );
+  };
   const [today, setToday] = useState(() => localSessionDay(new Date()));
   const [todaySessions, setTodaySessions] = useState<SessionInfo[] | null>(null);
   const dateRange = todayOnly ? today : null;
@@ -792,19 +818,30 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("Assistant")}</span>
           </SidebarNavButton>
         )}
-        {onOpenMainView && MAIN_VIEW_SPECS.map((spec) => (
-          <SidebarNavButton
-            key={spec.kind}
-            onClick={() => onOpenMainView(spec.kind)}
-            active={activeMainView === spec.kind}
-            badge={mainViewBadges[spec.kind]}
-          >
-            <span style={{ display: "flex", flexShrink: 0, color: "var(--text-muted)" }}>
-              {MAIN_VIEW_NAV_ICON_BY_KIND[spec.kind] ?? null}
-            </span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(spec.labelKey)}</span>
-          </SidebarNavButton>
-        ))}
+        {onOpenMainView && (
+          <>
+            {navLayout.visible.map((kind) => renderMainViewButton(kind))}
+            {navLayout.overflow.length > 0 && (
+              <SidebarNavButton onClick={() => setMoreExpanded((expanded) => !expanded)} active={false}>
+                <span
+                  style={{
+                    display: "flex",
+                    flexShrink: 0,
+                    color: "var(--text-muted)",
+                    transform: moreExpanded ? "rotate(180deg)" : "none",
+                    transition: "transform 0.12s",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("More")}</span>
+              </SidebarNavButton>
+            )}
+            {moreExpanded && navLayout.overflow.map((kind) => renderMainViewButton(kind))}
+          </>
+        )}
       </div>
 
       {!assistantActive && (

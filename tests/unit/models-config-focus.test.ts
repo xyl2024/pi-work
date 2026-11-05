@@ -1,37 +1,41 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync("components/panels/ModelsConfigPanel.tsx", "utf8");
-const focusCall = source.indexOf("containerRef.current?.focus");
+const source = readFileSync("components/panels/MainViewMasterDetail.tsx", "utf8");
+const focusCall = source.indexOf("el.focus({ preventScroll");
 const start = source.lastIndexOf("  useEffect(() => {", focusCall);
-const end = source.indexOf("\n  }, [page]);", start);
+const end = source.indexOf("\n  }, [focusKey, visible, ref]);", start);
 const runEffect = new Function(
-  "containerRef",
+  "ref",
   "document",
+  "visible",
+  "focusKey",
   source.slice(start + "  useEffect(() => {".length, end),
 );
 
-describe("models config panel focus", () => {
-  it("keeps the provider name input focused across consecutive draft edits", () => {
+function focusWith(activeElement: object, contains: (element: object) => boolean, visible = true): boolean {
+  let focused = false;
+  const container = {
+    contains,
+    focus: () => { focused = true; },
+  };
+  runEffect({ current: container }, { activeElement }, visible, null);
+  return focused;
+}
+
+describe("main view master detail focus", () => {
+  it("keeps the current field focused while the view state changes in place", () => {
     const input = {};
-    let focused: object = input;
-    const container = {
-      contains: (element: object) => element === input || element === container,
-      focus: () => { focused = container; },
-    };
     for (let i = 0; i < 3; i++) {
-      runEffect({ current: container }, { activeElement: focused });
-      expect(focused).toBe(input);
+      expect(focusWith(input, (element) => element === input)).toBe(false);
     }
   });
 
   it("focuses the panel when focus is outside it", () => {
-    let focused = false;
-    const container = {
-      contains: () => false,
-      focus: () => { focused = true; },
-    };
-    runEffect({ current: container }, { activeElement: {} });
-    expect(focused).toBe(true);
+    expect(focusWith({}, () => false)).toBe(true);
+  });
+
+  it("does not steal focus while the main view is hidden", () => {
+    expect(focusWith({}, () => false, false)).toBe(false);
   });
 });

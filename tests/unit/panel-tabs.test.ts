@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  CHANNELS_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
-  MEMORY_TAB_ID,
-  SKILLS_TAB_ID,
-  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
 import {
@@ -37,7 +33,6 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTOR_BY_ID,
   RIGHT_BAR_DESCRIPTORS,
-  isSessionBoundDescriptor,
   type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
@@ -139,21 +134,21 @@ describe("panelTabs open", () => {
 
 describe("panelTabs toggle", () => {
   it("opens the panel when its tab is not active", () => {
-    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "tokens" });
+    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "gitDiff" });
 
     expect(selectIsOpen(state)).toBe(true);
-    expect(selectActiveKind(state)).toBe("tokens");
-    expect(openCount(state, TOKENS_TAB_ID)).toBe(1);
+    expect(selectActiveKind(state)).toBe("gitDiff");
+    expect(openCount(state, GIT_DIFF_TAB_ID)).toBe(1);
   });
 
   it("collapses the panel when the toggled tab is active and the panel is open", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
-      { type: "toggle", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
+      { type: "toggle", kind: "gitDiff" },
     );
 
-    expect(kinds(state)).toEqual(["tokens"]);
+    expect(kinds(state)).toEqual(["gitDiff"]);
     expect(state.mode).toBe("closed");
     expect(selectIsOpen(state)).toBe(false);
     expect(selectActiveKind(state)).toBe(null);
@@ -162,19 +157,19 @@ describe("panelTabs toggle", () => {
   it("reopens an already open tab whose panel was collapsed", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "set_mode", mode: "closed" },
-      { type: "toggle", kind: "tokens" },
+      { type: "toggle", kind: "gitDiff" },
     );
 
     expect(state.mode).toBe("normal");
-    expect(openCount(state, TOKENS_TAB_ID)).toBe(2);
+    expect(openCount(state, GIT_DIFF_TAB_ID)).toBe(2);
   });
 
   it("toggles a different panel view instead of collapsing the active one", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "toggle", kind: "translate" },
     );
 
@@ -234,7 +229,7 @@ describe("panelTabs batch close", () => {
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
+      { type: "open", kind: "gitDiff" },
       { type: "open", kind: "llmAudit" },
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
@@ -244,7 +239,7 @@ describe("panelTabs batch close", () => {
   it("close_left drops the tabs left of the reference tab", () => {
     const state = reduce(strip(), { type: "close_left", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
+    expect(kinds(state)).toEqual(["llmAudit", "gitDiff"]);
   });
 
   it("close_left re-activates the reference tab when the active one was dropped", () => {
@@ -254,7 +249,7 @@ describe("panelTabs batch close", () => {
       { type: "close_left", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
+    expect(kinds(state)).toEqual(["llmAudit", "gitDiff"]);
     expect(state.activeId).toBe(LLM_AUDIT_TAB_ID);
     expect(selectActiveKind(state)).toBe("llmAudit");
   });
@@ -268,7 +263,7 @@ describe("panelTabs batch close", () => {
   it("close_right re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
-      { type: "activate", id: TOKENS_TAB_ID },
+      { type: "activate", id: GIT_DIFF_TAB_ID },
       { type: "close_right", id: FAVORITES_TAB_ID },
     );
 
@@ -378,49 +373,18 @@ describe("panelTabs registry", () => {
   it("covers exactly the panel views the shell knows about", () => {
     expect([...PANEL_TAB_KINDS].sort()).toEqual(
       [
-        "channels",
         "context",
         "conversationTree",
         "favorites",
         "gitDiff",
         "llmAudit",
         "mcp",
-        "memory",
-        "modelsConfig",
-        "skills",
-        "tokens",
         "translate",
       ].sort(),
     );
   });
 
-  it("registers the memory panel as a global read-only button with a bilingual command", () => {
-    const memory = PANEL_TAB_SPECS.find((spec) => spec.kind === "memory");
-
-    expect(memory?.tabId).toBe(MEMORY_TAB_ID);
-    expect(memory?.labelKey).toBe("Memory");
-    expect(memory?.sessionBound).toBe(false);
-    expect(memory?.defaultMode).toBe("normal");
-    expect(memory?.commands).toHaveLength(1);
-    expect(memory?.commands?.[0]?.labelKey).toBe("Open memory");
-    expect(memory?.commands?.[0]?.keywords).toEqual(
-      expect.arrayContaining(["memory", "remember", "记忆"]),
-    );
-  });
-
-  it("registers skills right after the MCP panel", () => {
-    const order = PANEL_TAB_KINDS as readonly string[];
-    const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
-
-    expect(skills?.tabId).toBe(SKILLS_TAB_ID);
-    expect(skills?.labelKey).toBe("Skills");
-    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
-    expect(skills?.sessionBound).toBe(false);
-    expect(order.indexOf("channels")).toBe(order.indexOf("skills") + 1);
-    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
-  });
-
-  it("registers the MCP panel as a session-bound button between models config and skills", () => {
+  it("registers the MCP panel as a session-bound button after LLM audit", () => {
     const order = PANEL_TAB_KINDS as readonly string[];
     const mcp = PANEL_TAB_SPECS.find((spec) => spec.kind === "mcp");
 
@@ -431,29 +395,16 @@ describe("panelTabs registry", () => {
     expect(mcp?.commands?.[0]?.keywords).toEqual(
       expect.arrayContaining(["mcp", "servers", "model context protocol", "服务器", "工具"]),
     );
-    expect(order.indexOf("mcp")).toBe(order.indexOf("modelsConfig") + 1);
-    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
+    expect(order.indexOf("mcp")).toBe(order.indexOf("llmAudit") + 1);
   });
 
-  it("no longer carries scheduled tasks", () => {
-    expect(PANEL_TAB_KINDS as readonly string[]).not.toContain("scheduler");
-    expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain("scheduler");
-    expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has("scheduler")).toBe(false);
-    expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain("scheduler");
-  });
-
-  it("registers the channels panel as a global button before the conversation tree", () => {
-    const order = PANEL_TAB_KINDS as readonly string[];
-    const channels = PANEL_TAB_SPECS.find((spec) => spec.kind === "channels");
-
-    expect(channels?.tabId).toBe(CHANNELS_TAB_ID);
-    expect(channels?.labelKey).toBe("Channels");
-    expect(channels?.sessionBound).toBe(false);
-    expect(channels?.commands?.[0]?.labelKey).toBe("Open channels");
-    expect(channels?.commands?.[0]?.keywords).toEqual(
-      expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
-    );
-    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
+  it("no longer carries main views", () => {
+    for (const kind of ["scheduler", "modelsConfig", "skills", "channels", "memory", "tokens"]) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
+      expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(kind);
+      expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(kind)).toBe(false);
+      expect(Object.keys(PANEL_COMMAND_ICON_BY_KIND)).not.toContain(kind);
+    }
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
@@ -525,7 +476,7 @@ describe("panelTabs open count selector", () => {
     const once = reduce(createPanelTabsState(), { type: "open", kind: "gitDiff" });
     const twice = reduce(once, { type: "open", kind: "gitDiff" });
 
-    expect(selectOpenCount(twice, "tokens")).toBe(0);
+    expect(selectOpenCount(twice, "context")).toBe(0);
     expect(selectOpenCount(once, "gitDiff")).toBe(1);
     expect(selectOpenCount(twice, "gitDiff")).toBe(2);
   });
@@ -575,8 +526,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
-      modelsConfigDirty: false,
-      skillsInstalling: false,
       mcpDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
@@ -592,64 +541,19 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("badges the models-config button only while the draft is dirty", () => {
-    const ctx = barCtx({ rightPanelState: "closed" });
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig");
-
-    expect(descriptor?.badge?.(ctx)).toBeFalsy();
-    expect(descriptor?.badge?.({ ...ctx, modelsConfigDirty: true })).toBeTruthy();
-  });
-
-  it("badges the skills button while an install is running, collapsed or not", () => {
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
-
-    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
-    expect(
-      descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
-    ).toBeTruthy();
-    expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
-  });
-
   it("badges the MCP button while any cwd holds an unsaved draft", () => {
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp");
 
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
     expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed", mcpDirty: true }))).toBeTruthy();
     expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ mcpDirty: true }))).toBeFalsy();
-    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
   });
 
-  it("presents skills as a global button alongside models config and channels", () => {
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
-    if (!descriptor) throw new Error("skills descriptor missing");
-    expect(isSessionBoundDescriptor(descriptor)).toBe(false);
-
-    const globalIds = RIGHT_BAR_BUTTON_IDS.filter((id) => {
-      const candidate = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id);
-      return candidate !== undefined && !isSessionBoundDescriptor(candidate);
-    });
-    expect(globalIds).toEqual(
-      expect.arrayContaining(["skills", "modelsConfig", "channels"]),
-    );
-    expect(globalIds).not.toContain("context");
-  });
-
-  it("routes the models-config / skills / MCP badges through the one shared corner-dot hook", () => {
-    const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
-      barCtx({ modelsConfigDirty: true }),
-    );
-    const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
-      barCtx({ skillsInstalling: true }),
-    );
+  it("routes the MCP badge through the shared corner-dot hook", () => {
     const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
 
-    expect(dirty).toEqual(installing);
-    expect(dirty).toEqual(mcpDirty);
-
     const rendered = (
-      dirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
+      mcpDirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
     ).type();
     expect(rendered.props.style.borderRadius).toBe("50%");
   });
@@ -710,40 +614,57 @@ describe("panelTabs registry → command palette", () => {
         .sort(),
     ).toEqual(
       [
-        "panel.channels",
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.mcp",
-        "panel.memory",
-        "panel.modelsConfig",
-        "panel.skills",
-        "panel.tokens",
         "panel.translate",
       ].sort(),
     );
   });
 
-  it("reaches the models-config panel through the palette keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.modelsConfig");
+  it("reaches models config through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
 
-    expect(cmd?.title).toBe("Open models config");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open models config",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].id).toBe("mainView.modelsConfig");
+    expect(commands[0].keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["modelsConfig"]);
+    expect(toggled).toEqual([]);
   });
 
-  it("reaches the skills panel through english and chinese keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.skills");
+  it("reaches skills through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
 
-    expect(cmd?.title).toBe("Open skills");
-    expect(cmd?.group).toBe("Panel");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
-  });
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.id === "mainView.skills",
+    );
 
-  it("reaches the memory panel through english and chinese keywords", () => {
-    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.memory");
+    expect(commands).toHaveLength(1);
+    expect(commands[0].title).toBe("Open skills");
+    expect(commands[0].keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
 
-    expect(cmd?.title).toBe("Open memory");
-    expect(cmd?.keywords).toEqual(expect.arrayContaining(["memory", "remember", "记忆"]));
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["skills"]);
+    expect(toggled).toEqual([]);
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {
@@ -779,6 +700,47 @@ describe("panelTabs registry → command palette", () => {
     for (const cmd of commands) cmd.run(ctx);
 
     expect(entered).toEqual(["scheduler"]);
+    expect(toggled).toEqual([]);
+  });
+
+  it("reaches channels through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
+
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open channels",
+    );
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].id).toBe("mainView.channels");
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["channels"]);
+    expect(toggled).toEqual([]);
+  });
+
+  it("reaches memory and token usage through the main view registry, entering instead of toggling", () => {
+    const entered: MainViewKind[] = [];
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      enterMainView: (kind) => entered.push(kind),
+      togglePanel: (kind) => toggled.push(kind),
+    });
+
+    const commands = buildCommands(ctx, (key) => key).filter(
+      (cmd) => cmd.title === "Open memory" || cmd.title === "Open token audit",
+    );
+
+    expect(commands.map((cmd) => cmd.id)).toEqual(["mainView.memory", "mainView.tokens"]);
+
+    for (const cmd of commands) cmd.run(ctx);
+
+    expect(entered).toEqual(["memory", "tokens"]);
     expect(toggled).toEqual([]);
   });
 

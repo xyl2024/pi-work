@@ -3,12 +3,12 @@
 import {
   createPanelViewStore,
   type PanelViewAdapter,
-  type PanelViewCloseGuard,
   type PanelViewStore,
 } from "./panel-view-store";
 import { fetchSkills, installSkill, patchSkillInvocation } from "./skills-io";
 import { errorMessage } from "@/lib/shared/error-message";
-import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
+import { isSkillInstallRunning } from "@/lib/shared/skills-close";
+import { registerMainViewLeaveGuard, requestMainViewLeave } from "./main-view-leave";
 import type {
   Skill,
   SkillInstallPhase,
@@ -39,6 +39,8 @@ export interface SkillsViewState {
   loadError: string | null;
   skills: Skill[];
   toggleBusy: string[];
+  query: string;
+  selectedFilePath: string | null;
   install: SkillsInstallState;
 }
 
@@ -49,22 +51,15 @@ const INITIAL: SkillsViewState = {
   loadError: null,
   skills: [],
   toggleBusy: [],
+  query: "",
+  selectedFilePath: null,
   install: IDLE_INSTALL,
 };
 
-const ROOT_PAGE: SkillsPage = { kind: "root" };
+const ROOT_PAGE: SkillsPage = { kind: "browse" };
 
 let installAbort: AbortController | null = null;
 let installGeneration = 0;
-
-function cancelSkillInstall(): void {
-  const scope = skillsPanel.scope();
-  if (scope.get().install.phase !== "running") return;
-  installGeneration += 1;
-  installAbort?.abort();
-  installAbort = null;
-  scope.patch({ install: { ...IDLE_INSTALL, installed: scope.get().install.installed } });
-}
 
 export function startSkillInstall(
   request: SkillInstallRequest,
@@ -109,10 +104,10 @@ export function startSkillInstall(
             : [...installed, request.package],
         },
       });
-      if (skillsPanel.currentPage().kind !== "detail") {
+      if (skillsPanel.currentPage().kind !== "form") {
         scope.resetPages();
-        reloadSkills();
       }
+      reloadSkills();
       onSuccess?.();
     })
     .catch((e: unknown) => {
@@ -150,12 +145,31 @@ export async function toggleSkillInvocation(
   }
 }
 
-export function openSkillsDetail(filePath: string): void {
-  skillsPanel.openPage({ kind: "detail", filePath });
+export function selectSkill(filePath: string): void {
+  skillsPanel.patch({ selectedFilePath: filePath });
 }
 
-export function openSkillsAdd(): void {
-  skillsPanel.openPage({ kind: "add" });
+export function clearSkillSelection(): void {
+  skillsPanel.patch({ selectedFilePath: null });
+}
+
+export function setSkillsQuery(query: string): void {
+  skillsPanel.patch({ query });
+}
+
+export async function openSkillsForm(): Promise<boolean> {
+  skillsPanel.openPage({ kind: "form" });
+  return true;
+}
+
+export async function closeSkillsForm(): Promise<boolean> {
+  if (!(await requestMainViewLeave({ view: "skills", intent: "back_to_browse" }))) return false;
+  discardSkillsForm();
+  return true;
+}
+
+function discardSkillsForm(): void {
+  if (skillsPanel.currentPage().kind === "form") skillsPanel.resetPages();
 }
 
 const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null, string | null> = {
@@ -172,7 +186,7 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
     }
     if (get().cwd !== cwd) {
       resetPages();
-      patch({ toggleBusy: [] });
+      patch({ toggleBusy: [], selectedFilePath: null });
     }
     patch({ cwd, loading: true, loaded: false, loadError: null, skills: [] });
     try {
@@ -187,21 +201,18 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
     installAbort?.abort();
     installAbort = null;
   },
-  guard(state): PanelViewCloseGuard | null {
-    const confirm = selectSkillsCloseConfirm({ installPhase: state.install.phase });
-    if (!confirm) return null;
-    return { ...confirm, discard: cancelSkillInstall };
-  },
   status(state) {
     return state.install.phase === "running";
-  },
-  isSiblingPage(next, current) {
-    return next.kind !== "root" && current.kind !== "root";
   },
 };
 
 export const skillsPanel: PanelViewStore<SkillsViewState, SkillsPage, string | null> =
   createPanelViewStore(skillsAdapter);
+
+registerMainViewLeaveGuard("skills", {
+  dirty: () => isSkillInstallRunning(skillsPanel.get().install.phase),
+  discard: () => {},
+});
 
 export function useSkillsPanel() {
   return skillsPanel.useSnapshot();

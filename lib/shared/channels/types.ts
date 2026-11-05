@@ -1,4 +1,4 @@
-export type ChannelsPage = { kind: "root" } | { kind: "detail"; channelId: string };
+export type ChannelsPage = { kind: "browse" } | { kind: "form" };
 
 export type ChannelProvider = "wechat";
 export type ChannelStatus = "pending" | "connected" | "disabled" | "expired";

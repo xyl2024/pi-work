@@ -55,8 +55,8 @@ export interface PanelViewAdapter<S, P, C, K> {
   release(context: PanelViewWriter<S, P>): void;
   afterPages?(event: PanelViewPagesEvent<S, P>): void;
   afterBack?(event: PanelViewBackEvent<S, P>): void;
-  guard(state: S): PanelViewCloseGuard | null;
-  status(state: S): PanelViewStatus;
+  guard?(state: S): PanelViewCloseGuard | null;
+  status?(state: S): PanelViewStatus;
   isRootPage?(pages: readonly P[]): boolean;
   isSiblingPage?(next: P, current: P): boolean;
 }
@@ -288,7 +288,7 @@ export function createPanelViewStore<S, P, C = void, K = string>(
   }
 
   function guard(): PanelViewCloseGuard | null {
-    return adapter.guard(snapshot.view);
+    return adapter.guard?.(snapshot.view) ?? null;
   }
 
   function release(): void {
@@ -315,7 +315,7 @@ export function createPanelViewStore<S, P, C = void, K = string>(
   async function requestClose(confirm: PanelViewConfirm): Promise<boolean> {
     if (released) return true;
     const captured = epoch;
-    const closeGuard = adapter.guard(snapshot.view);
+    const closeGuard = adapter.guard?.(snapshot.view) ?? null;
     if (closeGuard) {
       const confirmed = await confirm(closeGuard);
       if (!confirmed) return false;
@@ -348,8 +348,8 @@ export function createPanelViewStore<S, P, C = void, K = string>(
   function useStatus(): PanelViewStatus {
     return useSyncExternalStore(
       subscribe,
-      () => adapter.status(snapshot.view),
-      () => adapter.status(initialSnapshot.view),
+      () => adapter.status?.(snapshot.view) ?? null,
+      () => adapter.status?.(initialSnapshot.view) ?? null,
     );
   }
 
@@ -371,7 +371,7 @@ export function createPanelViewStore<S, P, C = void, K = string>(
     openPage,
     resetPages,
     back,
-    status: () => adapter.status(snapshot.view),
+    status: () => adapter.status?.(snapshot.view) ?? null,
     guard,
     requestClose,
     release,

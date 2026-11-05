@@ -5,7 +5,6 @@ import {
   fillModelsConfigModelFromCatalog,
   modelsConfigPanel,
 } from "@/lib/client/models-config-panel";
-import { PanelBackButton } from "../PanelBackButton";
 
 export function ModelsConfigFillModelPage({
   providerName,
@@ -17,7 +16,7 @@ export function ModelsConfigFillModelPage({
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <ModelCatalogPickerBody
-        backButton={<PanelBackButton panel={modelsConfigPanel} />}
+        backButton={null}
         onBack={() => modelsConfigPanel.back()}
         onSelect={(model) => fillModelsConfigModelFromCatalog(providerName, index, model)}
       />

@@ -138,7 +138,6 @@ export const scheduler = {
   "Known contacts": "已知联系人",
   "No outcome selected": "未选择任何通知时机",
 
-  "Your scheduled task changes will be lost.": "你的定时任务改动将会丢失。",
   "Task not found": "未找到该任务",
   "Select a task to see its details": "选择一个任务查看详情",
   "Timezone": "时区",

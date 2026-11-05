@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { MAIN_VIEW_KINDS, type MainViewKind } from "@/lib/shared/mainView";
 import { schedulerPanel } from "./scheduler-panel";
+import { skillsPanel } from "./skills-panel";
+import { channelsPanel } from "./channels-panel";
 
 function SchedulerRunningBadge() {
   const running = schedulerPanel.useStatus() === true;
@@ -15,8 +17,32 @@ function SchedulerRunningBadge() {
   );
 }
 
+function SkillsInstallingBadge() {
+  const installing = skillsPanel.useStatus() === true;
+  if (!installing) return null;
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
+    />
+  );
+}
+
+function ChannelsLoginBadge() {
+  const loggingIn = channelsPanel.useStatus() === true;
+  if (!loggingIn) return null;
+  return (
+    <span
+      aria-hidden="true"
+      style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
+    />
+  );
+}
+
 const MAIN_VIEW_BADGE_BY_KIND: Partial<Record<MainViewKind, () => ReactNode>> = {
   scheduler: SchedulerRunningBadge,
+  skills: SkillsInstallingBadge,
+  channels: ChannelsLoginBadge,
 };
 
 export function renderMainViewBadges(): Partial<Record<MainViewKind, ReactNode>> {

@@ -380,13 +380,8 @@ export interface WorkspacesResponse {
 
 export const FAVORITES_TAB_ID = "favorites:global";
 export const TRANSLATE_TAB_ID = "translate:global";
-export const TOKENS_TAB_ID = "tokens:global";
 export const GIT_DIFF_TAB_ID = "gitDiff:global";
 export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 export const LLM_AUDIT_TAB_ID = "llmAudit:global";
 export const CONTEXT_TAB_ID = "context:global";
-export const MODELS_CONFIG_TAB_ID = "modelsConfig:global";
 export const MCP_TAB_ID = "mcp:global";
-export const MEMORY_TAB_ID = "memory:global";
-export const SKILLS_TAB_ID = "skills:global";
-export const CHANNELS_TAB_ID = "channels:global";

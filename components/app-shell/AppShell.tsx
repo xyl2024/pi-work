@@ -25,7 +25,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerPanel } from "../panels/SchedulerPanel";
-import { ChannelsPanel } from "../panels/ChannelsPanel";
+import { ChannelsMainView } from "../panels/ChannelsMainView";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { ContextInsightPanel } from "../panels/ContextInsightPanel";
@@ -67,13 +67,11 @@ import {
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
 import {
-  MAIN_VIEW_KINDS,
   MAIN_VIEW_SPEC_BY_KIND,
   createMainViewState,
   mainViewReducer,
   selectMainViewKind,
   selectToggleExits,
-  shouldMountMainViewBody,
   type MainViewKind,
 } from "@/lib/shared/mainView";
 import type { ChatInputHandle } from "../chat/ChatInput";
@@ -84,15 +82,16 @@ import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-ba
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { renderMainViewBadges } from "@/lib/client/main-view-badges";
 import { useMainViewHeader } from "@/lib/client/main-view-header";
-import { modelsConfigPanel } from "@/lib/client/models-config-panel";
-import { skillsPanel } from "@/lib/client/skills-panel";
-import { channelsPanel } from "@/lib/client/channels-panel";
 import {
   usePanelViewLifecycleSync,
   type PanelViewLifecycleStore,
 } from "@/hooks/usePanelViewLifecycleSync";
 import { mcpPanel } from "@/lib/client/mcp-panel";
-import { requestSchedulerLeave, setSchedulerLeaveConfirm } from "@/lib/client/scheduler-panel";
+import {
+  requestMainViewLeave,
+  setMainViewLeaveConfirm,
+} from "@/lib/client/main-view-leave";
+import type { MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { AssistantConversation } from "../assistant/AssistantConversation";
@@ -139,7 +138,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   translate: () => <TranslatePanel />,
-  tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => (
     <ContextInsightPanel sessionId={ctx.selectedSessionId} visible={ctx.rightPanelState !== "closed"} />
@@ -159,7 +157,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
     />
   ),
-  modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
   mcp: (ctx) => (
     <McpPanel
       cwd={ctx.cwd}
@@ -168,16 +165,10 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onNewSession={ctx.onNewSession}
     />
   ),
-  skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
-  channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
-  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
 };
 
 const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
   mcp: mcpPanel,
-  channels: channelsPanel,
-  skills: skillsPanel,
-  modelsConfig: modelsConfigPanel,
 };
 
 const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
@@ -186,6 +177,7 @@ const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = Object.values(PANE
 
 interface MainViewBodyCtx {
   cwd: string | null;
+  selectedSessionId: string | null;
   openSessionById: (sessionId: string) => void;
   onExit: () => void;
   visible: boolean;
@@ -200,6 +192,11 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
       visible={ctx.visible}
     />
   ),
+  modelsConfig: (ctx) => <ModelsConfigPanel onExit={ctx.onExit} visible={ctx.visible} />,
+  skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onExit={ctx.onExit} visible={ctx.visible} />,
+  channels: (ctx) => <ChannelsMainView onExit={ctx.onExit} visible={ctx.visible} />,
+  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
+  tokens: () => <TokensPanel />,
 };
 
 function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
@@ -394,26 +391,27 @@ export function AppShell() {
   mainViewRef.current = mainViewState;
   const activeMainViewKind = selectMainViewKind(mainViewState);
   const chatForeground = mainViewState.active === "chat";
-  const [mainViewVisited, setMainViewVisited] = useState(false);
-  useEffect(() => {
-    if (activeMainViewKind !== null) setMainViewVisited(true);
-  }, [activeMainViewKind]);
-  const mainViewBodiesMounted = shouldMountMainViewBody(activeMainViewKind, mainViewVisited);
+  const requestLeaveActiveMainView = useCallback((intent: MainViewLeaveIntent) => {
+    const active = mainViewRef.current.active;
+    if (active === "chat") return Promise.resolve(true);
+    return requestMainViewLeave({ view: active, intent });
+  }, []);
   const setMainView = useCallback(async (kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
     const exits = selectToggleExits(current, kind);
-    if (exits && !(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView(exits ? "leave_main_view" : "switch_main_view"))) return;
     dispatchMainView({ type: "toggle", kind, panelMode });
     setPanelMode(exits ? panelMode : "closed");
-  }, [setPanelMode]);
-  const enterMainView = useCallback((kind: MainViewKind) => {
+  }, [requestLeaveActiveMainView, setPanelMode]);
+  const enterMainView = useCallback(async (kind: MainViewKind) => {
     const current = mainViewRef.current;
     const panelMode = current.active === "chat" ? panelTabsRef.current.mode : current.returnPanelMode;
     if (current.active === kind) return;
+    if (!(await requestLeaveActiveMainView("switch_main_view"))) return;
     dispatchMainView({ type: "enter", kind, panelMode });
     setPanelMode("closed");
-  }, [setPanelMode]);
+  }, [requestLeaveActiveMainView, setPanelMode]);
   const leaveMainView = useCallback(() => {
     const current = mainViewRef.current;
     if (current.active === "chat") return;
@@ -421,9 +419,9 @@ export function AppShell() {
     setPanelMode(current.returnPanelMode);
   }, [setPanelMode]);
   const handleLeaveMainView = useCallback(async () => {
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     leaveMainView();
-  }, [leaveMainView]);
+  }, [leaveMainView, requestLeaveActiveMainView]);
   const openTabs = panelTabsState.tabs;
   const activeFileTabId = panelTabsState.activeId;
   const activePanelTab = selectActiveTab(panelTabsState);
@@ -484,8 +482,6 @@ export function AppShell() {
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  const modelsConfigDirty = modelsConfigPanel.useStatus() === true;
-  const skillsInstalling = skillsPanel.useStatus() === true;
   usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
   const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -564,7 +560,7 @@ export function AppShell() {
       }
       return;
     }
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     const draft = workspaceRef.current.tabOrder
       .map((id) => workspaceRef.current.tabs[id])
       .find((tab) => tab.kind === "draft");
@@ -575,7 +571,7 @@ export function AppShell() {
       dispatchWorkspace({ type: "ensure_draft", cwd });
     }
     closeTopPanel();
-  }, [activeTab, activeTabId, closeTopPanel]);
+  }, [activeTab, activeTabId, closeTopPanel, requestLeaveActiveMainView]);
 
   useEffect(() => {
     if (!initialSessionRestored) return;
@@ -591,7 +587,7 @@ export function AppShell() {
     isRestoreOrScroll?: boolean | string | null,
     scrollEntryId?: string | null,
   ) => {
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     const targetScrollEntryId = scrollEntryId ?? (typeof isRestoreOrScroll === "string" ? isRestoreOrScroll : null);
     dispatchWorkspace({ type: "open_session", session });
     setInitialSessionRestored(true);
@@ -601,7 +597,7 @@ export function AppShell() {
       setPendingScrollEntryIds((prev) => ({ ...prev, [tabId]: targetScrollEntryId }));
     }
     closeTopPanel();
-  }, [closeTopPanel]);
+  }, [closeTopPanel, requestLeaveActiveMainView]);
 
   const handleSelectSearchResult = useCallback((result: SessionSearchResult) => {
     const sessionInfo: SessionInfo = {
@@ -620,7 +616,7 @@ export function AppShell() {
 
   const handleNewSession = useCallback(async (_sessionId: string, cwd: string) => {
     if (!cwd) return;
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     const current = workspaceRef.current;
     const draft = current.tabOrder
       .map((id) => current.tabs[id])
@@ -632,7 +628,7 @@ export function AppShell() {
       dispatchWorkspace({ type: "ensure_draft", cwd });
     }
     closeTopPanel();
-  }, [closeTopPanel]);
+  }, [closeTopPanel, requestLeaveActiveMainView]);
 
   const handleLogout = useCallback(() => {
     void fetch("/api/auth/session/logout", { method: "POST" })
@@ -693,7 +689,7 @@ export function AppShell() {
 
   const handleSessionDraftCreate = useCallback(async () => {
     try {
-      if (!(await requestSchedulerLeave("leave_main_view"))) return;
+      if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
       const response = await fetch("/api/default-cwd", { method: "POST" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json() as { cwd?: string };
@@ -718,23 +714,23 @@ export function AppShell() {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [closeTopPanel, t, toast]);
+  }, [closeTopPanel, requestLeaveActiveMainView, t, toast]);
 
   const handleOpenAssistant = useCallback(async () => {
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     dispatchWorkspace({ type: "open_assistant" });
     closeTopPanel();
-  }, [closeTopPanel]);
+  }, [closeTopPanel, requestLeaveActiveMainView]);
 
   const handleSessionCreated = useCallback((tabId: string, session: SessionInfo) => {
     dispatchWorkspace({ type: "upgrade_draft", tabId, session });
   }, []);
 
   const handleOpenScheduledSession = useCallback(async (sessionId: string) => {
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     dispatchWorkspace({ type: "open_session_by_id", sessionId });
     closeTopPanel();
-  }, [closeTopPanel]);
+  }, [closeTopPanel, requestLeaveActiveMainView]);
 
   const handleAgentEnd = useCallback((tabId?: string) => {
     setRefreshKey((k) => k + 1);
@@ -771,9 +767,9 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     dispatchWorkspace({ type: "close_session", sessionId });
     removeSessionPermissionRequests(sessionId);
-    if (!(await requestSchedulerLeave("leave_main_view"))) return;
+    if (!(await requestLeaveActiveMainView("leave_main_view"))) return;
     closeTopPanel();
-  }, [closeTopPanel, removeSessionPermissionRequests]);
+  }, [closeTopPanel, removeSessionPermissionRequests, requestLeaveActiveMainView]);
 
   const handleDraftChange = useCallback((tabId: string, draft: { dirty: boolean }) => {
     dispatchWorkspace({ type: "set_dirty", tabId, dirty: draft.dirty });
@@ -879,13 +875,13 @@ export function AppShell() {
   }, []);
 
   const handleOpenSkillsPanel = useCallback(() => {
-    dispatchPanelTabs({ type: "open", kind: "skills" });
-  }, []);
+    void enterMainView("skills");
+  }, [enterMainView]);
 
   const handleOpenMemoryPanel = useCallback(() => {
     setSettingsConfigOpen(false);
-    dispatchPanelTabs({ type: "open", kind: "memory" });
-  }, []);
+    void enterMainView("memory");
+  }, [enterMainView]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -964,8 +960,8 @@ export function AppShell() {
   );
 
   useEffect(() => {
-    setSchedulerLeaveConfirm((guard) => askPanelClose(guard));
-    return () => setSchedulerLeaveConfirm(null);
+    setMainViewLeaveConfirm((guard) => askPanelClose(guard));
+    return () => setMainViewLeaveConfirm(null);
   }, [askPanelClose]);
 
   const confirmDropPanelTabs = useCallback(
@@ -1107,8 +1103,6 @@ export function AppShell() {
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
-    modelsConfigDirty,
-    skillsInstalling,
     mcpDirty,
     t,
     toggleRightPanel: () =>
@@ -1358,6 +1352,7 @@ export function AppShell() {
 
   const mainViewBodyCtx: Omit<MainViewBodyCtx, "visible"> = {
     cwd: selectedCwd,
+    selectedSessionId,
     openSessionById: handleOpenScheduledSession,
     onExit: handleLeaveMainView,
   };
@@ -1426,23 +1421,22 @@ export function AppShell() {
         )}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
-        {mainViewBodiesMounted && MAIN_VIEW_KINDS.map((kind) => (
+        {activeMainViewKind !== null && (
           <div
-            key={kind}
             style={{
               position: "absolute",
               inset: 0,
-              display: activeMainViewKind === kind ? "flex" : "none",
+              display: "flex",
               flexDirection: "column",
               overflow: "hidden",
             }}
           >
-            {MAIN_VIEW_BODY_BY_KIND[kind]({
+            {MAIN_VIEW_BODY_BY_KIND[activeMainViewKind]({
               ...mainViewBodyCtx,
-              visible: activeMainViewKind === kind,
+              visible: true,
             })}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

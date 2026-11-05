@@ -4,18 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useI18n } from "@/hooks/useI18n";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { shortenPath } from "@/lib/client/paths";
 import { groupSkillFiles, stripFrontmatter } from "@/lib/shared/skill-files";
 import { skillGroup, type SkillDetailData } from "@/lib/shared/skills";
 import { fetchSkillDetail } from "@/lib/client/skills-io";
-import { skillsPanel, toggleSkillInvocation, useSkillsPanel } from "@/lib/client/skills-panel";
+import { toggleSkillInvocation, useSkillsPanel } from "@/lib/client/skills-panel";
 import { SkillFileRow } from "./SkillFileRow";
-import { PanelBackButton } from "../PanelBackButton";
 import { HumanCallBadge } from "./HumanCallBadge";
 
-export function SkillDetailPage({ filePath }: { filePath: string }) {
+export function SkillDetailPage({ filePath, onBack }: { filePath: string; onBack?: () => void }) {
   const { t } = useI18n();
   const { view } = useSkillsPanel();
   const { skills, toggleBusy } = view;
@@ -98,7 +98,16 @@ export function SkillDetailPage({ filePath }: { filePath: string }) {
           flexShrink: 0,
         }}
       >
-        <PanelBackButton panel={skillsPanel} />
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label={t("Back")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+          >
+            <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
+          </button>
+        )}
         <span
           style={{
             flex: 1,
