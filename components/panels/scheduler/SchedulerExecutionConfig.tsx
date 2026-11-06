@@ -18,6 +18,8 @@ interface Props {
   modelIconPreferences?: Record<string, string>;
 }
 
+const configValueStyle = { ...codePillStyle, background: "transparent", padding: 0 };
+
 const OUTCOME_LABEL: Record<SchedulerNotifyOutcome, string> = {
   success: "On success",
   error: "On error",
@@ -39,7 +41,7 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
     if (value.kind === "lifetime") {
       return (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <code style={codePillStyle}>{value.text}</code>
+          <code style={configValueStyle}>{value.text}</code>
           {value.isDefault && <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("default")}</span>}
         </span>
       );
@@ -53,7 +55,7 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
             <span key={`${channel.type}:${channel.recipientId}:${index}`} style={{ color: "var(--text-muted)" }}>
               {channel.type}
               {channel.name ? `: ${channel.name}` : channel.unavailable ? ` ${t("channels.unavailable")}` : ""}
-              <code style={{ ...codePillStyle, marginLeft: 6 }}>{channel.recipientId}</code>
+              <code style={{ ...configValueStyle, marginLeft: 6 }}>{channel.recipientId}</code>
             </span>
           ))}
         </span>
@@ -68,7 +70,7 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
         {icon ? <ProviderIcon id={icon} size={14} fallback={<ProviderGearIcon size={14} />} /> : null}
-        <code style={codePillStyle}>{value.text}</code>
+        <code style={configValueStyle}>{value.text}</code>
       </span>
     );
   };

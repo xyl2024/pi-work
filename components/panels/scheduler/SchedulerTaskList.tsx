@@ -215,9 +215,7 @@ function TaskRow({
   const { t, locale } = useI18n();
   const toast = useToast();
   const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
   const showErrorBadge = isSchedulerErrorStatus(task.lastRunStatus);
-  const actionsVisible = hovered || focused || selected;
 
   const nextLabel = !task.enabled
     ? t("Paused")
@@ -252,8 +250,6 @@ function TaskRow({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -297,7 +293,7 @@ function TaskRow({
             }}
           />
         )}
-        <span style={{ visibility: actionsVisible ? "visible" : "hidden", display: "inline-flex", flexShrink: 0 }}>
+        <span style={{ display: "inline-flex", flexShrink: 0 }}>
           <ToggleSwitch
             on={task.enabled}
             onChange={(next) => void handleToggle(next)}

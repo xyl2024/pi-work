@@ -332,6 +332,5 @@ const outputBodyStyle: CSSProperties = {
   boxSizing: "border-box",
   margin: "0 10px 8px",
   padding: "10px 12px",
-  background: "var(--bg-subtle)",
   borderRadius: 6,
 };
