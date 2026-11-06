@@ -156,6 +156,10 @@ function PiAgentTitle() {
   );
 }
 
+function SidebarDivider() {
+  return <div style={{ height: 1, flexShrink: 0, background: "var(--border)", margin: "0 10px" }} />;
+}
+
 function SidebarNavButton({ onClick, active = false, badge, children }: { onClick: () => void; active?: boolean; badge?: ReactNode; children: ReactNode }) {
   const restBackground = active ? "var(--bg-selected)" : "transparent";
   return (
@@ -163,11 +167,11 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
       onClick={onClick}
       aria-pressed={active}
       style={{
-        display: "flex", alignItems: "center", gap: 6,
+        display: "flex", alignItems: "center", gap: 8,
         justifyContent: "flex-start",
         width: "100%",
         height: SESSION_ROW_HEIGHT_PX,
-        padding: "0 8px 0 0",
+        padding: "0 10px",
         borderRadius: 8,
         background: restBackground,
         border: "none",
@@ -798,7 +802,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           </div>
         </div>
       </div>
-      <div style={{ height: 1, flexShrink: 0, background: "var(--border)" }} />
+      <SidebarDivider />
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
         {onCreateSessionDraft && (
           <SidebarNavButton onClick={onCreateSessionDraft}>
@@ -845,6 +849,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       </div>
 
       {!assistantActive && (
+      <>
+      <SidebarDivider />
       <SidebarSection
         title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
@@ -914,9 +920,12 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onNewSession={onNewSession}
       />
       </SidebarSection>
+      </>
       )}
 
       {explorerCwd && (
+        <>
+        <SidebarDivider />
         <SidebarSection
           title={t("Explorer")}
           open={explorerOpen}
@@ -964,6 +973,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             onExpandedCountChange={setExplorerExpandedCount}
           />
         </SidebarSection>
+        </>
       )}
 
       {onOpenSettings && (

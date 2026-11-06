@@ -160,7 +160,7 @@ describe("mainView registry", () => {
 
   it("registers channels as a main view in the fourth navigation slot", () => {
     expect(MAIN_VIEW_KINDS).toContain("channels");
-    expect(MAIN_VIEW_SPEC_BY_KIND.channels.labelKey).toBe("Channels");
+    expect(MAIN_VIEW_SPEC_BY_KIND.channels.labelKey).toBe("External channels");
     expect(MAIN_VIEW_SPEC_BY_KIND.channels.backLabelKey).toBe("Back to chat");
     expect(MAIN_VIEW_SPEC_BY_KIND.channels.navPriority).toBe(4);
     expect(ZH_TRANSLATIONS["Channels"]).toBe("频道");
@@ -174,7 +174,7 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.memory.navPriority).toBe(5);
     expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(6);
     expect(MAIN_VIEW_KINDS.indexOf("memory")).toBeLessThan(MAIN_VIEW_KINDS.indexOf("tokens"));
-    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory");
+    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory management");
     expect(MAIN_VIEW_SPEC_BY_KIND.tokens.labelKey).toBe("Token audit");
   });
 
@@ -218,7 +218,7 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_SPEC_BY_KIND.skills.navPriority).toBe(3);
     expect(ordered.indexOf("skills")).toBe(ordered.indexOf("modelsConfig") + 1);
     expect(ordered.indexOf("skills")).toBeGreaterThan(ordered.indexOf("scheduler"));
-    expect(MAIN_VIEW_SPEC_BY_KIND.skills.labelKey).toBe("Skills");
+    expect(MAIN_VIEW_SPEC_BY_KIND.skills.labelKey).toBe("Skills management");
     expect(MAIN_VIEW_SPEC_BY_KIND.skills.backLabelKey).toBe("Back to chat");
     expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.labelKey).toBe("Open skills");
     expect(MAIN_VIEW_SPEC_BY_KIND.skills.commands?.[0]?.keywords).toEqual(

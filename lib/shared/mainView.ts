@@ -53,7 +53,7 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
   skills: {
     kind: "skills",
     navPriority: 3,
-    labelKey: "Skills",
+    labelKey: "Skills management",
     backLabelKey: "Back to chat",
     commands: [
       {
@@ -65,7 +65,7 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
   channels: {
     kind: "channels",
     navPriority: 4,
-    labelKey: "Channels",
+    labelKey: "External channels",
     backLabelKey: "Back to chat",
     commands: [
       {
@@ -77,7 +77,7 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
   memory: {
     kind: "memory",
     navPriority: 5,
-    labelKey: "Memory",
+    labelKey: "Memory management",
     backLabelKey: "Back to chat",
     commands: [
       {

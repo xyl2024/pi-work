@@ -37,6 +37,7 @@ export const sessions = {
   "No icons match": "没有匹配的图标",
 
   "Memory": "记忆",
+  "Memory management": "记忆管理",
   "Turn memory on in Settings first": "先在设置里打开记忆",
 
   "Set default tools": "设置默认工具",
