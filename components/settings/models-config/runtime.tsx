@@ -8,7 +8,7 @@ import { SectionTitle, SecretTextInput, Field, inputStyle } from "./form-fields"
 import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
 import { ModelCard } from "./ModelCard";
 import { ModelConnectionTest } from "./ModelConnectionTest";
-import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
+import type { ApiKeyProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
 export function RuntimeModelCatalog() {
   const { t } = useI18n();
@@ -56,6 +56,11 @@ export function RuntimeModelCatalog() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }} />
         <input
+          type="search"
+          name="model-catalog-filter"
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("Search providers and models...")}
@@ -187,6 +192,11 @@ export function ModelCatalogPickerBody({
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <input
           ref={inputRef}
+          type="search"
+          name="fill-model-filter"
+          autoComplete="off"
+          data-1p-ignore
+          data-lpignore="true"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") onBack(); }}
@@ -307,6 +317,11 @@ export function AddModelNameStepBody({
           </svg>
           <input
             ref={inputRef}
+            type="search"
+            name="add-model-filter"
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -543,7 +558,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
             placeholder={provider.configured ? t("Enter new key to replace...") : "sk-..."}
             style={{ flex: 1 }}
-            autoComplete="off"
+            autoComplete="new-password"
             spellCheck={false}
             mono
           />
@@ -588,130 +603,6 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
           {removing ? t("Removing...") : t("Disconnect")}
         </button>
       )}
-    </div>
-  );
-}
-
-interface AddProviderPickerBodyProps {
-  oauthProviders: OAuthProvider[];
-  apiKeyProviders: ApiKeyProvider[];
-  onSelectOAuth: (id: string) => void;
-  onSelectApiKey: (id: string) => void;
-  onAddCustom: () => void;
-  onBack: () => void;
-  backButton: ReactNode;
-}
-
-export function AddProviderPickerBody({
-  oauthProviders, apiKeyProviders,
-  onSelectOAuth, onSelectApiKey, onAddCustom, onBack, backButton,
-}: AddProviderPickerBodyProps) {
-  const { t } = useI18n();
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
-
-  const q = search.trim().toLowerCase();
-  const availableOAuth = oauthProviders.filter((p) => !p.loggedIn && (!q || p.name.toLowerCase().includes(q)));
-  const availableApiKey = apiKeyProviders.filter((p) => !p.configured && (!q || p.displayName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)));
-  const showCustom = !q || "custom".includes(q) || "openai-compatible".includes(q) || "anthropic-compatible".includes(q);
-  const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
-
-  const cardStyle: React.CSSProperties = {
-    display: "flex", flexDirection: "row", alignItems: "center", gap: 8,
-    padding: "10px 12px",
-    background: "var(--bg)",
-    border: "1px solid var(--border)",
-    borderRadius: 7,
-    boxSizing: "border-box",
-    cursor: "pointer",
-    minWidth: 0,
-    textAlign: "left",
-    transition: "border-color 0.12s, background 0.12s",
-    width: "100%",
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
-      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-        {backButton}
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          ref={inputRef}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape") onBack(); }}
-          placeholder={t("Search providers...")}
-          style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
-        />
-      </div>
-
-      <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {totalCount === 0 ? (
-          <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("No providers match")}</div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
-            {showCustom && (
-              <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Custom")}</div>
-            )}
-            {showCustom && (
-              <button
-                onClick={() => onAddCustom()}
-                style={cardStyle}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("OpenAI / Anthropic compatible")}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Custom endpoint format")}</div>
-                </div>
-                <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
-                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </span>
-              </button>
-            )}
-
-            {availableOAuth.length > 0 && (
-              <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Subscriptions")}</div>
-            )}
-            {availableOAuth.map((p) => (
-              <button key={p.id} onClick={() => onSelectOAuth(p.id)}
-                style={cardStyle}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
-                </div>
-                <ProviderIcon id={p.id} size={28} />
-              </button>
-            ))}
-
-            {availableApiKey.length > 0 && (
-              <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("API Key")}</div>
-            )}
-            {availableApiKey.map((p) => (
-              <button key={p.id} onClick={() => onSelectApiKey(p.id)}
-                style={cardStyle}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
-                </div>
-                <ProviderIcon id={p.id} size={28} />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

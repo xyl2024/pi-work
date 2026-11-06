@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "../ui/ProviderIcon";
@@ -62,6 +62,9 @@ export function TextInput({
   return (
     <input
       id={id}
+      autoComplete="off"
+      data-1p-ignore
+      data-lpignore="true"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -78,7 +81,7 @@ export function SecretTextInput({
   placeholder,
   mono,
   onKeyDown,
-  autoComplete = "off",
+  autoComplete = "new-password",
   spellCheck = false,
   style,
 }: {
@@ -92,6 +95,8 @@ export function SecretTextInput({
   style?: CSSProperties;
 }) {
   const [visible, setVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const inputId = useId();
   const { t } = useI18n();
 
   useEffect(() => {
@@ -102,6 +107,14 @@ export function SecretTextInput({
     <div style={{ position: "relative", width: "100%", ...style }}>
       <input
         type={visible ? "text" : "password"}
+        name={`api-token-${inputId}`}
+        readOnly={!editing}
+        onFocus={() => setEditing(true)}
+        onBlur={() => setEditing(false)}
+        data-1p-ignore
+        data-lpignore="true"
+        autoCapitalize="none"
+        autoCorrect="off"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}

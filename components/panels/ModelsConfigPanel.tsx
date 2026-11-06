@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import {
   MODELS_CONFIG_ROOT_PAGE,
   clearModelsConfigProvider,
@@ -45,7 +46,8 @@ export function ModelsConfigPanel({
   }, []);
 
   const page = pages.length > 0 ? pages[pages.length - 1] : MODELS_CONFIG_ROOT_PAGE;
-  const formPage = isModelsConfigFormPage(page) ? page : null;
+  const connectionPage = page.kind === "oauth" || page.kind === "apikey" ? page : null;
+  const formPage = isModelsConfigFormPage(page) && !connectionPage ? page : null;
   const backToBrowse = useCallback(() => {
     modelsConfigPanel.back();
   }, []);
@@ -91,15 +93,24 @@ export function ModelsConfigPanel({
             ) : null
           }
           list={<ModelsConfigProviderList />}
-          detail={(onBack) => <ModelsConfigProviderDetail onBack={onBack} />}
-          hasDetail={selectedProvider !== null}
-          onClearDetail={clearModelsConfigProvider}
+          detail={(onBack) => connectionPage ? (
+            <div style={{ height: "100%", overflowY: "auto" }}>
+              {onBack && (
+                <button type="button" onClick={onBack} aria-label={t("Back")} style={{ display: "flex", alignItems: "center", gap: 6, margin: "12px 12px 0", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}>
+                  <ArrowLeftIcon width={14} height={14} aria-hidden="true" />{t("Providers")}
+                </button>
+              )}
+              {renderForm(connectionPage)}
+            </div>
+          ) : <ModelsConfigProviderDetail onBack={onBack} />}
+          hasDetail={connectionPage !== null || selectedProvider !== null}
+          onClearDetail={connectionPage ? () => { clearModelsConfigProvider(); backToBrowse(); } : clearModelsConfigProvider}
           onExit={onExit}
           visible={visible}
-          focusKey={`${page.kind}:${selectedProvider ?? ""}`}
+          focusKey={`${page.kind}:${connectionPage?.providerId ?? selectedProvider ?? ""}`}
         />
       </div>
-      {(formPage !== null || dirty) && <ModelsConfigSaveBar />}
+      {(formPage !== null || dirty || view.savedOk || view.saveError) && <ModelsConfigSaveBar />}
     </div>
   );
 }

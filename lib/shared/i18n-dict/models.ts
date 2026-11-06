@@ -1,5 +1,13 @@
 export const models = {
   "Models config": "模型配置",
+  "Providers": "提供商",
+  "Provider settings": "提供商设置",
+  "Delete provider": "删除提供商",
+  "Clear search": "清除搜索",
+  "Model catalog": "模型目录",
+  "Connect your first provider": "连接你的第一个提供商",
+  "Nothing to add": "暂无可添加项",
+  "All providers configured": "所有提供商都已配置",
   "Test connection": "测试连接",
   "Testing connection...": "正在测试连接…",
   "Connection successful": "连接成功",

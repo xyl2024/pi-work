@@ -123,6 +123,12 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 ref={inputRef}
+                name="oauth-response"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCode(inputValue); }}

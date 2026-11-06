@@ -21,10 +21,11 @@ export function ModelsConfigSaveBar() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: "1px solid var(--border)", background: "var(--bg)", flexShrink: 0 }}>
       <span
+        role={saveError ? "alert" : "status"}
         title={saveError ?? blockedText ?? undefined}
         style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: saveError || blockedText ? "var(--error)" : "var(--text-dim)", fontSize: 11 }}
       >
-        {saveError ?? blockedText ?? ""}
+        {saveError ?? blockedText ?? (dirty ? t("Unsaved changes") : "")}
       </span>
       <button
         type="button"

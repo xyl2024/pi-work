@@ -1,12 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ArrowLeftIcon } from "@/components/ui/icons";
+import { ProviderGearIcon, ProviderIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
 import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
-import { ModelEntryCard } from "@/components/settings/models-config/ModelEntryCard";
-import { SectionTitle } from "@/components/settings/models-config/form-fields";
 import {
-  deleteModelsConfigProvider,
   openModelsConfigAddModelName,
   openModelsConfigAddProvider,
   openModelsConfigModel,
@@ -14,114 +13,101 @@ import {
   selectModelsConfigDirty,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
+import styles from "./models-config.module.css";
 
 export function ModelsConfigProviderDetail({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
   const { view: state } = useModelsConfigPanel();
-  const { config, providerNames, selectedProvider } = state;
-  const providers = config.providers ?? {};
-  const providerCount = Object.keys(providers).length;
+  const { config, providerNames, selectedProvider, oauthProviders, apiKeyProviders } = state;
+  const [search, setSearch] = useState({ provider: selectedProvider, query: "" });
+  const query = search.provider === selectedProvider ? search.query : "";
+  const provider = selectedProvider === null ? undefined : config.providers?.[selectedProvider];
 
-  if (selectedProvider === null) {
+  if (selectedProvider === null || !provider) {
+    const hasProviders = Object.keys(config.providers ?? {}).length > 0
+      || oauthProviders.some((item) => item.loggedIn)
+      || apiKeyProviders.some((item) => item.configured);
     return (
-      <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          {t(providerCount === 0 ? "No providers configured" : "Select a provider")}
-        </div>
-        {providerCount === 0 && (
-          <button
-            type="button"
-            onClick={() => openModelsConfigAddProvider()}
-            style={{ padding: "5px 12px", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12 }}
-          >
-            {t("Add provider")}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  const provider = providers[selectedProvider];
-  if (!provider) {
-    return (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-dim)" }}>
-        {t("Select a provider")}
+      <div className={`${styles.empty} ${styles.welcome}`}>
+        <span className={styles.providerIcon} aria-hidden="true"><ProviderGearIcon size={24} /></span>
+        <h2 className={styles.detailTitle}>{t(hasProviders ? "Select a provider" : "Connect your first provider")}</h2>
+        <button type="button" className={`${styles.button} ${styles.primary}`} onClick={openModelsConfigAddProvider}>
+          + {t("Add provider")}
+        </button>
       </div>
     );
   }
 
   const name = selectedProvider;
   const models = provider.models ?? [];
-  const testDisabled = selectModelsConfigDirty(state) || state.saving || !!state.rawEdit;
+  const needle = query.trim().toLowerCase();
+  const visible = models.map((model, index) => ({ model, index }))
+    .filter(({ model }) => !needle || `${model.name ?? ""} ${model.id}`.toLowerCase().includes(needle));
+  const dirty = selectModelsConfigDirty(state);
+  const testDisabled = dirty || state.saving || !!state.rawEdit;
+  const iconId = provider.icon ?? name;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label={t("Back")}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
-          >
-            <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
-          </button>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {providerNames[name] ?? name}
-          </div>
-          <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {provider.api ?? t("API")}
-            {provider.baseUrl ? ` · ${provider.baseUrl}` : ""}
-            {` · ${t("{n} models", { n: models.length })}`}
+    <div className={styles.detail}>
+      <div className={styles.detailHeader}>
+        <div className={styles.providerHeading}>
+          {onBack && (
+            <button type="button" onClick={onBack} aria-label={t("Back")} className={styles.button}>
+              <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
+            </button>
+          )}
+          <span className={styles.providerIcon} aria-hidden="true">
+            {hasProviderIcon(iconId) ? <ProviderIcon id={iconId} size={20} /> : <ProviderGearIcon size={20} />}
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <h2 className={styles.detailTitle}>{providerNames[name] ?? name}</h2>
+            <span className={styles.muted}>{t("{n} models", { n: models.length })}</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => openModelsConfigProviderForm(name)}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
-        >
-          {t("Edit provider")}
-        </button>
-        <button
-          type="button"
-          onClick={() => deleteModelsConfigProvider(name)}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 4, color: "var(--error)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
-        >
-          {t("Delete")}
-        </button>
+        <button type="button" className={styles.button} onClick={() => openModelsConfigProviderForm(name)}>{t("Provider settings")}</button>
       </div>
-
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <SectionTitle>{t("Models")}</SectionTitle>
-            <button
-              type="button"
-              onClick={() => openModelsConfigAddModelName(name)}
-              style={{ padding: "3px 8px", background: "none", border: "1px dashed var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
-            >
-              + {t("Model")}
+      <div className={styles.detailBody}>
+        <div className={styles.toolbar}>
+          <h3 className={styles.title}>{t("Models")}</h3>
+          <button type="button" className={`${styles.button} ${styles.primary}`} onClick={() => openModelsConfigAddModelName(name)}>+ {t("Add model")}</button>
+        </div>
+        {models.length > 0 && (
+          <div className={styles.toolbar}>
+            <input type="search" name="provider-model-filter" autoComplete="off" data-1p-ignore data-lpignore="true" value={query} onChange={(event) => setSearch({ provider: name, query: event.target.value })} placeholder={t("Search models...")} aria-label={t("Search models...")} className={styles.search} />
+            {needle && <span className={styles.count} role="status">{t("{n} matching models", { n: visible.length })}</span>}
+          </div>
+        )}
+        {dirty && models.length > 0 && <p className={styles.notice}>{t("Save configuration before testing.")}</p>}
+        {visible.length === 0 ? (
+          <div className={styles.empty}>
+            <span>{t(models.length === 0 ? "No models" : "No matching models")}</span>
+            <button type="button" className={styles.button} onClick={() => models.length === 0 ? openModelsConfigAddModelName(name) : setSearch({ provider: name, query: "" })}>
+              {t(models.length === 0 ? "Add model" : "Clear search")}
             </button>
           </div>
-          {models.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No models")}</div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-              {models.map((model, index) => (
-                <div key={index} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-                  <ModelEntryCard
-                    model={model}
-                    providerIcon={provider.icon}
-                    onOpen={() => openModelsConfigModel(name, index)}
-                  />
-                  <ModelConnectionTest provider={name} modelId={model.id} disabled={testDisabled} />
+        ) : (
+          <div className={styles.modelList}>
+            {visible.map(({ model, index }) => (
+              <div key={`${name}:${index}:${model.id}`} className={styles.modelRow}>
+                <div className={styles.modelHeading}>
+                  <button type="button" className={styles.modelLink} onClick={() => openModelsConfigModel(name, index)} aria-label={`${t("Edit model")}: ${model.name || model.id || t("new model")}`}>
+                    <div className={styles.modelName}>{model.name || model.id || t("new model")}</div>
+                    {model.name && model.id && <div className={styles.modelId}>{model.id}</div>}
+                  </button>
+                  <button type="button" className={styles.button} onClick={() => openModelsConfigModel(name, index)} aria-label={`${t("Edit model")}: ${model.name || model.id || t("new model")}`}>{t("Edit")}</button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                {(model.contextWindow != null || model.maxTokens != null || model.reasoning) && (
+                  <div className={styles.modelMeta}>
+                    {typeof model.contextWindow === "number" && <span>{t("Context window")} {model.contextWindow.toLocaleString()}</span>}
+                    {typeof model.maxTokens === "number" && <span>{t("Max output")} {model.maxTokens.toLocaleString()}</span>}
+                    {model.reasoning && <span>{t("Reasoning")}</span>}
+                  </div>
+                )}
+                <ModelConnectionTest provider={name} modelId={model.id} disabled={testDisabled} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

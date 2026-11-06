@@ -1,9 +1,8 @@
 "use client";
 
-import { AddProviderPickerBody } from "@/components/settings/models-config/runtime";
+import { AddProviderPickerBody } from "@/components/settings/models-config/AddProviderPicker";
 import {
   addModelsConfigCustomProvider,
-  modelsConfigPanel,
   openModelsConfigApiKey,
   openModelsConfigOAuth,
   useModelsConfigPanel,
@@ -20,7 +19,6 @@ export function ModelsConfigAddProviderPage() {
         onSelectOAuth={openModelsConfigOAuth}
         onSelectApiKey={openModelsConfigApiKey}
         onAddCustom={addModelsConfigCustomProvider}
-        onBack={() => modelsConfigPanel.back()}
       />
     </div>
   );
