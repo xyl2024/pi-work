@@ -775,7 +775,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, paddingLeft: 6 }}>
             <PiAgentTitle />
           </div>
           <div style={{ display: "flex", gap: 6 }}>
