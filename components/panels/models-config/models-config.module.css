@@ -72,6 +72,9 @@
   background: color-mix(in srgb, var(--accent) 85%, var(--bg));
 }
 .providerScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
