@@ -14,7 +14,6 @@ import {
   putModelsConfig,
 } from "./models-config-io";
 import {
-  cloneModelFromCatalog,
   isModelsConfigDirty,
   missingModelIdProblem,
   modelsConfigChangedProviders,
@@ -23,8 +22,10 @@ import {
   modelsConfigProblemAt,
   parseModelEntryJson,
   withAddedModel,
+  withAddedModelFromCatalog,
   withCustomProvider,
   withModel,
+  withModelFromCatalog,
   withProvider,
   withRenamedProvider,
   withoutModel,
@@ -575,10 +576,10 @@ export function addModelsConfigModelFromCatalog(
   providerName: string,
   source: RuntimeModelInfo,
 ): void {
-  const { config, index } = withAddedModel(
+  const { config, index } = withAddedModelFromCatalog(
     modelsConfigPanel.get().config,
     providerName,
-    cloneModelFromCatalog(source),
+    source,
   );
   modelsConfigPanel.patch({ config });
   openPanelPage({ kind: "model", providerName, index });
@@ -592,7 +593,7 @@ export function fillModelsConfigModelFromCatalog(
 ): void {
   const state = modelsConfigPanel.get();
   modelsConfigPanel.patch({
-    config: withModel(state.config, providerName, index, cloneModelFromCatalog(source)),
+    config: withModelFromCatalog(state.config, providerName, index, source),
   });
   openPanelPage({ kind: "model", providerName, index });
 }

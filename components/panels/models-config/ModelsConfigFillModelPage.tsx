@@ -1,6 +1,7 @@
 "use client";
 
-import { ModelCatalogPickerBody } from "@/components/settings/models-config/runtime";
+import { CatalogSearch } from "@/components/settings/models-config/CatalogSearch";
+import { useRuntimeCatalogEntries } from "@/components/settings/models-config/use-catalog-entries";
 import {
   fillModelsConfigModelFromCatalog,
   modelsConfigPanel,
@@ -13,13 +14,15 @@ export function ModelsConfigFillModelPage({
   providerName: string;
   index: number;
 }) {
+  const { entries, loading, error } = useRuntimeCatalogEntries();
+
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <ModelCatalogPickerBody
-        backButton={null}
-        onBack={() => modelsConfigPanel.back()}
-        onSelect={(model) => fillModelsConfigModelFromCatalog(providerName, index, model)}
-      />
-    </div>
+    <CatalogSearch
+      entries={entries}
+      loading={loading}
+      error={error}
+      onExit={() => modelsConfigPanel.back()}
+      onSelect={(model) => fillModelsConfigModelFromCatalog(providerName, index, model)}
+    />
   );
 }

@@ -204,6 +204,23 @@ export function withoutModel(config: ModelsJson, providerName: string, index: nu
   };
 }
 
+export function withAddedModelFromCatalog(
+  config: ModelsJson,
+  providerName: string,
+  source: RuntimeModelInfo,
+): { config: ModelsJson; index: number } {
+  return withAddedModel(config, providerName, cloneModelFromCatalog(source));
+}
+
+export function withModelFromCatalog(
+  config: ModelsJson,
+  providerName: string,
+  index: number,
+  source: RuntimeModelInfo,
+): ModelsJson {
+  return withModel(config, providerName, index, cloneModelFromCatalog(source));
+}
+
 export function cloneModelFromCatalog(source: RuntimeModelInfo): ModelEntry {
   return {
     id: source.id,
