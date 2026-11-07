@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ModelTable } from "@/components/settings/models-config/ModelTable";
+import { ListSkeleton } from "@/components/settings/models-config/ListSkeleton";
 import { runtimeModelTableItems } from "@/lib/shared/models-config-table";
 import type { RuntimeModelInfo } from "@/lib/shared/models-config";
 import styles from "./models-config.module.css";
@@ -56,7 +57,7 @@ export function ApiKeyModels({ providerId, configured }: { providerId: string; c
         </button>
       </div>
       {loading ? (
-        <p className={styles.muted}>{t("Loading models...")}</p>
+        <ListSkeleton rows={4} label={t("Loading models...")} />
       ) : items.length === 0 ? (
         <p className={styles.muted}>{t("No available models")}</p>
       ) : (

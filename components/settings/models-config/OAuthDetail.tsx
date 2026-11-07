@@ -58,13 +58,13 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
 
   const submitCode = useCallback(async (code: string) => {
     if (!code.trim()) return;
-    const ok = await submitOAuthLoginCode(provider.id, code, "Verifying…");
+    const ok = await submitOAuthLoginCode(provider.id, code, t("Verifying…"));
     if (ok) setInputValue("");
-  }, [provider.id]);
+  }, [provider.id, t]);
 
   const submitSelection = useCallback(async (value: string) => {
-    await submitOAuthLoginCode(provider.id, value, "Continuing…");
-  }, [provider.id]);
+    await submitOAuthLoginCode(provider.id, value, t("Continuing…"));
+  }, [provider.id, t]);
 
   const copyDeviceCode = useCallback(() => {
     const code = oauthDeviceCodeCopyText(loginState);
@@ -75,40 +75,37 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
   }, [loginState, t, toast]);
 
   const isWorking = isOAuthLoginWorking(loginState);
+  const canSubmit = inputValue.trim() !== "";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className={styles.detail}>
+      <div className={styles.header}>
         <SectionTitle>{t("Subscription")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
-            {provider.loggedIn ? "connected" : "not connected"}
+        <div className={styles.status} data-connected={provider.loggedIn ? "true" : undefined}>
+          <span className={styles.statusDot} />
+          <span className={styles.statusText}>
+            {provider.loggedIn ? t("connected") : t("not connected")}
           </span>
         </div>
       </div>
 
-      <div style={{ minHeight: 48 }}>
+      <div className={styles.body}>
         {loginState.phase === "idle" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {provider.loggedIn ? "Already connected. You can re-login or disconnect." : `Connect your ${provider.name} account.`}
+          <p className={styles.text}>
+            {provider.loggedIn
+              ? t("Already connected. You can re-login or disconnect.")
+              : t("Connect your {name} account.", { name: provider.name })}
           </p>
         )}
         {loginState.phase === "connecting" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("Opening browser...")}</p>
+          <p className={styles.text}>{t("Opening browser...")}</p>
         )}
         {loginState.phase === "select" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {loginState.message}
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className={styles.group}>
+            <p className={styles.text}>{loginState.message}</p>
+            <div className={styles.options}>
               {loginState.options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => submitSelection(option.id)}
-                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
-                >
+                <button key={option.id} type="button" className={styles.option} onClick={() => submitSelection(option.id)}>
                   {option.label}
                 </button>
               ))}
@@ -116,22 +113,21 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
           </div>
         )}
         {(loginState.phase === "auth" || loginState.phase === "prompt") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          <div className={styles.group}>
+            <p className={styles.text}>
               {loginState.phase === "auth"
-                ? "Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below."
+                ? t("Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below.")
                 : loginState.message}
             </p>
             {loginState.phase === "auth" && (
-              <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-                If the browser window did not open, {" "}
-                <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
-                  click here to open the login page
+              <p className={styles.note}>
+                {t("Browser window did not open?")}{" "}
+                <a href={loginState.url} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                  {t("Open the login page")}
                 </a>
-                .
               </p>
             )}
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className={styles.inputRow}>
               <input
                 ref={inputRef}
                 name="oauth-response"
@@ -143,70 +139,63 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCode(inputValue); }}
-                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? "Enter value…")}
-                style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
+                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("Enter value…"))}
+                className={styles.input}
               />
               <button
+                type="button"
+                className={styles.submit}
+                data-ready={canSubmit ? "true" : undefined}
                 onClick={() => submitCode(inputValue)}
-                disabled={!inputValue.trim()}
-                style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg)", border: "none", borderRadius: 5, color: inputValue.trim() ? "#fff" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                disabled={!canSubmit}
               >
-                Submit
+                {t("Submit")}
               </button>
             </div>
           </div>
         )}
         {loginState.phase === "device_code" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Open the verification page and enter this code:
-            </p>
+          <div className={styles.group}>
+            <p className={styles.text}>{t("Open the verification page and enter this code:")}</p>
             <div className={styles.deviceCode}>
               <span className={styles.deviceCodeValue}>{loginState.userCode}</span>
               <button type="button" className={styles.copyButton} onClick={copyDeviceCode}>
                 {t("Copy code")}
               </button>
             </div>
-            <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
+            <p className={styles.note}>
+              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" className={styles.link}>
                 {loginState.verificationUri}
               </a>
-              {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}
+              {loginState.expiresInSeconds
+                ? ` ${t("Expires in {n} minutes.", { n: Math.ceil(loginState.expiresInSeconds / 60) })}`
+                : ""}
             </p>
           </div>
         )}
         {loginState.phase === "progress" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
+          <p className={styles.text}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>{t("Connected successfully.")}</p>
+          <p className={styles.success}>{t("Connected successfully.")}</p>
         )}
         {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--error)" }}>{loginState.message}</p>
+          <p className={styles.error}>{loginState.message}</p>
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className={styles.actions}>
         {isWorking ? (
-          <button
-            onClick={() => cancelOAuthLogin(provider.id)}
-            style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
-          >
+          <button type="button" className={styles.ghost} onClick={() => cancelOAuthLogin(provider.id)}>
             {t("Cancel")}
           </button>
         ) : (
           <>
-            <button
-              onClick={handleLogin}
-              style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
-            >
-              {provider.loggedIn ? "Re-login" : "Login"}
+            <button type="button" className={styles.primary} onClick={handleLogin}>
+              {provider.loggedIn ? t("Re-login") : t("Login")}
             </button>
             {provider.loggedIn && (
-              <button
-                onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 5, color: "var(--error)", cursor: "pointer", fontSize: 12 }}
-              >
+              <button type="button" className={styles.danger} onClick={handleLogout}>
                 {t("Disconnect")}
               </button>
             )}

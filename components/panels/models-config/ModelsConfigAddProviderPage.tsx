@@ -7,11 +7,12 @@ import {
   openModelsConfigOAuth,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
+import styles from "./models-config.module.css";
 
 export function ModelsConfigAddProviderPage() {
   const { oauthProviders, apiKeyProviders } = useModelsConfigPanel().view;
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div className={styles.pageColumn}>
       <AddProviderPickerBody
         backButton={null}
         oauthProviders={oauthProviders}

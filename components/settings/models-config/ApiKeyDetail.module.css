@@ -1,0 +1,100 @@
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.statusDot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--border);
+}
+.status[data-configured="true"] .statusDot {
+  background: var(--success);
+}
+.statusText {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.status[data-configured="true"] .statusText {
+  color: var(--success);
+}
+.description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.fieldRow {
+  display: flex;
+  gap: 6px;
+}
+.keyField {
+  flex: 1;
+}
+.saveButton {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: not-allowed;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.saveButton[data-ready="true"] {
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.saveButton[data-ready="true"]:hover {
+  background: var(--accent-hover);
+}
+.saveButton[data-saved="true"] {
+  background: var(--success);
+  color: #fff;
+  cursor: not-allowed;
+}
+.saveButton:focus-visible, .disconnect:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.error {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}
+.disconnect {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+  border-radius: 5px;
+  background: none;
+  color: var(--error);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.disconnect:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+.disconnect:disabled {
+  cursor: not-allowed;
+}

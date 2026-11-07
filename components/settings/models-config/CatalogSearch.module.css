@@ -60,36 +60,6 @@
   font-size: 12px;
   text-align: center;
 }
-.skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: 6px;
-}
-.skeletonRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.skeletonBar {
-  height: 10px;
-  border-radius: 999px;
-  background: var(--bg-hover);
-  animation: catalog-skeleton-pulse 1.4s ease-in-out infinite;
-}
-.skeletonName {
-  flex: 1;
-  min-width: 0;
-  max-width: 280px;
-}
-.skeletonTag {
-  width: 84px;
-}
-.skeletonNumber {
-  width: 52px;
-}
 .footer {
   display: flex;
   align-items: center;
@@ -119,8 +89,4 @@
 .skip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-@keyframes catalog-skeleton-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 1; }
 }

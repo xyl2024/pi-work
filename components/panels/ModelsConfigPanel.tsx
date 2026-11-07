@@ -27,6 +27,8 @@ import { ModelsConfigAddModelNamePage } from "./models-config/ModelsConfigAddMod
 import { ModelsConfigFillModelPage } from "./models-config/ModelsConfigFillModelPage";
 import { ModelsConfigCatalogPage } from "./models-config/ModelsConfigCatalogPage";
 import { ModelsConfigSaveBar } from "./models-config/ModelsConfigSaveBar";
+import { ListSkeleton } from "@/components/settings/models-config/ListSkeleton";
+import styles from "./models-config/models-config.module.css";
 
 export function ModelsConfigPanel({
   onExit,
@@ -59,44 +61,40 @@ export function ModelsConfigPanel({
 
   if (loadError) {
     return (
-      <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--error)", fontSize: 12 }}>
+      <div className={`${styles.stateBlock} ${styles.errorBlock}`}>
         {t("Failed to load models")}
-        <div style={{ marginTop: 6, color: "var(--text-dim)", fontSize: 11, wordBreak: "break-word" }}>{loadError}</div>
+        <div className={styles.errorDetail}>{loadError}</div>
       </div>
     );
   }
 
   if (!loaded) {
     return (
-      <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-        {t("Loading...")}
+      <div className={styles.skeletonBlock}>
+        <ListSkeleton rows={6} />
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={-1}
-      style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
-    >
-      <div style={{ flex: 1, minHeight: 0 }}>
+    <div ref={containerRef} tabIndex={-1} className={styles.panel}>
+      <div className={styles.panelBody}>
         <MainViewMasterDetail
           containerRef={containerRef}
           titleKey={formPage ? modelsConfigPageTitleKey(formPage) : null}
           onBack={formPage ? backToBrowse : null}
           full={
             formPage ? (
-              <div ref={scrollRef} style={{ height: "100%", overflowY: "auto" }}>
+              <div ref={scrollRef} className={styles.scrollArea}>
                 {renderForm(formPage)}
               </div>
             ) : null
           }
           list={<ModelsConfigProviderList />}
           detail={(onBack) => connectionPage ? (
-            <div style={{ height: "100%", overflowY: "auto" }}>
+            <div className={styles.scrollArea}>
               {onBack && (
-                <button type="button" onClick={onBack} aria-label={t("Back")} style={{ display: "flex", alignItems: "center", gap: 6, margin: "12px 12px 0", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", cursor: "pointer" }}>
+                <button type="button" onClick={onBack} aria-label={t("Back")} className={styles.connectionBack}>
                   <ArrowLeftIcon width={14} height={14} aria-hidden="true" />{t("Providers")}
                 </button>
               )}

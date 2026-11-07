@@ -8,6 +8,9 @@ import type { ModelEntry } from "./types";
 import { Field, TextInput, Check, SectionTitle, IconField, Select } from "./form-fields";
 import { ThinkingLevelMapEditor } from "./ThinkingLevelMapEditor";
 import { hasDeepseekCompat, setDeepseekCompat } from "./utils";
+import styles from "./ModelFields.module.css";
+
+const COST_FIELDS = ["input", "output", "cacheRead", "cacheWrite"] as const;
 
 export function ModelFields({
   model,
@@ -23,8 +26,8 @@ export function ModelFields({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+    <div className={styles.fields}>
+      <div className={styles.grid}>
         <Field label={t("ID *")} error={model.id.trim() ? undefined : t("Model ID is required")}>
           <TextInput value={model.id} onChange={(v) => set("id", v)} placeholder={t("model-id")} mono />
         </Field>
@@ -37,23 +40,20 @@ export function ModelFields({
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
-      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-        <Check label="Reasoning / thinking" checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label="Image input" checked={model.input?.includes("image") ?? false} onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
+      <div className={styles.checks}>
+        <Check label={t("Reasoning / thinking")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+        <Check label={t("Image input")} checked={model.input?.includes("image") ?? false} onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
       </div>
 
       {model.reasoning && (
         <>
-          <Check label="DeepSeek thinking compat" checked={hasDeepseekCompat(model)} onChange={(v) => onChange(setDeepseekCompat(model, v))} />
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <Check label={t("DeepSeek thinking compat")} checked={hasDeepseekCompat(model)} onChange={(v) => onChange(setDeepseekCompat(model, v))} />
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
               <SectionTitle>{t("Thinking level map")}</SectionTitle>
               {model.thinkingLevelMap && (
-                <button
-                  onClick={() => set("thinkingLevelMap", undefined)}
-                  style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
-                >
-                  clear all
+                <button type="button" className={styles.clearButton} onClick={() => set("thinkingLevelMap", undefined)}>
+                  {t("Clear all")}
                 </button>
               )}
             </div>
@@ -62,8 +62,8 @@ export function ModelFields({
         </>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="Context window (tokens)">
+      <div className={styles.grid}>
+        <Field label={t("Context window (tokens)")}>
           <NumberStepper
             value={model.contextWindow ?? NaN}
             onChange={(v) => set("contextWindow", Number.isInteger(v) ? v : undefined)}
@@ -74,7 +74,7 @@ export function ModelFields({
             width={92}
           />
         </Field>
-        <Field label="Max output tokens">
+        <Field label={t("Max output tokens")}>
           <NumberStepper
             value={model.maxTokens ?? NaN}
             onChange={(v) => set("maxTokens", Number.isInteger(v) ? v : undefined)}
@@ -89,9 +89,9 @@ export function ModelFields({
 
       <div>
         <SectionTitle>{t("Cost (per million tokens)")}</SectionTitle>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-          {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
+        <div className={styles.gridCost}>
+          {COST_FIELDS.map((k) => (
+            <Field key={k} label={t(k)}>
               <NumericField
                 value={model.cost?.[k] ?? null}
                 onCommit={(v) => setCost(k, v)}
@@ -100,7 +100,7 @@ export function ModelFields({
                 step={0.01}
                 integer={false}
                 placeholder="0"
-                ariaLabel={k}
+                ariaLabel={t(k)}
                 width={92}
               />
             </Field>

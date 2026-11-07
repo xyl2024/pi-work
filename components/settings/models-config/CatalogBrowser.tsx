@@ -12,6 +12,7 @@ import {
 import { useToast } from "../../ui/Toast";
 import { CatalogSourcesHelp } from "./CatalogSourcesHelp";
 import { ModelTable } from "./ModelTable";
+import { ListSkeleton } from "./ListSkeleton";
 import type { RuntimeCatalog } from "./types";
 import styles from "./CatalogBrowser.module.css";
 
@@ -102,26 +103,7 @@ export function CatalogBrowser({ configured }: { configured: CatalogConfiguredKe
 
       <div className={styles.body} data-scroll-wide>
         {busy ? (
-          <div className={styles.skeleton} role="status" aria-label={t("Loading catalog...")}>
-            {Array.from({ length: SKELETON_PROVIDERS }, (_, providerIndex) => (
-              <div key={providerIndex} className={styles.skeletonProvider}>
-                <div className={styles.skeletonHeader}>
-                  <span className={`${styles.skeletonBar} ${styles.skeletonIcon}`} />
-                  <span className={`${styles.skeletonBar} ${styles.skeletonName}`} />
-                  <span className={`${styles.skeletonBar} ${styles.skeletonBadge}`} />
-                  <span className={`${styles.skeletonBar} ${styles.skeletonNumber}`} />
-                </div>
-                {Array.from({ length: SKELETON_ROWS }, (_, rowIndex) => (
-                  <div key={rowIndex} className={styles.skeletonRow}>
-                    <span className={`${styles.skeletonBar} ${styles.skeletonName}`} />
-                    <span className={`${styles.skeletonBar} ${styles.skeletonBadge}`} />
-                    <span className={`${styles.skeletonBar} ${styles.skeletonNumber}`} />
-                    <span className={`${styles.skeletonBar} ${styles.skeletonNumber}`} />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+          <ListSkeleton rows={SKELETON_ROWS * SKELETON_PROVIDERS} label={t("Loading catalog...")} />
         ) : error ? (
           <div className={styles.state}>{error}</div>
         ) : visible.length === 0 ? (
