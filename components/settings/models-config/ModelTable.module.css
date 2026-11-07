@@ -58,6 +58,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
 .id {
   display: block;
   margin-top: 2px;
