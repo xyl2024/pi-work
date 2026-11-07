@@ -15,6 +15,7 @@ vi.mock("@/lib/client/oauth-login-store", () => ({
 }));
 
 import {
+  addModelsConfigCustomProvider,
   clearModelsConfigProvider,
   fillModelsConfigModelFromCatalog,
   modelsConfigPanel,
@@ -90,6 +91,16 @@ describe("models config page stacks", () => {
       root,
       { kind: "model", providerName: "openai", index: 1 },
     ]);
+  });
+});
+
+describe("adding a custom provider", () => {
+  it("writes the default api into the draft before the form opens", () => {
+    addModelsConfigCustomProvider();
+
+    const state = modelsConfigPanel.get();
+    expect(modelsConfigPanel.pages()).toEqual([root, { kind: "provider", name: "new-provider" }]);
+    expect(state.config.providers?.["new-provider"]).toEqual({ api: "openai-completions" });
   });
 });
 
