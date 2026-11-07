@@ -359,3 +359,70 @@
   background: var(--success);
   color: #fff;
 }
+
+.formPage {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px 24px;
+}
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.formPage > .formSection:first-child {
+  border-top: 0;
+  padding-top: 8px;
+}
+.formSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.formSectionHeader::-webkit-details-marker {
+  display: none;
+}
+.formSectionHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.formSectionHint {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+.formSectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.dangerZone {
+  gap: 10px;
+}
+.dangerButton {
+  align-self: flex-start;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--error);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dangerButton:hover {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+.dangerButton:focus-visible {
+  outline: 2px solid var(--error);
+  outline-offset: 2px;
+}
