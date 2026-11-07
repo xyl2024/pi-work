@@ -7,6 +7,7 @@ import {
 
 export interface MainViewLeaveGuard {
   dirty(): boolean;
+  changes?(): number;
   discard(): void;
 }
 
@@ -33,6 +34,7 @@ export async function requestMainViewLeave(request: MainViewLeaveRequest): Promi
   const confirm = selectMainViewLeaveConfirm({
     intent: request.intent,
     dirty: guard?.dirty() ?? false,
+    changeCount: guard?.changes?.() ?? 0,
   });
   if (confirm) {
     if (!confirmFn) return false;

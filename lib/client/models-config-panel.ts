@@ -128,12 +128,17 @@ function renamedProviders(state: ModelsConfigViewState): string[] {
     .map(([name]) => name);
 }
 
+export function selectModelsConfigChangedProviderNames(state: ModelsConfigViewState): string[] {
+  return [
+    ...new Set([
+      ...modelsConfigChangedProviders({ config: state.config, baseline: state.baseline }),
+      ...renamedProviders(state),
+    ]),
+  ];
+}
+
 export function selectModelsConfigChangeCount(state: ModelsConfigViewState): number {
-  const touched = new Set([
-    ...modelsConfigChangedProviders({ config: state.config, baseline: state.baseline }),
-    ...renamedProviders(state),
-  ]);
-  return touched.size;
+  return selectModelsConfigChangedProviderNames(state).length;
 }
 
 const PROVIDER_DELETE_DESCRIPTION = 'Delete "{name}" and its {n} model definitions? This takes effect after saving.';
@@ -365,6 +370,7 @@ registerMainViewLeaveGuard("modelsConfig", {
     const state = modelsConfigPanel.get();
     return selectModelsConfigDirty(state) || state.oauthInProgress;
   },
+  changes: () => selectModelsConfigChangeCount(modelsConfigPanel.get()),
   discard: discardModelsConfigDraft,
 });
 

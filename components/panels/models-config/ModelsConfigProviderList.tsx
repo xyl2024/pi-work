@@ -6,6 +6,7 @@ import { ProviderGearIcon, ProviderIcon, hasProviderIcon } from "@/components/ui
 import {
   openModelsConfigAddProvider,
   openModelsConfigCatalog,
+  selectModelsConfigChangedProviderNames,
   selectModelsConfigProvider,
   setModelsConfigProviderFilter,
   useModelsConfigPanel,
@@ -30,6 +31,7 @@ export function ModelsConfigProviderList() {
   const { t } = useI18n();
   const { view } = useModelsConfigPanel();
   const { config, oauthProviders, apiKeyProviders, providerFilter, selectedProvider, selectedProviderKind, providerNames } = view;
+  const changedProviders = selectModelsConfigChangedProviderNames(view);
   const sections = useMemo(
     () =>
       modelsConfigProviderSections({
@@ -37,8 +39,9 @@ export function ModelsConfigProviderList() {
         apiKeyProviders,
         providers: config.providers ?? {},
         providerNames,
+        changedProviders,
       }),
-    [oauthProviders, apiKeyProviders, config.providers, providerNames],
+    [oauthProviders, apiKeyProviders, config.providers, providerNames, changedProviders],
   );
   const visible = useMemo(
     () => filterModelsConfigProviderSections(sections, providerFilter),
@@ -118,6 +121,14 @@ export function ModelsConfigProviderList() {
                       )}
                     </span>
                     {preview && <span className={styles.matchPreview}>{preview}</span>}
+                    {row.changed && (
+                      <span
+                        className={styles.unsavedDot}
+                        role="img"
+                        aria-label={t("Unsaved changes")}
+                        title={t("Unsaved changes")}
+                      />
+                    )}
                     <span className={styles.muted} aria-hidden="true">›</span>
                   </button>
                 );
