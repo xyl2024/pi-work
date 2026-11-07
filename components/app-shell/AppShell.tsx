@@ -1442,6 +1442,11 @@ export function AppShell() {
       selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
       onOpenFile={handleOpenFile}
       explorerRefreshKey={explorerRefreshKey}
+      activeFilePath={
+        panelTabsState.mode !== "closed" && activePanelTab?.kind === "file"
+          ? activePanelTab.params.path
+          : null
+      }
       onAtMention={handleAtMention}
       onOpenSearch={openPalette}
       onFileDeleted={handleFileDeleted}

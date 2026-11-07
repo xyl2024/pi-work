@@ -56,6 +56,7 @@ interface Props {
   onAtMention?: (filePath: string) => void;
   onOpenSearch?: () => void;
   onFileDeleted?: (filePath: string) => void;
+  activeFilePath?: string | null;
   onOpenSettings?: () => void;
   onLogout?: () => void;
   profileRefreshKey?: number;
@@ -196,7 +197,7 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onCreateSessionDraft, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, onCreateSessionDraft, onOpenAssistant, onOpenMainView, activeMainView = null, mainViewBadges = {}, assistantActive: assistantActiveProp, assistantCwd: assistantCwdProp, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, activeFilePath = null, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -1003,6 +1004,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             onAtMention={onAtMention}
             onFileMutated={triggerExplorerRefresh}
             onFileDeleted={onFileDeleted}
+            activeFilePath={activeFilePath}
             collapseKey={explorerCollapseKey}
             onExpandedCountChange={setExplorerExpandedCount}
           />

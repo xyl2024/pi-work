@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
-import { encodeFilePathForApi, getRelativeFilePath, joinFilePath } from "@/lib/shared/file-paths";
+import { encodeFilePathForApi, getRelativeFilePath, joinFilePath, normalizeFilePathSlashes } from "@/lib/shared/file-paths";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { useToast } from "../ui/Toast";
@@ -43,6 +43,7 @@ interface Props {
   onFileDeleted?: (filePath: string) => void;
   collapseKey?: number;
   onExpandedCountChange?: (count: number) => void;
+  activeFilePath?: string | null;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -101,6 +102,22 @@ function stageHint(file: GitDiffFile, t: (k: string) => string): string {
   return "";
 }
 
+function ancestorDirPaths(filePath: string, cwd: string): string[] | null {
+  const normalizedCwd = normalizeFilePathSlashes(cwd).replace(/\/+$/, "");
+  const normalizedFile = normalizeFilePathSlashes(filePath);
+  if (!normalizedFile.startsWith(normalizedCwd + "/")) return null;
+  const segments = normalizedFile.slice(normalizedCwd.length + 1).split("/");
+  segments.pop();
+  const dirs: string[] = [];
+  let current = normalizedCwd;
+  for (const segment of segments) {
+    if (!segment) continue;
+    current = `${current}/${segment}`;
+    dirs.push(current);
+  }
+  return dirs;
+}
+
 function TreeNode({
   node,
   depth,
@@ -114,6 +131,7 @@ function TreeNode({
   onFileDeleted,
   gitFilesByPath,
   gitAggregate,
+  activeFilePath,
 }: {
   node: FileNode;
   depth: number;
@@ -127,12 +145,14 @@ function TreeNode({
   onFileDeleted?: (filePath: string) => void;
   gitFilesByPath: Map<string, GitDiffFile>;
   gitAggregate: Map<string, GitFileStatus>;
+  activeFilePath: string | null;
 }) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
   const cm = useContextMenu();
   const open = expandedPaths.has(node.fullPath);
+  const selected = !node.isDir && node.fullPath === activeFilePath;
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
@@ -174,6 +194,10 @@ function TreeNode({
   }, [loaded, node.fullPath]);
 
   useEffect(() => {
+    if (open && !loaded && !loading) void loadChildren();
+  }, [open, loaded, loading, loadChildren]);
+
+  useEffect(() => {
     if (open && loaded) {
       loadChildren(true);
     }
@@ -183,13 +207,11 @@ function TreeNode({
   const handleClick = useCallback(() => {
     if (renaming) return;
     if (node.isDir) {
-      const next = !open;
-      onToggleExpanded(node.fullPath, next);
-      if (next && !loaded) loadChildren();
+      onToggleExpanded(node.fullPath, !open);
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded, renaming]);
+  }, [node.isDir, node.fullPath, node.name, open, onOpenFile, onToggleExpanded, renaming]);
 
   const copyText = useCallback(async (text: string) => {
     try {
@@ -429,7 +451,9 @@ function TreeNode({
           paddingRight: 8,
           height: 24,
           cursor: renaming ? "default" : "pointer",
-          background: dragOver
+          background: selected
+            ? "var(--bg-selected)"
+            : dragOver
             ? "var(--bg-selected)"
             : flashHighlight
               ? "var(--bg-selected)"
@@ -625,6 +649,7 @@ function TreeNode({
               onFileDeleted={onFileDeleted}
               gitFilesByPath={gitFilesByPath}
               gitAggregate={gitAggregate}
+              activeFilePath={activeFilePath}
             />
           ))}
           {children.length === 0 && loaded && (
@@ -638,7 +663,7 @@ function TreeNode({
   );
 }
 
-export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange }: Props) {
+export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange, activeFilePath = null }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [roots, setRoots] = useState<FileNode[]>([]);
@@ -718,6 +743,18 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
   }, [cwd, refreshKey]);
 
   useEffect(() => {
+    if (!activeFilePath) return;
+    const dirs = ancestorDirPaths(activeFilePath, cwd);
+    if (!dirs || dirs.length === 0) return;
+    setExpandedPaths((prev) => {
+      if (dirs.every((dir) => prev.has(dir))) return prev;
+      const next = new Set(prev);
+      for (const dir of dirs) next.add(dir);
+      return next;
+    });
+  }, [activeFilePath, cwd]);
+
+  useEffect(() => {
     onExpandedCountChange?.(expandedPaths.size);
   }, [expandedPaths, onExpandedCountChange]);
 
@@ -773,6 +810,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
             onFileDeleted={onFileDeleted}
             gitFilesByPath={gitFilesByPath}
             gitAggregate={gitAggregate}
+            activeFilePath={activeFilePath}
           />
         ))}
         {roots.length === 0 && (
