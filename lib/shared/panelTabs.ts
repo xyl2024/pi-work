@@ -2,7 +2,6 @@ import type { MainViewKind } from "./mainView";
 import {
   CONTEXT_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
-  FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
@@ -10,7 +9,6 @@ import {
 } from "./types";
 
 export interface PanelTabParams {
-  favorites: undefined;
   translate: undefined;
   gitDiff: undefined;
   conversationTree: undefined;
@@ -108,19 +106,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open git diff",
         keywords: ["git", "diff", "changes", "status", "变更", "改动", "差异"],
-      },
-    ],
-  },
-  favorites: {
-    kind: "favorites",
-    tabId: FAVORITES_TAB_ID,
-    labelKey: "Favorites",
-    defaultMode: "normal",
-    sessionBound: false,
-    commands: [
-      {
-        labelKey: "Open favorites",
-        keywords: ["favorite", "star", "collection", "收藏", "星标"],
       },
     ],
   },

@@ -12,15 +12,6 @@ export const sessions = {
   "Loading sessions...": "正在加载会话...",
   "End of results": "已加载全部会话",
 
-  "Favorite session": "收藏会话",
-  "Unfavorite session": "取消收藏",
-  "Favorites": "收藏夹",
-  "Open favorites": "打开收藏夹",
-  "Hide favorites": "关闭收藏夹",
-  "Failed to update favorite": "更新收藏失败",
-  "No favorites yet — click ☆ on any session to add one.":
-    "暂无收藏会话 — 点击会话上的 ☆ 即可收藏",
-
   "Hi, {name}, what shall we create together today?": "Hi，{name} 今天想一起创造什么？",
   "No activity in this workspace yet": "此工作区暂无活动",
   "Couldn't load activity": "无法加载活动数据",

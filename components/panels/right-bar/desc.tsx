@@ -15,7 +15,6 @@ import {
   GitGraph,
   Languages,
   PanelRight,
-  Star,
 } from "lucide-react";
 import { ConversationTreeGlyphIcon, McpIcon } from "../../ui/icons";
 
@@ -118,12 +117,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Open git diff",
     isDisabled: (ctx) => !ctx.selectedCwd,
     icon: ({ size }) => <GitGraph size={size} />,
-  }),
-  favorites: panelButton("favorites", {
-    labelKey: "Open favorites",
-    icon: ({ size, active }) => (
-      <Star size={size} fill={active ? "var(--accent)" : "none"} />
-    ),
   }),
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",

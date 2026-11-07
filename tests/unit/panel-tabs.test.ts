@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MCP_TAB_ID,
@@ -72,11 +71,11 @@ describe("panelTabs open", () => {
     const state = reduce(
       createPanelTabsState(),
       { type: "open", kind: "translate" },
-      { type: "open", kind: "favorites" },
+      { type: "open", kind: "llmAudit" },
       { type: "open", kind: "translate" },
     );
 
-    expect(kinds(state)).toEqual(["favorites", "translate"]);
+    expect(kinds(state)).toEqual(["llmAudit", "translate"]);
     expect(selectActiveKind(state)).toBe("translate");
   });
 
@@ -182,23 +181,23 @@ describe("panelTabs close", () => {
   it("falls back to the oldest remaining tab when the active one closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "favorites" },
+      { type: "open", kind: "mcp" },
       { type: "open", kind: "translate" },
       { type: "open", kind: "llmAudit" },
       { type: "close", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["translate", "favorites"]);
-    expect(selectActiveKind(state)).toBe("favorites");
+    expect(kinds(state)).toEqual(["translate", "mcp"]);
+    expect(selectActiveKind(state)).toBe("mcp");
     expect(state.mode).not.toBe("closed");
   });
 
   it("keeps the active tab when a background tab closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "favorites" },
+      { type: "open", kind: "mcp" },
       { type: "open", kind: "translate" },
-      { type: "close", id: FAVORITES_TAB_ID },
+      { type: "close", id: MCP_TAB_ID },
     );
 
     expect(selectActiveKind(state)).toBe("translate");
@@ -231,7 +230,7 @@ describe("panelTabs batch close", () => {
       createPanelTabsState(),
       { type: "open", kind: "gitDiff" },
       { type: "open", kind: "llmAudit" },
-      { type: "open", kind: "favorites" },
+      { type: "open", kind: "mcp" },
       { type: "open", kind: "translate" },
     );
   }
@@ -254,21 +253,21 @@ describe("panelTabs batch close", () => {
     expect(selectActiveKind(state)).toBe("llmAudit");
   });
 
-  it("close_right drops the tabs right of the reference tab", () => {
-    const state = reduce(strip(), { type: "close_right", id: FAVORITES_TAB_ID });
+  it("close_right drops the reference tab and the ones left of it", () => {
+    const state = reduce(strip(), { type: "close_right", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["translate", "favorites"]);
+    expect(kinds(state)).toEqual(["translate", "mcp", "llmAudit"]);
   });
 
   it("close_right re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
       { type: "activate", id: GIT_DIFF_TAB_ID },
-      { type: "close_right", id: FAVORITES_TAB_ID },
+      { type: "close_right", id: MCP_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["translate", "favorites"]);
-    expect(state.activeId).toBe(FAVORITES_TAB_ID);
+    expect(kinds(state)).toEqual(["translate", "mcp"]);
+    expect(state.activeId).toBe(MCP_TAB_ID);
   });
 
   it("close_others keeps only the reference tab and activates it", () => {
@@ -375,7 +374,6 @@ describe("panelTabs registry", () => {
       [
         "context",
         "conversationTree",
-        "favorites",
         "gitDiff",
         "llmAudit",
         "mcp",
@@ -614,7 +612,6 @@ describe("panelTabs registry → command palette", () => {
         .sort(),
     ).toEqual(
       [
-        "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.mcp",

@@ -378,7 +378,6 @@ export interface WorkspacesResponse {
   nextCursor: string | null;
 }
 
-export const FAVORITES_TAB_ID = "favorites:global";
 export const TRANSLATE_TAB_ID = "translate:global";
 export const GIT_DIFF_TAB_ID = "gitDiff:global";
 export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";

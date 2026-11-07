@@ -14,7 +14,6 @@ import { useTextSelection } from "@/hooks/useTextSelection";
 import { SessionTabBar } from "../sessions/SessionTabBar";
 import { FileViewer } from "../files/FileViewer";
 import { TabBar } from "../ui/TabBar";
-import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
@@ -114,9 +113,7 @@ interface PanelBodyCtx {
   rightPanelState: PanelMode;
   selectedSessionId: string | null;
   cwd: string | null;
-  favoriteIds: string[];
   onSelectSession: (session: SessionInfo) => void;
-  onToggleFavorite: (sessionId: string) => void;
   currentModel: { provider: string; modelId: string } | null;
   thinkingLevel: string;
   isStreaming: boolean;
@@ -130,13 +127,6 @@ interface PanelBodyCtx {
 }
 
 const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode> = {
-  favorites: (ctx) => (
-    <CollectionPanel
-      favoriteIds={ctx.favoriteIds}
-      onSelectSession={ctx.onSelectSession}
-      onToggleFavorite={ctx.onToggleFavorite}
-    />
-  ),
   translate: () => <TranslatePanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => (
@@ -502,34 +492,6 @@ export function AppShell() {
 
   const { branchTree, branchActiveLeafId, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
-
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  useEffect(() => {
-    fetch("/api/favorites")
-      .then((r) => r.json())
-      .then((d: { sessionIds?: string[] }) => {
-        if (Array.isArray(d.sessionIds)) setFavoriteIds(d.sessionIds);
-      })
-      .catch(() => {});
-  }, []);
-  const toggleSessionFavorite = useCallback(async (sessionId: string) => {
-    const prev = favoriteIds;
-    const next = prev.includes(sessionId)
-      ? prev.filter((id) => id !== sessionId)
-      : [...prev, sessionId];
-    setFavoriteIds(next);
-    try {
-      const res = await fetch("/api/favorites", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionIds: next }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      setFavoriteIds(prev);
-      toast.show({ kind: "error", message: t("Failed to update favorite") });
-    }
-  }, [favoriteIds, t, toast]);
 
   const leftWidth = `${LEFT_PANEL_RATIO * 100}%`;
   const rightWidth = `${RIGHT_PANEL_RATIO * 100}%`;
@@ -1114,9 +1076,7 @@ export function AppShell() {
     rightPanelState,
     selectedSessionId,
     cwd: selectedCwd,
-    favoriteIds,
     onSelectSession: handleSelectSession,
-    onToggleFavorite: toggleSessionFavorite,
     currentModel,
     thinkingLevel,
     isStreaming,
@@ -1507,8 +1467,6 @@ export function AppShell() {
       onAtMention={handleAtMention}
       onOpenSearch={openPalette}
       onFileDeleted={handleFileDeleted}
-      favoriteIds={favoriteIds}
-      onToggleFavorite={toggleSessionFavorite}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onLogout={handleLogout}
       profileRefreshKey={profileRefreshKey}

@@ -37,7 +37,6 @@ interface MultiCwdListProps {
   workspaceLoadError: string | null;
   expandedCwd: string | null;
   perCwdSessions: Record<string, CwdSessionsState>;
-  favoriteIds: string[];
   selectedSessionId: string | null;
   activeSession?: SessionInfo | null;
 
@@ -47,7 +46,6 @@ interface MultiCwdListProps {
   onSelectSession: (session: SessionInfo) => void;
   onLoadMoreWorkspaces: () => void;
   onLoadMoreCwdSessions: (cwd: string) => void;
-  onToggleFavorite?: (sessionId: string) => void;
   onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
   onNewSession?: (cwd: string) => void;
@@ -64,7 +62,6 @@ export function MultiCwdList({
   workspaceLoadError,
   expandedCwd,
   perCwdSessions,
-  favoriteIds,
   selectedSessionId,
   activeSession,
   onCwdHeaderRef,
@@ -72,7 +69,6 @@ export function MultiCwdList({
   onSelectSession,
   onLoadMoreWorkspaces,
   onLoadMoreCwdSessions,
-  onToggleFavorite,
   onSessionRenamed,
   onSessionDeleted,
   onNewSession,
@@ -136,7 +132,6 @@ export function MultiCwdList({
             workspace={ws}
             expanded={expanded}
             group={displayGroup}
-            favoriteIds={favoriteIds}
             selectedSessionId={selectedSessionId}
             attentionBySessionId={attentionBySessionId}
             onHeaderRef={(el) => onCwdHeaderRef(ws.cwd, el)}
@@ -144,7 +139,6 @@ export function MultiCwdList({
             onSelectSession={onSelectSession}
             onLoadMoreSessions={() => onLoadMoreCwdSessions(ws.cwd)}
             onOpenCwdSessions={() => onOpenCwdSessions(ws.cwd)}
-            onToggleFavorite={onToggleFavorite}
             onSessionRenamed={onSessionRenamed}
             onSessionDeleted={onSessionDeleted}
             onNewSession={onNewSession}
@@ -188,7 +182,6 @@ interface CwdGroupProps {
   workspace: Workspace;
   expanded: boolean;
   group: CwdSessionsState | undefined;
-  favoriteIds: string[];
   selectedSessionId: string | null;
   attentionBySessionId: ReadonlyMap<string, SessionAttention>;
 
@@ -197,7 +190,6 @@ interface CwdGroupProps {
   onSelectSession: (session: SessionInfo) => void;
   onLoadMoreSessions: () => void;
   onOpenCwdSessions: () => void;
-  onToggleFavorite?: (sessionId: string) => void;
   onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
   onNewSession?: (cwd: string) => void;
@@ -207,7 +199,6 @@ function CwdGroup({
   workspace,
   expanded,
   group,
-  favoriteIds,
   selectedSessionId,
   attentionBySessionId,
   onHeaderRef,
@@ -215,7 +206,6 @@ function CwdGroup({
   onSelectSession,
   onLoadMoreSessions,
   onOpenCwdSessions,
-  onToggleFavorite,
   onSessionRenamed,
   onSessionDeleted,
   onNewSession,
@@ -291,8 +281,6 @@ function CwdGroup({
       onClick={() => onSelectSession(s)}
       onRenamed={onSessionRenamed}
       onDeleted={(id) => onSessionDeleted(id)}
-      isFavorited={favoriteIds.includes(s.id)}
-      onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
       attention={attentionBySessionId.get(s.id)}
     />
   );

@@ -18,8 +18,6 @@ interface SessionItemProps {
   onClick: () => void;
   onRenamed?: (sessionId: string, name: string) => void;
   onDeleted?: (id: string) => void;
-  isFavorited?: boolean;
-  onToggleFavorite?: () => void;
   attention?: SessionAttention;
 }
 
@@ -29,8 +27,6 @@ export function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
-  isFavorited = false,
-  onToggleFavorite,
   attention,
 }: SessionItemProps) {
   const { t } = useI18n();
@@ -296,13 +292,6 @@ export function SessionItem({
             overflow: "hidden",
           }}
         >
-          {isFavorited && (
-            <span aria-hidden style={{ display: "flex", alignItems: "center", flexShrink: 0 }} title={t("Favorites")}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </span>
-          )}
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }} aria-label={session.running ? `${title} (${t("running")})` : title}>
             {attention === "permission" && (
               <Tooltip content={t("Awaiting command approval")}>
@@ -446,22 +435,14 @@ export function SessionItem({
             pointerEvents: menuVisible ? "auto" : "none",
           }}
         >
-          {onToggleFavorite && (
-            <MenuRow
-              index={0}
-              icon={<StarIcon filled={isFavorited} />}
-              label={isFavorited ? t("Unfavorite session") : t("Favorite session")}
-              onClick={() => handleMenuItem(onToggleFavorite)}
-            />
-          )}
           <MenuRow
-            index={onToggleFavorite ? 1 : 0}
+            index={0}
             icon={<PencilIcon />}
             label={t("Rename")}
             onClick={() => handleMenuItem(beginRename)}
           />
           <MenuRow
-            index={(onToggleFavorite ? 1 : 0) + 1}
+            index={1}
             icon={<TrashIcon />}
             label={t("Delete")}
             destructive
@@ -514,14 +495,6 @@ function MenuRow({
       </span>
       <span style={{ flex: 1 }}>{label}</span>
     </div>
-  );
-}
-
-function StarIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
   );
 }
 
