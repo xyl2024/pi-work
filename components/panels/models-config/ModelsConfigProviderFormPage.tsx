@@ -2,9 +2,10 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderFields } from "@/components/settings/models-config/ProviderFields";
+import { useModelsConfigDeleteConfirm } from "@/components/panels/models-config/useModelsConfigDeleteConfirm";
 import {
-  deleteModelsConfigProvider,
   renameModelsConfigProvider,
+  requestModelsConfigProviderDelete,
   updateModelsConfigProvider,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
@@ -12,6 +13,7 @@ import {
 export function ModelsConfigProviderFormPage({ name }: { name: string }) {
   const { t } = useI18n();
   const { view: state } = useModelsConfigPanel();
+  const confirmDelete = useModelsConfigDeleteConfirm();
   const { config, providerNames } = state;
   const provider = config.providers?.[name];
   if (!provider) return null;
@@ -27,7 +29,7 @@ export function ModelsConfigProviderFormPage({ name }: { name: string }) {
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
         <button
           type="button"
-          onClick={() => deleteModelsConfigProvider(name)}
+          onClick={() => { void confirmDelete(() => requestModelsConfigProviderDelete(name)); }}
           style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 6, background: "transparent", color: "var(--error)", cursor: "pointer", fontSize: 12 }}
         >
           {t("Delete provider")}

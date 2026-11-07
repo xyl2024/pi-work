@@ -57,6 +57,17 @@ import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 
 export const MODELS_CONFIG_ROOT_PAGE: ModelsConfigPage = { kind: "root" };
 
+export type ModelsConfigPendingDelete =
+  | { kind: "provider"; name: string }
+  | { kind: "model"; providerName: string; index: number };
+
+export interface ModelsConfigDeleteConfirm {
+  titleKey: string;
+  descriptionKey: string;
+  params: Record<string, string | number>;
+  affectedModelCount: number;
+}
+
 export interface ModelsConfigViewState {
   loading: boolean;
   loaded: boolean;
@@ -76,6 +87,7 @@ export interface ModelsConfigViewState {
   modelIconPreferences: ModelIconPreferences;
   selectedProvider: string | null;
   providerFilter: string;
+  pendingDelete: ModelsConfigPendingDelete | null;
 }
 
 const EMPTY_CONFIG: ModelsJson = { providers: {} };
@@ -99,6 +111,7 @@ const INITIAL: ModelsConfigViewState = {
   modelIconPreferences: {},
   selectedProvider: null,
   providerFilter: "",
+  pendingDelete: null,
 };
 
 export function selectModelsConfigDirty(state: ModelsConfigViewState): boolean {
@@ -118,6 +131,34 @@ export function selectModelsConfigChangeCount(state: ModelsConfigViewState): num
     ...renamedProviders(state),
   ]);
   return touched.size;
+}
+
+const PROVIDER_DELETE_DESCRIPTION = 'Delete "{name}" and its {n} model definitions? This takes effect after saving.';
+const MODEL_DELETE_DESCRIPTION = 'Delete model "{name}"? This takes effect after saving.';
+
+export function selectModelsConfigDeleteConfirm(
+  state: ModelsConfigViewState,
+): ModelsConfigDeleteConfirm | null {
+  const pending = state.pendingDelete;
+  if (!pending) return null;
+  if (pending.kind === "provider") {
+    const provider = state.config.providers?.[pending.name];
+    if (!provider) return null;
+    return {
+      titleKey: "Delete provider",
+      descriptionKey: PROVIDER_DELETE_DESCRIPTION,
+      params: { name: state.providerNames[pending.name] ?? pending.name, n: provider.models?.length ?? 0 },
+      affectedModelCount: provider.models?.length ?? 0,
+    };
+  }
+  const model = state.config.providers?.[pending.providerName]?.models?.[pending.index];
+  if (!model) return null;
+  return {
+    titleKey: "Delete model",
+    descriptionKey: MODEL_DELETE_DESCRIPTION,
+    params: { name: model.name?.trim() || model.id?.trim() || "Untitled model" },
+    affectedModelCount: 1,
+  };
 }
 
 export type ModelsConfigSaveBarPhase = "clean" | "dirty" | "blocked" | "saving" | "failed" | "saved";
@@ -180,6 +221,7 @@ export function revertModelsConfigDraft(): void {
     rawEdit: null,
     savedOk: false,
     saveError: null,
+    pendingDelete: null,
   });
 }
 
@@ -310,6 +352,7 @@ export function discardModelsConfigDraft(): void {
     saving: false,
     savedOk: false,
     saveError: null,
+    pendingDelete: null,
   });
   modelsConfigPanel.resetPages();
 }
@@ -471,7 +514,29 @@ export function renameModelsConfigProvider(oldName: string, newName: string): vo
   modelsConfigPanel.patch({ providerNames: { ...state.providerNames, [oldName]: newName }, savedOk: false });
 }
 
-export function deleteModelsConfigProvider(name: string): void {
+export function requestModelsConfigProviderDelete(name: string): void {
+  if (!modelsConfigPanel.get().config.providers?.[name]) return;
+  modelsConfigPanel.patch({ pendingDelete: { kind: "provider", name } });
+}
+
+export function requestModelsConfigModelDelete(providerName: string, index: number): void {
+  if (!modelsConfigPanel.get().config.providers?.[providerName]?.models?.[index]) return;
+  modelsConfigPanel.patch({ pendingDelete: { kind: "model", providerName, index } });
+}
+
+export function cancelModelsConfigDelete(): void {
+  modelsConfigPanel.patch({ pendingDelete: null });
+}
+
+export function confirmModelsConfigDelete(): void {
+  const pending = modelsConfigPanel.get().pendingDelete;
+  if (!pending) return;
+  modelsConfigPanel.patch({ pendingDelete: null });
+  if (pending.kind === "provider") deleteModelsConfigProvider(pending.name);
+  else removeModelsConfigModel(pending.providerName, pending.index);
+}
+
+function deleteModelsConfigProvider(name: string): void {
   const state = modelsConfigPanel.get();
   const providerNames = { ...state.providerNames };
   delete providerNames[name];
@@ -522,7 +587,7 @@ export function fillModelsConfigModelFromCatalog(
   openPanelPage({ kind: "model", providerName, index });
 }
 
-export function removeModelsConfigModel(providerName: string, index: number): void {
+function removeModelsConfigModel(providerName: string, index: number): void {
   const state = modelsConfigPanel.get();
   modelsConfigPanel.patch({ config: withoutModel(state.config, providerName, index), rawEdit: null });
   modelsConfigPanel.resetPages();
