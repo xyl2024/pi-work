@@ -72,6 +72,16 @@ export interface ModelEntry {
   contextWindow?: number;
   maxTokens?: number;
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown[] };
+  promptCache?: { short?: number; long?: number };
+  inputLimits?: {
+    maxRequestBytes?: number;
+    images?: {
+      resize?: { maxWidth?: number; maxHeight?: number; maxBytes?: number; jpegQuality?: number };
+      maxPerMessage?: number;
+      maxPerRequest?: number;
+    };
+  };
+  samplingParams?: Record<string, unknown>;
   compat?: Record<string, unknown>;
   icon?: string;
 }

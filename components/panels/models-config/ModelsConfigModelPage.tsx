@@ -14,13 +14,12 @@ import {
   openModelsConfigFillModel,
   requestModelsConfigModelDelete,
   selectModelsConfigProblem,
-  selectModelsConfigDirty,
   updateModelsConfigModel,
   updateModelsConfigRawEdit,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
-import styles from "./models-config.module.css";
+import styles from "./ModelPage.module.css";
 
 export function ModelsConfigModelPage({ providerName, index }: { providerName: string; index: number }) {
   const { t } = useI18n();
@@ -36,7 +35,8 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
       ? state.rawEdit
       : null;
   const problem = selectModelsConfigProblem(state);
-  const rawError = modelsConfigProblemText(problem, t);
+  const rawProblem = rawEdit && (problem?.reason === "syntax" || problem?.reason === "not-object") ? problem : null;
+  const rawError = modelsConfigProblemText(rawProblem, t);
 
   const copyRawJson = async () => {
     try {
@@ -50,44 +50,52 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
   const title = model.name || model.id || t("new model");
 
   return (
-    <div className={styles.formPage}>
-      <div className={styles.formHeader}>
-        <span className={styles.formIdentity}>
-          {title}
-        </span>
-        <button
-          type="button"
-          onClick={() => openModelsConfigFillModel(providerName, index)}
-          className={styles.formAction}
-        >
-          {t("Fill from model catalog")}
-        </button>
-        <button
-          type="button"
-          onClick={() => { void confirmDelete(() => requestModelsConfigModelDelete(providerName, index)); }}
-          className={styles.dangerAction}
-        >
-          {t("Delete")}
-        </button>
+    <div className={styles.page}>
+      <div className={styles.body}>
+        <header className={styles.identity}>
+          <span className={styles.title}>{title}</span>
+          <button
+            type="button"
+            className={styles.fillButton}
+            onClick={() => openModelsConfigFillModel(providerName, index)}
+          >
+            {t("Fill from model catalog")}
+          </button>
+        </header>
+
+        <ModelFields
+          model={model}
+          onChange={(next) => updateModelsConfigModel(providerName, index, next)}
+        />
+
+        <ModelRawSection
+          summaryJson={summaryJson}
+          editing={rawEdit !== null}
+          draft={rawEdit?.text ?? ""}
+          error={rawEdit ? rawError : null}
+          onEnterEdit={() => beginModelsConfigRawEdit(providerName, index, summaryJson)}
+          onDraftChange={updateModelsConfigRawEdit}
+          onCancel={cancelModelsConfigRawEdit}
+          onApply={applyModelsConfigRawEdit}
+          onCopy={() => { void copyRawJson(); }}
+        />
+
+        <div className={styles.dangerZone}>
+          <button
+            type="button"
+            className={styles.deleteButton}
+            onClick={() => { void confirmDelete(() => requestModelsConfigModelDelete(providerName, index)); }}
+          >
+            {t("Delete model")}
+          </button>
+        </div>
       </div>
 
-      <ModelConnectionTest provider={providerName} modelId={model.id} disabled={selectModelsConfigDirty(state) || state.saving || !!state.rawEdit} />
-
-      <ModelFields
-        model={model}
-        onChange={(next) => updateModelsConfigModel(providerName, index, next)}
-      />
-
-      <ModelRawSection
-        summaryJson={summaryJson}
-        editing={rawEdit !== null}
-        draft={rawEdit?.text ?? ""}
-        error={rawEdit ? rawError : null}
-        onEnterEdit={() => beginModelsConfigRawEdit(providerName, index, summaryJson)}
-        onDraftChange={updateModelsConfigRawEdit}
-        onCancel={cancelModelsConfigRawEdit}
-        onApply={applyModelsConfigRawEdit}
-        onCopy={() => { void copyRawJson(); }}
+      <ModelConnectionTest
+        provider={providerName}
+        modelId={model.id}
+        disabled={state.saving}
+        sticky
       />
     </div>
   );

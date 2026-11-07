@@ -1,20 +1,47 @@
-.root {
-  display: flex;
-  flex-direction: column;
+.section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
 }
-.header {
+.summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  list-style: none;
+  text-transform: uppercase;
+  user-select: none;
+}
+.summary::-webkit-details-marker {
+  display: none;
+}
+.summary::before {
+  content: "▸";
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 0.12s;
+}
+.section[open] .summary::before {
+  transform: rotate(90deg);
+}
+.summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.title {
+  flex: 1;
 }
 .actions {
   display: flex;
   gap: 6px;
+  letter-spacing: 0;
+  text-transform: none;
 }
-.smallButton {
-  display: inline-flex;
+.actionButton {
+  display: flex;
   align-items: center;
   gap: 4px;
   padding: 3px 7px;
@@ -26,24 +53,39 @@
   font: inherit;
   font-size: 11px;
 }
-.smallButton:hover {
+.actionButton:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
-.smallButton:focus-visible, .editor:focus-visible, .primaryButton:focus-visible, .ghostButton:focus-visible, .summary:focus-visible {
+.actionButton:focus-visible,
+.ghostButton:focus-visible,
+.primaryButton:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+.code {
+  max-height: 280px;
+  margin: 8px 0 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .editor {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 8px;
 }
 .textarea {
   width: 100%;
   min-height: 220px;
   max-height: 420px;
-  box-sizing: border-box;
   padding: 6px 9px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -54,6 +96,7 @@
   line-height: 1.45;
   resize: vertical;
   white-space: pre;
+  box-sizing: border-box;
 }
 .textarea[data-invalid="true"] {
   border-color: var(--error);
@@ -66,10 +109,10 @@
   color: var(--error);
   font-size: 11px;
 }
-.footer {
+.editorActions {
   display: flex;
-  gap: 6px;
   justify-content: flex-end;
+  gap: 6px;
 }
 .ghostButton {
   padding: 4px 12px;
@@ -99,10 +142,52 @@
 .primaryButton:hover {
   background: var(--accent-hover);
 }
-.summary {
-  cursor: pointer;
+.hint {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.root {
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.smallButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
   color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
   font-size: 11px;
+}
+.smallButton:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.smallButton:focus-visible,
+.editor:focus-visible,
+.primaryButton:focus-visible,
+.ghostButton:focus-visible,
+.summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.footer {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
 }
 pre.preview {
   margin: 6px 0 0;
@@ -116,10 +201,4 @@ pre.preview {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-}
-.hint {
-  margin-top: 6px;
-  color: var(--text-dim);
-  font-size: 10px;
-  line-height: 1.5;
 }
