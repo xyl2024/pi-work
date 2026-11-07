@@ -21,6 +21,7 @@ import {
   modelsConfigProblem,
   modelsConfigProblemAt,
   parseModelEntryJson,
+  parseProviderEntryJson,
   withAddedModel,
   withAddedModelFromCatalog,
   withCustomProvider,
@@ -32,6 +33,7 @@ import {
   withoutProvider,
   type ModelsConfigProblem,
   type ModelsConfigProblemLocation,
+  type ModelsConfigProviderRawEdit,
   type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
 import { registerMainViewLeaveGuard } from "./main-view-leave";
@@ -78,6 +80,7 @@ export interface ModelsConfigViewState {
   providerNames: Record<string, string>;
   baseline: ModelsJson;
   rawEdit: ModelsConfigRawEdit | null;
+  providerRawEdit: ModelsConfigProviderRawEdit | null;
   saving: boolean;
   savedOk: boolean;
   saveError: string | null;
@@ -103,6 +106,7 @@ const INITIAL: ModelsConfigViewState = {
   providerNames: {},
   baseline: EMPTY_CONFIG,
   rawEdit: null,
+  providerRawEdit: null,
   saving: false,
   savedOk: false,
   saveError: null,
@@ -203,6 +207,11 @@ export function selectModelsConfigProblem(
     const rawProblem = modelsConfigProblem(rawEdit.text, rawEdit.providerName);
     if (rawProblem) return { ...rawProblem, location: { providerName: rawEdit.providerName, index: rawEdit.index } };
   }
+  const providerRawEdit = state.providerRawEdit;
+  if (providerRawEdit) {
+    const rawProblem = modelsConfigProblem(providerRawEdit.text, providerRawEdit.providerName);
+    if (rawProblem) return rawProblem;
+  }
   return missingModelIdProblem(state.config);
 }
 
@@ -228,6 +237,7 @@ export function revertModelsConfigDraft(): void {
     config: state.baseline,
     providerNames: {},
     rawEdit: null,
+    providerRawEdit: null,
     savedOk: false,
     saveError: null,
     pendingDelete: null,
@@ -260,7 +270,7 @@ function pageProviderName(page: ModelsConfigPage): string | null {
 
 function openPanelPage(page: ModelsConfigPage): void {
   const selectedProvider = pageProviderName(page) ?? modelsConfigPanel.get().selectedProvider;
-  modelsConfigPanel.patch({ selectedProvider });
+  modelsConfigPanel.patch({ selectedProvider, rawEdit: null, providerRawEdit: null });
   if (page.kind === "root") {
     modelsConfigPanel.resetPages();
     return;
@@ -341,7 +351,7 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
     cancelActiveOAuthLogins();
   },
   afterBack({ writer }) {
-    writer.patch({ rawEdit: null });
+    writer.patch({ rawEdit: null, providerRawEdit: null });
   },
   isSiblingPage(next, current) {
     return next.kind !== "root" && next.kind === current.kind;
@@ -358,6 +368,7 @@ export function discardModelsConfigDraft(): void {
     config: state.baseline,
     providerNames: {},
     rawEdit: null,
+    providerRawEdit: null,
     saving: false,
     savedOk: false,
     saveError: null,
@@ -422,6 +433,7 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     let config = latest.config;
     let pages = modelsConfigPanel.pages();
     let rawEdit = latest.rawEdit;
+    let providerRawEdit = latest.providerRawEdit;
     let selectedProvider = latest.selectedProvider;
     const providerNames = { ...latest.providerNames };
     for (const [name, nextName] of renames) {
@@ -429,6 +441,7 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
       pages = renameProviderPage(pages, name, nextName);
       if (selectedProvider === name) selectedProvider = nextName;
       if (rawEdit?.providerName === name) rawEdit = { ...rawEdit, providerName: nextName };
+      if (providerRawEdit?.providerName === name) providerRawEdit = { ...providerRawEdit, providerName: nextName };
       const currentText = providerNames[name];
       delete providerNames[name];
       if (currentText !== undefined && currentText !== pendingNames[name]) {
@@ -438,7 +451,7 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     for (const [name, text] of Object.entries(pendingNames)) {
       if (text.trim() === name && providerNames[name] === text) delete providerNames[name];
     }
-    scope.patch({ config, rawEdit, providerNames, selectedProvider, saving: false, savedOk: true, saveError: null, baseline: payload });
+    scope.patch({ config, rawEdit, providerRawEdit, providerNames, selectedProvider, saving: false, savedOk: true, saveError: null, baseline: payload });
     replacePages(pages);
     setTimeout(() => modelsConfigPanel.patch({ savedOk: false }), 2000);
     return { ok: true };
@@ -453,7 +466,7 @@ export function selectModelsConfigProvider(
   name: string,
   kind: ModelsConfigProviderKind = "custom",
 ): void {
-  modelsConfigPanel.patch({ selectedProvider: name, selectedProviderKind: kind, rawEdit: null });
+  modelsConfigPanel.patch({ selectedProvider: name, selectedProviderKind: kind, rawEdit: null, providerRawEdit: null });
   if (modelsConfigPanel.currentPage().kind !== "root") modelsConfigPanel.resetPages();
 }
 
@@ -560,6 +573,7 @@ function deleteModelsConfigProvider(name: string): void {
     providerNames,
     config: withoutProvider(state.config, name),
     rawEdit: null,
+    providerRawEdit: null,
     selectedProvider: state.selectedProvider === name ? null : state.selectedProvider,
     selectedProviderKind: state.selectedProvider === name ? null : state.selectedProviderKind,
   });
@@ -643,6 +657,43 @@ export function cancelModelsConfigRawEdit(): void {
     rawEdit: null,
     config: parsed.ok
       ? withModel(state.config, rawEdit.providerName, rawEdit.index, parsed.model)
+      : state.config,
+  });
+}
+
+export function beginModelsConfigProviderRawEdit(providerName: string, text: string): void {
+  modelsConfigPanel.patch({ providerRawEdit: { providerName, originalJson: text, text } });
+}
+
+export function updateModelsConfigProviderRawEdit(text: string): void {
+  const state = modelsConfigPanel.get();
+  const providerRawEdit = state.providerRawEdit;
+  if (!providerRawEdit) return;
+  const parsed = parseProviderEntryJson(text);
+  modelsConfigPanel.patch({
+    providerRawEdit: { ...providerRawEdit, text },
+    config: parsed.ok
+      ? withProvider(state.config, providerRawEdit.providerName, parsed.provider)
+      : state.config,
+  });
+}
+
+export function applyModelsConfigProviderRawEdit(): void {
+  const providerRawEdit = modelsConfigPanel.get().providerRawEdit;
+  if (!providerRawEdit) return;
+  if (!parseProviderEntryJson(providerRawEdit.text).ok) return;
+  modelsConfigPanel.patch({ providerRawEdit: null });
+}
+
+export function cancelModelsConfigProviderRawEdit(): void {
+  const state = modelsConfigPanel.get();
+  const providerRawEdit = state.providerRawEdit;
+  if (!providerRawEdit) return;
+  const parsed = parseProviderEntryJson(providerRawEdit.originalJson);
+  modelsConfigPanel.patch({
+    providerRawEdit: null,
+    config: parsed.ok
+      ? withProvider(state.config, providerRawEdit.providerName, parsed.provider)
       : state.config,
   });
 }

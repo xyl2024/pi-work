@@ -537,4 +537,39 @@
   flex-shrink: 0;
   stroke-dasharray: 18;
   animation: saved-check-draw 0.35s ease forwards;
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.formPage > .formSection:first-child {
+  border-top: 0;
+  padding-top: 8px;
+}
+.formSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.formSectionHeader::-webkit-details-marker {
+  display: none;
+}
+.formSectionHeader:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.formSectionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
 }

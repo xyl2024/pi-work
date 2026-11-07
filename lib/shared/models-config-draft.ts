@@ -12,6 +12,12 @@ export interface ModelsConfigRawEdit {
   text: string;
 }
 
+export interface ModelsConfigProviderRawEdit {
+  providerName: string;
+  originalJson: string;
+  text: string;
+}
+
 export type ModelsConfigProblemReason =
   | "syntax"
   | "not-object"
