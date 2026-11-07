@@ -12,14 +12,37 @@ export interface ModelsConfigRawEdit {
   text: string;
 }
 
+export type ModelsConfigProblemReason =
+  | "syntax"
+  | "not-object"
+  | "provider-name"
+  | "provider-name-conflict"
+  | "empty-model-id";
+
+export interface ModelsConfigProblemLocation {
+  providerName: string | null;
+  index: number | null;
+}
+
 export type ModelsConfigProblem = {
-  reason: "syntax" | "not-object" | "provider-name" | "provider-name-conflict";
+  reason: ModelsConfigProblemReason;
   message: string;
+  location: ModelsConfigProblemLocation;
 };
 
-export function parseModelEntryJson(
+const NO_LOCATION: ModelsConfigProblemLocation = { providerName: null, index: null };
+
+export function modelsConfigProblemAt(
+  reason: ModelsConfigProblemReason,
+  message: string,
+  location: ModelsConfigProblemLocation = NO_LOCATION,
+): ModelsConfigProblem {
+  return { reason, message, location };
+}
+
+export function parseRawObjectJson(
   text: string,
-): { ok: true; model: ModelEntry } | { ok: false; reason: "syntax" | "not-object"; message: string } {
+): { ok: true; value: Record<string, unknown> } | { ok: false; reason: "syntax" | "not-object"; message: string } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -29,19 +52,49 @@ export function parseModelEntryJson(
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { ok: false, reason: "not-object", message: "not a JSON object" };
   }
-  const model = { ...(parsed as ModelEntry) };
+  return { ok: true, value: parsed as Record<string, unknown> };
+}
+
+export function parseModelEntryJson(
+  text: string,
+): { ok: true; model: ModelEntry } | { ok: false; reason: "syntax" | "not-object"; message: string } {
+  const parsed = parseRawObjectJson(text);
+  if (!parsed.ok) return parsed;
+  const model = { ...(parsed.value as unknown as ModelEntry) };
   if (typeof model.id !== "string") model.id = "";
   if (model.icon === undefined || model.icon === null || model.icon === "") delete model.icon;
   return { ok: true, model };
 }
 
+export function parseProviderEntryJson(
+  text: string,
+): { ok: true; provider: ProviderEntry } | { ok: false; reason: "syntax" | "not-object"; message: string } {
+  const parsed = parseRawObjectJson(text);
+  if (!parsed.ok) return parsed;
+  return { ok: true, provider: { ...(parsed.value as ProviderEntry) } };
+}
+
 export function modelsConfigProblem(
   rawText: string | null | undefined,
+  providerName: string | null = null,
 ): ModelsConfigProblem | null {
   if (!rawText) return null;
-  const parsed = parseModelEntryJson(rawText);
+  const parsed = parseRawObjectJson(rawText);
   if (parsed.ok) return null;
-  return { reason: parsed.reason, message: parsed.message };
+  return modelsConfigProblemAt(parsed.reason, parsed.message, { providerName, index: null });
+}
+
+export function missingModelIdProblem(config: ModelsJson): ModelsConfigProblem | null {
+  for (const [providerName, provider] of Object.entries(config.providers ?? {})) {
+    const models = provider?.models ?? [];
+    for (let index = 0; index < models.length; index += 1) {
+      const id = models[index]?.id;
+      if (typeof id !== "string" || !id.trim()) {
+        return modelsConfigProblemAt("empty-model-id", "Model ID cannot be empty", { providerName, index });
+      }
+    }
+  }
+  return null;
 }
 
 export function normalizeModelsJson(raw: unknown): ModelsJson {
@@ -65,8 +118,25 @@ function sortValue(value: unknown): unknown {
   return sorted;
 }
 
+function canonicalValue(value: unknown): string {
+  return JSON.stringify(sortValue(value)) ?? "undefined";
+}
+
 export function canonicalModelsJson(config: ModelsJson): string {
-  return JSON.stringify(sortValue(config));
+  return canonicalValue(config);
+}
+
+export function modelsConfigChangedProviders(draft: ModelsConfigDraft): string[] {
+  const configProviders = draft.config.providers ?? {};
+  const baselineProviders = draft.baseline.providers ?? {};
+  const names = new Set([...Object.keys(configProviders), ...Object.keys(baselineProviders)]);
+  return [...names]
+    .filter((name) => canonicalValue(configProviders[name]) !== canonicalValue(baselineProviders[name]))
+    .sort();
+}
+
+export function modelsConfigChangeCount(draft: ModelsConfigDraft): number {
+  return modelsConfigChangedProviders(draft).length;
 }
 
 export function isModelsConfigDirty(draft: ModelsConfigDraft): boolean {

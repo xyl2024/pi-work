@@ -16,8 +16,11 @@ import {
 import {
   cloneModelFromCatalog,
   isModelsConfigDirty,
+  missingModelIdProblem,
+  modelsConfigChangedProviders,
   modelsConfigDraftFrom,
   modelsConfigProblem,
+  modelsConfigProblemAt,
   parseModelEntryJson,
   withAddedModel,
   withCustomProvider,
@@ -27,6 +30,7 @@ import {
   withoutModel,
   withoutProvider,
   type ModelsConfigProblem,
+  type ModelsConfigProblemLocation,
   type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
 import { registerMainViewLeaveGuard } from "./main-view-leave";
@@ -98,26 +102,85 @@ const INITIAL: ModelsConfigViewState = {
 };
 
 export function selectModelsConfigDirty(state: ModelsConfigViewState): boolean {
-  return Object.entries(state.providerNames).some(([name, text]) => text !== name)
+  return Object.entries(state.providerNames).some(([name, text]) => text.trim() !== name)
     || isModelsConfigDirty({ config: state.config, baseline: state.baseline });
+}
+
+function renamedProviders(state: ModelsConfigViewState): string[] {
+  return Object.entries(state.providerNames)
+    .filter(([name, text]) => text.trim() !== name)
+    .map(([name]) => name);
+}
+
+export function selectModelsConfigChangeCount(state: ModelsConfigViewState): number {
+  const touched = new Set([
+    ...modelsConfigChangedProviders({ config: state.config, baseline: state.baseline }),
+    ...renamedProviders(state),
+  ]);
+  return touched.size;
+}
+
+export type ModelsConfigSaveBarPhase = "clean" | "dirty" | "blocked" | "saving" | "failed" | "saved";
+
+export function selectModelsConfigSaveBarPhase(state: ModelsConfigViewState): ModelsConfigSaveBarPhase {
+  if (state.saving) return "saving";
+  if (state.savedOk) return "saved";
+  if (state.saveError) return "failed";
+  if (selectModelsConfigProblem(state)) return "blocked";
+  if (selectModelsConfigDirty(state)) return "dirty";
+  return "clean";
 }
 
 export function selectModelsConfigProblem(
   state: ModelsConfigViewState,
 ): ModelsConfigProblem | null {
   for (const [name, text] of Object.entries(state.providerNames)) {
-    const nextName = text.trim();
-    if (!nextName) return { reason: "provider-name", message: "Provider name cannot be empty" };
-    if (nextName !== name && Object.hasOwn(state.config.providers ?? {}, nextName)) {
-      return { reason: "provider-name-conflict", message: "Name already exists" };
+    if (!text.trim()) {
+      return modelsConfigProblemAt("provider-name", "Provider name cannot be empty", { providerName: name, index: null });
     }
   }
-  const names = Object.entries(state.config.providers ?? {}).map(([name]) =>
-    (state.providerNames[name] ?? name).trim());
-  if (new Set(names).size !== names.length) {
-    return { reason: "provider-name-conflict", message: "Name already exists" };
+  const claimed = new Map<string, string>();
+  for (const name of Object.keys(state.config.providers ?? {})) {
+    const nextName = (state.providerNames[name] ?? name).trim();
+    const owner = claimed.get(nextName);
+    if (owner !== undefined) {
+      return modelsConfigProblemAt("provider-name-conflict", "Name already exists", { providerName: name, index: null });
+    }
+    claimed.set(nextName, name);
   }
-  return modelsConfigProblem(state.rawEdit?.text);
+  const rawEdit = state.rawEdit;
+  if (rawEdit) {
+    const rawProblem = modelsConfigProblem(rawEdit.text, rawEdit.providerName);
+    if (rawProblem) return { ...rawProblem, location: { providerName: rawEdit.providerName, index: rawEdit.index } };
+  }
+  return missingModelIdProblem(state.config);
+}
+
+export function focusModelsConfigProblem(problem: ModelsConfigProblem): void {
+  const location: ModelsConfigProblemLocation = problem.location;
+  const providerName = location.providerName;
+  if (!providerName) {
+    modelsConfigPanel.resetPages();
+    return;
+  }
+  const provider = modelsConfigPanel.get().config.providers?.[providerName];
+  const index = location.index;
+  if (!provider || index === null) {
+    openModelsConfigProviderForm(providerName);
+    return;
+  }
+  openModelsConfigModel(providerName, index);
+}
+
+export function revertModelsConfigDraft(): void {
+  const state = modelsConfigPanel.get();
+  modelsConfigPanel.patch({
+    config: state.baseline,
+    providerNames: {},
+    rawEdit: null,
+    savedOk: false,
+    saveError: null,
+  });
 }
 
 function sameStack(pages: readonly ModelsConfigPage[], stack: readonly ModelsConfigPage[]): boolean {

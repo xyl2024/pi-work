@@ -220,6 +220,10 @@ describe("modelsConfigProblem", () => {
   });
 
   it("flags a JSON payload that is not an object", () => {
-    expect(modelsConfigProblem("42")).toEqual({ reason: "not-object", message: "not a JSON object" });
+    expect(modelsConfigProblem("42")).toEqual({
+      reason: "not-object",
+      message: "not a JSON object",
+      location: { providerName: null, index: null },
+    });
   });
 });
