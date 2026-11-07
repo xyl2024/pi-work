@@ -1,15 +1,5 @@
-import type { ModelEntry, RuntimeModelInfo } from "./types";
-import { DEEPSEEK_COMPAT, THINKING_LEVELS } from "./constants";
-
-export function getDisplayedThinkingLevels(model: RuntimeModelInfo): string[] {
-  if (!model.reasoning) return [];
-  return THINKING_LEVELS.filter((level) => {
-    const mapped = model.thinkingLevelMap?.[level];
-    if (mapped === null) return false;
-    if (level === "xhigh" || level === "max") return mapped !== undefined;
-    return true;
-  });
-}
+import type { ModelEntry } from "./types";
+import { DEEPSEEK_COMPAT } from "./constants";
 
 export function hasDeepseekCompat(model: ModelEntry): boolean {
   return model.compat?.thinkingFormat === "deepseek";

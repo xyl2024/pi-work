@@ -3,6 +3,7 @@ import {
   OAUTH_LOGIN_IDLE,
   anyOAuthLoginInProgress,
   isOAuthLoginWorking,
+  oauthDeviceCodeCopyText,
   oauthLoginToken,
   parseOAuthLoginEvent,
   reduceOAuthLogin,
@@ -83,6 +84,22 @@ describe("reduceOAuthLogin: need input", () => {
   it("device_code keeps the code, verification URI and expiry", () => {
     const t = reduceOAuthLogin({ phase: "connecting" }, { type: "device_code", userCode: "ABCD", verificationUri: "https://v", intervalSeconds: 5, expiresInSeconds: 300 });
     expect(t.state).toEqual({ phase: "device_code", userCode: "ABCD", verificationUri: "https://v", intervalSeconds: 5, expiresInSeconds: 300 });
+  });
+
+  it("offers the device code itself for copying", () => {
+    const t = reduceOAuthLogin({ phase: "connecting" }, { type: "device_code", userCode: " ABCD-1234 ", verificationUri: "https://v", intervalSeconds: 5, expiresInSeconds: 300 });
+    expect(oauthDeviceCodeCopyText(t.state)).toBe("ABCD-1234");
+  });
+
+  it("offers nothing to copy outside the device_code phase", () => {
+    expect(oauthDeviceCodeCopyText(OAUTH_LOGIN_IDLE)).toBeNull();
+    expect(oauthDeviceCodeCopyText({ phase: "auth", url: "u", instructions: null, token: "tok" })).toBeNull();
+    expect(oauthDeviceCodeCopyText({ phase: "progress", message: "wait" })).toBeNull();
+    expect(oauthDeviceCodeCopyText({ phase: "success" })).toBeNull();
+  });
+
+  it("offers nothing to copy when the code is blank", () => {
+    expect(oauthDeviceCodeCopyText({ phase: "device_code", userCode: "  ", verificationUri: "https://v", intervalSeconds: null, expiresInSeconds: null })).toBeNull();
   });
 
   it("progress keeps the message", () => {

@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
+import { copyText } from "@/lib/client/clipboard";
 import type { OAuthLoginState, OAuthProvider } from "./types";
 import { SectionTitle } from "./form-fields";
+import { oauthDeviceCodeCopyText } from "@/lib/client/oauth-login";
+import styles from "./OAuthDetail.module.css";
 import {
   bindOAuthLoginSuccess,
   cancelOAuthLogin,
@@ -62,6 +65,14 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
   const submitSelection = useCallback(async (value: string) => {
     await submitOAuthLoginCode(provider.id, value, "Continuing…");
   }, [provider.id]);
+
+  const copyDeviceCode = useCallback(() => {
+    const code = oauthDeviceCodeCopyText(loginState);
+    if (!code) return;
+    void copyText(code)
+      .then(() => toast.show({ kind: "success", message: t("Code copied") }))
+      .catch(() => toast.show({ kind: "error", message: t("Copy failed") }));
+  }, [loginState, t, toast]);
 
   const isWorking = isOAuthLoginWorking(loginState);
 
@@ -150,8 +161,11 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
               Open the verification page and enter this code:
             </p>
-            <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
-              {loginState.userCode}
+            <div className={styles.deviceCode}>
+              <span className={styles.deviceCodeValue}>{loginState.userCode}</span>
+              <button type="button" className={styles.copyButton} onClick={copyDeviceCode}>
+                {t("Copy code")}
+              </button>
             </div>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
               <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>

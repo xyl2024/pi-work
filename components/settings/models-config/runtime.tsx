@@ -6,8 +6,6 @@ import { useToast } from "../../ui/Toast";
 import { ProviderIcon, ProviderGearIcon } from "../../ui/ProviderIcon";
 import { SectionTitle, SecretTextInput, Field, inputStyle } from "./form-fields";
 import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
-import { ModelCard } from "./ModelCard";
-import { ModelConnectionTest } from "./ModelConnectionTest";
 import type { ApiKeyProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
 export function RuntimeModelCatalog() {
@@ -387,85 +385,6 @@ export function AddModelNameStepBody({
   );
 }
 
-export function RuntimeModelList({ providerId, configured }: { providerId: string; configured: boolean }) {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [models, setModels] = useState<RuntimeModelInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-
-  const loadModels = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const url = isRefresh
-        ? `/api/models?refresh=true&provider=${encodeURIComponent(providerId)}`
-        : "/api/models";
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { modelList?: RuntimeModelInfo[] };
-      setModels((data.modelList ?? []).filter((model) => model.provider === providerId));
-      if (isRefresh) toast.show({ kind: "success", message: t("Models refreshed") });
-    } catch (e) {
-      if (isRefresh) {
-        setModels([]);
-        toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to refresh models") });
-      } else {
-        setModels([]);
-      }
-    } finally {
-      if (isRefresh) setRefreshing(false);
-      else setLoading(false);
-    }
-  }, [providerId, t, toast]);
-
-  useEffect(() => { void loadModels(); }, [providerId, configured, loadModels]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <SectionTitle>{t("Available models")}</SectionTitle>
-        <button
-          onClick={() => { void loadModels(true); }}
-          disabled={loading || refreshing}
-          title={t("Fetch the latest model list for this provider")}
-          style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: loading || refreshing ? "default" : "pointer", fontSize: 11, flexShrink: 0 }}
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: refreshing ? "spin 0.9s linear infinite" : undefined, flexShrink: 0 }}>
-            <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-          {refreshing ? t("Refreshing...") : t("Refresh models")}
-        </button>
-      </div>
-      {loading ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading models...")}</div>
-      ) : models.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No available models")}</div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
-          {models.map((model) => (
-            <div key={model.id} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <ModelCard
-                model={model}
-                expanded={expanded.has(model.id)}
-                onToggle={() => setExpanded((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(model.id)) next.delete(model.id);
-                  else next.add(model.id);
-                  return next;
-                })}
-              />
-              <ModelConnectionTest provider={providerId} modelId={model.id} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -586,8 +505,6 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
       </Field>
 
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--error)" }}>{error}</p>}
-
-      <RuntimeModelList providerId={provider.id} configured={provider.configured} />
 
       {provider.configured && (
         <button

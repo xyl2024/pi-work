@@ -8,6 +8,15 @@ export interface ModelTableModel {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown[] };
 }
 
+export interface ModelTableItemModel extends ModelTableModel {
+  provider: string;
+}
+
+export interface ModelTableRowItem {
+  key: string;
+  model: ModelTableModel;
+}
+
 export interface ModelTableRowView {
   title: string;
   subtitle: string | null;
@@ -47,6 +56,15 @@ export function modelCapabilities(model: ModelTableModel): string[] {
   if (model.input?.includes("image")) capabilities.push(MODEL_CAPABILITY_LABELS.imageInput);
   if (model.api?.trim()) capabilities.push(MODEL_CAPABILITY_LABELS.apiOverride);
   return capabilities;
+}
+
+export function runtimeModelTableItems(
+  models: readonly ModelTableItemModel[],
+  providerId: string,
+): ModelTableRowItem[] {
+  return models
+    .filter((model) => model.provider === providerId)
+    .map((model, index) => ({ key: `${providerId}:${index}:${model.id}`, model }));
 }
 
 export function modelTableRow(model: ModelTableModel): ModelTableRowView {

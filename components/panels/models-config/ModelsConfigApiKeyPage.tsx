@@ -3,7 +3,10 @@
 import { useI18n } from "@/hooks/useI18n";
 import { ApiKeyDetail } from "@/components/settings/models-config/runtime";
 import { reloadModelsConfigApiKeyProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
+import { ApiKeyModels } from "./ApiKeyModels";
+import { AuthPageHeader } from "./AuthPageHeader";
 import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
+import styles from "./models-config.module.css";
 
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
   const { t } = useI18n();
@@ -11,19 +14,16 @@ export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
   const provider = apiKeyProviders.find((item) => item.id === providerId);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-          {provider?.displayName ?? providerId}
-        </span>
-      </div>
+    <div className={styles.authPage}>
+      <AuthPageHeader title={provider?.displayName ?? providerId} />
       {provider ? (
         <>
           <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigApiKeyProviders} />
+          <ApiKeyModels key={`${provider.id}:models`} providerId={provider.id} configured={provider.configured} />
           <ProviderModelIconsSection providerId={provider.id} />
         </>
       ) : (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No providers configured")}</div>
+        <div className={styles.muted}>{t("No providers configured")}</div>
       )}
     </div>
   );
