@@ -56,6 +56,8 @@ export const models = {
 
   "API": "API",
   "Context window": "上下文窗口",
+  "Capabilities": "能力",
+  "Not connected": "未连接",
   "Max output": "最大输出",
   "Input": "输入",
   "Reasoning": "推理",

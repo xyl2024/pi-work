@@ -10,7 +10,7 @@
   gap: 12px;
   padding: 16px 12px 12px;
 }
-.heading, .toolbar, .providerHeading, .modelHeading, .modelActions {
+.heading, .toolbar, .modelActions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -40,7 +40,7 @@
   font: inherit;
   font-size: 12px;
 }
-.search:focus-visible, .button:focus-visible, .providerRow:focus-visible, .modelLink:focus-visible, .catalog:focus-visible {
+.search:focus-visible, .button:focus-visible, .providerRow:focus-visible, .catalog:focus-visible, .statusButton:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -60,7 +60,7 @@
   font-size: 12px;
   flex-shrink: 0;
 }
-.button:hover, .catalog:hover, .modelLink:hover {
+.button:hover, .catalog:hover {
   background: var(--bg-hover);
 }
 .primary {
@@ -138,7 +138,7 @@
   flex-direction: column;
   gap: 4px;
 }
-.providerName, .modelName {
+.providerName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -176,18 +176,73 @@
   flex-direction: column;
   min-height: 0;
 }
-.detailHeader {
+.summaryWrap {
+  padding: 20px 24px 0;
+}
+.summaryCard {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 12px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  flex-wrap: wrap;
 }
-.providerHeading {
+.summaryCard .detailTitle {
+  margin: 0;
+}
+.summaryIdentity {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.summaryTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.sourceBadge {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.statusButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.statusButton:hover {
+  background: var(--bg-hover);
+}
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+.statusButton[data-connected="true"] {
+  color: var(--text);
+}
+.statusButton[data-connected="true"] .statusDot {
+  background: var(--success);
 }
 .detailTitle {
   font-size: 18px;
@@ -211,47 +266,20 @@
   flex: 1;
   max-width: 300px;
 }
-.modelList {
-  display: flex;
-  flex-direction: column;
+.modelTable {
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
 }
-.modelRow {
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.modelRow + .modelRow {
-  border-top: 1px solid var(--border);
-}
-.modelLink {
+.modelActions {
   flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-}
-.modelId {
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.modelMeta {
-  display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 6px 16px;
-  color: var(--text-muted);
-  font-size: 11px;
+}
+.modelActions .search {
+  flex: 1;
+  min-width: 140px;
+  max-width: 260px;
 }
 .empty {
   min-height: 180px;
@@ -281,11 +309,11 @@
   color: var(--text-muted);
 }
 @media (max-width: 600px) {
-  .detailHeader, .detailBody {
+  .detailBody, .summaryWrap {
     padding: 16px;
   }
-  .modelRow {
-    padding: 12px;
+  .summaryWrap {
+    padding-bottom: 0;
   }
   .detailTitle {
     font-size: 16px;

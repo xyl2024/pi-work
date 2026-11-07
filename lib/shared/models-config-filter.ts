@@ -30,6 +30,16 @@ const SECTION_TITLE: Record<ModelsConfigProviderKind, string> = {
   custom: "Custom providers",
 };
 
+const KIND_LABEL: Record<ModelsConfigProviderKind, string> = {
+  subscription: "Subscription",
+  apiKey: "API Key",
+  custom: "Custom",
+};
+
+export function modelsConfigProviderKindLabel(kind: ModelsConfigProviderKind): string {
+  return KIND_LABEL[kind];
+}
+
 const SECTION_ORDER: ModelsConfigProviderKind[] = ["subscription", "apiKey", "custom"];
 
 function customModels(provider: ProviderEntry | undefined): ModelsConfigProviderModel[] {

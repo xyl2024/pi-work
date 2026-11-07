@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterModelsConfigProviderSections,
+  modelsConfigProviderKindLabel,
   modelsConfigProviderSections,
   type ModelsConfigProviderSection,
 } from "@/lib/shared/models-config-filter";
@@ -73,6 +74,14 @@ describe("modelsConfigProviderSections", () => {
       ["custom:my-endpoint", true],
     ]);
     expect(sections[1].rows[0]).toMatchObject({ key: "apiKey:anthropic", changed: false });
+  });
+});
+
+describe("modelsConfigProviderKindLabel", () => {
+  it("names the source badge of each provider kind", () => {
+    expect(modelsConfigProviderKindLabel("subscription")).toBe("Subscription");
+    expect(modelsConfigProviderKindLabel("apiKey")).toBe("API Key");
+    expect(modelsConfigProviderKindLabel("custom")).toBe("Custom");
   });
 });
 
