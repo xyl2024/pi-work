@@ -1,6 +1,7 @@
 "use client";
 
-import { AddModelNameStepBody } from "@/components/settings/models-config/runtime";
+import { CatalogSearch } from "@/components/settings/models-config/CatalogSearch";
+import { useRuntimeCatalogEntries } from "@/components/settings/models-config/use-catalog-entries";
 import {
   addModelsConfigModel,
   addModelsConfigModelFromCatalog,
@@ -8,14 +9,16 @@ import {
 } from "@/lib/client/models-config-panel";
 
 export function ModelsConfigAddModelNamePage({ providerName }: { providerName: string }) {
+  const { entries, loading, error } = useRuntimeCatalogEntries();
+
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <AddModelNameStepBody
-        backButton={null}
-        onBack={() => modelsConfigPanel.back()}
-        onSelect={(model) => addModelsConfigModelFromCatalog(providerName, model)}
-        onSkip={() => addModelsConfigModel(providerName)}
-      />
-    </div>
+    <CatalogSearch
+      entries={entries}
+      loading={loading}
+      error={error}
+      onExit={() => modelsConfigPanel.back()}
+      onSelect={(model) => addModelsConfigModelFromCatalog(providerName, model)}
+      onSkip={() => addModelsConfigModel(providerName)}
+    />
   );
 }

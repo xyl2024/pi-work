@@ -27,6 +27,11 @@
 .row[data-clickable="true"]:hover {
   background: var(--bg-hover);
 }
+.row[data-active="true"] {
+  background: var(--bg-selected);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   UNKNOWN_MODEL_VALUE,
@@ -19,6 +19,8 @@ export interface ModelTableProps {
   items: readonly ModelTableItem[];
   onSelect?: (item: ModelTableItem) => void;
   label?: string;
+  activeKey?: string | null;
+  onHoverItem?: (item: ModelTableItem) => void;
 }
 
 function unknownClass(value: string): string {
@@ -28,27 +30,34 @@ function unknownClass(value: string): string {
 export function ModelTableRow({
   model,
   onOpen,
+  active = false,
+  onHover,
+  rowRef,
 }: {
   model: ModelTableModel;
   onOpen?: () => void;
+  active?: boolean;
+  onHover?: () => void;
+  rowRef?: (element: HTMLTableRowElement | null) => void;
 }) {
   const { t } = useI18n();
   const row = modelTableRow(model);
-  const activate = onOpen
-    ? {
-        tabIndex: 0,
-        "data-clickable": "true",
-        onClick: onOpen,
-        onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          onOpen();
-        },
-      }
-    : {};
 
   return (
-    <tr className={styles.row} {...activate}>
+    <tr
+      ref={rowRef}
+      className={styles.row}
+      data-active={active ? "true" : undefined}
+      data-clickable={onOpen ? "true" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onMouseEnter={onHover}
+      onClick={onOpen}
+      onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
+        if (!onOpen || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        onOpen();
+      }}
+    >
       <td className={styles.cell}>
         <span className={styles.name}>{row.title || t("new model")}</span>
         {row.subtitle && <span className={styles.id}>{row.subtitle}</span>}
@@ -69,8 +78,14 @@ export function ModelTableRow({
   );
 }
 
-export function ModelTable({ items, onSelect, label }: ModelTableProps) {
+export function ModelTable({ items, onSelect, label, activeKey = null, onHoverItem }: ModelTableProps) {
   const { t } = useI18n();
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
+
+  useEffect(() => {
+    if (activeKey) rowRefs.current.get(activeKey)?.scrollIntoView({ block: "nearest" });
+  }, [activeKey]);
+
   return (
     <table className={styles.table} aria-label={label}>
       <thead>
@@ -93,6 +108,12 @@ export function ModelTable({ items, onSelect, label }: ModelTableProps) {
           <ModelTableRow
             key={item.key}
             model={item.model}
+            active={item.key === activeKey}
+            rowRef={(element) => {
+              if (element) rowRefs.current.set(item.key, element);
+              else rowRefs.current.delete(item.key);
+            }}
+            onHover={onHoverItem ? () => onHoverItem(item) : undefined}
             onOpen={item.onOpen ?? (onSelect ? () => onSelect(item) : undefined)}
           />
         ))}

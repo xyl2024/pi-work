@@ -8,7 +8,9 @@ import {
   normalizeModelsJson,
   parseModelEntryJson,
   withAddedModel,
+  withAddedModelFromCatalog,
   withCustomProvider,
+  withModelFromCatalog,
   withModel,
   withProvider,
   withRenamedProvider,
@@ -172,6 +174,88 @@ describe("cloneModelFromCatalog", () => {
     });
     expect(cloned.input).not.toBe(source.input);
     expect(cloned.cost).not.toBe(source.cost);
+  });
+});
+
+const CATALOG_SOURCE = {
+  id: "gpt-4o",
+  name: "GPT-4o",
+  provider: "openai",
+  api: "openai-completions",
+  baseUrl: "https://api.openai.com/v1",
+  headers: { "X-Tenant": "acme" },
+  reasoning: true,
+  input: ["text", "image"],
+  cost: { input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 1.25 },
+  contextWindow: 128000,
+  maxTokens: 16384,
+  compat: { supportsToolChoice: true },
+};
+
+describe("withModelFromCatalog", () => {
+  const config: ModelsJson = {
+    providers: {
+      "my-endpoint": {
+        api: "openai-responses",
+        baseUrl: "https://example.test/v1",
+        headers: { Authorization: "Bearer secret" },
+        models: [{ id: "old-model", name: "Old" }],
+      },
+    },
+  };
+
+  it("leaves provider settings untouched", () => {
+    const after = withModelFromCatalog(config, "my-endpoint", 0, CATALOG_SOURCE);
+    expect(after.providers?.["my-endpoint"]).toMatchObject({
+      api: "openai-responses",
+      baseUrl: "https://example.test/v1",
+      headers: { Authorization: "Bearer secret" },
+    });
+  });
+
+  it("fills only model fields", () => {
+    const after = withModelFromCatalog(config, "my-endpoint", 0, CATALOG_SOURCE);
+    expect(after.providers?.["my-endpoint"]?.models?.[0]).toEqual({
+      id: "gpt-4o",
+      name: "GPT-4o",
+      api: "openai-completions",
+      reasoning: true,
+      thinkingLevelMap: undefined,
+      input: ["text", "image"],
+      contextWindow: 128000,
+      maxTokens: 16384,
+      cost: { input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 1.25, tiers: undefined },
+      compat: { supportsToolChoice: true },
+    });
+  });
+
+  it("does not move provider base url or headers into the model entry", () => {
+    const after = withModelFromCatalog(config, "my-endpoint", 0, CATALOG_SOURCE);
+    const filled = after.providers?.["my-endpoint"]?.models?.[0] ?? {};
+    expect(filled).not.toHaveProperty("provider");
+    expect(filled).not.toHaveProperty("baseUrl");
+    expect(filled).not.toHaveProperty("headers");
+  });
+
+  it("does not mutate the original config", () => {
+    withModelFromCatalog(config, "my-endpoint", 0, CATALOG_SOURCE);
+    expect(config.providers?.["my-endpoint"]?.models?.[0]).toEqual({ id: "old-model", name: "Old" });
+  });
+});
+
+describe("withAddedModelFromCatalog", () => {
+  it("appends the catalog model and keeps provider settings", () => {
+    const config: ModelsJson = {
+      providers: { "my-endpoint": { api: "openai-completions", baseUrl: "https://example.test", models: [{ id: "one" }] } },
+    };
+    const { config: after, index } = withAddedModelFromCatalog(config, "my-endpoint", CATALOG_SOURCE);
+    expect(index).toBe(1);
+    expect(after.providers?.["my-endpoint"]).toMatchObject({
+      api: "openai-completions",
+      baseUrl: "https://example.test",
+    });
+    expect(after.providers?.["my-endpoint"]?.models?.[1]?.id).toBe("gpt-4o");
+    expect(after.providers?.["my-endpoint"]?.models?.[0]).toEqual({ id: "one" });
   });
 });
 

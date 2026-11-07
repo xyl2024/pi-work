@@ -1,0 +1,126 @@
+.root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.field:focus-within {
+  border-color: var(--accent);
+}
+.fieldIcon {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.input:focus-visible {
+  outline: none;
+}
+.notes {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 12px 12px;
+}
+.state {
+  padding: 24px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+}
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.skeletonBar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  animation: catalog-skeleton-pulse 1.4s ease-in-out infinite;
+}
+.skeletonName {
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+}
+.skeletonTag {
+  width: 84px;
+}
+.skeletonNumber {
+  width: 52px;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.skip {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.skip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@keyframes catalog-skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
