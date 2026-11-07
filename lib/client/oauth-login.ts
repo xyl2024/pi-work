@@ -126,6 +126,12 @@ export function oauthLoginToken(state: OAuthLoginState): string | null {
   return state.phase === "auth" || state.phase === "prompt" || state.phase === "select" ? state.token : null;
 }
 
+export function oauthDeviceCodeCopyText(state: OAuthLoginState): string | null {
+  if (state.phase !== "device_code") return null;
+  const code = state.userCode.trim();
+  return code.length > 0 ? code : null;
+}
+
 export function isOAuthLoginWorking(state: OAuthLoginState): boolean {
   return state.phase !== "idle" && state.phase !== "success" && state.phase !== "error";
 }
