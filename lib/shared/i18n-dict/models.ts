@@ -51,6 +51,8 @@ export const models = {
   "Loading catalog...": "正在加载模型目录...",
   "Failed to load model catalog": "加载模型目录失败",
   "No matching providers or models": "没有匹配的厂商或模型",
+  "API Keys": "API 密钥",
+  "Custom providers": "自定义",
 
   "API": "API",
   "Context window": "上下文窗口",
