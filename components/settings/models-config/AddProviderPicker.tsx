@@ -3,6 +3,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderGearIcon, ProviderIcon } from "@/components/ui/ProviderIcon";
+import {
+  countModelsConfigShelfRows,
+  filterModelsConfigShelfSections,
+  modelsConfigShelfSections,
+  type ModelsConfigShelfRow,
+  type ModelsConfigShelfSection,
+} from "@/lib/shared/models-config-shelf";
+import type { ModelsConfigProviderKind } from "@/lib/shared/models-config-filter";
 import type { ApiKeyProvider, OAuthProvider } from "./types";
 import styles from "./AddProviderPicker.module.css";
 
@@ -78,44 +86,29 @@ function CustomIcon() {
   );
 }
 
-function ProviderCard({
-  name,
-  icon,
-  meta,
-  trailing,
-  onClick,
-}: {
-  name: ReactNode;
-  icon: ReactNode;
-  meta?: ReactNode;
-  trailing?: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className={styles.card} onClick={onClick}>
-      <span className={styles.cardIcon}>{icon}</span>
-      <span className={styles.cardText}>
-        <span className={styles.cardName}>{name}</span>
-        {meta && <span className={styles.cardMeta}>{meta}</span>}
-      </span>
-      <span className={styles.cardTrailing}>
-        {trailing}
-        <span className={styles.cardChevron}><ChevronIcon /></span>
-      </span>
-    </button>
-  );
-}
+const SECTION_ICONS: Record<ModelsConfigProviderKind, () => ReactNode> = {
+  subscription: SubscriptionIcon,
+  apiKey: ApiKeyIcon,
+  custom: CustomIcon,
+};
 
-function CustomCard({ onClick }: { onClick: () => void }) {
+function ShelfCard({ row, onOpen }: { row: ModelsConfigShelfRow; onOpen: () => void }) {
   const { t } = useI18n();
   return (
-    <button type="button" className={styles.card} onClick={onClick}>
-      <span className={`${styles.cardIcon} ${styles.cardIconDashed}`}><PlusIcon /></span>
+    <button type="button" className={styles.card} onClick={onOpen}>
+      <span className={`${styles.cardIcon} ${row.kind === "custom" ? styles.cardIconDashed : ""}`}>
+        {row.kind === "custom" ? (
+          <PlusIcon />
+        ) : (
+          <ProviderIcon id={row.id} size={20} fallback={<ProviderGearIcon size={16} />} />
+        )}
+      </span>
       <span className={styles.cardText}>
-        <span className={styles.cardName}>{t("OpenAI / Anthropic compatible")}</span>
-        <span className={styles.cardMeta}>{t("Custom endpoint format")}</span>
+        <span className={styles.cardName}>{row.kind === "custom" ? t(row.name) : row.name}</span>
+        <span className={styles.cardMeta}>{t(row.summaryKey, row.summaryParams)}</span>
       </span>
       <span className={styles.cardTrailing}>
+        <span className={styles.cardAction}>{t(row.actionLabelKey)}</span>
         <span className={styles.cardChevron}><ChevronIcon /></span>
       </span>
     </button>
@@ -133,25 +126,28 @@ export function AddProviderPickerBody({
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
 
-  const q = search.trim().toLowerCase();
-  const availableOAuth = useMemo(
-    () => oauthProviders.filter((p) => !p.loggedIn && (!q || `${p.name} ${p.id}`.toLowerCase().includes(q))),
-    [oauthProviders, q],
+  const sections = useMemo(
+    () =>
+      modelsConfigShelfSections({
+        oauthProviders,
+        apiKeyProviders,
+        customKeywords: [t("Custom"), t("OpenAI / Anthropic compatible"), t("Custom endpoint format")],
+      }),
+    [oauthProviders, apiKeyProviders, t],
   );
-  const availableApiKey = useMemo(
-    () => apiKeyProviders.filter((p) => !p.configured && (!q || `${p.displayName} ${p.id}`.toLowerCase().includes(q))),
-    [apiKeyProviders, q],
-  );
-  const customSearchText = [
-    t("Custom"), t("OpenAI / Anthropic compatible"), t("Custom endpoint format"),
-    "custom", "openai-compatible", "anthropic-compatible",
-  ].join(" ").toLowerCase();
-  const showCustom = !q || customSearchText.includes(q);
-  const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
+  const filtered = useMemo(() => filterModelsConfigShelfSections(sections, search), [sections, search]);
+  const totalCount = countModelsConfigShelfRows(filtered);
+  const searching = search.trim() !== "";
 
   const clearSearch = () => {
     setSearch("");
     inputRef.current?.focus();
+  };
+
+  const open = (row: ModelsConfigShelfRow) => {
+    if (row.action === "connect") onSelectOAuth(row.id);
+    else if (row.action === "configure") onSelectApiKey(row.id);
+    else onAddCustom();
   };
 
   return (
@@ -181,7 +177,7 @@ export function AddProviderPickerBody({
         </div>
       </div>
 
-      {q && (
+      {searching && (
         <div className={styles.results} role="status" aria-live="polite">
           {totalCount > 0 ? t("{n} providers", { n: totalCount }) : t("No providers match")}
         </div>
@@ -190,78 +186,35 @@ export function AddProviderPickerBody({
       <div className={styles.body} data-scroll-wide>
         {totalCount === 0 ? (
           <div className={styles.emptyState}>
-            <span>{q ? t("No providers match") : t("All providers configured")}</span>
-            {q && (
+            <span>{searching ? t("No providers match") : t("All providers configured")}</span>
+            {searching && (
               <button type="button" className={styles.emptyStateButton} onClick={clearSearch}>
                 {t("Clear")}
               </button>
             )}
           </div>
         ) : (
-          <>
-            {(availableOAuth.length > 0 || !q) && (
-              <section className={styles.section} aria-labelledby={`${idBase}-subscriptions`}>
-                <h3 id={`${idBase}-subscriptions`} className={styles.sectionHeader}>
-                  <span className={styles.sectionIcon}><SubscriptionIcon /></span>
-                  {t("Subscriptions")}
-                  <span className={styles.sectionCount}>{availableOAuth.length}</span>
+          filtered.map((section: ModelsConfigShelfSection) => {
+            const SectionIcon = SECTION_ICONS[section.kind];
+            return (
+              <section key={section.kind} className={styles.section} aria-labelledby={`${idBase}-${section.kind}`}>
+                <h3 id={`${idBase}-${section.kind}`} className={styles.sectionHeader}>
+                  <span className={styles.sectionIcon}><SectionIcon /></span>
+                  {t(section.titleKey)}
+                  <span className={styles.sectionCount}>{section.rows.length}</span>
                 </h3>
-                {availableOAuth.length === 0 ? (
+                {section.rows.length === 0 ? (
                   <div className={styles.sectionEmpty}>{t("Nothing to add")}</div>
                 ) : (
                   <div className={styles.grid}>
-                    {availableOAuth.map((p) => (
-                      <ProviderCard
-                        key={p.id}
-                        name={p.name}
-                        icon={<ProviderIcon id={p.id} size={20} fallback={<ProviderGearIcon size={16} />} />}
-                        trailing={t("Sign in")}
-                        onClick={() => onSelectOAuth(p.id)}
-                      />
+                    {section.rows.map((row) => (
+                      <ShelfCard key={row.key} row={row} onOpen={() => open(row)} />
                     ))}
                   </div>
                 )}
               </section>
-            )}
-
-            {(availableApiKey.length > 0 || !q) && (
-              <section className={styles.section} aria-labelledby={`${idBase}-api-key`}>
-                <h3 id={`${idBase}-api-key`} className={styles.sectionHeader}>
-                  <span className={styles.sectionIcon}><ApiKeyIcon /></span>
-                  {t("API Key")}
-                  <span className={styles.sectionCount}>{availableApiKey.length}</span>
-                </h3>
-                {availableApiKey.length === 0 ? (
-                  <div className={styles.sectionEmpty}>{t("Nothing to add")}</div>
-                ) : (
-                  <div className={styles.grid}>
-                    {availableApiKey.map((p) => (
-                      <ProviderCard
-                        key={p.id}
-                        name={p.displayName}
-                        icon={<ProviderIcon id={p.id} size={20} fallback={<ProviderGearIcon size={16} />} />}
-                        meta={t("{n} models", { n: p.modelCount })}
-                        onClick={() => onSelectApiKey(p.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {showCustom && (
-              <section className={styles.section} aria-labelledby={`${idBase}-custom`}>
-                <h3 id={`${idBase}-custom`} className={styles.sectionHeader}>
-                  <span className={styles.sectionIcon}><CustomIcon /></span>
-                  {t("Custom")}
-                  <span className={styles.sectionCount}>1</span>
-                </h3>
-                <div className={styles.grid}>
-                  <CustomCard onClick={onAddCustom} />
-                </div>
-              </section>
-            )}
-          </>
+            );
+          })
         )}
       </div>
     </div>
