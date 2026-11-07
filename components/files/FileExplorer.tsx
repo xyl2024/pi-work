@@ -13,6 +13,7 @@ import { FileGitBadge, gitStatusColor } from "./FileGitBadge";
 import { useGitStatusStore, aggregateFolderStatuses, startTracking, stopTracking } from "@/lib/client/git-status-store";
 import { createEntry, duplicateEntry, moveEntry, pickFiles, uploadFilesToDir, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
 import { copyText as copyToClipboard } from "@/lib/client/clipboard";
+import { downloadFile } from "@/lib/client/file-download";
 import type { GitDiffFile, GitFileStatus } from "@/lib/shared/git-diff-types";
 
 const DRAG_MIME = "application/x-pi-file-path";
@@ -57,16 +58,6 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
     children: e.isDir ? [] : undefined,
     loaded: !e.isDir,
   }));
-}
-
-function triggerDownload(fullPath: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = `/api/files/${encodeFilePathForApi(fullPath)}?type=download`;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
 }
 
 const EMPTY_GIT_FILES: GitDiffFile[] = [];
@@ -351,7 +342,7 @@ function TreeNode({
       },
       { key: "copy_abs", label: t("Copy absolute path"), onSelect: () => copyText(node.fullPath) },
       { key: "copy_rel", label: t("Copy relative path"), onSelect: () => copyText(rel) },
-      { key: "download", label: t("Download"), onSelect: () => triggerDownload(node.fullPath, node.isDir ? `${node.name}.zip` : node.name) },
+      { key: "download", label: t("Download"), onSelect: () => downloadFile(node.fullPath, node.isDir ? `${node.name}.zip` : node.name) },
       ...(node.isDir
         ? []
         : [{ key: "duplicate", label: t("Duplicate"), onSelect: () => { void onDuplicate(); } }]),

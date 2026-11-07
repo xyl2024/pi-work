@@ -48,6 +48,8 @@ import { formatTtft, formatTps } from "@/lib/shared/model-call-metrics";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
+import { copyText as copyToClipboard } from "@/lib/client/clipboard";
+import { downloadFile } from "@/lib/client/file-download";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import { canFocusChatInput } from "@/lib/shared/chat-shortcuts";
 import {
@@ -921,20 +923,44 @@ export function AppShell() {
     dispatchPanelTabs({ type: "close_others", id: tabId });
   }, []);
 
+  const [fileRefreshCounters, setFileRefreshCounters] = useState<Record<string, number>>({});
+  const handleRefreshFileTab = useCallback((tabId: string) => {
+    setFileRefreshCounters((prev) => ({ ...prev, [tabId]: (prev[tabId] ?? 0) + 1 }));
+    toast.show({ kind: "info", message: t("Refreshed") });
+  }, [t, toast]);
+
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
     const idx = openTabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
+    const tab = openTabs[idx];
     const hasLeft = idx > 0;
     const hasRight = idx < openTabs.length - 1;
     const hasOthers = openTabs.length > 1;
+    const copyPath = async (text: string) => {
+      try {
+        await copyToClipboard(text);
+      } catch {
+      }
+      toast.show({ kind: "success", message: t("Copied") });
+    };
+    const cwd = selectedSession?.cwd ?? newSessionCwd ?? undefined;
+    const fileItems: ContextMenuItem[] = tab.kind === "file"
+      ? [
+          { key: "refresh", label: t("Refresh"), onSelect: () => handleRefreshFileTab(tabId) },
+          { key: "download", label: t("Download"), onSelect: () => downloadFile(tab.params.path, tab.label ?? "download") },
+          { key: "copy-abs", label: t("Copy absolute path"), onSelect: () => { void copyPath(tab.params.path); } },
+          { key: "copy-rel", label: t("Copy relative path"), onSelect: () => { void copyPath(getRelativeFilePath(tab.params.path, cwd)); } },
+        ]
+      : [];
     const items: ContextMenuItem[] = [
+      ...fileItems,
       { key: "close", label: t("Close tab"), onSelect: () => handleCloseFileTab(tabId) },
       { key: "close-left", label: t("Close tabs to the left"), onSelect: () => handleCloseLeftTabs(tabId), disabled: !hasLeft },
       { key: "close-right", label: t("Close tabs to the right"), onSelect: () => handleCloseRightTabs(tabId), disabled: !hasRight },
       { key: "close-others", label: t("Close other tabs"), onSelect: () => handleCloseOtherTabs(tabId), disabled: !hasOthers },
     ];
     cm.open({ x, y, items, triggerElement });
-  }, [openTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
+  }, [openTabs, selectedSession?.cwd, newSessionCwd, t, toast, cm, handleRefreshFileTab, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
 
   const handleFileDeleted = useCallback((filePath: string) => {
     dispatchPanelTabs({ type: "close_files_under", path: filePath });
@@ -1383,6 +1409,7 @@ export function AppShell() {
           </div>
         ) : activePanelTab.kind === "file" ? (
           <FileViewer
+            key={`${activePanelTab.id}:${fileRefreshCounters[activePanelTab.id] ?? 0}`}
             filePath={activePanelTab.params.path}
             cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
             rightPanelState={rightPanelState}
