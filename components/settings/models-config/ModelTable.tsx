@@ -13,6 +13,7 @@ export interface ModelTableItem {
   key: string;
   model: ModelTableModel;
   onOpen?: () => void;
+  badge?: string;
 }
 
 export interface ModelTableProps {
@@ -30,12 +31,14 @@ function unknownClass(value: string): string {
 export function ModelTableRow({
   model,
   onOpen,
+  badge,
   active = false,
   onHover,
   rowRef,
 }: {
   model: ModelTableModel;
   onOpen?: () => void;
+  badge?: string;
   active?: boolean;
   onHover?: () => void;
   rowRef?: (element: HTMLTableRowElement | null) => void;
@@ -59,7 +62,10 @@ export function ModelTableRow({
       }}
     >
       <td className={styles.cell}>
-        <span className={styles.name}>{row.title || t("new model")}</span>
+        <span className={styles.titleRow}>
+          <span className={styles.name}>{row.title || t("new model")}</span>
+          {badge && <span className={styles.badge}>{t(badge)}</span>}
+        </span>
         {row.subtitle && <span className={styles.id}>{row.subtitle}</span>}
       </td>
       <td className={styles.cell}>
@@ -108,6 +114,7 @@ export function ModelTable({ items, onSelect, label, activeKey = null, onHoverIt
           <ModelTableRow
             key={item.key}
             model={item.model}
+            badge={item.badge}
             active={item.key === activeKey}
             rowRef={(element) => {
               if (element) rowRefs.current.set(item.key, element);
