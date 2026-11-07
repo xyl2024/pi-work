@@ -48,7 +48,11 @@ import {
   updateModelsConfigProvider,
 } from "@/lib/client/models-config-panel";
 import { requestMainViewLeave, setMainViewLeaveConfirm } from "@/lib/client/main-view-leave";
-import { MAIN_VIEW_LEAVE_CONFIRM } from "@/lib/shared/main-view-leave";
+import { MAIN_VIEW_LEAVE_CONFIRM, MAIN_VIEW_LEAVE_CONFIRM_WITH_CHANGES } from "@/lib/shared/main-view-leave";
+
+function QUANTIFIED_CONFIRM(n: number) {
+  return { ...MAIN_VIEW_LEAVE_CONFIRM_WITH_CHANGES, params: { n } };
+}
 
 async function openPanel(): Promise<void> {
   modelsConfigPanel.open();
@@ -85,7 +89,7 @@ describe("models config leave guard", () => {
       requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" }),
     ).resolves.toBe(false);
     expect(confirm).toHaveBeenCalledTimes(1);
-    expect(confirm).toHaveBeenCalledWith(MAIN_VIEW_LEAVE_CONFIRM);
+    expect(confirm).toHaveBeenCalledWith(QUANTIFIED_CONFIRM(1));
     expect(modelsConfigPanel.get().config.providers).toHaveProperty("openai");
   });
 
@@ -100,8 +104,8 @@ describe("models config leave guard", () => {
     await requestMainViewLeave({ view: "modelsConfig", intent: "switch_main_view" });
 
     expect(confirm).toHaveBeenCalledTimes(2);
-    expect(confirm.mock.calls[0][0]).toEqual(MAIN_VIEW_LEAVE_CONFIRM);
-    expect(confirm.mock.calls[1][0]).toEqual(MAIN_VIEW_LEAVE_CONFIRM);
+    expect(confirm.mock.calls[0][0]).toMatchObject(QUANTIFIED_CONFIRM(1));
+    expect(confirm.mock.calls[1][0]).toMatchObject(QUANTIFIED_CONFIRM(1));
   });
 
   it("discards the dirty draft after confirming", async () => {
@@ -147,5 +151,29 @@ describe("models config leave guard", () => {
 
     expect(modelsConfigPanel.pages()).toEqual([{ kind: "root" }]);
     expect(modelsConfigPanel.get().config.providers).toHaveProperty("openai");
+  });
+});
+
+describe("models config leave guard change count", () => {
+  it("tailors the confirmation to the number of changed providers", async () => {
+    modelsConfigPanel.patch({ config: { providers: { alpha: { api: "anthropic" }, beta: { api: "anthropic" } } } });
+    updateModelsConfigProvider("alpha", { api: "anthropic", models: [{ id: "a-1" }] });
+    updateModelsConfigProvider("beta", { api: "anthropic", models: [{ id: "b-1" }] });
+    const confirm = vi.fn<(confirm: unknown) => Promise<boolean>>(async () => false);
+    setMainViewLeaveConfirm(confirm);
+
+    await requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" });
+
+    expect(confirm.mock.calls[0][0]).toMatchObject({ params: { n: 2 } });
+  });
+
+  it("keeps the generic wording while an authorization is running with a clean draft", async () => {
+    oauth.setActive(true);
+    const confirm = vi.fn<(confirm: unknown) => Promise<boolean>>(async () => false);
+    setMainViewLeaveConfirm(confirm);
+
+    await requestMainViewLeave({ view: "modelsConfig", intent: "leave_main_view" });
+
+    expect(confirm).toHaveBeenCalledWith(MAIN_VIEW_LEAVE_CONFIRM);
   });
 });

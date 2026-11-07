@@ -948,10 +948,11 @@ export function AppShell() {
       titleKey: string;
       descriptionKey: string;
       confirmLabelKey: string;
+      params?: Record<string, string | number>;
     }): Promise<boolean> =>
       confirm({
         title: t(guard.titleKey),
-        description: t(guard.descriptionKey),
+        description: t(guard.descriptionKey, guard.params),
         confirmLabel: t(guard.confirmLabelKey),
         cancelLabel: t("Cancel"),
         destructive: true,

@@ -40,3 +40,26 @@ describe("selectMainViewLeaveConfirm", () => {
     expect(dict[MAIN_VIEW_LEAVE_CONFIRM.confirmLabelKey]).toBeTruthy();
   });
 });
+
+describe("selectMainViewLeaveConfirm change count", () => {
+  it("quantifies the changes that would be discarded", () => {
+    const confirm = selectMainViewLeaveConfirm({ intent: "leave_main_view", dirty: true, changeCount: 3 });
+
+    expect(confirm).not.toBeNull();
+    expect(confirm?.titleKey).toBe(MAIN_VIEW_LEAVE_CONFIRM.titleKey);
+    expect(confirm?.confirmLabelKey).toBe("Leave");
+    expect(confirm?.descriptionKey).toContain("{n}");
+    expect(confirm?.params).toEqual({ n: 3 });
+  });
+
+  it("keeps the generic wording when only a login is running", () => {
+    expect(selectMainViewLeaveConfirm({ intent: "leave_main_view", dirty: true, changeCount: 0 }))
+      .toEqual(MAIN_VIEW_LEAVE_CONFIRM);
+  });
+
+  it("has Chinese copy for the quantified wording", () => {
+    const confirm = selectMainViewLeaveConfirm({ intent: "leave_main_view", dirty: true, changeCount: 2 });
+    const dict = ZH_TRANSLATIONS as Record<string, string>;
+    expect(dict[confirm?.descriptionKey ?? ""]).toContain("{n}");
+  });
+});

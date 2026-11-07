@@ -9,6 +9,8 @@ export const common = {
   "Leave while work is in progress?": "工作尚未完成，确认离开？",
   "Unsaved changes will be lost. Work in progress will either stop or keep running in the background.":
     "未保存的更改将会丢失；进行中的工作可能会停止，也可能在后台继续。",
+  "Discard {n} unsaved changes. Work in progress will either stop or keep running in the background.":
+    "放弃 {n} 处未保存更改；进行中的工作可能会停止，也可能在后台继续。",
   "Leave": "离开",
   "Save": "保存",
   "Saving...": "正在保存...",
