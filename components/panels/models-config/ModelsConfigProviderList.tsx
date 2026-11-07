@@ -5,9 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ProviderGearIcon, ProviderIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
 import {
   openModelsConfigAddProvider,
-  openModelsConfigApiKey,
   openModelsConfigCatalog,
-  openModelsConfigOAuth,
   selectModelsConfigProvider,
   setModelsConfigProviderFilter,
   useModelsConfigPanel,
@@ -30,9 +28,8 @@ function matchedLabel(row: ModelsConfigProviderRow): string | null {
 
 export function ModelsConfigProviderList() {
   const { t } = useI18n();
-  const { view, pages } = useModelsConfigPanel();
-  const { config, oauthProviders, apiKeyProviders, providerFilter, selectedProvider, providerNames } = view;
-  const page = pages[pages.length - 1];
+  const { view } = useModelsConfigPanel();
+  const { config, oauthProviders, apiKeyProviders, providerFilter, selectedProvider, selectedProviderKind, providerNames } = view;
   const sections = useMemo(
     () =>
       modelsConfigProviderSections({
@@ -53,9 +50,7 @@ export function ModelsConfigProviderList() {
   );
 
   const openRow = (row: ModelsConfigProviderRow) => {
-    if (row.kind === "subscription") return openModelsConfigOAuth(row.id);
-    if (row.kind === "apiKey") return openModelsConfigApiKey(row.id);
-    selectModelsConfigProvider(row.id);
+    selectModelsConfigProvider(row.id, row.kind);
   };
 
   return (
@@ -102,9 +97,7 @@ export function ModelsConfigProviderList() {
               </h3>
               {section.rows.map((row) => {
                 const iconId = row.kind === "custom" ? config.providers?.[row.id]?.icon ?? row.id : row.id;
-                const selected = row.kind === "custom"
-                  ? page?.kind === "root" && selectedProvider === row.id
-                  : (page?.kind === "oauth" && row.kind === "subscription" || page?.kind === "apikey" && row.kind === "apiKey") && page.providerId === row.id;
+                const selected = selectedProvider === row.id && selectedProviderKind === row.kind;
                 const preview = matchedLabel(row);
                 return (
                   <button

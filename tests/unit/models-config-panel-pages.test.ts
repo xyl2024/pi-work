@@ -120,6 +120,32 @@ describe("models config browse state", () => {
     clearModelsConfigProvider();
 
     expect(modelsConfigPanel.get().selectedProvider).toBeNull();
+    expect(modelsConfigPanel.get().selectedProviderKind).toBeNull();
     expect(modelsConfigPanel.get().providerFilter).toBe("open");
+  });
+
+  it("remembers the source kind of the selected provider", () => {
+    selectModelsConfigProvider("openai", "subscription");
+    expect(modelsConfigPanel.get().selectedProviderKind).toBe("subscription");
+
+    selectModelsConfigProvider("anthropic", "apiKey");
+    expect(modelsConfigPanel.get().selectedProviderKind).toBe("apiKey");
+
+    selectModelsConfigProvider("my-endpoint");
+    expect(modelsConfigPanel.get().selectedProviderKind).toBe("custom");
+  });
+
+  it("selects the provider when its auth page is opened", () => {
+    openModelsConfigOAuth("openai");
+    expect(modelsConfigPanel.get()).toMatchObject({
+      selectedProvider: "openai",
+      selectedProviderKind: "subscription",
+    });
+
+    openModelsConfigApiKey("anthropic");
+    expect(modelsConfigPanel.get()).toMatchObject({
+      selectedProvider: "anthropic",
+      selectedProviderKind: "apiKey",
+    });
   });
 });

@@ -35,6 +35,7 @@ import {
 } from "@/lib/shared/models-config-draft";
 import { registerMainViewLeaveGuard } from "./main-view-leave";
 import { errorMessage } from "@/lib/shared/error-message";
+import type { ModelsConfigProviderKind } from "@/lib/shared/models-config-filter";
 import type {
   ApiKeyProvider,
   ModelEntry,
@@ -86,6 +87,7 @@ export interface ModelsConfigViewState {
   oauthInProgress: boolean;
   modelIconPreferences: ModelIconPreferences;
   selectedProvider: string | null;
+  selectedProviderKind: ModelsConfigProviderKind | null;
   providerFilter: string;
   pendingDelete: ModelsConfigPendingDelete | null;
 }
@@ -110,6 +112,7 @@ const INITIAL: ModelsConfigViewState = {
   oauthInProgress: false,
   modelIconPreferences: {},
   selectedProvider: null,
+  selectedProviderKind: null,
   providerFilter: "",
   pendingDelete: null,
 };
@@ -439,8 +442,11 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
   }
 }
 
-export function selectModelsConfigProvider(name: string): void {
-  modelsConfigPanel.patch({ selectedProvider: name, rawEdit: null });
+export function selectModelsConfigProvider(
+  name: string,
+  kind: ModelsConfigProviderKind = "custom",
+): void {
+  modelsConfigPanel.patch({ selectedProvider: name, selectedProviderKind: kind, rawEdit: null });
   if (modelsConfigPanel.currentPage().kind !== "root") modelsConfigPanel.resetPages();
 }
 
@@ -450,7 +456,7 @@ export function openModelsConfigProviderForm(name: string): void {
 }
 
 export function clearModelsConfigProvider(): void {
-  modelsConfigPanel.patch({ selectedProvider: null, rawEdit: null });
+  modelsConfigPanel.patch({ selectedProvider: null, selectedProviderKind: null, rawEdit: null });
 }
 
 export function setModelsConfigProviderFilter(query: string): void {
@@ -464,6 +470,8 @@ export function openModelsConfigModel(providerName: string, index: number): void
 
 export function openModelsConfigOAuth(providerId: string): void {
   modelsConfigPanel.patch({
+    selectedProvider: providerId,
+    selectedProviderKind: "subscription",
     oauthProviderId: providerId,
     oauthLogin: getOAuthLoginState(providerId),
     oauthInProgress: hasActiveOAuthLogin(),
@@ -478,6 +486,7 @@ export function openModelsConfigCatalog(): void {
 }
 
 export function openModelsConfigApiKey(providerId: string): void {
+  modelsConfigPanel.patch({ selectedProvider: providerId, selectedProviderKind: "apiKey" });
   openPanelPage({ kind: "apikey", providerId });
   modelsConfigPanel.patch({ rawEdit: null });
 }
@@ -545,6 +554,7 @@ function deleteModelsConfigProvider(name: string): void {
     config: withoutProvider(state.config, name),
     rawEdit: null,
     selectedProvider: state.selectedProvider === name ? null : state.selectedProvider,
+    selectedProviderKind: state.selectedProvider === name ? null : state.selectedProviderKind,
   });
   modelsConfigPanel.resetPages();
 }
