@@ -6,12 +6,13 @@ import { copyText } from "@/lib/client/clipboard";
 import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
 import { ModelFields } from "@/components/settings/models-config/ModelFields";
 import { ModelRawSection } from "@/components/settings/models-config/ModelRawSection";
+import { useModelsConfigDeleteConfirm } from "@/components/panels/models-config/useModelsConfigDeleteConfirm";
 import {
   applyModelsConfigRawEdit,
   beginModelsConfigRawEdit,
   cancelModelsConfigRawEdit,
   openModelsConfigFillModel,
-  removeModelsConfigModel,
+  requestModelsConfigModelDelete,
   selectModelsConfigProblem,
   selectModelsConfigDirty,
   updateModelsConfigModel,
@@ -24,6 +25,7 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
   const { t } = useI18n();
   const toast = useToast();
   const { view: state } = useModelsConfigPanel();
+  const confirmDelete = useModelsConfigDeleteConfirm();
   const model = state.config.providers?.[providerName]?.models?.[index];
   if (!model) return null;
 
@@ -61,7 +63,7 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
         </button>
         <button
           type="button"
-          onClick={() => removeModelsConfigModel(providerName, index)}
+          onClick={() => { void confirmDelete(() => requestModelsConfigModelDelete(providerName, index)); }}
           style={{ padding: "3px 8px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 4, color: "var(--error)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
         >
           {t("Delete")}
