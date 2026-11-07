@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { SearchIcon } from "@/components/ui/icons";
 import { ProviderGearIcon, ProviderIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
@@ -9,51 +9,21 @@ import {
   filterCatalogProviderRows,
   type CatalogConfiguredKeys,
 } from "@/lib/shared/catalog-sections";
-import { useToast } from "../../ui/Toast";
 import { CatalogSourcesHelp } from "./CatalogSourcesHelp";
 import { ModelTable } from "./ModelTable";
 import { ListSkeleton } from "./ListSkeleton";
-import type { RuntimeCatalog } from "./types";
+import { useModelsApi } from "./use-catalog-entries";
 import styles from "./CatalogBrowser.module.css";
 
 const SKELETON_PROVIDERS = 3;
 const SKELETON_ROWS = 3;
 
-const EMPTY_CATALOG: RuntimeCatalog = { providers: [], modelCount: 0 };
-
 export function CatalogBrowser({ configured }: { configured: CatalogConfiguredKeys }) {
   const { t } = useI18n();
-  const toast = useToast();
-  const [catalog, setCatalog] = useState<RuntimeCatalog>(EMPTY_CATALOG);
+  const { data, loading, refreshing, error, refresh } = useModelsApi();
+  const catalog = data.catalog;
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [openRaw, setOpenRaw] = useState<readonly string[]>([]);
-
-  const loadCatalog = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/models${isRefresh ? "?refresh=true" : ""}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as { catalog?: RuntimeCatalog };
-      setCatalog(data.catalog ?? EMPTY_CATALOG);
-      if (isRefresh) toast.show({ kind: "success", message: t("Catalog refreshed") });
-    } catch (e) {
-      const message = e instanceof Error && e.message ? e.message : t("Failed to load model catalog");
-      setError(message);
-      if (isRefresh) toast.show({ kind: "error", message });
-    } finally {
-      if (isRefresh) setRefreshing(false);
-      else setLoading(false);
-    }
-  }, [t, toast]);
-
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
 
   const rows = useMemo(
     () => catalogProviderRows({ providers: catalog.providers, configured }),
@@ -93,7 +63,7 @@ export function CatalogBrowser({ configured }: { configured: CatalogConfiguredKe
         <button
           type="button"
           className={styles.refresh}
-          onClick={() => { void loadCatalog(true); }}
+          onClick={() => { void refresh(); }}
           disabled={busy}
         >
           {refreshing ? t("Refreshing...") : t("Refresh catalog")}

@@ -19,7 +19,7 @@ export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
       {provider ? (
         <>
           <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigApiKeyProviders} />
-          <ApiKeyModels key={`${provider.id}:models`} providerId={provider.id} configured={provider.configured} />
+          <ApiKeyModels key={`${provider.id}:models:${provider.configured}`} providerId={provider.id} />
           <ProviderModelIconsSection providerId={provider.id} />
         </>
       ) : (

@@ -109,11 +109,11 @@ describe("models config browse state", () => {
     selectModelsConfigProvider("openai");
 
     expect(modelsConfigPanel.pages()).toEqual([root]);
-    expect(modelsConfigPanel.get().selectedProvider).toBe("openai");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "openai", kind: "custom" });
 
     selectModelsConfigProvider("anthropic");
     expect(modelsConfigPanel.pages()).toEqual([root]);
-    expect(modelsConfigPanel.get().selectedProvider).toBe("anthropic");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "anthropic", kind: "custom" });
   });
 
   it("keeps the provider filter when the selection moves", () => {
@@ -130,33 +130,30 @@ describe("models config browse state", () => {
 
     clearModelsConfigProvider();
 
-    expect(modelsConfigPanel.get().selectedProvider).toBeNull();
-    expect(modelsConfigPanel.get().selectedProviderKind).toBeNull();
+    expect(modelsConfigPanel.get().selected).toBeNull();
     expect(modelsConfigPanel.get().providerFilter).toBe("open");
   });
 
   it("remembers the source kind of the selected provider", () => {
     selectModelsConfigProvider("openai", "subscription");
-    expect(modelsConfigPanel.get().selectedProviderKind).toBe("subscription");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "openai", kind: "subscription" });
 
     selectModelsConfigProvider("anthropic", "apiKey");
-    expect(modelsConfigPanel.get().selectedProviderKind).toBe("apiKey");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "anthropic", kind: "apiKey" });
 
     selectModelsConfigProvider("my-endpoint");
-    expect(modelsConfigPanel.get().selectedProviderKind).toBe("custom");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "my-endpoint", kind: "custom" });
   });
 
   it("selects the provider when its auth page is opened", () => {
     openModelsConfigOAuth("openai");
     expect(modelsConfigPanel.get()).toMatchObject({
-      selectedProvider: "openai",
-      selectedProviderKind: "subscription",
+      selected: { name: "openai", kind: "subscription" },
     });
 
     openModelsConfigApiKey("anthropic");
     expect(modelsConfigPanel.get()).toMatchObject({
-      selectedProvider: "anthropic",
-      selectedProviderKind: "apiKey",
+      selected: { name: "anthropic", kind: "apiKey" },
     });
   });
 });

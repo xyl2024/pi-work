@@ -18,29 +18,40 @@ export interface ModelsConfigProviderRow {
   changed: boolean;
 }
 
-export interface ModelsConfigProviderSection {
+export interface ModelsConfigSection<Row> {
   kind: ModelsConfigProviderKind;
   titleKey: string;
-  rows: ModelsConfigProviderRow[];
+  rows: Row[];
 }
 
-const SECTION_TITLE: Record<ModelsConfigProviderKind, string> = {
-  subscription: "Subscriptions",
-  apiKey: "API Keys",
-  custom: "Custom providers",
+export type ModelsConfigProviderSection = ModelsConfigSection<ModelsConfigProviderRow>;
+
+export interface ModelsConfigProviderKindInfo {
+  kind: ModelsConfigProviderKind;
+  titleKey: string;
+  labelKey: string;
+}
+
+export const MODELS_CONFIG_PROVIDER_KIND_INFO: Record<ModelsConfigProviderKind, ModelsConfigProviderKindInfo> = {
+  subscription: { kind: "subscription", titleKey: "Subscriptions", labelKey: "Subscription" },
+  apiKey: { kind: "apiKey", titleKey: "API Keys", labelKey: "API Key" },
+  custom: { kind: "custom", titleKey: "Custom providers", labelKey: "Custom" },
 };
 
-const KIND_LABEL: Record<ModelsConfigProviderKind, string> = {
-  subscription: "Subscription",
-  apiKey: "API Key",
-  custom: "Custom",
-};
+export const MODELS_CONFIG_PROVIDER_KIND_ORDER: ModelsConfigProviderKind[] = ["subscription", "apiKey", "custom"];
 
 export function modelsConfigProviderKindLabel(kind: ModelsConfigProviderKind): string {
-  return KIND_LABEL[kind];
+  return MODELS_CONFIG_PROVIDER_KIND_INFO[kind].labelKey;
 }
 
-const SECTION_ORDER: ModelsConfigProviderKind[] = ["subscription", "apiKey", "custom"];
+export function modelsConfigProviderKindTitle(kind: ModelsConfigProviderKind): string {
+  return MODELS_CONFIG_PROVIDER_KIND_INFO[kind].titleKey;
+}
+
+export function byModelsConfigRowName(left: { id: string; name: string }, right: { id: string; name: string }): number {
+  const nameOrder = left.name.toLowerCase().localeCompare(right.name.toLowerCase());
+  return nameOrder !== 0 ? nameOrder : left.id.localeCompare(right.id);
+}
 
 function customModels(provider: ProviderEntry | undefined): ModelsConfigProviderModel[] {
   return (provider?.models ?? []).map((model: ModelEntry) => ({
@@ -67,11 +78,6 @@ function row(input: {
     matchedModels: [],
     changed: input.changed,
   };
-}
-
-function byName(left: ModelsConfigProviderRow, right: ModelsConfigProviderRow): number {
-  const nameOrder = left.name.toLowerCase().localeCompare(right.name.toLowerCase());
-  return nameOrder !== 0 ? nameOrder : left.id.localeCompare(right.id);
 }
 
 export function modelsConfigProviderSections(input: {
@@ -119,10 +125,10 @@ export function modelsConfigProviderSections(input: {
     ),
   };
 
-  return SECTION_ORDER.map((kind) => ({
+  return MODELS_CONFIG_PROVIDER_KIND_ORDER.map((kind) => ({
     kind,
-    titleKey: SECTION_TITLE[kind],
-    rows: rows[kind].sort(byName),
+    titleKey: modelsConfigProviderKindTitle(kind),
+    rows: rows[kind].sort(byModelsConfigRowName),
   }));
 }
 

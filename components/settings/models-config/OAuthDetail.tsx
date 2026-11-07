@@ -84,7 +84,7 @@ export function OAuthDetail({ provider, loginState, onRefresh }: {
         <div className={styles.status} data-connected={provider.loggedIn ? "true" : undefined}>
           <span className={styles.statusDot} />
           <span className={styles.statusText}>
-            {provider.loggedIn ? t("connected") : t("not connected")}
+            {provider.loggedIn ? t("Connected") : t("Not connected")}
           </span>
         </div>
       </div>

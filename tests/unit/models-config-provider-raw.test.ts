@@ -20,6 +20,7 @@ import {
   applyModelsConfigProviderRawEdit,
   beginModelsConfigProviderRawEdit,
   cancelModelsConfigProviderRawEdit,
+  clearModelsConfigProvider,
   modelsConfigPanel,
   openModelsConfigProviderForm,
   selectModelsConfigProblem,
@@ -85,6 +86,13 @@ describe("provider raw JSON editing", () => {
     beginModelsConfigProviderRawEdit(providerName, JSON.stringify(provider()));
     updateModelsConfigProviderRawEdit('{"api":"anthropic-messages"}');
     openModelsConfigProviderForm(providerName);
+    expect(modelsConfigPanel.get().providerRawEdit).toBeNull();
+  });
+
+  it("drops the raw buffer when the selection is cleared", () => {
+    beginModelsConfigProviderRawEdit(providerName, JSON.stringify(provider()));
+    updateModelsConfigProviderRawEdit('{"api":"anthropic-messages"}');
+    clearModelsConfigProvider();
     expect(modelsConfigPanel.get().providerRawEdit).toBeNull();
   });
 });

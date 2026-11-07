@@ -141,10 +141,6 @@ export function modelsConfigChangedProviders(draft: ModelsConfigDraft): string[]
     .sort();
 }
 
-export function modelsConfigChangeCount(draft: ModelsConfigDraft): number {
-  return modelsConfigChangedProviders(draft).length;
-}
-
 export function isModelsConfigDirty(draft: ModelsConfigDraft): boolean {
   return canonicalModelsJson(draft.config) !== canonicalModelsJson(draft.baseline);
 }

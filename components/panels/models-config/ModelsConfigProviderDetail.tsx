@@ -20,10 +20,11 @@ import styles from "./models-config.module.css";
 export function ModelsConfigProviderDetail({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
   const { view: state } = useModelsConfigPanel();
-  const { config, providerNames, selectedProvider, selectedProviderKind, oauthProviders, apiKeyProviders } = state;
+  const { config, providerNames, selected, oauthProviders, apiKeyProviders } = state;
   const [search, setSearch] = useState({ key: "", query: "" });
 
-  const kind = selectedProviderKind ?? "custom";
+  const selectedProvider = selected?.name ?? null;
+  const kind = selected?.kind ?? "custom";
   const provider = kind === "custom" && selectedProvider !== null ? config.providers?.[selectedProvider] : undefined;
   const oauthProvider = kind === "subscription" ? oauthProviders.find((item) => item.id === selectedProvider) : undefined;
   const apiKeyProvider = kind === "apiKey" ? apiKeyProviders.find((item) => item.id === selectedProvider) : undefined;

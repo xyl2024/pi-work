@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ProviderGearIcon, ProviderIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { SectionTitle } from "@/components/settings/models-config/form-fields";
-import type { RuntimeCatalog, RuntimeModelInfo } from "@/lib/shared/models-config";
+import { useModelsApi } from "@/components/settings/models-config/use-catalog-entries";
 import { MODEL_ICON_LIST_COLLAPSE_THRESHOLD, shouldCollapseModelIconList } from "@/lib/shared/model-icon-list";
 import {
   MODEL_ICON_PREFERENCE_AUTO,
@@ -14,7 +14,6 @@ import {
   isProviderIconPreferred,
   matchModelIcon,
   modelIconPreferenceKey,
-  type ModelIconPreferences,
 } from "@/lib/shared/model-icon-match";
 import { saveModelIconPreference } from "@/lib/client/model-icon-preferences";
 import {
@@ -24,47 +23,25 @@ import {
 import { ListSkeleton } from "@/components/settings/models-config/ListSkeleton";
 import styles from "./ProviderModelIconsSection.module.css";
 
-interface ModelsApiResponse {
-  catalog?: RuntimeCatalog;
-  modelIcons?: Record<string, string>;
-  modelIconPreferences?: ModelIconPreferences;
-}
-
 export function ProviderModelIconsSection({ providerId }: { providerId: string }) {
   const { t } = useI18n();
   const toast = useToast();
-  const [models, setModels] = useState<RuntimeModelInfo[]>([]);
-  const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  const { data, loaded, loading, error: loadError } = useModelsApi({
+    messages: { loadFailureKey: "Failed to load models" },
+  });
+  const models = useMemo(
+    () => data.catalog.providers.find((provider) => provider.id === providerId)?.models ?? [],
+    [data.catalog.providers, providerId],
+  );
+  const modelIcons = data.modelIcons;
   const { modelIconPreferences: preferences } = useModelsConfigPanel().view;
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const response = await fetch("/api/models", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = (await response.json()) as ModelsApiResponse;
-        if (cancelled) return;
-        const catalogProvider = data.catalog?.providers.find((provider) => provider.id === providerId);
-        setModels(catalogProvider?.models ?? []);
-        setModelIcons(data.modelIcons ?? {});
-        applyModelsConfigModelIconPreferences(data.modelIconPreferences ?? {});
-      } catch (e) {
-        if (cancelled) return;
-        setModels([]);
-        setLoadError(e instanceof Error && e.message ? e.message : t("Failed to load models"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [providerId, t]);
+    if (!loaded) return;
+    applyModelsConfigModelIconPreferences(data.modelIconPreferences);
+  }, [data.modelIconPreferences, loaded]);
 
   const providerIconId = useMemo(
     () => resolveProviderIcon(providerId, undefined, modelIcons),

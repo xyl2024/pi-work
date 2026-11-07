@@ -10,7 +10,7 @@ import {
   type ModelsConfigShelfRow,
   type ModelsConfigShelfSection,
 } from "@/lib/shared/models-config-shelf";
-import type { ModelsConfigProviderKind } from "@/lib/shared/models-config-filter";
+import { MODELS_CONFIG_PROVIDER_KIND_VIEW } from "./provider-kind";
 import type { ApiKeyProvider, OAuthProvider } from "./types";
 import styles from "./AddProviderPicker.module.css";
 
@@ -57,40 +57,6 @@ function PlusIcon({ size = 14 }: { size?: number }) {
     </svg>
   );
 }
-
-function SubscriptionIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function ApiKeyIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="7.5" cy="15.5" r="4.5" />
-      <path d="M10.7 12.3 21 2l-3 3 2 2-2 2-2-2-2 2 2 2" />
-    </svg>
-  );
-}
-
-function CustomIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <line x1="12" y1="8" x2="12" y2="16" />
-      <line x1="8" y1="12" x2="16" y2="12" />
-    </svg>
-  );
-}
-
-const SECTION_ICONS: Record<ModelsConfigProviderKind, () => ReactNode> = {
-  subscription: SubscriptionIcon,
-  apiKey: ApiKeyIcon,
-  custom: CustomIcon,
-};
 
 function ShelfCard({ row, onOpen }: { row: ModelsConfigShelfRow; onOpen: () => void }) {
   const { t } = useI18n();
@@ -195,12 +161,12 @@ export function AddProviderPickerBody({
           </div>
         ) : (
           filtered.map((section: ModelsConfigShelfSection) => {
-            const SectionIcon = SECTION_ICONS[section.kind];
+            const { Icon: SectionIcon, titleKey } = MODELS_CONFIG_PROVIDER_KIND_VIEW[section.kind];
             return (
               <section key={section.kind} className={styles.section} aria-labelledby={`${idBase}-${section.kind}`}>
                 <h3 id={`${idBase}-${section.kind}`} className={styles.sectionHeader}>
                   <span className={styles.sectionIcon}><SectionIcon /></span>
-                  {t(section.titleKey)}
+                  {t(titleKey)}
                   <span className={styles.sectionCount}>{section.rows.length}</span>
                 </h3>
                 {section.rows.length === 0 ? (

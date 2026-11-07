@@ -1,5 +1,11 @@
 import type { ApiKeyProvider, OAuthProvider } from "./models-config";
-import type { ModelsConfigProviderKind } from "./models-config-filter";
+import {
+  byModelsConfigRowName,
+  modelsConfigProviderKindTitle,
+  MODELS_CONFIG_PROVIDER_KIND_ORDER,
+  type ModelsConfigProviderKind,
+  type ModelsConfigSection,
+} from "./models-config-filter";
 
 export type ModelsConfigShelfAction = "connect" | "configure" | "create";
 
@@ -15,19 +21,7 @@ export interface ModelsConfigShelfRow {
   keywords: readonly string[];
 }
 
-export interface ModelsConfigShelfSection {
-  kind: ModelsConfigProviderKind;
-  titleKey: string;
-  rows: ModelsConfigShelfRow[];
-}
-
-const SECTION_TITLE: Record<ModelsConfigProviderKind, string> = {
-  subscription: "Subscriptions",
-  apiKey: "API Keys",
-  custom: "Custom providers",
-};
-
-const SECTION_ORDER: ModelsConfigProviderKind[] = ["subscription", "apiKey", "custom"];
+export type ModelsConfigShelfSection = ModelsConfigSection<ModelsConfigShelfRow>;
 
 const CUSTOM_KEYWORDS = ["custom", "openai-compatible", "anthropic-compatible", "base url", "api key"];
 
@@ -73,11 +67,6 @@ function customRow(keywords: readonly string[]): ModelsConfigShelfRow {
   };
 }
 
-function byName(left: ModelsConfigShelfRow, right: ModelsConfigShelfRow): number {
-  const nameOrder = left.name.toLowerCase().localeCompare(right.name.toLowerCase());
-  return nameOrder !== 0 ? nameOrder : left.id.localeCompare(right.id);
-}
-
 export function modelsConfigShelfSections(input: {
   oauthProviders: readonly OAuthProvider[];
   apiKeyProviders: readonly ApiKeyProvider[];
@@ -89,10 +78,10 @@ export function modelsConfigShelfSections(input: {
     custom: [customRow(input.customKeywords ?? [])],
   };
 
-  return SECTION_ORDER.map((kind) => ({
+  return MODELS_CONFIG_PROVIDER_KIND_ORDER.map((kind) => ({
     kind,
-    titleKey: SECTION_TITLE[kind],
-    rows: rows[kind].sort(byName),
+    titleKey: modelsConfigProviderKindTitle(kind),
+    rows: rows[kind].sort(byModelsConfigRowName),
   }));
 }
 

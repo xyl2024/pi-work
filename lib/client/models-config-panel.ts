@@ -72,6 +72,11 @@ export interface ModelsConfigDeleteConfirm {
   affectedModelCount: number;
 }
 
+export interface ModelsConfigProviderSelection {
+  name: string;
+  kind: ModelsConfigProviderKind;
+}
+
 export interface ModelsConfigViewState {
   loading: boolean;
   loaded: boolean;
@@ -90,8 +95,7 @@ export interface ModelsConfigViewState {
   oauthLogin: OAuthLoginState;
   oauthInProgress: boolean;
   modelIconPreferences: ModelIconPreferences;
-  selectedProvider: string | null;
-  selectedProviderKind: ModelsConfigProviderKind | null;
+  selected: ModelsConfigProviderSelection | null;
   providerFilter: string;
   pendingDelete: ModelsConfigPendingDelete | null;
 }
@@ -116,8 +120,7 @@ const INITIAL: ModelsConfigViewState = {
   oauthLogin: OAUTH_LOGIN_IDLE,
   oauthInProgress: false,
   modelIconPreferences: {},
-  selectedProvider: null,
-  selectedProviderKind: null,
+  selected: null,
   providerFilter: "",
   pendingDelete: null,
 };
@@ -144,6 +147,10 @@ export function selectModelsConfigChangedProviderNames(state: ModelsConfigViewSt
 
 export function selectModelsConfigChangeCount(state: ModelsConfigViewState): number {
   return selectModelsConfigChangedProviderNames(state).length;
+}
+
+function draftEdit(patch: Partial<ModelsConfigViewState>): Partial<ModelsConfigViewState> {
+  return { ...patch, savedOk: false, saveError: null };
 }
 
 const PROVIDER_DELETE_DESCRIPTION = 'Delete "{name}" and its {n} model definitions? This takes effect after saving.';
@@ -269,8 +276,10 @@ function pageProviderName(page: ModelsConfigPage): string | null {
 }
 
 function openPanelPage(page: ModelsConfigPage): void {
-  const selectedProvider = pageProviderName(page) ?? modelsConfigPanel.get().selectedProvider;
-  modelsConfigPanel.patch({ selectedProvider, rawEdit: null, providerRawEdit: null });
+  const current = modelsConfigPanel.get().selected;
+  const providerName = pageProviderName(page);
+  const selected = providerName === null ? current : { name: providerName, kind: current?.kind ?? "custom" };
+  modelsConfigPanel.patch({ selected, rawEdit: null, providerRawEdit: null });
   if (page.kind === "root") {
     modelsConfigPanel.resetPages();
     return;
@@ -434,12 +443,12 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     let pages = modelsConfigPanel.pages();
     let rawEdit = latest.rawEdit;
     let providerRawEdit = latest.providerRawEdit;
-    let selectedProvider = latest.selectedProvider;
+    let selected = latest.selected;
     const providerNames = { ...latest.providerNames };
     for (const [name, nextName] of renames) {
       config = withRenamedProvider(config, name, nextName);
       pages = renameProviderPage(pages, name, nextName);
-      if (selectedProvider === name) selectedProvider = nextName;
+      if (selected?.name === name) selected = { ...selected, name: nextName };
       if (rawEdit?.providerName === name) rawEdit = { ...rawEdit, providerName: nextName };
       if (providerRawEdit?.providerName === name) providerRawEdit = { ...providerRawEdit, providerName: nextName };
       const currentText = providerNames[name];
@@ -451,7 +460,7 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
     for (const [name, text] of Object.entries(pendingNames)) {
       if (text.trim() === name && providerNames[name] === text) delete providerNames[name];
     }
-    scope.patch({ config, rawEdit, providerRawEdit, providerNames, selectedProvider, saving: false, savedOk: true, saveError: null, baseline: payload });
+    scope.patch({ config, rawEdit, providerRawEdit, providerNames, selected, saving: false, savedOk: true, saveError: null, baseline: payload });
     replacePages(pages);
     setTimeout(() => modelsConfigPanel.patch({ savedOk: false }), 2000);
     return { ok: true };
@@ -466,7 +475,7 @@ export function selectModelsConfigProvider(
   name: string,
   kind: ModelsConfigProviderKind = "custom",
 ): void {
-  modelsConfigPanel.patch({ selectedProvider: name, selectedProviderKind: kind, rawEdit: null, providerRawEdit: null });
+  modelsConfigPanel.patch({ selected: { name, kind }, rawEdit: null, providerRawEdit: null });
   if (modelsConfigPanel.currentPage().kind !== "root") modelsConfigPanel.resetPages();
 }
 
@@ -476,7 +485,7 @@ export function openModelsConfigProviderForm(name: string): void {
 }
 
 export function clearModelsConfigProvider(): void {
-  modelsConfigPanel.patch({ selectedProvider: null, selectedProviderKind: null, rawEdit: null });
+  modelsConfigPanel.patch({ selected: null, rawEdit: null, providerRawEdit: null });
 }
 
 export function setModelsConfigProviderFilter(query: string): void {
@@ -490,8 +499,7 @@ export function openModelsConfigModel(providerName: string, index: number): void
 
 export function openModelsConfigOAuth(providerId: string): void {
   modelsConfigPanel.patch({
-    selectedProvider: providerId,
-    selectedProviderKind: "subscription",
+    selected: { name: providerId, kind: "subscription" },
     oauthProviderId: providerId,
     oauthLogin: getOAuthLoginState(providerId),
     oauthInProgress: hasActiveOAuthLogin(),
@@ -506,7 +514,7 @@ export function openModelsConfigCatalog(): void {
 }
 
 export function openModelsConfigApiKey(providerId: string): void {
-  modelsConfigPanel.patch({ selectedProvider: providerId, selectedProviderKind: "apiKey" });
+  modelsConfigPanel.patch({ selected: { name: providerId, kind: "apiKey" } });
   openPanelPage({ kind: "apikey", providerId });
   modelsConfigPanel.patch({ rawEdit: null });
 }
@@ -528,19 +536,19 @@ export function openModelsConfigFillModel(providerName: string, index: number): 
 
 export function addModelsConfigCustomProvider(): void {
   const { config, name } = withCustomProvider(modelsConfigPanel.get().config);
-  modelsConfigPanel.patch({ config });
+  modelsConfigPanel.patch(draftEdit({ config }));
   openPanelPage({ kind: "provider", name });
   modelsConfigPanel.patch({ rawEdit: null });
 }
 
 export function updateModelsConfigProvider(name: string, provider: ProviderEntry): void {
   const state = modelsConfigPanel.get();
-  modelsConfigPanel.patch({ config: withProvider(state.config, name, provider) });
+  modelsConfigPanel.patch(draftEdit({ config: withProvider(state.config, name, provider) }));
 }
 
 export function renameModelsConfigProvider(oldName: string, newName: string): void {
   const state = modelsConfigPanel.get();
-  modelsConfigPanel.patch({ providerNames: { ...state.providerNames, [oldName]: newName }, savedOk: false });
+  modelsConfigPanel.patch(draftEdit({ providerNames: { ...state.providerNames, [oldName]: newName } }));
 }
 
 export function requestModelsConfigProviderDelete(name: string): void {
@@ -569,25 +577,24 @@ function deleteModelsConfigProvider(name: string): void {
   const state = modelsConfigPanel.get();
   const providerNames = { ...state.providerNames };
   delete providerNames[name];
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     providerNames,
     config: withoutProvider(state.config, name),
     rawEdit: null,
     providerRawEdit: null,
-    selectedProvider: state.selectedProvider === name ? null : state.selectedProvider,
-    selectedProviderKind: state.selectedProvider === name ? null : state.selectedProviderKind,
-  });
+    selected: state.selected?.name === name ? null : state.selected,
+  }));
   modelsConfigPanel.resetPages();
 }
 
 export function updateModelsConfigModel(providerName: string, index: number, model: ModelEntry): void {
   const state = modelsConfigPanel.get();
-  modelsConfigPanel.patch({ config: withModel(state.config, providerName, index, model) });
+  modelsConfigPanel.patch(draftEdit({ config: withModel(state.config, providerName, index, model) }));
 }
 
 export function addModelsConfigModel(providerName: string): void {
   const { config, index } = withAddedModel(modelsConfigPanel.get().config, providerName);
-  modelsConfigPanel.patch({ config });
+  modelsConfigPanel.patch(draftEdit({ config }));
   openPanelPage({ kind: "model", providerName, index });
   modelsConfigPanel.patch({ rawEdit: null });
 }
@@ -601,7 +608,7 @@ export function addModelsConfigModelFromCatalog(
     providerName,
     source,
   );
-  modelsConfigPanel.patch({ config });
+  modelsConfigPanel.patch(draftEdit({ config }));
   openPanelPage({ kind: "model", providerName, index });
   modelsConfigPanel.patch({ rawEdit: null });
 }
@@ -612,20 +619,20 @@ export function fillModelsConfigModelFromCatalog(
   source: RuntimeModelInfo,
 ): void {
   const state = modelsConfigPanel.get();
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     config: withModelFromCatalog(state.config, providerName, index, source),
-  });
+  }));
   openPanelPage({ kind: "model", providerName, index });
 }
 
 function removeModelsConfigModel(providerName: string, index: number): void {
   const state = modelsConfigPanel.get();
-  modelsConfigPanel.patch({ config: withoutModel(state.config, providerName, index), rawEdit: null });
+  modelsConfigPanel.patch(draftEdit({ config: withoutModel(state.config, providerName, index), rawEdit: null }));
   modelsConfigPanel.resetPages();
 }
 
 export function beginModelsConfigRawEdit(providerName: string, index: number, text: string): void {
-  modelsConfigPanel.patch({ rawEdit: { providerName, index, originalJson: text, text } });
+  modelsConfigPanel.patch(draftEdit({ rawEdit: { providerName, index, originalJson: text, text } }));
 }
 
 export function updateModelsConfigRawEdit(text: string): void {
@@ -633,19 +640,19 @@ export function updateModelsConfigRawEdit(text: string): void {
   const rawEdit = state.rawEdit;
   if (!rawEdit) return;
   const parsed = parseModelEntryJson(text);
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     rawEdit: { ...rawEdit, text },
     config: parsed.ok
       ? withModel(state.config, rawEdit.providerName, rawEdit.index, parsed.model)
       : state.config,
-  });
+  }));
 }
 
 export function applyModelsConfigRawEdit(): void {
   const rawEdit = modelsConfigPanel.get().rawEdit;
   if (!rawEdit) return;
   if (!parseModelEntryJson(rawEdit.text).ok) return;
-  modelsConfigPanel.patch({ rawEdit: null });
+  modelsConfigPanel.patch(draftEdit({ rawEdit: null }));
 }
 
 export function cancelModelsConfigRawEdit(): void {
@@ -653,16 +660,16 @@ export function cancelModelsConfigRawEdit(): void {
   const rawEdit = state.rawEdit;
   if (!rawEdit) return;
   const parsed = parseModelEntryJson(rawEdit.originalJson);
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     rawEdit: null,
     config: parsed.ok
       ? withModel(state.config, rawEdit.providerName, rawEdit.index, parsed.model)
       : state.config,
-  });
+  }));
 }
 
 export function beginModelsConfigProviderRawEdit(providerName: string, text: string): void {
-  modelsConfigPanel.patch({ providerRawEdit: { providerName, originalJson: text, text } });
+  modelsConfigPanel.patch(draftEdit({ providerRawEdit: { providerName, originalJson: text, text } }));
 }
 
 export function updateModelsConfigProviderRawEdit(text: string): void {
@@ -670,19 +677,19 @@ export function updateModelsConfigProviderRawEdit(text: string): void {
   const providerRawEdit = state.providerRawEdit;
   if (!providerRawEdit) return;
   const parsed = parseProviderEntryJson(text);
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     providerRawEdit: { ...providerRawEdit, text },
     config: parsed.ok
       ? withProvider(state.config, providerRawEdit.providerName, parsed.provider)
       : state.config,
-  });
+  }));
 }
 
 export function applyModelsConfigProviderRawEdit(): void {
   const providerRawEdit = modelsConfigPanel.get().providerRawEdit;
   if (!providerRawEdit) return;
   if (!parseProviderEntryJson(providerRawEdit.text).ok) return;
-  modelsConfigPanel.patch({ providerRawEdit: null });
+  modelsConfigPanel.patch(draftEdit({ providerRawEdit: null }));
 }
 
 export function cancelModelsConfigProviderRawEdit(): void {
@@ -690,10 +697,10 @@ export function cancelModelsConfigProviderRawEdit(): void {
   const providerRawEdit = state.providerRawEdit;
   if (!providerRawEdit) return;
   const parsed = parseProviderEntryJson(providerRawEdit.originalJson);
-  modelsConfigPanel.patch({
+  modelsConfigPanel.patch(draftEdit({
     providerRawEdit: null,
     config: parsed.ok
       ? withProvider(state.config, providerRawEdit.providerName, parsed.provider)
       : state.config,
-  });
+  }));
 }

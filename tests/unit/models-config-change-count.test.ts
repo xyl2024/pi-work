@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   missingModelIdProblem,
-  modelsConfigChangeCount,
   modelsConfigChangedProviders,
   modelsConfigProblem,
   parseModelEntryJson,
@@ -29,7 +28,7 @@ describe("modelsConfigChangedProviders", () => {
   it("names the provider whose nested model changed", () => {
     const config = withModel(baseline, "beta", 0, { id: "b-1", name: "Beta One" });
     expect(modelsConfigChangedProviders({ config, baseline })).toEqual(["beta"]);
-    expect(modelsConfigChangeCount({ config, baseline })).toBe(1);
+    expect(modelsConfigChangedProviders({ config, baseline })).toHaveLength(1);
   });
 
   it("counts added and removed providers", () => {
@@ -44,20 +43,20 @@ describe("modelsConfigChangedProviders", () => {
     config = withModel(config, "alpha", 1, { id: "a-2", maxTokens: 100 });
     config = withModel(config, "beta", 0, { id: "b-1", reasoning: true });
     expect(modelsConfigChangedProviders({ config, baseline })).toEqual(["alpha", "beta"]);
-    expect(modelsConfigChangeCount({ config, baseline })).toBe(2);
+    expect(modelsConfigChangedProviders({ config, baseline })).toHaveLength(2);
   });
 
   it("drops back to zero when an edit is undone", () => {
     const edited = withModel(baseline, "alpha", 0, { id: "a-1", name: "Typed" });
-    expect(modelsConfigChangeCount({ config: edited, baseline })).toBe(1);
+    expect(modelsConfigChangedProviders({ config: edited, baseline })).toHaveLength(1);
     const undone = withModel(edited, "alpha", 0, { id: "a-1" });
-    expect(modelsConfigChangeCount({ config: undone, baseline })).toBe(0);
+    expect(modelsConfigChangedProviders({ config: undone, baseline })).toHaveLength(0);
   });
 
   it("counts a provider added and then removed back to nothing", () => {
     const added = withCustomProvider(baseline);
     const removed = withoutProvider(added.config, added.name);
-    expect(modelsConfigChangeCount({ config: removed, baseline })).toBe(0);
+    expect(modelsConfigChangedProviders({ config: removed, baseline })).toHaveLength(0);
   });
 });
 

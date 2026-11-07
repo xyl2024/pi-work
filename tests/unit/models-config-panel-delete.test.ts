@@ -48,7 +48,7 @@ function seed(): void {
     baseline,
     providerNames: {},
     rawEdit: null,
-    selectedProvider: null,
+    selected: null,
     pendingDelete: null,
   });
 }
@@ -111,7 +111,7 @@ describe("deleting a provider waits for confirmation", () => {
     expect(state.pendingDelete).toBeNull();
     expect(state.config.providers).not.toHaveProperty("alpha");
     expect(state.config.providers).toHaveProperty("beta");
-    expect(state.selectedProvider).toBeNull();
+    expect(state.selected).toBeNull();
     expect(selectModelsConfigChangeCount(state)).toBe(1);
     expect(modelsConfigPanel.currentPage().kind).toBe("root");
     expect(putModelsConfig).not.toHaveBeenCalled();

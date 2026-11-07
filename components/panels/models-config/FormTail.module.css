@@ -1,0 +1,26 @@
+.dangerZone {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.dangerButton {
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  border-radius: 6px;
+  background: none;
+  color: var(--error);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.dangerButton:hover {
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.dangerButton:focus-visible {
+  outline: 2px solid var(--error);
+  outline-offset: 2px;
+}

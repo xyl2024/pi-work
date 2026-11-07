@@ -117,7 +117,7 @@ describe("models config leave guard", () => {
 
     expect(modelsConfigPanel.get().config.providers).toEqual({});
     expect(modelsConfigPanel.pages()).toEqual([{ kind: "root" }]);
-    expect(modelsConfigPanel.get().selectedProvider).toBe("openai");
+    expect(modelsConfigPanel.get().selected).toEqual({ name: "openai", kind: "custom" });
   });
 
   it("asks while an authorization is running and cancels the login when confirmed", async () => {

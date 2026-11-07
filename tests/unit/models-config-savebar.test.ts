@@ -51,7 +51,7 @@ beforeEach(() => {
     saving: false,
     savedOk: false,
     saveError: null,
-    selectedProvider: null,
+    selected: null,
   });
   seed();
 });
@@ -121,6 +121,29 @@ describe("save bar phases", () => {
     await saveModelsConfig();
     expect(selectModelsConfigChangeCount(modelsConfigPanel.get())).toBe(0);
     expect(selectModelsConfigSaveBarPhase(modelsConfigPanel.get())).toBe("saved");
+  });
+
+  it("leaves the saved phase as soon as the draft is edited again", async () => {
+    updateModelsConfigProvider("alpha", { api: "openai-completions", baseUrl: "https://x" });
+    await saveModelsConfig();
+    expect(selectModelsConfigSaveBarPhase(modelsConfigPanel.get())).toBe("saved");
+
+    updateModelsConfigModel("alpha", 0, { id: "a-1", name: "A renamed" });
+
+    expect(selectModelsConfigSaveBarPhase(modelsConfigPanel.get())).toBe("dirty");
+    expect(selectModelsConfigChangeCount(modelsConfigPanel.get())).toBe(1);
+  });
+
+  it("clears a stale failure as soon as the draft is edited again", async () => {
+    updateModelsConfigProvider("alpha", { api: "openai-completions", baseUrl: "https://x" });
+    vi.mocked(putModelsConfig).mockResolvedValue({ ok: false, error: "network down" });
+    await saveModelsConfig();
+    expect(selectModelsConfigSaveBarPhase(modelsConfigPanel.get())).toBe("failed");
+
+    updateModelsConfigModel("alpha", 0, { id: "a-1", name: "A renamed" });
+
+    expect(modelsConfigPanel.get().saveError).toBeNull();
+    expect(selectModelsConfigSaveBarPhase(modelsConfigPanel.get())).toBe("dirty");
   });
 });
 

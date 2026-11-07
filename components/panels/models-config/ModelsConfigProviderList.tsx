@@ -30,7 +30,7 @@ function matchedLabel(row: ModelsConfigProviderRow): string | null {
 export function ModelsConfigProviderList() {
   const { t } = useI18n();
   const { view } = useModelsConfigPanel();
-  const { config, oauthProviders, apiKeyProviders, providerFilter, selectedProvider, selectedProviderKind, providerNames } = view;
+  const { config, oauthProviders, apiKeyProviders, providerFilter, selected, providerNames } = view;
   const changedProviders = selectModelsConfigChangedProviderNames(view);
   const sections = useMemo(
     () =>
@@ -100,14 +100,14 @@ export function ModelsConfigProviderList() {
               </h3>
               {section.rows.map((row) => {
                 const iconId = row.kind === "custom" ? config.providers?.[row.id]?.icon ?? row.id : row.id;
-                const selected = selectedProvider === row.id && selectedProviderKind === row.kind;
+                const isSelected = selected?.name === row.id && selected.kind === row.kind;
                 const preview = matchedLabel(row);
                 return (
                   <button
                     key={row.key}
                     type="button"
                     className={styles.providerRow}
-                    aria-current={selected ? "true" : undefined}
+                    aria-current={isSelected ? "true" : undefined}
                     data-changed={row.changed ? "true" : undefined}
                     onClick={() => openRow(row)}
                   >

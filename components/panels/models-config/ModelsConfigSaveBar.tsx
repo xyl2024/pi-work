@@ -18,7 +18,12 @@ export function ModelsConfigSaveBar() {
   const { view } = useModelsConfigPanel();
   const phase = selectModelsConfigSaveBarPhase(view);
   const problem = selectModelsConfigProblem(view);
-  const problemText = modelsConfigProblemText(problem, t);
+  const problemProvider = problem?.location.providerName ?? null;
+  const problemText = modelsConfigProblemText(
+    problem,
+    t,
+    problemProvider === null ? undefined : view.providerNames[problemProvider] ?? problemProvider,
+  );
   const count = selectModelsConfigChangeCount(view);
   const saveDisabled = phase !== "dirty" && phase !== "failed";
 

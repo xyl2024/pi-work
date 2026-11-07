@@ -516,27 +516,11 @@
 .dangerAction:hover {
   background: var(--error-bg);
 }
-.dangerZone {
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
-}
-.dangerZoneButton {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--error);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-}
-.dangerZoneButton:hover {
-  background: var(--error-bg);
-}
 .saveBarCheck {
   flex-shrink: 0;
   stroke-dasharray: 18;
   animation: saved-check-draw 0.35s ease forwards;
+}
 .formSection {
   display: flex;
   flex-direction: column;
@@ -571,5 +555,4 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
 }

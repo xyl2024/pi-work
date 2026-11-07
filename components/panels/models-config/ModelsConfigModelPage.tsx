@@ -1,12 +1,9 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/ui/Toast";
-import { copyText } from "@/lib/client/clipboard";
 import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
 import { ModelFields } from "@/components/settings/models-config/ModelFields";
-import { ModelRawSection } from "@/components/settings/models-config/ModelRawSection";
-import { useModelsConfigDeleteConfirm } from "@/components/panels/models-config/useModelsConfigDeleteConfirm";
+import { FormDangerZone, FormRawSection } from "@/components/panels/models-config/FormTail";
 import {
   applyModelsConfigRawEdit,
   beginModelsConfigRawEdit,
@@ -23,9 +20,7 @@ import styles from "./ModelPage.module.css";
 
 export function ModelsConfigModelPage({ providerName, index }: { providerName: string; index: number }) {
   const { t } = useI18n();
-  const toast = useToast();
   const { view: state } = useModelsConfigPanel();
-  const confirmDelete = useModelsConfigDeleteConfirm();
   const model = state.config.providers?.[providerName]?.models?.[index];
   if (!model) return null;
 
@@ -36,16 +31,7 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
       : null;
   const problem = selectModelsConfigProblem(state);
   const rawProblem = rawEdit && (problem?.reason === "syntax" || problem?.reason === "not-object") ? problem : null;
-  const rawError = modelsConfigProblemText(rawProblem, t);
-
-  const copyRawJson = async () => {
-    try {
-      await copyText(summaryJson);
-      toast.show({ kind: "success", message: t("Copied") });
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Network error") });
-    }
-  };
+  const rawError = modelsConfigProblemText(rawProblem, t, state.providerNames[providerName] ?? providerName);
 
   const title = model.name || model.id || t("new model");
 
@@ -68,7 +54,7 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
           onChange={(next) => updateModelsConfigModel(providerName, index, next)}
         />
 
-        <ModelRawSection
+        <FormRawSection
           summaryJson={summaryJson}
           editing={rawEdit !== null}
           draft={rawEdit?.text ?? ""}
@@ -77,18 +63,12 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
           onDraftChange={updateModelsConfigRawEdit}
           onCancel={cancelModelsConfigRawEdit}
           onApply={applyModelsConfigRawEdit}
-          onCopy={() => { void copyRawJson(); }}
         />
 
-        <div className={styles.dangerZone}>
-          <button
-            type="button"
-            className={styles.deleteButton}
-            onClick={() => { void confirmDelete(() => requestModelsConfigModelDelete(providerName, index)); }}
-          >
-            {t("Delete model")}
-          </button>
-        </div>
+        <FormDangerZone
+          labelKey="Delete model"
+          onDelete={() => requestModelsConfigModelDelete(providerName, index)}
+        />
       </div>
 
       <ModelConnectionTest

@@ -3,7 +3,6 @@ export const common = {
   "Description": "描述",
   "Name already exists": "名称已存在",
   "Provider name": "提供商名称",
-  "Provider name cannot be empty": "提供商名称不能为空",
 
   "Cancel": "取消",
   "Leave while work is in progress?": "工作尚未完成，确认离开？",

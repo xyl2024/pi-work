@@ -1,12 +1,9 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/ui/Toast";
-import { copyText } from "@/lib/client/clipboard";
 import { ProviderFields } from "@/components/settings/models-config/ProviderFields";
 import { AdvancedSettings } from "@/components/settings/models-config/AdvancedSettings";
-import { ModelRawSection } from "@/components/settings/models-config/ModelRawSection";
-import { useModelsConfigDeleteConfirm } from "@/components/panels/models-config/useModelsConfigDeleteConfirm";
+import { FormDangerZone, FormRawSection } from "@/components/panels/models-config/FormTail";
 import {
   applyModelsConfigProviderRawEdit,
   beginModelsConfigProviderRawEdit,
@@ -27,9 +24,7 @@ type ProviderAdvancedField = "headers" | "compat" | "modelOverrides";
 
 export function ModelsConfigProviderFormPage({ name }: { name: string }) {
   const { t } = useI18n();
-  const toast = useToast();
   const { view: state } = useModelsConfigPanel();
-  const confirmDelete = useModelsConfigDeleteConfirm();
   const { config, providerNames } = state;
   const provider = config.providers?.[name];
   if (!provider) return null;
@@ -37,24 +32,16 @@ export function ModelsConfigProviderFormPage({ name }: { name: string }) {
   const providerRawEdit = state.providerRawEdit?.providerName === name ? state.providerRawEdit : null;
   const summaryJson = JSON.stringify(provider, null, 2);
   const problem = selectModelsConfigProblem(state);
+  const displayName = providerNames[name] ?? name;
   const nameError = problem && problem.location.providerName === name
-    ? modelsConfigProblemText(problem, t) ?? undefined
+    ? modelsConfigProblemText(problem, t, displayName) ?? undefined
     : undefined;
   const rawError = providerRawEdit
-    ? modelsConfigProblemText(modelsConfigProblem(providerRawEdit.text, name), t)
+    ? modelsConfigProblemText(modelsConfigProblem(providerRawEdit.text, name), t, displayName)
     : null;
 
   const setAdvanced = (field: ProviderAdvancedField) => (next: Record<string, unknown> | undefined) => {
     updateModelsConfigProvider(name, { ...provider, [field]: next } as ProviderEntry);
-  };
-
-  const copyRawJson = async () => {
-    try {
-      await copyText(summaryJson);
-      toast.show({ kind: "success", message: t("Copied") });
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Network error") });
-    }
   };
 
   return (
@@ -98,32 +85,21 @@ export function ModelsConfigProviderFormPage({ name }: { name: string }) {
         </div>
       </details>
 
-      <details className={styles.formSection}>
-        <summary className={styles.formSectionHeader}>{t("Raw JSON")}</summary>
-        <div className={styles.formSectionBody}>
-          <ModelRawSection
-            summaryJson={summaryJson}
-            editing={providerRawEdit !== null}
-            draft={providerRawEdit?.text ?? ""}
-            error={rawError}
-            onEnterEdit={() => beginModelsConfigProviderRawEdit(name, summaryJson)}
-            onDraftChange={updateModelsConfigProviderRawEdit}
-            onCancel={cancelModelsConfigProviderRawEdit}
-            onApply={applyModelsConfigProviderRawEdit}
-            onCopy={() => { void copyRawJson(); }}
-          />
-        </div>
-      </details>
+      <FormRawSection
+        summaryJson={summaryJson}
+        editing={providerRawEdit !== null}
+        draft={providerRawEdit?.text ?? ""}
+        error={rawError}
+        onEnterEdit={() => beginModelsConfigProviderRawEdit(name, summaryJson)}
+        onDraftChange={updateModelsConfigProviderRawEdit}
+        onCancel={cancelModelsConfigProviderRawEdit}
+        onApply={applyModelsConfigProviderRawEdit}
+      />
 
-      <section className={styles.dangerZone}>
-        <button
-          type="button"
-          className={styles.dangerZoneButton}
-          onClick={() => { void confirmDelete(() => requestModelsConfigProviderDelete(name)); }}
-        >
-          {t("Delete provider")}
-        </button>
-      </section>
+      <FormDangerZone
+        labelKey="Delete provider"
+        onDelete={() => requestModelsConfigProviderDelete(name)}
+      />
     </div>
   );
 }

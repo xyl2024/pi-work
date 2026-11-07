@@ -39,7 +39,7 @@ export function ModelsConfigPanel({
 }) {
   const { t } = useI18n();
   const { view, pages } = useModelsConfigPanel();
-  const { loaded, loadError, selectedProvider } = view;
+  const { loaded, loadError, selected } = view;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -101,11 +101,11 @@ export function ModelsConfigPanel({
               {renderForm(connectionPage)}
             </div>
           ) : <ModelsConfigProviderDetail onBack={onBack} />}
-          hasDetail={connectionPage !== null || selectedProvider !== null}
+          hasDetail={connectionPage !== null || selected !== null}
           onClearDetail={connectionPage ? () => { clearModelsConfigProvider(); backToBrowse(); } : clearModelsConfigProvider}
           onExit={onExit}
           visible={visible}
-          focusKey={`${page.kind}:${connectionPage?.providerId ?? selectedProvider ?? ""}`}
+          focusKey={`${page.kind}:${connectionPage?.providerId ?? selected?.name ?? ""}`}
         />
       </div>
       {(formPage !== null || dirty || view.savedOk || view.saveError) && <ModelsConfigSaveBar />}
