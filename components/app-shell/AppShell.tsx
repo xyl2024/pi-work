@@ -1374,7 +1374,7 @@ export function AppShell() {
         background: "var(--bg)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, height: 34, padding: "0 10px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, height: 34, padding: "0 10px", borderBottom: "1px solid var(--panel-border)" }}>
         <button
           type="button"
           onClick={() => {
