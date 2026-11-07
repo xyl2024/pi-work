@@ -77,6 +77,7 @@ import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { renderMainViewBadges } from "@/lib/client/main-view-badges";
+import { markSchedulerSeen } from "@/lib/client/scheduler-unread";
 import { useMainViewHeader } from "@/lib/client/main-view-header";
 import {
   requestMainViewLeave,
@@ -351,6 +352,14 @@ export function AppShell() {
   const mainViewRef = useRef(mainViewState);
   mainViewRef.current = mainViewState;
   const activeMainViewKind = selectMainViewKind(mainViewState);
+  const schedulerViewed = activeMainViewKind === "scheduler";
+  useEffect(() => {
+    if (!schedulerViewed) return;
+    markSchedulerSeen();
+    return () => {
+      markSchedulerSeen();
+    };
+  }, [schedulerViewed]);
   const chatForeground = mainViewState.active === "chat";
   const requestLeaveActiveMainView = useCallback((intent: MainViewLeaveIntent) => {
     const active = mainViewRef.current.active;

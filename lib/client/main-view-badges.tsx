@@ -6,17 +6,11 @@ import { schedulerPanel } from "./scheduler-panel";
 import { skillsPanel } from "./skills-panel";
 import { channelsPanel } from "./channels-panel";
 import { selectModelsConfigChangeCount, useModelsConfigPanel } from "./models-config-panel";
-
-function SchedulerRunningBadge() {
-  const running = schedulerPanel.useStatus() === true;
-  if (!running) return null;
-  return (
-    <span
-      aria-hidden="true"
-      style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
-    />
-  );
-}
+import { useSchedulerUnread } from "./scheduler-unread";
+import {
+  formatUnreadSegment,
+  hasSchedulerUnread,
+} from "@/lib/shared/scheduler-unread";
 
 function SkillsInstallingBadge() {
   const installing = skillsPanel.useStatus() === true;
@@ -66,8 +60,53 @@ function ModelsConfigDirtyBadge() {
   );
 }
 
+function SchedulerBadge() {
+  const running = schedulerPanel.useStatus() === true;
+  const unread = useSchedulerUnread();
+  const showUnread = hasSchedulerUnread(unread);
+  if (!running && !showUnread) return null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {running && (
+        <span
+          aria-hidden="true"
+          style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
+        />
+      )}
+      {showUnread && (
+        <span
+          aria-label={`New scheduled task results: ${unread.success} succeeded, ${unread.failed} failed`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: 16,
+            borderRadius: 999,
+            border: "1px solid var(--border)",
+            overflow: "hidden",
+            fontSize: 10,
+            fontWeight: 600,
+            lineHeight: 1,
+            color: "var(--text-muted)",
+          }}
+        >
+          {unread.success > 0 && (
+            <span style={{ padding: "0 4px", color: "var(--text)" }}>{formatUnreadSegment(unread.success)}</span>
+          )}
+          {unread.success > 0 && unread.failed > 0 && (
+            <span style={{ width: 1, alignSelf: "stretch", background: "var(--border)" }} />
+          )}
+          {unread.failed > 0 && (
+            <span style={{ padding: "0 4px", color: "var(--error)" }}>{formatUnreadSegment(unread.failed)}</span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
 const MAIN_VIEW_BADGE_BY_KIND: Partial<Record<MainViewKind, () => ReactNode>> = {
-  scheduler: SchedulerRunningBadge,
+  scheduler: SchedulerBadge,
   skills: SkillsInstallingBadge,
   channels: ChannelsLoginBadge,
   modelsConfig: ModelsConfigDirtyBadge,

@@ -3,6 +3,7 @@ import { migrateToolName } from "../../shared/subagent";
 import { existsSync } from "fs";
 import { getSchedulerDb, hasSchedulerStore } from "./db";
 import { sanitizeNotification } from "@/lib/server/notifications";
+import { tallySchedulerUnread, type SchedulerUnreadCounts } from "@/lib/shared/scheduler-unread";
 import { createLogger } from "../logger";
 import type { TaskNotification } from "@/lib/shared/notifications";
 import {
@@ -465,6 +466,20 @@ export function listRunningRuns(): RunningTaskRun[] {
     startedAt: row.started_at,
     sessionId: row.session_id,
   }));
+}
+
+export function countUnreadRuns(since: number): SchedulerUnreadCounts {
+  const rows = getSchedulerDb()
+    .prepare(
+      `SELECT status, COUNT(*) AS count
+         FROM task_runs
+        WHERE ended_at IS NOT NULL AND ended_at > ? AND status != 'running'
+        GROUP BY status`
+    )
+    .all(Math.max(0, Math.floor(since))) as Array<{ status: TaskRunStatus; count: number }>;
+  const countByStatus: Partial<Record<TaskRunStatus, number>> = {};
+  for (const row of rows) countByStatus[row.status] = row.count;
+  return tallySchedulerUnread(countByStatus);
 }
 
 export function listRuns(taskId: string, limit: number = DEFAULT_RUNS_LIMIT): TaskRun[] {
