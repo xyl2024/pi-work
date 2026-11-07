@@ -1,3 +1,5 @@
+export const TOOLBAR_ICON_STROKE = 1.8;
+
 export const chatInputMetrics = {
   font: 12,
   fontSmall: 10,
@@ -14,9 +16,7 @@ export const chatInputMetrics = {
   sendIcon: 14,
   stopIcon: 10,
   toolbarButton: 27,
-  toolbarIcon: 13,
-  toolbarIconSmall: 12,
-  toolbarIconTiny: 10,
+  toolbarIcon: 14,
   toolbarLabelPadding: "0 8px",
   toolbarRadius: 8,
   labeledPadding: "7px 10px",

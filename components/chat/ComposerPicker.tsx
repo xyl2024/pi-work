@@ -9,7 +9,7 @@ import { SkillPickerView } from "./composer-picker/SkillPickerView";
 import { useComposerPicker } from "./composer-picker/useComposerPicker";
 import { isInteractiveKeyboardTarget } from "./composer-picker/keyboard-target";
 import { resolvePickerKeyAction, type PickerKeyRegion } from "@/lib/client/picker-keyboard";
-import { chatInputMetrics } from "./chat-input/metrics";
+import { chatInputMetrics, TOOLBAR_ICON_STROKE } from "./chat-input/metrics";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 import {
   COMPOSER_PICKER_ITEMS,
@@ -154,7 +154,7 @@ export function ComposerPicker({
           width: chatInputMetrics.toolbarButton, height: chatInputMetrics.toolbarButton, padding: 0, flexShrink: 0,
           background: snapshot.open ? "var(--bg-hover)" : "none",
           border: "none",
-          borderRadius: "50%",
+          borderRadius: chatInputMetrics.toolbarRadius,
           color: snapshot.open ? "var(--text)" : "var(--text-muted)",
           cursor: "pointer",
           transition: "background 0.12s, color 0.12s",
@@ -168,7 +168,7 @@ export function ComposerPicker({
           event.currentTarget.style.color = snapshot.open ? "var(--text)" : "var(--text-muted)";
         }}
       >
-        <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width={chatInputMetrics.toolbarIcon} height={chatInputMetrics.toolbarIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={TOOLBAR_ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>

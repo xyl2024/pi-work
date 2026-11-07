@@ -18,7 +18,7 @@ import {
   type ThinkingLevel,
 } from "../ThinkingPicker";
 import { MoreMenu, type CollapsedMenuEntry } from "../MoreMenu";
-import { chatInputMetrics } from "./metrics";
+import { chatInputMetrics, TOOLBAR_ICON_STROKE } from "./metrics";
 import { useToolbarLayout } from "./hooks/useToolbarLayout";
 import { ICONS } from "../../ui/icons";
 import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
@@ -193,7 +193,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
         label: `${t("Thinking level")} · ${currentThinkingDisplay}`,
         icon: (
           <span style={{ display: "flex", color: THINKING_LEVEL_COLOR[currentThinkingLevel] }}>
-            <ThinkingIcon size={14} />
+            <ThinkingIcon />
           </span>
         ),
         onClick: () => {
@@ -206,7 +206,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
       entries.push({
         key: "tools",
         label: t("Tools"),
-        icon: <ToolsIcon size={14} />,
+        icon: <ToolsIcon />,
         onClick: () => setToolsPickerOpen(true),
       });
     }
@@ -214,7 +214,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
       entries.push({
         key: "cwd",
         label: t("Change project"),
-        icon: <CwdProjectIcon cwd={cwd ?? null} size={chatInputMetrics.toolbarIconSmall} />,
+        icon: <CwdProjectIcon cwd={cwd ?? null} size={chatInputMetrics.toolbarIcon} />,
         onClick: () => setCollapsedCwdOpen(true),
       });
     }
@@ -281,8 +281,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
           >
             <ProviderIcon
               id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
-              size={chatInputMetrics.toolbarIconSmall}
-              fallback={<ProviderGearIcon size={chatInputMetrics.toolbarIconSmall - 1} />}
+              size={chatInputMetrics.toolbarIcon}
+              fallback={<ProviderGearIcon size={chatInputMetrics.toolbarIcon} />}
             />
             {showModelName && (
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
@@ -448,7 +448,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 e.currentTarget.style.color = permissionFullAccess ? FULL_ACCESS_RED : "var(--text-muted)";
               }}
             >
-              <ICONS.shield size={chatInputMetrics.toolbarIcon} strokeWidth={1.9} />
+              <ICONS.shield size={chatInputMetrics.toolbarIcon} strokeWidth={TOOLBAR_ICON_STROKE} />
             </button>
           </Tooltip>
         )}
@@ -463,9 +463,9 @@ export function BottomToolbar(props: BottomToolbarProps) {
     </div>
   );
 }
-function ToolsIcon({ size = 15 }: { size?: number }) {
+function ToolsIcon({ size = chatInputMetrics.toolbarIcon }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={TOOLBAR_ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
       <path d="M14.7 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
   );

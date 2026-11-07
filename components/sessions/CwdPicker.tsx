@@ -85,7 +85,7 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
           onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
           onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = open ? "var(--bg-hover)" : "none"; e.currentTarget.style.color = cwd ? "var(--text)" : "var(--text-muted)"; } }}
         >
-          <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}><CwdProjectIcon cwd={cwd} size={14} /></span>
+          <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}><CwdProjectIcon cwd={cwd} size={chatInputMetrics.toolbarIcon} /></span>
           {!iconOnly && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>{buttonLabel}</span>}
         </button>
       </Tooltip>}
