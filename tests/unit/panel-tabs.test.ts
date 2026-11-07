@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  MCP_TAB_ID,
+  CONTEXT_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
 import {
@@ -181,23 +181,23 @@ describe("panelTabs close", () => {
   it("falls back to the oldest remaining tab when the active one closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "mcp" },
+      { type: "open", kind: "context" },
       { type: "open", kind: "translate" },
       { type: "open", kind: "llmAudit" },
       { type: "close", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["translate", "mcp"]);
-    expect(selectActiveKind(state)).toBe("mcp");
+    expect(kinds(state)).toEqual(["translate", "context"]);
+    expect(selectActiveKind(state)).toBe("context");
     expect(state.mode).not.toBe("closed");
   });
 
   it("keeps the active tab when a background tab closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "mcp" },
+      { type: "open", kind: "context" },
       { type: "open", kind: "translate" },
-      { type: "close", id: MCP_TAB_ID },
+      { type: "close", id: CONTEXT_TAB_ID },
     );
 
     expect(selectActiveKind(state)).toBe("translate");
@@ -230,7 +230,7 @@ describe("panelTabs batch close", () => {
       createPanelTabsState(),
       { type: "open", kind: "gitDiff" },
       { type: "open", kind: "llmAudit" },
-      { type: "open", kind: "mcp" },
+      { type: "open", kind: "context" },
       { type: "open", kind: "translate" },
     );
   }
@@ -256,18 +256,18 @@ describe("panelTabs batch close", () => {
   it("close_right drops the reference tab and the ones left of it", () => {
     const state = reduce(strip(), { type: "close_right", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["translate", "mcp", "llmAudit"]);
+    expect(kinds(state)).toEqual(["translate", "context", "llmAudit"]);
   });
 
   it("close_right re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
       { type: "activate", id: GIT_DIFF_TAB_ID },
-      { type: "close_right", id: MCP_TAB_ID },
+      { type: "close_right", id: CONTEXT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["translate", "mcp"]);
-    expect(state.activeId).toBe(MCP_TAB_ID);
+    expect(kinds(state)).toEqual(["translate", "context"]);
+    expect(state.activeId).toBe(CONTEXT_TAB_ID);
   });
 
   it("close_others keeps only the reference tab and activates it", () => {
@@ -376,24 +376,9 @@ describe("panelTabs registry", () => {
         "conversationTree",
         "gitDiff",
         "llmAudit",
-        "mcp",
         "translate",
       ].sort(),
     );
-  });
-
-  it("registers the MCP panel as a session-bound button after LLM audit", () => {
-    const order = PANEL_TAB_KINDS as readonly string[];
-    const mcp = PANEL_TAB_SPECS.find((spec) => spec.kind === "mcp");
-
-    expect(mcp?.tabId).toBe(MCP_TAB_ID);
-    expect(mcp?.labelKey).toBe("mcp.title");
-    expect(mcp?.sessionBound).toBe(true);
-    expect(mcp?.commands?.[0]?.labelKey).toBe("mcp.open");
-    expect(mcp?.commands?.[0]?.keywords).toEqual(
-      expect.arrayContaining(["mcp", "servers", "model context protocol", "服务器", "工具"]),
-    );
-    expect(order.indexOf("mcp")).toBe(order.indexOf("llmAudit") + 1);
   });
 
   it("no longer carries main views", () => {
@@ -408,7 +393,7 @@ describe("panelTabs registry", () => {
   it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["context", "conversationTree", "gitDiff", "llmAudit", "mcp"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit"].sort(),
     );
 
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
@@ -524,7 +509,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
-      mcpDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
@@ -537,23 +521,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     for (const desc of RIGHT_BAR_DESCRIPTORS) {
       expect(desc.icon({ size: 16, active: desc.isActive(ctx) })).toBeTruthy();
     }
-  });
-
-  it("badges the MCP button while any cwd holds an unsaved draft", () => {
-    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp");
-
-    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
-    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed", mcpDirty: true }))).toBeTruthy();
-    expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
-  });
-
-  it("routes the MCP badge through the shared corner-dot hook", () => {
-    const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
-
-    const rendered = (
-      mcpDirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
-    ).type();
-    expect(rendered.props.style.borderRadius).toBe("50%");
   });
 
   it("derives exactly one right-bar button id per panel kind", () => {
@@ -614,7 +581,6 @@ describe("panelTabs registry → command palette", () => {
       [
         "panel.gitDiff",
         "panel.llmAudit",
-        "panel.mcp",
         "panel.translate",
       ].sort(),
     );

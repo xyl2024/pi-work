@@ -7,7 +7,6 @@ export const SUBAGENT_IMPLEMENTER_TOOL_IDS: readonly string[] = [
   "edit",
   "write",
   "bash",
-  "codemode",
 ];
 
 export const SUBAGENT_WEB_SEARCHER_TOOL_IDS: readonly string[] = [

@@ -366,7 +366,7 @@ describe("get by task_id", () => {
           { type: "text", text: "reading" },
           { type: "toolCall", toolCallId: "t1", toolName: "read", input: { path: "/a.ts" } },
           { type: "toolCall", toolCallId: "t2", toolName: "read", input: { path: "/b.ts" } },
-          { type: "toolCall", toolCallId: "t3", toolName: "codemode", input: { input: "grep" } },
+          { type: "toolCall", toolCallId: "t3", toolName: "bash", input: { input: "grep" } },
         ],
       },
     ]);
@@ -374,7 +374,7 @@ describe("get by task_id", () => {
 
     const detail = await getSubagentTaskDetail({ parentSessionId: parent, taskId, activityLimit: 2 });
     expect(detail.activityCount).toBe(3);
-    expect(detail.activities.map((activity) => activity.toolName)).toEqual(["read", "codemode"]);
+    expect(detail.activities.map((activity) => activity.toolName)).toEqual(["read", "bash"]);
     expect(detail.activities[0].summary).toBe("/b.ts");
 
     const narrower = await getSubagentTaskDetail({ parentSessionId: parent, taskId, activityLimit: 1 });

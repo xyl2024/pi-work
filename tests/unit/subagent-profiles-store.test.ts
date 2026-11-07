@@ -80,7 +80,7 @@ describe("subagent profile store", () => {
     expect(implementer).toMatchObject({
       inheritSystemPrompt: true,
       systemPrompt: "",
-      tools: ["read", "edit", "write", "bash", "codemode"],
+      tools: ["read", "edit", "write", "bash"],
       model: null,
       thinkingLevel: "off",
       timeoutMs: 30 * 60 * 1000,
@@ -147,7 +147,7 @@ describe("subagent profile store", () => {
     expect(upgraded.find((profile) => profile.name === "codebase_explorer")?.permissionMode).toBe("auto_deny");
     const implementer = upgraded.find((profile) => profile.name === "implementer");
     expect(implementer?.inheritSystemPrompt).toBe(true);
-    expect(implementer?.tools).toEqual(["read", "edit", "write", "bash", "codemode"]);
+    expect(implementer?.tools).toEqual(["read", "edit", "write", "bash"]);
     expect(implementer?.permissionMode).toBe("auto_deny");
     const columns = (getSubagentDb().prepare("PRAGMA table_info(subagent_profiles)").all() as Array<{ name: string }>)
       .map((column) => column.name);

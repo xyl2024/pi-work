@@ -230,7 +230,7 @@ _Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
 **子代理档案（Subagent profile）**：
-一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`subagent` 工具 `spawn` 动作的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、危险命令的**无人值守档位**、Pi Bot 形象与运行超时。四个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）、`implementer`（小任务实现）与 `web_searcher`（网络检索与带来源的汇报）在首次初始化时写入表中，之后同样可改可删（`builtin` 只是 seed 标记，不是锁）；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode；`web_searcher` 的工具为 web_search/web_fetch/bash/read/write/edit，种子版本升到 2 后为既有安装补插，已有档案不被覆盖。
+一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`subagent` 工具 `spawn` 动作的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、危险命令的**无人值守档位**、Pi Bot 形象与运行超时。四个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）、`implementer`（小任务实现）与 `web_searcher`（网络检索与带来源的汇报）在首次初始化时写入表中，之后同样可改可删（`builtin` 只是 seed 标记，不是锁）；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash；`web_searcher` 的工具为 web_search/web_fetch/bash/read/write/edit，种子版本升到 2 后为既有安装补插，已有档案不被覆盖。
 _Avoid_: 把「子代理档案」说成「子代理类型」；把它与某次调用（子代理任务）混为一谈
 
 **子代理任务（Subagent task）**：
@@ -355,32 +355,3 @@ _Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那�
 一轮对话正常结束后，由指定 LLM 生成的、用户可能接着问的一个问题；以输入框 placeholder 形式展示，空输入框时按 Tab 采纳为草稿。「正常结束」指该轮最后一条 assistant 消息 `stopReason === "stop"` 且正文非空——截断（`length`）、挂起（`deferred`）、中断（`aborted`）、出错（`error`）都不算。只在**用户交互会话**中生成：子代理会话与定时任务会话不生成（按会话身份排除，与会话当前由谁驱动无关）。placeholder 只是它的展示载体。
 _Avoid_: 与输入框草稿（draft，用户自己输入的未发送文本）混用；叫「自动补全」或「预测输入」（它不补全用户已输入的内容）；把「有建议」当成「可用 Tab」（只有建议可见即输入框为空时才可采纳）
 
-### MCP
-
-**MCP 服务器（MCP server）**：
-pi 的 MCP 扩展在一个会话启动时连接的外部工具来源，配置写在 pi 自己的 `mcp.json` 里而不是 Pi Work 的 `config.yaml`，工具以 `mcp__<服务器>__<工具>` 注册。它在界面上是一个**面板视图**（右侧按钮列上的按钮，内容跟选中会话的 cwd 走），面板内的改动是**待保存项**，一次保存整批写回。
-_Avoid_: 把它当作 Pi Work 的集成（Pi Work 只读写它的配置文件，连接与工具注册都在 pi 那边）
-
-**服务器条目（Server entry）**：
-`mcpServers` 里的一项，由名字加一份配置组成：stdio（`command`/`args`/`env`/`cwd`）或 streamable HTTP（`url`/`headers`）。
-_Avoid_: 用「服务器」指代整份 `mcp.json`
-
-**条目作用域（Entry scope）**：
-条目来自哪份文件：**全局**（`~/.pi/agent/mcp.json`，总是读）与**本工作目录**（`<cwd>/.pi/mcp.json`，只在 `PiWorkConfig.mcp.project_servers` 打开时读）；pi 自己的字段名仍是 `project`。
-_Avoid_: 用「项目」指代它（那是 cwd 的 _Avoid_ 词，且「工作目录分组（Workspace）」已指侧栏的会话分组）；把它当成每个会话各存一份
-
-**条目覆盖（Entry shadowing）**：
-两份文件里的同名条目按作用域合并，**本工作目录**的那份盖住全局的那份，两份都留在文件里，只有被盖住的那份不按原名连接。有两种形态，由条目里有没有传输字段决定：
-
-- **整体替换**：带 `command` / `url` / `type` 的条目定义一台服务器，替换全局同名的整份配置；
-- **遮蔽条目**：不带这些字段的条目只覆盖全局同名条目的 `enabled` / `exposure` / `toolExposure`，其余字段（包括凭据）沿用全局那份。用于在某个工作目录里单独停用或降级一台全局服务器；写了这三个键之外的键就是**无效条目**。
-
-_Avoid_: 把它当作条目被移动或删除；把遮蔽条目当成「没有命令或 URL 的无效条目」
-
-**无效条目（Invalid entry）**：
-解析通过但没通过 pi 校验的条目（字段类型写错、遮蔽条目带了 `enabled` / `exposure` / `toolExposure` 之外的键、全局条目既没 `command` 也没 `url`），pi 只跳过它、其余服务器照常连接；所以它既不等于整份文件坏掉，也不允许被静默丢弃或重写。
-_Avoid_: 把它当作 `mcp.json` 解析失败（那是文件级错误，面板拒绝保存）；把项目里的遮蔽条目当成无效条目
-
-**工具暴露级别（Exposure）**：
-一个 MCP 服务器的工具对模型可见的程度，五档：`codemode`、`codemode-deferred`、`deferred`、`direct`、`hidden`，可用 `toolExposure` 按工具覆盖。
-_Avoid_: 与会话工具集（loadout）混用

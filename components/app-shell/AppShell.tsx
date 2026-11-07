@@ -19,7 +19,6 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
-import { McpPanel } from "../panels/McpPanel";
 import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
@@ -54,13 +53,11 @@ import { canFocusChatInput } from "@/lib/shared/chat-shortcuts";
 import {
   createPanelTabsState,
   panelButtonIdForKind,
-  type AnyPanelTab,
   panelTabsReducer,
   selectActiveKind,
   selectActiveTab,
   selectCanExpand,
   selectOpenCount,
-  selectTab,
   type PanelMode,
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
@@ -81,11 +78,6 @@ import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-ba
 import { MAIN_VIEW_COMMAND_ICON_BY_KIND } from "@/lib/client/main-view-icons";
 import { renderMainViewBadges } from "@/lib/client/main-view-badges";
 import { useMainViewHeader } from "@/lib/client/main-view-header";
-import {
-  usePanelViewLifecycleSync,
-  type PanelViewLifecycleStore,
-} from "@/hooks/usePanelViewLifecycleSync";
-import { mcpPanel } from "@/lib/client/mcp-panel";
 import {
   requestMainViewLeave,
   setMainViewLeaveConfirm,
@@ -147,23 +139,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
     />
   ),
-  mcp: (ctx) => (
-    <McpPanel
-      cwd={ctx.cwd}
-      visible={ctx.rightPanelState !== "closed"}
-      onCloseTab={ctx.onClosePanelTab}
-      onNewSession={ctx.onNewSession}
-    />
-  ),
 };
-
-const PANEL_VIEW_STORE_BY_KIND: Partial<Record<PanelViewKind, PanelViewLifecycleStore>> = {
-  mcp: mcpPanel,
-};
-
-const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_VIEW_STORE_BY_KIND) as PanelViewKind[];
-
-const PANEL_VIEW_STORES: readonly PanelViewLifecycleStore[] = Object.values(PANEL_VIEW_STORE_BY_KIND);
 
 interface MainViewBodyCtx {
   cwd: string | null;
@@ -188,11 +164,6 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
   memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
   tokens: () => <TokensPanel />,
 };
-
-function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
-  const closing = new Set(tabs.map((tab) => tab.kind));
-  return PANEL_KINDS_WITH_CLOSE_GUARD.filter((kind) => closing.has(kind));
-}
 
 function formatTokenCount(tokens: number): string {
   if (!Number.isFinite(tokens) || tokens <= 0) return "0";
@@ -472,8 +443,6 @@ export function AppShell() {
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
-  usePanelViewLifecycleSync(panelTabsState, PANEL_VIEW_STORES);
-  const mcpDirty = mcpPanel.useStatus() === true;
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
 
   useEffect(() => {
@@ -927,47 +896,21 @@ export function AppShell() {
     return () => setMainViewLeaveConfirm(null);
   }, [askPanelClose]);
 
-  const confirmDropPanelTabs = useCallback(
-    async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
-      const closingStores: PanelViewLifecycleStore[] = [];
-      for (const kind of kinds) {
-        const store = PANEL_VIEW_STORE_BY_KIND[kind];
-        if (!store) continue;
-        const guard = store.guard();
-        if (guard && !(await askPanelClose(guard))) return false;
-        closingStores.push(store);
-      }
-      for (const store of closingStores) await store.requestClose(() => true);
-      return true;
-    },
-    [askPanelClose],
-  );
-
-  const handleCloseFileTab = useCallback(async (tabId: string) => {
-    const tab = selectTab(panelTabsState, tabId);
-    if (!(await confirmDropPanelTabs(lossyPanelKinds(tab ? [tab] : [])))) return;
+  const handleCloseFileTab = useCallback((tabId: string) => {
     dispatchPanelTabs({ type: "close", id: tabId });
-  }, [panelTabsState, confirmDropPanelTabs]);
+  }, []);
 
-  const handleCloseLeftTabs = useCallback(async (tabId: string) => {
-    const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
-    const drops = index > 0 ? panelTabsState.tabs.slice(0, index) : [];
-    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
+  const handleCloseLeftTabs = useCallback((tabId: string) => {
     dispatchPanelTabs({ type: "close_left", id: tabId });
-  }, [panelTabsState, confirmDropPanelTabs]);
+  }, []);
 
-  const handleCloseRightTabs = useCallback(async (tabId: string) => {
-    const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
-    const drops = panelTabsState.tabs.slice(index + 1);
-    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
+  const handleCloseRightTabs = useCallback((tabId: string) => {
     dispatchPanelTabs({ type: "close_right", id: tabId });
-  }, [panelTabsState, confirmDropPanelTabs]);
+  }, []);
 
-  const handleCloseOtherTabs = useCallback(async (tabId: string) => {
-    const drops = panelTabsState.tabs.filter((tab) => tab.id !== tabId);
-    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
+  const handleCloseOtherTabs = useCallback((tabId: string) => {
     dispatchPanelTabs({ type: "close_others", id: tabId });
-  }, [panelTabsState, confirmDropPanelTabs]);
+  }, []);
 
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
     const idx = openTabs.findIndex((t) => t.id === tabId);
@@ -1066,7 +1009,6 @@ export function AppShell() {
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
-    mcpDirty,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),

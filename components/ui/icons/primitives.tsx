@@ -70,12 +70,6 @@ export const GitDiffGlyphIcon = (props: IconProps) => <Icon {...props}><circle c
 export const LlmAuditGlyphIcon = (props: IconProps) => <Icon {...props}><path d="M2 12h3l2-4 3 8 2-4h2" /><circle cx="15.5" cy="15.5" r="2.5" /><path d="M17.5 17.5 20 20" /></Icon>;
 export const ToolIcon = (props: IconProps) => <Icon {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></Icon>;
 
-export const McpIcon = (props: IconProps) => (
-  <Icon {...props} viewBox="0 0 1024 1024" fill="currentColor" stroke="none" strokeWidth={0}>
-    <path d="M330.965333 529.685333a85.333333 85.333333 0 0 0 120.682667 120.682667L723.2 378.837333l60.330667 60.330667L512 710.698667A170.666667 170.666667 0 0 1 270.634667 469.333333L542.165333 197.824l60.330667 60.330667-271.530667 271.530666z" />
-    <path d="M693.034667 107.306667a170.24 170.24 0 0 1 49.6 131.392 170.666667 170.666667 0 0 1 131.392 290.986666L542.165333 861.546667l89.6 89.6-60.330666 60.373333-149.952-149.973333L813.696 469.333333a85.333333 85.333333 0 0 0-120.682667-120.661333L421.482667 620.16l-60.330667-60.330667 271.530667-271.530666A85.333333 85.333333 0 0 0 512 167.616L119.808 559.829333l-60.352-60.330666L451.669333 107.285333a170.666667 170.666667 0 0 1 241.365334 0z" />
-  </Icon>
-);
 export const JsonIcon = (props: IconProps) => <Icon {...props}><path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 1-2 2v3a2 2 0 0 1-2 2h-2" /></Icon>;
 export const ConversationTreeGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="5" r="2.5" /><circle cx="5.5" cy="19" r="2.5" /><circle cx="18.5" cy="19" r="2.5" /><path d="M12 7.5v3M12 10.5H7.5a2 2 0 0 0-2 2v4M12 10.5h4.5a2 2 0 0 1 2 2v4" /></Icon>;
 export const ExpandLeftIcon = (props: IconProps) => <Icon {...props}><polyline points="13 7 18 12 13 17" /><polyline points="6 7 11 12 6 17" /></Icon>;

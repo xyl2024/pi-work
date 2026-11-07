@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     const tempKey = `__tools_probe__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { session } = await startRpcSession(tempKey, "", cwd, "all", source, { mcp: false });
+    const { session } = await startRpcSession(tempKey, "", cwd, "all", source);
     try {
       const tools = (await session.send({ type: "get_tools" })) as Array<{
         name: string;

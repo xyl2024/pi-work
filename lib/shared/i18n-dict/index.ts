@@ -7,7 +7,6 @@ import { commands } from "./commands";
 import { common } from "./common";
 import { fileViewer } from "./file-viewer";
 import { grokbot } from "./grokbot";
-import { mcp } from "./mcp";
 import { models } from "./models";
 import { permissions } from "./permissions";
 import { profile } from "./profile";
@@ -33,7 +32,6 @@ export const ZH_TRANSLATIONS = {
   ...commands,
   ...fileViewer,
   ...grokbot,
-  ...mcp,
   ...models,
   ...permissions,
   ...profile,

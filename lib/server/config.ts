@@ -11,7 +11,6 @@ import {
   type PiWorkConfig,
   type TextSelectionToolbarConfig,
   type AssistantConfig,
-  type McpConfig,
   type MemoryConfig,
   type SuggestedPromptConfig,
   type UiSoundEventId,
@@ -55,11 +54,6 @@ function defaultRightSideBar(): RightSideBarConfig {
 
 const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = defaultRightSideBar();
 
-const DEFAULT_MCP: McpConfig = {
-  project_servers: false,
-  startup_wait_ms: 3000,
-};
-
 const DEFAULT_SUGGESTED_PROMPT: SuggestedPromptConfig = {
   enabled: true,
   model: null,
@@ -95,19 +89,6 @@ function parseAssistant(raw: unknown): AssistantConfig {
   return { sidebar_entry: (raw as Record<string, unknown>).sidebar_entry === true };
 }
 
-function parseMcp(raw: unknown): McpConfig {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
-  const obj = raw as Record<string, unknown>;
-  const startup = obj.startup_wait_ms;
-  return {
-    project_servers: obj.project_servers === true,
-    startup_wait_ms:
-      typeof startup === "number" && Number.isFinite(startup) && startup >= 0
-        ? Math.min(Math.floor(startup), 120_000)
-        : DEFAULT_MCP.startup_wait_ms,
-  };
-}
-
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
@@ -126,7 +107,6 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   cwd_aliases: {},
   disabled_skills: {},
   network_proxy: { enabled: false, url: "", no_proxy: "" },
-  mcp: { ...DEFAULT_MCP },
   suggested_prompt: { ...DEFAULT_SUGGESTED_PROMPT },
   memory: { enabled: false },
   assistant: { ...DEFAULT_ASSISTANT },
@@ -382,7 +362,6 @@ export function readConfig(): PiWorkConfig {
         cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
         disabled_skills: parseDisabledSkills(cfg.disabled_skills),
         network_proxy: parseNetworkProxy(cfg.network_proxy),
-        mcp: parseMcp(cfg.mcp),
         suggested_prompt: parseSuggestedPrompt(cfg.suggested_prompt),
         memory: parseMemory(cfg.memory),
         assistant: parseAssistant(cfg.assistant),

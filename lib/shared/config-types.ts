@@ -37,11 +37,6 @@ export interface NetworkProxyConfig {
   no_proxy: string;
 }
 
-export interface McpConfig {
-  project_servers: boolean;
-  startup_wait_ms: number;
-}
-
 export interface SuggestedPromptModel {
   provider: string;
   modelId: string;
@@ -64,7 +59,6 @@ export interface PiWorkConfig {
   cwd_aliases: Record<string, string>;
   disabled_skills: Record<string, string[]>;
   network_proxy: NetworkProxyConfig;
-  mcp: McpConfig;
   suggested_prompt: SuggestedPromptConfig;
   memory: MemoryConfig;
   assistant: AssistantConfig;

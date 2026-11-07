@@ -25,21 +25,20 @@ describe("tool-selection: declarable tools", () => {
   it("keeps catalog order and drops non-declarable tools", () => {
     const names = declarableToolNames([
       { name: "read" },
-      { name: "mcp__docs__search", exposure: "codemode" },
-      { name: "codemode", exposure: "model-only" },
+      { name: "mcp__docs__search", exposure: "deferred" },
       { name: "mcp__gh__get", exposure: "direct" },
       { name: "mcp__gh__delete", exposure: "hidden" },
       { name: "mcp__jira__list", exposure: "deferred" },
     ]);
 
-    expect(names).toEqual(["read", "codemode", "mcp__gh__get"]);
+    expect(names).toEqual(["read", "mcp__gh__get"]);
   });
 
   it("still expands prefix patterns for the tools that survive", () => {
     const all = ["mcp__docs__search", "mcp__docs__read", "mcp__gh__get"];
     const declarable = new Set(declarableToolNames([
-      { name: "mcp__docs__search", exposure: "codemode" },
-      { name: "mcp__docs__read", exposure: "codemode" },
+      { name: "mcp__docs__search", exposure: "deferred" },
+      { name: "mcp__docs__read", exposure: "deferred" },
       { name: "mcp__gh__get", exposure: "direct" },
     ]));
 

@@ -1,4 +1,4 @@
-import { createAgentSession, createCodemodeExtension, createMcpExtension, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
@@ -16,7 +16,6 @@ import {
 } from "../shared/system-prompt-segments";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
-import { loadMcpConfigForPiWork } from "./mcp-config";
 import { loadPiWorkSkillsSafety } from "./pi-work-skills";
 import path from "node:path";
 
@@ -761,7 +760,6 @@ export interface StartRpcSessionOptions {
   stripDefaultSystemPromptSections?: boolean;
   persistToolSelection?: boolean;
   parentSessionId?: string;
-  mcp?: boolean;
   permissionMode?: SessionPermissionMode;
   assistant?: boolean;
 }
@@ -849,13 +847,9 @@ export async function startRpcSession(
     let memoryPromptBlock: string | null = null;
     let memorySnapshot: SessionMemorySnapshot | null = null;
     let disabledSkillPaths = new Set<string>();
-    let mcpProjectServers = false;
-    let mcpStartupWaitMs = 3000;
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
-      mcpProjectServers = cfg.mcp.project_servers;
-      mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
       const memory = resolveMemoryInjectionForSession(cwd, cfg.memory.enabled === true);
       memoryEnabled = memory.enabled;
       memoryPromptBlock = memory.block;
@@ -865,10 +859,6 @@ export async function startRpcSession(
       }
     } catch {
     }
-    const mcpEnabled = assistantSession
-      ? false
-      : options.mcp
-        ?? (source === "user" && !options.systemPromptPrefix && !systemPromptOverride);
     const promptAppendMode: SystemPromptAppendMode = systemPromptOverride
       ? "override"
       : options.systemPromptPrefix
@@ -914,20 +904,6 @@ export async function startRpcSession(
             ].filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
-        createCodemodeExtension(),
-        ...(mcpEnabled
-          ? [
-              createMcpExtension({
-                loadConfig: (ctx) =>
-                  loadMcpConfigForPiWork({
-                    agentDir,
-                    cwd: ctx.cwd,
-                    projectTrusted: mcpProjectServers,
-                  }),
-                startupWaitMs: mcpStartupWaitMs,
-              }),
-            ]
-          : []),
         ...(options.systemPromptPrefix
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", (event) => {
@@ -1097,10 +1073,6 @@ export async function startRpcSession(
 
     if (isNewSession) {
       invalidateSessionListCache();
-    }
-
-    if (mcpEnabled) {
-      await inner.bindExtensions({});
     }
 
     const declarableNames = declarableToolNames(inner.getAllTools());

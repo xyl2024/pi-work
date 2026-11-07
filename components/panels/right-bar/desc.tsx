@@ -16,7 +16,7 @@ import {
   Languages,
   PanelRight,
 } from "lucide-react";
-import { ConversationTreeGlyphIcon, McpIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -29,7 +29,6 @@ export interface RightBarCtx {
   activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
-  mcpDirty: boolean;
   t: (key: string) => string;
 
   toggleRightPanel: () => void;
@@ -44,7 +43,6 @@ export interface RightBarDescriptor {
   sessionBound?: true;
   labelKey: string;
   icon: PanelIcon;
-  badge?: (ctx: RightBarCtx) => ReactNode | null;
   isActive: (ctx: RightBarCtx) => boolean;
   isDisabled?: (ctx: RightBarCtx) => boolean;
   isVisible?: (ctx: RightBarCtx) => boolean;
@@ -61,31 +59,12 @@ const panelToggleDescriptor: RightBarDescriptor = {
   onClick: (ctx) => ctx.toggleRightPanel(),
 };
 
-function CornerBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        top: 5,
-        right: 5,
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        background: "var(--accent)",
-        boxShadow: "0 0 0 2px var(--bg-panel)",
-      }}
-    />
-  );
-}
-
 function panelButton(
   kind: PanelViewKind,
   presentation: {
     labelKey: string;
     icon: PanelIcon;
     isDisabled?: (ctx: RightBarCtx) => boolean;
-    badge?: (ctx: RightBarCtx) => ReactNode | null;
   },
 ): RightBarDescriptor {
   const buttonId = PANEL_BUTTON_ID_BY_KIND[kind];
@@ -100,7 +79,6 @@ function panelButton(
     onClick: (ctx) => ctx.togglePanel(kind),
     ...(spec.sessionBound ? { sessionBound: true as const } : {}),
     ...(presentation.isDisabled ? { isDisabled: presentation.isDisabled } : {}),
-    ...(presentation.badge ? { badge: presentation.badge } : {}),
   };
 }
 
@@ -121,11 +99,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
-  }),
-  mcp: panelButton("mcp", {
-    labelKey: "mcp.open",
-    icon: ({ size }) => <McpIcon size={size} />,
-    badge: (ctx) => (ctx.mcpDirty ? <CornerBadge /> : null),
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

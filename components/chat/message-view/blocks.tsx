@@ -179,7 +179,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
   const isFileMutation = toolKind === "file-mutation";
-  const isCodemode = toolKind === "codemode";
   const isSpecialized = isBash || isFileMutation;
   const isCollapsedByDefault = !isSpecialized;
   const [expanded, setExpanded] = useState(!isCollapsedByDefault);
@@ -252,22 +251,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         }}
       >
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout: block.input.timeout, durationMs: result?.durationMs }, t)} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
-      </div>
-    );
-  }
-
-  if (isCodemode) {
-    return (
-      <div
-        style={{
-          borderRadius: 7,
-          overflow: "hidden",
-          fontSize: 12,
-          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid transparent",
-          background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
-        }}
-      >
-        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} annotation={formatToolAnnotation({ durationMs: result?.durationMs }, t)} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -558,91 +541,6 @@ function BashToolCallContent({ command, annotation, cwd, resultText, resultImage
         </svg>
       </button>
     )}
-    </div>
-  );
-}
-
-const CODEMODE_DETAIL_MAX_HEIGHT = 300;
-
-function CodemodeToolCallContent({ code, annotation, resultText, resultImages, resultIsEmpty, isError, isDark }: {
-  code: string;
-  annotation: string | null;
-  resultText: string | null;
-  resultImages: ImageContent[];
-  resultIsEmpty: boolean;
-  isError: boolean;
-  isDark: boolean;
-}) {
-  const { t } = useI18n();
-  const [expandedAll, setExpandedAll] = useState(false);
-  useEffect(() => {
-    if (resultImages.length > 0) setExpandedAll(true);
-  }, [resultImages.length]);
-  const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
-  const showMask = contentHeight !== null && contentHeight > CODEMODE_DETAIL_MAX_HEIGHT && !expandedAll;
-  const codeBg = isDark ? "#1e1e1e" : "#f7f7f7";
-  const dimFg = isDark ? "#9ca3af" : "#6b7280";
-  return (
-    <div
-      style={{
-        position: "relative",
-        height: expandedAll
-          ? (contentHeight === null ? "auto" : contentHeight)
-          : (contentHeight === null ? "auto" : Math.min(contentHeight, CODEMODE_DETAIL_MAX_HEIGHT)),
-        overflow: "hidden",
-        transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
-      }}
-    >
-      <div ref={contentRef} data-scroll-inset style={{ background: codeBg }}>
-        {annotation !== null && (
-          <div style={{ color: dimFg, fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 10px 0" }}>{annotation}</div>
-        )}
-        <SyntaxHighlighter
-          language="javascript"
-          style={isDark ? vscDarkPlus : vs}
-          PreTag="pre"
-          customStyle={{ margin: 0, padding: "8px 10px", background: codeBg, fontSize: 12, lineHeight: 1.5, overflowX: "auto", border: "none" }}
-          codeTagProps={{ style: { background: codeBg, fontFamily: "var(--font-mono)", border: "none" } }}
-        >
-          {code}
-        </SyntaxHighlighter>
-        {resultText !== null && <PairedResult text={resultText} images={resultImages} isEmpty={resultIsEmpty} isError={isError} />}
-      </div>
-
-      {!expandedAll && showMask && (
-        <button
-          onClick={() => setExpandedAll(true)}
-          aria-label={t("Expand")}
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            border: "none",
-            padding: 0,
-            background: `linear-gradient(to bottom, rgba(0,0,0,0), ${codeBg})`,
-          }}
-        >
-          <svg
-            width={16}
-            height={16}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ color: "var(--text-muted)" }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }

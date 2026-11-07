@@ -16,7 +16,7 @@ import type {
   ToolResultMessage,
 } from "./types";
 
-export type ToolCallKind = "read" | "file-mutation" | "bash" | "codemode" | "other";
+export type ToolCallKind = "read" | "file-mutation" | "bash" | "other";
 
 export function classifyToolCall(toolName: string): ToolCallKind {
   switch (toolName) {
@@ -27,8 +27,6 @@ export function classifyToolCall(toolName: string): ToolCallKind {
       return "file-mutation";
     case "bash":
       return "bash";
-    case "codemode":
-      return "codemode";
     default:
       return "other";
   }

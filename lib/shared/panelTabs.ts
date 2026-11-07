@@ -4,7 +4,6 @@ import {
   CONVERSATION_TREE_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  MCP_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
 
@@ -14,7 +13,6 @@ export interface PanelTabParams {
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
-  mcp: undefined;
   file: { path: string };
 }
 
@@ -119,19 +117,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open LLM API audit",
         keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-      },
-    ],
-  },
-  mcp: {
-    kind: "mcp",
-    tabId: MCP_TAB_ID,
-    labelKey: "mcp.title",
-    defaultMode: "normal",
-    sessionBound: true,
-    commands: [
-      {
-        labelKey: "mcp.open",
-        keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
       },
     ],
   },

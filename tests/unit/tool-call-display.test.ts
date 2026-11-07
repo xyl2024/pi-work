@@ -64,7 +64,6 @@ describe("classifyToolCall", () => {
       write: "file-mutation",
       bash: "bash",
       subagent: "other",
-      codemode: "codemode",
       grep: "other",
       find: "other",
       ls: "other",

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AgentSessionWrapper } from "@/lib/server/rpc-manager";
 import type { AgentSessionLike } from "@/lib/server/pi-types";
 
-const SELECTED = ["read", "bash", "edit", "write", "codemode", "subagent", "celebrate"];
+const SELECTED = ["read", "bash", "edit", "write", "subagent", "celebrate"];
 const ALL = [...SELECTED, "ask_user_questions", "pi_work_call"];
 
 function fakeSession() {

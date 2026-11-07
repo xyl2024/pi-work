@@ -123,7 +123,6 @@ function renderDescriptor(
       onClick={() => desc.onClick(ctx)}
       active={desc.isActive(ctx)}
       disabled={desc.isDisabled ? desc.isDisabled(ctx) : false}
-      badge={desc.badge?.(ctx) ?? undefined}
       icon={desc.icon({ size: 16, active: desc.isActive(ctx) })}
     />
   );

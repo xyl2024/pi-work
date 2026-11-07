@@ -9,7 +9,6 @@ interface RightBarButtonProps {
   active?: boolean;
   disabled?: boolean;
   icon?: ReactNode;
-  badge?: ReactNode;
 }
 
 export function RightBarButton({
@@ -18,7 +17,6 @@ export function RightBarButton({
   active = false,
   disabled = false,
   icon,
-  badge,
 }: RightBarButtonProps) {
   const color = disabled
     ? "var(--text-dim)"
@@ -60,7 +58,6 @@ export function RightBarButton({
         }}
       >
         {icon}
-        {badge}
       </button>
     </Tooltip>
   );
