@@ -6,6 +6,7 @@ export interface UsePopoverPositionOptions {
   triggerRef: React.RefObject<HTMLElement | null>;
   popoverRef: React.RefObject<HTMLElement | null>;
   open: boolean;
+  placement?: "below" | "right";
   align?: "start" | "end";
   gap?: number;
   margin?: number;
@@ -16,6 +17,7 @@ export function usePopoverPosition({
   triggerRef,
   popoverRef,
   open,
+  placement = "below",
   align = "start",
   gap = 6,
   margin = 8,
@@ -37,6 +39,15 @@ export function usePopoverPosition({
       const pr = popover.getBoundingClientRect();
       const vw = document.documentElement.clientWidth;
       const vh = document.documentElement.clientHeight;
+
+      if (placement === "right") {
+        let left = tr.right + gap;
+        if (left + pr.width > vw - margin) left = tr.left - gap - pr.width;
+        left = Math.max(margin, Math.min(left, vw - pr.width - margin));
+        const top = Math.max(margin, Math.min(tr.top, vh - pr.height - margin));
+        setPos({ left, top });
+        return;
+      }
 
       let left: number;
       if (align === "start") {
@@ -72,7 +83,7 @@ export function usePopoverPosition({
       window.removeEventListener("resize", measure);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, align, gap, margin, ...(contentDeps ?? [])]);
+  }, [open, placement, align, gap, margin, ...(contentDeps ?? [])]);
 
   return pos;
 }

@@ -20,6 +20,7 @@ import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { MAIN_VIEW_SPECS, MAIN_VIEW_SPEC_BY_KIND, type MainViewKind } from "@/lib/shared/mainView";
 import { resolveMainViewNav } from "@/lib/shared/main-view-nav";
 import { MAIN_VIEW_NAV_ICON_BY_KIND } from "@/lib/client/main-view-icons";
+import { PopoverPortal, useDismissableLayer } from "../ui/popover";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
   SESSION_PAGE_SIZE_GROUPED,
@@ -201,18 +202,31 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const toast = useToast();
   const [todayOnly, setTodayOnly] = useState(false);
   const [moreExpanded, setMoreExpanded] = useState(false);
+  const moreTriggerRef = useRef<HTMLSpanElement | null>(null);
+  const morePopoverRef = useRef<HTMLDivElement | null>(null);
+  const closeMore = useCallback(() => setMoreExpanded(false), []);
+  useDismissableLayer({
+    enabled: moreExpanded,
+    containerRef: moreTriggerRef,
+    contentRef: morePopoverRef,
+    triggerRef: moreTriggerRef,
+    onDismiss: closeMore,
+  });
   const navLayout = resolveMainViewNav({
     kinds: MAIN_VIEW_SPECS.map((spec) => spec.kind),
     active: activeMainView,
     availableRows: MAIN_VIEW_NAV_ROWS,
   });
 
-  const renderMainViewButton = (kind: MainViewKind) => {
+  const renderMainViewButton = (kind: MainViewKind, afterOpen?: () => void) => {
     const spec = MAIN_VIEW_SPEC_BY_KIND[kind];
     return (
       <SidebarNavButton
         key={spec.kind}
-        onClick={() => onOpenMainView?.(spec.kind)}
+        onClick={() => {
+          onOpenMainView?.(spec.kind);
+          afterOpen?.();
+        }}
         active={activeMainView === spec.kind}
         badge={mainViewBadges[spec.kind]}
       >
@@ -824,24 +838,48 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           <>
             {navLayout.visible.map((kind) => renderMainViewButton(kind))}
             {navLayout.overflow.length > 0 && (
-              <SidebarNavButton onClick={() => setMoreExpanded((expanded) => !expanded)} active={false}>
-                <span
-                  style={{
-                    display: "flex",
-                    flexShrink: 0,
-                    color: "var(--text-muted)",
-                    transform: moreExpanded ? "rotate(180deg)" : "none",
-                    transition: "transform 0.12s",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M6 9l6 6 6-6" />
-                  </svg>
-                </span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("More")}</span>
-              </SidebarNavButton>
+              <span ref={moreTriggerRef} style={{ display: "block" }}>
+                <SidebarNavButton onClick={() => setMoreExpanded((expanded) => !expanded)} active={false}>
+                  <span
+                    style={{
+                      display: "flex",
+                      flexShrink: 0,
+                      color: "var(--text-muted)",
+                      transform: moreExpanded ? "rotate(-90deg)" : "none",
+                      transition: "transform 0.12s",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("More")}</span>
+                </SidebarNavButton>
+              </span>
             )}
-            {moreExpanded && navLayout.overflow.map((kind) => renderMainViewButton(kind))}
+            <PopoverPortal
+              open={moreExpanded}
+              triggerRef={moreTriggerRef}
+              popoverRef={morePopoverRef}
+              placement="right"
+              gap={6}
+              contentDeps={[navLayout.overflow, activeMainView]}
+              ariaLabel={t("More")}
+              style={{
+                minWidth: 168,
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                padding: 4,
+                background: "var(--bg-panel)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+              }}
+            >
+              {navLayout.overflow.map((kind) => renderMainViewButton(kind, closeMore))}
+            </PopoverPortal>
           </>
         )}
       </div>

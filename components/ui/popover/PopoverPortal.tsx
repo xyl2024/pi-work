@@ -8,6 +8,7 @@ export interface PopoverPortalProps {
   open: boolean;
   triggerRef: React.RefObject<HTMLElement | null>;
   popoverRef: React.RefObject<HTMLElement | null>;
+  placement?: "below" | "right";
   align?: "start" | "end";
   gap?: number;
   contentDeps?: ReadonlyArray<unknown>;
@@ -27,6 +28,7 @@ export function PopoverPortal({
   open,
   triggerRef,
   popoverRef,
+  placement = "below",
   align = "start",
   gap = 4,
   contentDeps,
@@ -44,6 +46,7 @@ export function PopoverPortal({
     triggerRef,
     popoverRef,
     open: open && mounted,
+    placement,
     align,
     gap,
     contentDeps,
