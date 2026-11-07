@@ -77,6 +77,9 @@ export const models = {
   "Copy raw JSON": "复制原始 JSON",
   "Raw JSON must be an object": "原始 JSON 必须是一个对象",
   "Raw metadata hint": "未在表单中暴露的字段（如 compat）可点击\u201c以 JSON 编辑\u201d直接修改，或手编 ~/.pi/agent/models.json。",
+  "{n} unsaved changes": "{n} 处未保存更改",
+  "Discard all": "撤销全部",
+  "Model ID is required": "模型 ID 不能为空",
 
   "Provider": "提供商",
   "Edit provider": "编辑提供商",

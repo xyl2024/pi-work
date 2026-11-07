@@ -2,61 +2,61 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import {
+  focusModelsConfigProblem,
+  revertModelsConfigDraft,
   saveModelsConfig,
-  selectModelsConfigDirty,
+  selectModelsConfigChangeCount,
   selectModelsConfigProblem,
+  selectModelsConfigSaveBarPhase,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
 import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
+import styles from "./models-config.module.css";
 
 export function ModelsConfigSaveBar() {
   const { t } = useI18n();
-  const { view: state } = useModelsConfigPanel();
-  const { saving, savedOk, saveError } = state;
-  const dirty = selectModelsConfigDirty(state);
-  const problem = selectModelsConfigProblem(state);
-  const blockedText = modelsConfigProblemText(problem, t);
-  const disabled = saving || savedOk || !dirty || problem !== null;
+  const { view } = useModelsConfigPanel();
+  const phase = selectModelsConfigSaveBarPhase(view);
+  const problem = selectModelsConfigProblem(view);
+  const problemText = modelsConfigProblemText(problem, t);
+  const count = selectModelsConfigChangeCount(view);
+  const saveDisabled = phase !== "dirty" && phase !== "failed";
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: "1px solid var(--border)", background: "var(--bg)", flexShrink: 0 }}>
+    <div className={styles.saveBar}>
       <span
-        role={saveError ? "alert" : "status"}
-        title={saveError ?? blockedText ?? undefined}
-        style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: saveError || blockedText ? "var(--error)" : "var(--text-dim)", fontSize: 11 }}
+        className={styles.saveBarStatus}
+        data-tone={phase === "failed" ? "error" : undefined}
+        role={phase === "failed" ? "alert" : "status"}
       >
-        {saveError ?? blockedText ?? (dirty ? t("Unsaved changes") : "")}
+        {phase === "failed" ? view.saveError
+          : phase === "blocked" && problem && problemText ? (
+            <button type="button" className={styles.saveBarProblem} onClick={() => focusModelsConfigProblem(problem)}>
+              {problemText}
+            </button>
+          )
+          : phase === "saving" ? t("Saving...")
+          : phase === "saved" ? t("Saved")
+          : phase === "dirty" ? t("{n} unsaved changes", { n: count })
+          : null}
       </span>
+      {count > 0 && phase !== "saving" && (
+        <button type="button" className={styles.button} onClick={revertModelsConfigDraft}>
+          {t("Discard all")}
+        </button>
+      )}
       <button
         type="button"
+        className={`${styles.button} ${styles.primary} ${phase === "saved" ? styles.saveBarSaved : ""}`}
         onClick={() => { void saveModelsConfig(); }}
-        disabled={disabled}
-        style={{
-          position: "relative",
-          padding: "5px 16px",
-          minWidth: 92,
-          background: savedOk ? "var(--success)" : disabled ? "var(--bg)" : "var(--accent)",
-          border: disabled && !savedOk ? "1px solid var(--border)" : "none",
-          borderRadius: 6,
-          color: savedOk ? "#fff" : disabled ? "var(--text-dim)" : "#fff",
-          cursor: disabled ? "default" : "pointer",
-          fontSize: 13,
-          fontWeight: 600,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          flexShrink: 0,
-          transition: "background-color 0.2s ease, color 0.2s ease",
-          animation: savedOk ? "saved-pop 0.45s ease" : undefined,
-        }}
+        disabled={saveDisabled}
       >
-        {savedOk && (
+        {phase === "saved" && (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}>
             <polyline points="20 6 9 17 4 12" />
           </svg>
         )}
-        <span>{savedOk ? t("Saved") : saving ? t("Saving...") : t("Save")}</span>
+        <span>{phase === "saved" ? t("Saved") : phase === "saving" ? t("Saving...") : t("Save")}</span>
       </button>
     </div>
   );

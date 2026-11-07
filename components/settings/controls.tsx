@@ -26,15 +26,18 @@ export function Field({
   label,
   children,
   hint,
+  error,
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
+  error?: string;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
       {children}
+      {error && <span role="alert" style={{ fontSize: 10, color: "var(--error)", marginTop: 2 }}>{error}</span>}
       {hint && <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{hint}</span>}
     </div>
   );
