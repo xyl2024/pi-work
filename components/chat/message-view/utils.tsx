@@ -168,6 +168,7 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
     <Tooltip content={href ?? ""}>
       <a {...props} href={href}>
         {children}
+        {"\u2060"}
         <ExternalLinkIcon className="markdown-link-icon" />
       </a>
     </Tooltip>
