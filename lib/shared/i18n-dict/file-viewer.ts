@@ -27,17 +27,9 @@ export const fileViewer = {
   "Payload duration": "耗时",
   "Payload provider": "服务商",
 
-  "Play": "播放",
-  "Pause": "暂停",
   "Mute": "静音",
   "Unmute": "取消静音",
   "Volume": "音量",
-  "Speed": "速度",
-  "Seek": "跳转",
-  "Replay": "回放",
-  "Close replay": "关闭回放",
-  "Step back": "上一条",
-  "Step forward": "下一条",
 
   "Export as PNG": "导出为 PNG 图片",
   "Share this message card": "分享此消息卡片",

@@ -11,7 +11,6 @@ import {
   DownloadIcon,
   EditIcon,
   NotificationIcon,
-  PlayIcon,
 } from "@/components/ui/icons";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
@@ -73,7 +72,6 @@ export function MoreActionsRow() {
   if (!headerActions) return null;
 
   const visibleCount =
-    (headerActions.replayVisible ? 1 : 0) +
     (headerActions.exportVisible ? 1 : 0) +
     (headerActions.autoNameVisible ? 1 : 0) +
     (headerActions.compactVisible ? 1 : 0) +
@@ -87,22 +85,6 @@ export function MoreActionsRow() {
 
   return (
     <div ref={menuContainerRef} className="flex items-end gap-2" style={{ marginRight: 8 }}>
-      {headerActions.replayVisible && (
-        <Tooltip content={t("Replay")}>
-          <button
-            type="button"
-            onClick={() => {
-              setOpenMenu(null);
-              headerActions.onOpenReplay();
-            }}
-            aria-label={t("Replay")}
-            className={launcherButtonClass}
-            style={launcherStyle(true)}
-          >
-            <PlayIcon size={16} />
-          </button>
-        </Tooltip>
-      )}
       {headerActions.exportVisible && (
         <div className="relative flex items-end">
           <Tooltip content={headerActions.isExporting ? t("Exporting...") : t("Export session")}>

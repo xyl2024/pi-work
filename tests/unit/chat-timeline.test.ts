@@ -147,54 +147,6 @@ describe("buildChatTimeline tool call mapping", () => {
   });
 });
 
-describe("buildChatTimeline replay crop", () => {
-  const messages: AgentMessage[] = [
-    user("one"),
-    assistant([toolCall("call-a")]),
-    toolResult("call-a"),
-    user("two"),
-  ];
-  const entryIds = ["e0", "e1", "e2", "e3"];
-  const entryTimestamps = [10, 11, 12, 13];
-  const timeline = buildChatTimeline({ messages, entryIds, entryTimestamps });
-
-  it("keeps the whole conversation when replay is closed", () => {
-    const slice = timeline.sliceForReplay(null);
-    expect(slice.messages).toHaveLength(4);
-    expect(slice.entryIds).toEqual(entryIds);
-    expect(slice.entryTimestamps).toEqual(entryTimestamps);
-  });
-
-  it("crops at index 0 to nothing", () => {
-    const slice = timeline.sliceForReplay(0);
-    expect(slice.messages).toEqual([]);
-    expect(slice.entryIds).toEqual([]);
-    expect(slice.entryTimestamps).toEqual([]);
-  });
-
-  it("crops in the middle on all three parallel arrays", () => {
-    const slice = timeline.sliceForReplay(2);
-    expect(slice.messages).toEqual(messages.slice(0, 2));
-    expect(slice.entryIds).toEqual(["e0", "e1"]);
-    expect(slice.entryTimestamps).toEqual([10, 11]);
-  });
-
-  it("keeps everything at exactly the total", () => {
-    expect(timeline.sliceForReplay(4).messages).toEqual(messages);
-  });
-
-  it("clamps past the total", () => {
-    expect(timeline.sliceForReplay(9).messages).toEqual(messages);
-  });
-
-  it("still pairs a call with a result sitting past the crop", () => {
-    const slice = timeline.sliceForReplay(2);
-    expect(slice.messages.some((m) => m.role === "toolResult")).toBe(false);
-    expect(timeline.toolCallVisibleIndices.get("call-a")).toBe(1);
-    expect(indexToolResults(messages).get("call-a")).toBe(messages[2]);
-  });
-});
-
 describe("indexToolResults", () => {
   it("keeps the last result for a repeated tool call id", () => {
     const messages: AgentMessage[] = [toolResult("call-a"), toolResult("call-a")];
@@ -381,7 +333,7 @@ describe("buildTimelineDividers", () => {
     expect(dividers.trailingChangeMarkers).toEqual([]);
   });
 
-  it("does not treat replay-cropped persisted messages as pending messages", () => {
+  it("does not treat persisted messages missing from entryIds as pending messages", () => {
     const entryIds = ["e0", "e1", "e2", "e3"];
     const dividers = buildTimelineDividers({
       timeline: timelineOf(messages, entryIds),
@@ -583,46 +535,5 @@ describe("buildTimelineDividers change marker suppression and folding", () => {
       "compaction",
       "mc2",
     ]);
-  });
-});
-
-describe("buildTimelineDividers replay crop consistency", () => {
-  const messages: AgentMessage[] = [
-    assistant([{ type: "text", text: "warmup" }]),
-    user("one"),
-    assistant([{ type: "text", text: "first" }]),
-    user("two"),
-    assistant([{ type: "text", text: "second" }]),
-    user("three"),
-  ];
-  const entryIds = ["e0", "e1", "e2", "e3", "e4", "e5"];
-  const timeline = timelineOf(messages, entryIds);
-  const modelChange = (entryId: string, beforeMessageEntryId?: string): ChangeMarker => ({
-    entryId,
-    kind: "model",
-    provider: "anthropic",
-    modelId: "claude-x",
-    beforeMessageEntryId,
-    timestamp: "2026-01-02T03:00:01.000Z",
-  });
-
-  it("drops cropped anchors and keeps the ones still inside the replay slice", () => {
-    const slice = timeline.sliceForReplay(4);
-    expect(slice.entryIds).toEqual(["e0", "e1", "e2", "e3"]);
-    const dividers = buildTimelineDividers({
-      timeline,
-      entryIds: slice.entryIds,
-      changeMarkers: [
-        modelChange("before-user", "e1"),
-        modelChange("kept", "e3"),
-        modelChange("cropped", "e5"),
-      ],
-    });
-    expect(dividers.beforeVisible.size).toBe(1);
-    expect(
-      (dividers.beforeVisible.get(3) ?? []).map((d) => (d.kind === "change" ? d.marker.entryId : d.kind)),
-    ).toEqual(["kept"]);
-    expect([...dividers.beforeEntryId.keys()]).toEqual(["e3"]);
-    expect(dividers.trailingChangeMarkers).toEqual([]);
   });
 });

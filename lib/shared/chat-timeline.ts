@@ -25,13 +25,6 @@ export interface ChatTimeline {
   visibleIndexOfSession(sessionIndex: number): number;
   sessionIndexOfVisible(visibleIndex: number): number | null;
   visibleIndexOfEntry(entryId: string): number | null;
-  sliceForReplay(replayIndex: number | null): ChatTimelineSlice;
-}
-
-export interface ChatTimelineSlice {
-  messages: AgentMessage[];
-  entryIds: string[];
-  entryTimestamps: (number | undefined)[];
 }
 
 export function buildChatTimeline(input: ChatTimelineInput): ChatTimeline {
@@ -78,20 +71,6 @@ export function buildChatTimeline(input: ChatTimelineInput): ChatTimeline {
       if (sessionIndex === -1) return null;
       const clamped = Math.min(sessionIndex, messages.length);
       return visibleOffsets[clamped];
-    },
-    sliceForReplay(replayIndex) {
-      if (replayIndex === null) {
-        return {
-          messages: input.messages,
-          entryIds: input.entryIds,
-          entryTimestamps: input.entryTimestamps,
-        };
-      }
-      return {
-        messages: input.messages.slice(0, replayIndex),
-        entryIds: input.entryIds.slice(0, replayIndex),
-        entryTimestamps: input.entryTimestamps.slice(0, replayIndex),
-      };
     },
   };
 }

@@ -5,8 +5,6 @@ import { isContentEqual } from "@/lib/client/shallowEqual";
 import type { SessionExportFormat } from "@/lib/shared/session-export";
 
 export interface ChatHeaderActions {
-  onOpenReplay: () => void;
-  replayVisible: boolean;
   onExport: (format: SessionExportFormat) => void;
   exportVisible: boolean;
   isExporting: boolean;

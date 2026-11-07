@@ -37,7 +37,6 @@ import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { SubagentSessionsButton } from "./SubagentSessionsButton";
 import { MoreActionsRow } from "./chat-window/MoreActionsRow";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
-import { ReplayBar } from "./ReplayBar";
 import LoadingState from "../ui/LoadingState";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -60,7 +59,6 @@ import type { SuggestedPromptPush } from "./chat-window/hooks/useSuggestedPrompt
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
-import { useReplay } from "./chat-window/hooks/useReplay";
 import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
 import { useStreamingViewportHeight } from "./chat-window/hooks/useStreamingViewportHeight";
 import { useTextSelection } from "@/hooks/useTextSelection";
@@ -397,18 +395,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     onNavigate: handleNavigate,
   });
 
-  const replay = useReplay({
-    sessionId: session?.id ?? null,
-    isStreaming: streamState.isStreaming,
-    agentRunning,
-    messages,
-  });
-
-  const renderSlice = timeline.sliceForReplay(replay.cropIndex);
-  const renderMessages = renderSlice.messages;
-  const renderEntryIds = renderSlice.entryIds;
-  const renderEntryTimestamps = renderSlice.entryTimestamps;
-
   const toolResultsMap = useMemo(() => {
     const map = indexToolResults(messages);
     for (const [id, partial] of inFlightToolResults) {
@@ -420,11 +406,11 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
   const { beforeVisible, trailingCompactionPoints, trailingChangeMarkers } = useMemo(() => {
     return buildTimelineDividers({
       timeline,
-      entryIds: renderEntryIds,
+      entryIds: entryIds,
       compactionPoints,
       changeMarkers,
     });
-  }, [timeline, renderEntryIds, compactionPoints, changeMarkers]);
+  }, [timeline, entryIds, compactionPoints, changeMarkers]);
 
   const trailingChangeNodes = trailingChangeMarkers.map((marker) => (
     marker.kind === "model"
@@ -440,9 +426,9 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
 
   const optimisticCompactionMessageIdx = useMemo(() => {
     if (trailingCompactionPoints.length === 0) return -1;
-    const idx = renderEntryIds.length;
-    return renderMessages[idx] ? idx : -1;
-  }, [renderEntryIds, renderMessages, trailingCompactionPoints]);
+    const idx = entryIds.length;
+    return messages[idx] ? idx : -1;
+  }, [entryIds, messages, trailingCompactionPoints]);
 
   const trailingCompactionNodes = optimisticCompactionMessageIdx === -1
     ? trailingCompactionPoints.map((point) => (
@@ -453,33 +439,33 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
 
   const turnDurationMap = useMemo(() => {
     const map = new Map<number, { startMs: number; endMs?: number; running: boolean }>();
-    for (let i = 0; i < renderMessages.length; i++) {
-      const m = renderMessages[i];
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
       if (m.role !== "user" || typeof m.timestamp !== "number") continue;
       let lastAssistant = -1;
-      for (let j = i + 1; j < renderMessages.length && renderMessages[j].role !== "user"; j++) {
-        if (renderMessages[j].role === "assistant") lastAssistant = j;
+      for (let j = i + 1; j < messages.length && messages[j].role !== "user"; j++) {
+        if (messages[j].role === "assistant") lastAssistant = j;
       }
       if (lastAssistant === -1) continue;
-      const endMs = renderEntryTimestamps[lastAssistant];
+      const endMs = entryTimestamps[lastAssistant];
       map.set(lastAssistant, {
         startMs: m.timestamp,
         endMs: endMs ?? undefined,
-        running: streamState.isStreaming && lastAssistant === renderMessages.length - 1,
+        running: streamState.isStreaming && lastAssistant === messages.length - 1,
       });
     }
     return map;
-  }, [renderMessages, renderEntryTimestamps, streamState.isStreaming]);
+  }, [messages, entryTimestamps, streamState.isStreaming]);
 
   const hasCollapsible = useMemo(
-    () => renderMessages.some((m) => hasDisplayableProcessMessage(m) || (m.role === "assistant" && (m.content ?? []).some((b) => b.type === "thinking" || b.type === "toolCall"))),
-    [renderMessages],
+    () => messages.some((m) => hasDisplayableProcessMessage(m) || (m.role === "assistant" && (m.content ?? []).some((b) => b.type === "thinking" || b.type === "toolCall"))),
+    [messages],
   );
   const collapseAllEnabled = hasCollapsible && !agentRunning;
 
   let lastUserIdx = -1;
-  for (let i = renderMessages.length - 1; i >= 0; i--) {
-    if (renderMessages[i].role === "user") { lastUserIdx = i; break; }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") { lastUserIdx = i; break; }
   }
   const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
 
@@ -503,7 +489,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     recalculateStreamingViewportHeight();
   }, [handleStreamingHeightIncrease, recalculateStreamingViewportHeight]);
 
-  const lastUserTimestamp = lastUserIdx !== -1 ? renderMessages[lastUserIdx]?.timestamp : undefined;
+  const lastUserTimestamp = lastUserIdx !== -1 ? messages[lastUserIdx]?.timestamp : undefined;
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   useEffect(() => {
     if (!agentRunning) {
@@ -535,9 +521,9 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
       container.scrollTo({ top: elTop - 20, behavior: "smooth" });
     }
     const sessionIndex = timeline.sessionIndexOfVisible(idx);
-    const entryId = sessionIndex === null ? null : renderEntryIds[sessionIndex] ?? null;
+    const entryId = sessionIndex === null ? null : entryIds[sessionIndex] ?? null;
     flashJumpHighlight(entryId);
-  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow, renderEntryIds, flashJumpHighlight]);
+  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow, entryIds, flashJumpHighlight]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -583,8 +569,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
   }, [autoNameFirstAssistantReady]);
 
   const headerActions = useMemo(() => ({
-    onOpenReplay: replay.open,
-    replayVisible: replay.buttonVisible,
     onExport: handleExport,
     exportVisible: Boolean(session) && !agentRunning,
     isExporting,
@@ -600,8 +584,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     notifyVisible: Boolean(session),
     currentNotifyChannelId: boundChannelId,
   }), [
-    replay.open,
-    replay.buttonVisible,
     agentRunning,
     handleExport,
     session,
@@ -816,19 +798,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
         </div>
       ) : (
       <>
-      {replay.visible && (
-        <ReplayBar
-          total={messages.length}
-          index={replay.index}
-          playing={replay.playing}
-          speed={replay.speed}
-          positionLabel={replay.positionLabel}
-          onIndexChange={replay.onIndexChange}
-          onPlayingChange={replay.onPlayingChange}
-          onSpeedChange={replay.onSpeedChange}
-          onClose={replay.onClose}
-        />
-      )}
       <CollapseNonceProvider value={collapseNonce}>
       <MessageCallMetricsProvider value={messageCallMetrics}>
       <div className="relative flex flex-1 overflow-hidden">
@@ -850,8 +819,8 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                   onOpenFile?: (filePath: string, fileName: string) => void;
                 } = {},
               ): React.ReactNode => {
-                const msg = opts.messageOverride ?? renderMessages[idx];
-                const anchorEntryId = branchAnchorEntryId(renderMessages, renderEntryIds, idx) ?? undefined;
+                const msg = opts.messageOverride ?? messages[idx];
+                const anchorEntryId = branchAnchorEntryId(messages, entryIds, idx) ?? undefined;
                 const isVisible = isVisibleChatMessage(msg);
                 const currentRefIdx =
                   isVisible && opts.attachRef !== false ? timeline.visibleIndexOfSession(idx) : -1;
@@ -860,12 +829,12 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                   showTimestamp = false;
                   if (msg.role === "assistant") {
                     showTimestamp = true;
-                    for (let j = idx + 1; j < renderMessages.length; j++) {
-                      const r = renderMessages[j].role;
+                    for (let j = idx + 1; j < messages.length; j++) {
+                      const r = messages[j].role;
                       if (r === "user") break;
                       if (r === "assistant") { showTimestamp = false; break; }
                     }
-                    if (showTimestamp && streamState.isStreaming && idx === renderMessages.length - 1) {
+                    if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
                       showTimestamp = false;
                     }
                   }
@@ -879,14 +848,14 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     modelNames={modelNames}
                     modelIcons={modelIcons}
                     modelIconPreferences={modelIconPreferences}
-                    entryId={renderEntryIds[idx]}
+                    entryId={entryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
                     branchAnchorEntryId={agentRunning ? undefined : anchorEntryId}
                     onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
                     showTimestamp={showTimestamp}
                     keywords={search.keywords}
                     highlightEntryId={jumpHighlightEntryId ?? search.highlightEntryId}
-                    isSearchMatch={search.matchedEntryIds.has(renderEntryIds[idx])}
+                    isSearchMatch={search.matchedEntryIds.has(entryIds[idx])}
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
@@ -918,7 +887,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
               const maybeDivider = (idx: number): React.ReactNode => {
                 const nodes: React.ReactNode[] = [];
                 const visibleIndex = timeline.visibleIndexOfSession(idx);
-                const dividers = isVisibleChatMessage(renderMessages[idx]) ? beforeVisible.get(visibleIndex) : undefined;
+                const dividers = isVisibleChatMessage(messages[idx]) ? beforeVisible.get(visibleIndex) : undefined;
                 for (const divider of dividers ?? []) {
                   if (divider.kind === "compaction") {
                     nodes.push(<CompactionDivider key={`comp-${divider.point.entryId}`} point={divider.point} />);
@@ -945,10 +914,10 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                 if (nodes.length === 0) return null;
                 return <Fragment key={`dividers-${idx}`}>{nodes}</Fragment>;
               };
-              for (let idx = 0; idx < renderMessages.length;) {
+              for (let idx = 0; idx < messages.length;) {
                 const div = maybeDivider(idx);
                 if (div) rendered.push(div);
-                const msg = renderMessages[idx];
+                const msg = messages[idx];
                 if (!isGroupAnchor(msg)) {
                   (liveTurnActive && idx > lastUserIdx ? streamingRendered : rendered).push(
                     renderOne(idx, { inStreamingViewport: liveTurnActive && idx > lastUserIdx }),
@@ -959,11 +928,11 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
 
                 const userIdx = idx;
                 let endIdx = userIdx + 1;
-                while (endIdx < renderMessages.length && !isGroupAnchor(renderMessages[endIdx])) {
+                while (endIdx < messages.length && !isGroupAnchor(messages[endIdx])) {
                   endIdx += 1;
                 }
 
-                const finalAssistantIdx = findFinalAssistantIndex(renderMessages, userIdx, endIdx);
+                const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
                 if (finalAssistantIdx === -1) {
                   for (let i = userIdx; i < endIdx; i++) {
                     const d = i === userIdx ? null : maybeDivider(i);
@@ -978,7 +947,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
 
                 const turnCwd = session?.cwd ?? cwd ?? null;
                 const { readFiles, diffStats: turnDiffStats } = summarizeTurn(
-                  renderMessages.slice(userIdx + 1, endIdx),
+                  messages.slice(userIdx + 1, endIdx),
                   toolResultsMap,
                   turnCwd,
                   resolveReadPath,
@@ -990,7 +959,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                 for (let i = userIdx + 1; i < finalAssistantIdx; i++) processIndices.push(i);
 
                 const visibleProcessIndices = processIndices.filter((i) =>
-                  hasDisplayableProcessMessage(renderMessages[i]),
+                  hasDisplayableProcessMessage(messages[i]),
                 );
                 const processCount = visibleProcessIndices.length;
 
@@ -1028,12 +997,12 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                       <ProcessDetailsGroup
                         key={`process-${userIdx}`}
                         turnDuration={{
-                          startMs: renderMessages[userIdx].timestamp as number,
-                          endMs: renderEntryTimestamps[finalAssistantIdx],
+                          startMs: messages[userIdx].timestamp as number,
+                          endMs: entryTimestamps[finalAssistantIdx],
                         }}
                         items={visibleProcessIndices.map((i) => ({
                           key: `proc-${i}`,
-                          toolCalls: countToolCallsByName(renderMessages, [i], []),
+                          toolCalls: countToolCallsByName(messages, [i], []),
                           node: renderProcessNode(i),
                         }))}
                       />,
