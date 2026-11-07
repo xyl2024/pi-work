@@ -67,7 +67,7 @@ export const LanguageIcon = (props: IconProps) => <Icon {...props}><path d="M5 8
 export const LightbulbIcon = (props: IconProps) => <Icon {...props}><path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" /><path d="M7 18h5M8 21h3" /></Icon>;
 export const TokensChartIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M8.5 16l1-3M12 16l1-5M15.5 16l1-7M7 17h10" /></Icon>;
 export const GitDiffGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M6 9v6M18 9a9 9 0 0 1-9 9" /></Icon>;
-export const LlmAuditGlyphIcon = (props: IconProps) => <Icon {...props}><path d="M2 12h3l2-4 3 8 2-4h2" /><circle cx="15.5" cy="15.5" r="2.5" /><path d="M17.5 17.5 20 20" /></Icon>;
+export const LlmAuditGlyphIcon = (props: IconProps) => <Icon {...props}><path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" /></Icon>;
 export const ToolIcon = (props: IconProps) => <Icon {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></Icon>;
 
 export const JsonIcon = (props: IconProps) => <Icon {...props}><path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 1-2 2v3a2 2 0 0 1-2 2h-2" /></Icon>;

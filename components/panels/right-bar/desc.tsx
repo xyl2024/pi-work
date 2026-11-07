@@ -11,12 +11,11 @@ import {
 } from "@/lib/shared/panelTabs";
 import {
   Eye,
-  ChartColumn,
   GitGraph,
   Languages,
   PanelRight,
 } from "lucide-react";
-import { ConversationTreeGlyphIcon } from "../../ui/icons";
+import { ConversationTreeGlyphIcon, LlmAuditGlyphIcon } from "../../ui/icons";
 
 export interface PanelIconOptions {
   size: number;
@@ -98,7 +97,7 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   }),
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
-    icon: ({ size }) => <ChartColumn size={size} />,
+    icon: ({ size }) => <LlmAuditGlyphIcon size={size} />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",
