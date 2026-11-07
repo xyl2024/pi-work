@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
 import { SectionTitle, SecretTextInput, Field } from "./form-fields";
 import type { ApiKeyProvider } from "./types";
+import styles from "./ApiKeyDetail.module.css";
 
 export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
   const { t } = useI18n();
@@ -72,48 +73,46 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
     }
   }, [provider.id, onRefresh, t, toast]);
 
+  const ready = !saving && apiKey.trim() !== "" && !savedOk;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className={styles.detail}>
+      <div className={styles.header}>
         <SectionTitle>{t("API Key")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
+        <div className={styles.status} data-configured={provider.configured ? "true" : undefined}>
+          <span className={styles.statusDot} />
+          <span className={styles.statusText}>
             {provider.configured ? t("configured") : t("not configured")}
           </span>
         </div>
       </div>
 
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+      <p className={styles.description}>
         {provider.configured
           ? t("API key stored message")
-          : `${t("Enter your")} ${provider.displayName} API key ${t("to enable")} ${provider.modelCount} ${t("models")}.`}
+          : t("Enter your {name} API key to enable {n} models.", { name: provider.displayName, n: provider.modelCount })}
       </p>
 
-      <Field label="API Key">
-        <div style={{ display: "flex", gap: 6 }}>
-          <SecretTextInput
-            value={apiKey}
-            onChange={setApiKey}
-            onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? t("Enter new key to replace...") : "sk-..."}
-            style={{ flex: 1 }}
-            autoComplete="new-password"
-            spellCheck={false}
-            mono
-          />
+      <Field label={t("API Key")}>
+        <div className={styles.fieldRow}>
+          <div className={styles.keyField}>
+            <SecretTextInput
+              value={apiKey}
+              onChange={setApiKey}
+              onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
+              placeholder={provider.configured ? t("Enter new key to replace...") : "sk-..."}
+              autoComplete="new-password"
+              spellCheck={false}
+              mono
+            />
+          </div>
           <button
+            type="button"
+            className={styles.saveButton}
             onClick={handleSave}
-            disabled={saving || !apiKey.trim() || savedOk}
-            style={{
-              padding: "6px 12px",
-              background: savedOk ? "var(--success)" : apiKey.trim() ? "var(--accent)" : "var(--bg)",
-              border: "none", borderRadius: 5,
-              color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
-              cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 600, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-            }}
+            disabled={!ready}
+            data-ready={ready ? "true" : undefined}
+            data-saved={savedOk ? "true" : undefined}
           >
             {savedOk && (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -125,19 +124,10 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
         </div>
       </Field>
 
-      {error && <p style={{ margin: 0, fontSize: 12, color: "var(--error)" }}>{error}</p>}
+      {error && <p className={styles.error}>{error}</p>}
 
       {provider.configured && (
-        <button
-          onClick={handleRemove}
-          disabled={removing}
-          style={{
-            alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)",
-            borderRadius: 5, color: "var(--error)",
-            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
-          }}
-        >
+        <button type="button" className={styles.disconnect} onClick={handleRemove} disabled={removing}>
           {removing ? t("Removing...") : t("Disconnect")}
         </button>
       )}

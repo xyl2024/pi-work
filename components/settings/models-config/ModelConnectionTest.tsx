@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/client/clipboard";
 import { selectModelsConfigDirty, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import type { ModelConnectionTestResult } from "@/lib/shared/model-connection-test";
+import styles from "./ModelConnectionTest.module.css";
 
 export function ModelConnectionTest({ provider, modelId, disabled = false }: {
   provider: string; modelId: string; disabled?: boolean;
@@ -52,33 +53,57 @@ export function ModelConnectionTest({ provider, modelId, disabled = false }: {
   };
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" disabled={blocked || running || !modelId} onClick={() => { void run(); }}
-          style={{ padding: "4px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: blocked || running ? "default" : "pointer", opacity: blocked || running ? 0.5 : 1 }}>
+    <section className={styles.section}>
+      <div className={styles.toolbar}>
+        <button
+          type="button"
+          className={styles.testButton}
+          disabled={blocked || running || !modelId}
+          onClick={() => { void run(); }}
+        >
           {t(running ? "Testing connection..." : "Test connection")}
         </button>
-        {running && <button type="button" onClick={() => {
-          controller.current?.abort();
-          controller.current = null;
-          setRunning(false);
-        }}>{t("Cancel")}</button>}
-        {result && <span role="status" style={{ color: result.ok ? "var(--text)" : "var(--error)" }}>
-          {t(result.ok ? "Connection successful" : "Connection failed")} · {result.durationMs} ms
-        </span>}
+        {running && (
+          <button
+            type="button"
+            className={styles.cancelButton}
+            onClick={() => {
+              controller.current?.abort();
+              controller.current = null;
+              setRunning(false);
+            }}
+          >
+            {t("Cancel")}
+          </button>
+        )}
+        {result && (
+          <span role="status" className={styles.status} data-ok={result.ok ? "true" : "false"}>
+            {t(result.ok ? "Connection successful" : "Connection failed")} · {result.durationMs} ms
+          </span>
+        )}
       </div>
-      {error && <div role="alert" style={{ color: "var(--error)", whiteSpace: "pre-wrap" }}>{error}</div>}
-      {result && <details open>
-        <summary>{t("Connection diagnostics")}</summary>
-        <button type="button" onClick={() => {
-          void copyText(JSON.stringify(result, null, 2)).then(() => setCopied(true)).catch(() => setError(t("Network error")));
-        }}>{t(copied ? "Copied" : "Copy")}</button>
-        {result.truncated && <div>{t("Diagnostics truncated")}</div>}
-        <pre style={{ maxHeight: 480, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: 8, background: "var(--bg)", userSelect: "text" }}>
-          {JSON.stringify({ ok: result.ok, startedAt: result.startedAt, durationMs: result.durationMs, firstEventMs: result.firstEventMs, error: result.error }, null, 2)}
-          {"\n\n"}{result.diagnostics}
-        </pre>
-      </details>}
+      {error && <div role="alert" className={styles.error}>{error}</div>}
+      {result && (
+        <details open>
+          <summary className={styles.summary}>{t("Connection diagnostics")}</summary>
+          <div className={styles.diagnostics}>
+            <button
+              type="button"
+              className={styles.copyButton}
+              onClick={() => {
+                void copyText(JSON.stringify(result, null, 2)).then(() => setCopied(true)).catch(() => setError(t("Network error")));
+              }}
+            >
+              {t(copied ? "Copied" : "Copy")}
+            </button>
+            {result.truncated && <div className={styles.truncated}>{t("Diagnostics truncated")}</div>}
+            <pre className={styles.dump}>
+              {JSON.stringify({ ok: result.ok, startedAt: result.startedAt, durationMs: result.durationMs, firstEventMs: result.firstEventMs, error: result.error }, null, 2)}
+              {"\n\n"}{result.diagnostics}
+            </pre>
+          </div>
+        </details>
+      )}
     </section>
   );
 }

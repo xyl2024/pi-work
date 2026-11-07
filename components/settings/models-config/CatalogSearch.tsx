@@ -10,6 +10,7 @@ import {
 import type { RuntimeModelInfo } from "@/lib/shared/models-config";
 import { SearchIcon } from "@/components/ui/icons";
 import { ModelTable, type ModelTableItem } from "./ModelTable";
+import { ListSkeleton } from "./ListSkeleton";
 import styles from "./CatalogSearch.module.css";
 
 export interface CatalogSearchProps {
@@ -98,16 +99,7 @@ export function CatalogSearch({ entries, loading, error, onSelect, onExit, onSki
 
       <div className={styles.results} data-scroll-wide>
         {loading ? (
-          <div className={styles.skeleton} role="status" aria-label={t("Loading catalog...")}>
-            {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              <div key={index} className={styles.skeletonRow}>
-                <span className={`${styles.skeletonBar} ${styles.skeletonName}`} />
-                <span className={`${styles.skeletonBar} ${styles.skeletonTag}`} />
-                <span className={`${styles.skeletonBar} ${styles.skeletonNumber}`} />
-                <span className={`${styles.skeletonBar} ${styles.skeletonNumber}`} />
-              </div>
-            ))}
-          </div>
+          <ListSkeleton rows={SKELETON_ROWS} label={t("Loading catalog...")} />
         ) : error ? (
           <div className={styles.state}>{error}</div>
         ) : items.length === 0 ? (

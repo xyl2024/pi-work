@@ -1,0 +1,86 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.testButton {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.testButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.testButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.testButton:focus-visible, .cancelButton:focus-visible, .copyButton:focus-visible, .summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cancelButton, .copyButton {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.cancelButton:hover, .copyButton:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.status {
+  color: var(--text);
+}
+.status[data-ok="false"] {
+  color: var(--error);
+}
+.error {
+  color: var(--error);
+  white-space: pre-wrap;
+}
+.summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.truncated {
+  color: var(--warning);
+  font-size: 11px;
+}
+pre.dump {
+  max-height: 480px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

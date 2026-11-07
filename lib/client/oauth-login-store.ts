@@ -1,6 +1,5 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import type { OAuthLoginState } from "@/lib/shared/models-config";
 import {
   OAUTH_LOGIN_IDLE,
@@ -66,14 +65,6 @@ export function getOAuthLoginState(providerId: string): OAuthLoginState {
 
 export function subscribeOAuthLogins(listener: () => void): () => void {
   return subscribe(listener);
-}
-
-export function useOAuthLoginState(providerId: string): OAuthLoginState {
-  return useSyncExternalStore(
-    subscribe,
-    () => snapshotFor(providerId),
-    () => OAUTH_LOGIN_IDLE,
-  );
 }
 
 export function bindOAuthLoginSuccess(providerId: string, onSuccess: OAuthLoginSuccessHandler): void {

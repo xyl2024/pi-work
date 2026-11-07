@@ -9,6 +9,7 @@ import {
   updateModelsConfigProvider,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
+import styles from "./models-config.module.css";
 
 export function ModelsConfigProviderFormPage({ name }: { name: string }) {
   const { t } = useI18n();
@@ -19,18 +20,18 @@ export function ModelsConfigProviderFormPage({ name }: { name: string }) {
   if (!provider) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
+    <div className={styles.formPage}>
       <ProviderFields
         name={providerNames[name] ?? name}
         provider={provider}
         onChange={(next) => updateModelsConfigProvider(name, next)}
         onRename={(nextName) => renameModelsConfigProvider(name, nextName)}
       />
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+      <div className={styles.dangerZone}>
         <button
           type="button"
           onClick={() => { void confirmDelete(() => requestModelsConfigProviderDelete(name)); }}
-          style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 6, background: "transparent", color: "var(--error)", cursor: "pointer", fontSize: 12 }}
+          className={styles.dangerZoneButton}
         >
           {t("Delete provider")}
         </button>

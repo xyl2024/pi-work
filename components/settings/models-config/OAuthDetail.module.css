@@ -1,3 +1,178 @@
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.statusDot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--border);
+}
+.status[data-connected="true"] .statusDot {
+  background: var(--success);
+}
+.statusText {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.status[data-connected="true"] .statusText {
+  color: var(--success);
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 48px;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.option {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.option:hover {
+  background: var(--bg-hover);
+}
+.text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.link {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.link:hover {
+  color: var(--accent-hover);
+}
+.link:focus-visible, .option:focus-visible, .input:focus-visible, .submit:focus-visible, .primary:focus-visible, .ghost:focus-visible, .danger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.success {
+  margin: 0;
+  color: var(--success);
+  font-size: 12px;
+}
+.error {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}
+.inputRow {
+  display: flex;
+  gap: 6px;
+}
+.input {
+  flex: 1;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.submit {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: not-allowed;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.submit[data-ready="true"] {
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.submit[data-ready="true"]:hover {
+  background: var(--accent-hover);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+.primary {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.primary:hover {
+  background: var(--accent-hover);
+}
+.ghost {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.danger {
+  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+  border-radius: 5px;
+  background: none;
+  color: var(--error);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.danger:hover {
+  background: var(--error-bg);
+}
 .deviceCode {
   display: flex;
   align-items: center;

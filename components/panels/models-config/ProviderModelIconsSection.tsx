@@ -21,6 +21,8 @@ import {
   applyModelsConfigModelIconPreferences,
   useModelsConfigPanel,
 } from "@/lib/client/models-config-panel";
+import { ListSkeleton } from "@/components/settings/models-config/ListSkeleton";
+import styles from "./ProviderModelIconsSection.module.css";
 
 interface ModelsApiResponse {
   catalog?: RuntimeCatalog;
@@ -91,29 +93,29 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
   }, [providerId, savingKey, t, toast]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+    <div className={styles.section}>
+      <div className={styles.header}>
         <SectionTitle>{t("Models")}</SectionTitle>
         {!loading && !loadError && models.length > 0 && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
+          <span className={styles.count}>
             {t("{n} models", { n: models.length })}
           </span>
         )}
       </div>
-      <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+      <p className={styles.hint}>
         {t("Icon preference hint")}
       </p>
 
       {loading ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading models...")}</div>
+        <ListSkeleton rows={4} label={t("Loading models...")} />
       ) : loadError ? (
-        <div style={{ fontSize: 12, color: "var(--error)" }}>{loadError}</div>
+        <div className={styles.error}>{loadError}</div>
       ) : models.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No models")}</div>
+        <div className={styles.empty}>{t("No models")}</div>
       ) : (
         <>
-          <div style={{ display: "flex", flexDirection: "column", border: "1px solid var(--border)", borderRadius: 7, overflow: "hidden" }}>
-            {visibleModels.map((model, index) => {
+          <div className={styles.list}>
+            {visibleModels.map((model) => {
               const providerPreferred = isProviderIconPreferred(preferences, providerId, model.id);
               const effectiveIconId = resolveProviderIcon(providerId, model.id, modelIcons, preferences);
               const matchedIconId = matchModelIcon(model.id);
@@ -124,37 +126,22 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
               );
               const busy = savingKey !== null;
               return (
-                <div
-                  key={model.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 9,
-                    padding: "7px 9px",
-                    minWidth: 0,
-                    borderTop: index === 0 ? undefined : "1px solid var(--border)",
-                    background: "var(--bg)",
-                  }}
-                >
-                  <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+                <div key={model.id} className={styles.row}>
+                  <span className={styles.rowIcon}>
                     {effectiveIconId
                       ? <ProviderIcon id={effectiveIconId} size={18} />
                       : <ProviderGearIcon size={16} />}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                  <span className={styles.rowText}>
+                    <span className={styles.rowName}>
                       {model.name}
                     </span>
-                    <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                    <span className={styles.rowId}>
                       {model.id}
                     </span>
                   </span>
                   {canToggle && (
-                    <span
-                      role="group"
-                      aria-label={t("Icon preference")}
-                      style={{ display: "flex", alignItems: "center", gap: 2, padding: 2, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-hover)", flexShrink: 0 }}
-                    >
+                    <span role="group" aria-label={t("Icon preference")} className={styles.toggle}>
                       <button
                         type="button"
                         onClick={() => { void handleToggle(model.id, false); }}
@@ -162,7 +149,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
                         aria-pressed={!providerPreferred}
                         title={t("Auto-matched icon")}
                         aria-label={`${t("Auto-matched icon")}: ${model.name}`}
-                        style={segmentStyle(!providerPreferred, busy)}
+                        className={styles.segment}
                       >
                         {matchedIconId
                           ? <ProviderIcon id={matchedIconId} size={15} />
@@ -175,7 +162,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
                         aria-pressed={providerPreferred}
                         title={t("Provider icon")}
                         aria-label={`${t("Provider icon")}: ${model.name}`}
-                        style={segmentStyle(providerPreferred, busy)}
+                        className={styles.segment}
                       >
                         {providerIconId
                           ? <ProviderIcon id={providerIconId} size={15} />
@@ -191,7 +178,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
             <button
               type="button"
               onClick={() => setExpanded((prev) => !prev)}
-              style={{ alignSelf: "flex-start", padding: "4px 9px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+              className={styles.expand}
             >
               {expanded ? t("Show less") : t("Show all ({n})", { n: models.length })}
             </button>
@@ -200,21 +187,4 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
       )}
     </div>
   );
-}
-
-function segmentStyle(active: boolean, busy: boolean): React.CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 24,
-    height: 24,
-    padding: 0,
-    background: active ? "var(--bg)" : "none",
-    border: `1px solid ${active ? "var(--accent)" : "transparent"}`,
-    borderRadius: 4,
-    cursor: busy ? "default" : "pointer",
-    opacity: busy ? 0.55 : 1,
-    flexShrink: 0,
-  };
 }
