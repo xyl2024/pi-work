@@ -3,8 +3,7 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
-import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "../ui/ProviderIcon";
-
+import { IconPicker } from "../ui/IconPicker";
 export const SETTINGS_RADIUS = 6;
 export const SETTINGS_CONTROL_FONT_SIZE = 13;
 export const SETTINGS_CONTROL_HEIGHT = 32;
@@ -274,23 +273,12 @@ export function IconField({ value, onChange }: { value: string | undefined; onCh
   const { t } = useI18n();
   return (
     <Field label={t("Icon")}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: SETTINGS_RADIUS, background: "var(--bg-hover)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {value && hasProviderIcon(value)
-            ? <ProviderIcon id={value} size={16} />
-            : <ProviderGearIcon size={14} />}
-        </div>
-        <select
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          style={{ ...inputStyle, flex: 1 }}
-        >
-          <option value="">— {t("none")} / {t("inherit")} —</option>
-          {PROVIDER_ICON_IDS.map((id) => (
-            <option key={id} value={id}>{id}</option>
-          ))}
-        </select>
-      </div>
+      <IconPicker
+        value={value}
+        onChange={onChange}
+        autoLabel={t("Inherit / automatic")}
+        dialogLabel={t("Choose icon")}
+      />
       <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Icon source hint")}</span>
     </Field>
   );

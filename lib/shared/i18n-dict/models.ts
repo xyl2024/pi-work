@@ -106,6 +106,8 @@ export const models = {
   "Failed to update icon preference": "更新图标偏好失败",
   "inherit": "继承",
   "none": "无",
+  "Inherit / automatic": "继承 / 自动",
+  "Choose icon": "选择图标",
   "API key stored message": "API key 已保存。在下方输入新的 key 可以替换它，或断开连接将其移除。",
   "Body": "请求体",
   "Enter your": "输入你的",
