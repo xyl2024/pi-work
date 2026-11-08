@@ -185,8 +185,8 @@ const FAILURE_MESSAGES: Record<MemoryWriteFailureCode, string> = {
   no_match: "没有条目匹配 old_text，请对照最接近的条目改写。",
   ambiguous: "old_text 命中多个位置，请给出更精确的 old_text。",
   budget: "记忆库超出字符预算，请一次批量删旧加新。",
-  out_of_range: "条目索引越界，记忆库可能已被改动，请刷新后再删。",
-  stale_entry: "条目在你确认前已被改动，已拒绝删除，请刷新后再试。",
+  out_of_range: "条目索引越界，记忆库可能已被改动，请刷新后重试。",
+  stale_entry: "条目在你确认前已被改动，已拒绝写入，请刷新后再试。",
   busy: "记忆库正被其它会话写入，请稍后重试。",
 };
 
@@ -379,6 +379,16 @@ function validatedContent(raw: string): { text: string } | { code: "empty" | "in
   return { text: raw.trim() };
 }
 
+function validatedUserContent(raw: string): { text: string } | { code: "empty" | "invalid" } {
+  if (raw.trim() === "") return { code: "empty" };
+  if (raw.includes(MEMORY_ENTRY_SEPARATOR)) return { code: "invalid" };
+  return { text: raw.trim() };
+}
+
+function duplicates(entries: readonly string[], text: string, exceptIndex = -1): boolean {
+  return entries.some((entry, index) => index !== exceptIndex && entry.trim() === text);
+}
+
 type OperationOutcome =
   | { kind: "applied"; entries: string[] }
   | { kind: "failed"; code: MemoryWriteFailureCode; detail: Partial<MemoryWriteFailure> };
@@ -466,6 +476,68 @@ async function snapshotDeletedRaw(target: MemoryTarget, raw: string): Promise<vo
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     }
+  }
+}
+
+export async function addMemoryEntry(
+  target: MemoryTarget,
+  content: string,
+): Promise<MemoryWriteResult> {
+  const release = await acquireLock();
+  if (release === null) return failure(target, "busy", 0, []);
+  try {
+    const snapshot = readMemory(target);
+    if (snapshot.status === "unreadable") return failure(target, "unreadable", 0, []);
+    const validated = validatedUserContent(content);
+    if ("code" in validated) return failure(target, validated.code, 0, snapshot.entries);
+    if (duplicates(snapshot.entries, validated.text)) {
+      return failure(target, "duplicate", 0, snapshot.entries, { matched: validated.text });
+    }
+    const entries = [...snapshot.entries, validated.text];
+    const used = usageOf(entries);
+    if (used > snapshot.limit) {
+      return failure(target, "budget", 0, snapshot.entries, { attemptedUsed: used });
+    }
+    writeFileAtomic(storePath(target), joinEntries(entries));
+    return { ok: true, target, entries, used, limit: snapshot.limit };
+  } finally {
+    await release();
+  }
+}
+
+export async function updateMemoryEntry(
+  target: MemoryTarget,
+  index: number,
+  hash: string,
+  content: string,
+): Promise<MemoryWriteResult> {
+  const release = await acquireLock();
+  if (release === null) return failure(target, "busy", index, []);
+  try {
+    const snapshot = readMemory(target);
+    if (snapshot.status === "unreadable") return failure(target, "unreadable", index, []);
+    const views = memoryEntryViews(snapshot.entries, snapshot.limit);
+    const view = Number.isInteger(index) && index >= 0 ? views[index] : undefined;
+    if (view === undefined) return failure(target, "out_of_range", index, snapshot.entries);
+    if (view.hash !== hash) return failure(target, "stale_entry", index, snapshot.entries);
+    const validated = validatedUserContent(content);
+    if ("code" in validated) return failure(target, validated.code, index, snapshot.entries);
+    if (duplicates(snapshot.entries, validated.text, index)) {
+      return failure(target, "duplicate", index, snapshot.entries, { matched: validated.text });
+    }
+    const entries = [...snapshot.entries];
+    entries[index] = validated.text;
+    const used = usageOf(entries);
+    if (used > snapshot.limit && used > snapshot.used) {
+      return failure(target, "budget", index, snapshot.entries, { attemptedUsed: used });
+    }
+    if (view.oversized) {
+      await snapshotDeletedRaw(target, readFileSync(storePath(target), "utf8"));
+    }
+    writeFileAtomic(storePath(target), joinEntries(entries));
+    return { ok: true, target, entries, used, limit: snapshot.limit };
+  } finally {
+    await release();
   }
 }
 

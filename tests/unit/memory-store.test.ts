@@ -5,9 +5,11 @@ import { createSandbox, seedMemoryLibrary, type Sandbox } from "./sandbox";
 import { MEMORY_TARGET_FILES, memoryEntryHash } from "@/lib/shared/memory";
 import {
   MEMORY_CHAR_LIMITS,
+  addMemoryEntry,
   applyMemoryOperations,
   deleteMemoryEntry,
   readMemory,
+  updateMemoryEntry,
 } from "@/lib/server/memory-store";
 
 function storeFile(sandbox: Sandbox, target: "memory" | "user"): string {
@@ -515,5 +517,149 @@ describe("memory store: user deletes one entry", () => {
     expect([one.ok, two.ok].filter(Boolean)).toHaveLength(1);
     expect([one, two].find((result) => !result.ok)).toMatchObject({ code: "stale_entry" });
     expect(readMemory("memory").entries).toEqual(["乙"]);
+  });
+});
+
+describe("memory store: user adds and updates one entry", () => {
+  function backups(sandbox: Sandbox): string[] {
+    return readdirSync(join(sandbox.dataDir, "memory")).filter((name) => name.endsWith(".bak"));
+  }
+
+  it("adds a trimmed entry and writes only the target library", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+
+    const result = await addMemoryEntry("user", "  回复用中文  ");
+
+    expect(result).toMatchObject({ ok: true, entries: ["回复用中文"], used: "回复用中文".length });
+    expect(readFileSync(storeFile(sandbox, "user"), "utf8")).toBe("回复用中文");
+    expect(readMemory("memory").status).toBe("missing");
+  });
+
+  it("refuses an empty or separator-carrying add", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["既有条目"]);
+
+    expect(await addMemoryEntry("memory", "   ")).toMatchObject({ ok: false, code: "empty" });
+    expect(await addMemoryEntry("memory", `伪装\n§\n注入条目`)).toMatchObject({
+      ok: false,
+      code: "invalid",
+    });
+    expect(readFileSync(file, "utf8")).toBe("既有条目");
+  });
+
+  it("refuses a duplicate add", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["同一条事实"]);
+
+    const result = await addMemoryEntry("memory", "  同一条事实 ");
+
+    expect(result).toMatchObject({ ok: false, code: "duplicate" });
+    expect(readFileSync(file, "utf8")).toBe("同一条事实");
+  });
+
+  it("refuses an add that would exceed the budget", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["既有条目"]);
+
+    const result = await addMemoryEntry("memory", "新".repeat(MEMORY_CHAR_LIMITS.memory));
+
+    expect(result).toMatchObject({ ok: false, code: "budget", limit: MEMORY_CHAR_LIMITS.memory });
+    expect(readFileSync(file, "utf8")).toBe("既有条目");
+  });
+
+  it("updates the entry pinned by index and hash", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条", "第三条"]);
+
+    const result = await updateMemoryEntry("memory", 1, memoryEntryHash("第二条"), "改过的第二条");
+
+    expect(result).toMatchObject({
+      ok: true,
+      entries: ["第一条", "改过的第二条", "第三条"],
+      used: "第一条\n§\n改过的第二条\n§\n第三条".length,
+    });
+    expect(readFileSync(file, "utf8")).toBe("第一条\n§\n改过的第二条\n§\n第三条");
+  });
+
+  it("refuses an update whose pin no longer matches", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+
+    expect(
+      await updateMemoryEntry("memory", 0, memoryEntryHash("旧内容"), "新内容"),
+    ).toMatchObject({ ok: false, code: "stale_entry" });
+    expect(await updateMemoryEntry("memory", 9, memoryEntryHash("第一条"), "新内容")).toMatchObject({
+      ok: false,
+      code: "out_of_range",
+    });
+    expect(readFileSync(file, "utf8")).toBe("第一条\n§\n第二条");
+  });
+
+  it("refuses an update that duplicates another entry", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+
+    const result = await updateMemoryEntry("memory", 0, memoryEntryHash("第一条"), "第二条");
+
+    expect(result).toMatchObject({ ok: false, code: "duplicate" });
+    expect(readFileSync(file, "utf8")).toBe("第一条\n§\n第二条");
+  });
+
+  it("refuses an update that grows the library past its budget", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const file = seedMemoryLibrary(sandbox, "memory", ["短条目", "另一条"]);
+
+    const result = await updateMemoryEntry(
+      "memory",
+      0,
+      memoryEntryHash("短条目"),
+      "长".repeat(MEMORY_CHAR_LIMITS.memory),
+    );
+
+    expect(result).toMatchObject({ ok: false, code: "budget" });
+    expect(readFileSync(file, "utf8")).toBe("短条目\n§\n另一条");
+  });
+
+  it("lets the user shrink an oversized entry and snapshots the pre-update file", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const runaway = "手写".repeat(1200);
+    const raw = [runaway, "正常条目"].join("\n§\n");
+    const file = seedMemoryLibrary(sandbox, "memory", [runaway, "正常条目"]);
+
+    const result = await updateMemoryEntry("memory", 0, memoryEntryHash(runaway), "修好了");
+
+    expect(result).toMatchObject({ ok: true, entries: ["修好了", "正常条目"] });
+    expect(readFileSync(file, "utf8")).toBe("修好了\n§\n正常条目");
+    const files = backups(sandbox);
+    expect(files).toHaveLength(1);
+    expect(readFileSync(join(sandbox.dataDir, "memory", files[0]!), "utf8")).toBe(raw);
+  });
+
+  it("lets the user shrink an entry even while the library stays over budget", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+    const first = "甲".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    const second = "乙".repeat(MEMORY_CHAR_LIMITS.memory + 1);
+    const file = seedMemoryLibrary(sandbox, "memory", [first, second]);
+
+    const result = await updateMemoryEntry(
+      "memory",
+      0,
+      memoryEntryHash(first),
+      "甲".repeat(MEMORY_CHAR_LIMITS.memory - 100),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(readFileSync(file, "utf8")).toBe(
+      ["甲".repeat(MEMORY_CHAR_LIMITS.memory - 100), second].join("\n§\n"),
+    );
+  });
+
+  it("does not create the store for a rejected update", async () => {
+    const sandbox = createSandbox("pi-work-memory-store-");
+
+    const result = await updateMemoryEntry("memory", 0, "missing", "新条目");
+
+    expect(result).toMatchObject({ ok: false, code: "out_of_range" });
+    expect(existsSync(join(sandbox.dataDir, "memory", "MEMORY.md"))).toBe(false);
   });
 });

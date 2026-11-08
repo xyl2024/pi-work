@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { DELETE, GET } from "@/app/api/memory/entries/route";
+import { DELETE, GET, PATCH, POST } from "@/app/api/memory/entries/route";
 import { readConfig, writeConfig } from "@/lib/server/config";
 import { writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
 import { MEMORY_ENTRY_SEPARATOR, memoryEntryHash } from "@/lib/shared/memory";
@@ -219,7 +219,7 @@ describe("DELETE /api/memory/entries", () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({
-      error: "条目在你确认前已被改动，已拒绝删除，请刷新后再试。",
+      error: "条目在你确认前已被改动，已拒绝写入，请刷新后再试。",
       code: "stale_entry",
     });
     expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
@@ -237,7 +237,7 @@ describe("DELETE /api/memory/entries", () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({
-      error: "条目索引越界，记忆库可能已被改动，请刷新后再删。",
+      error: "条目索引越界，记忆库可能已被改动，请刷新后重试。",
       code: "out_of_range",
     });
   });
@@ -266,5 +266,145 @@ describe("DELETE /api/memory/entries", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+function writeRequest(method: "POST" | "PATCH", body: unknown, cwd?: string): Request {
+  const url = cwd === undefined
+    ? "http://localhost/api/memory/entries"
+    : `http://localhost/api/memory/entries?cwd=${encodeURIComponent(cwd)}`;
+  return new Request(url, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("POST /api/memory/entries", () => {
+  it("rejects a body without a valid target or content", async () => {
+    createSandbox("pi-work-memory-entries-route-");
+
+    const cases: Array<[unknown, string]> = [
+      [{ content: "新条目" }, "target must be memory or user"],
+      [{ target: "other", content: "新条目" }, "target must be memory or user"],
+      [{ target: "memory" }, "content must be a string"],
+      [{ target: "memory", content: 42 }, "content must be a string"],
+    ];
+
+    for (const [body, error] of cases) {
+      const response = await POST(writeRequest("POST", body));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error });
+    }
+
+    const malformed = await POST(
+      new Request("http://localhost/api/memory/entries", { method: "POST", body: "not json" }),
+    );
+    expect(malformed.status).toBe(400);
+  });
+
+  it("adds an entry and returns the write-after snapshot", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["用户用 WSL2"]);
+    seedMemoryLibrary(sandbox, "user", ["回复用中文"]);
+    setGlobalMemory(true);
+
+    const response = await POST(writeRequest("POST", { target: "memory", content: "偏好简短回复" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.enabled).toBe(true);
+    expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual([
+      "用户用 WSL2",
+      "偏好简短回复",
+    ]);
+    expect(body.memory.used).toBe("用户用 WSL2\n§\n偏好简短回复".length);
+    expect(body.user.entries.map((entry: { text: string }) => entry.text)).toEqual(["回复用中文"]);
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
+      "用户用 WSL2\n§\n偏好简短回复",
+    );
+  });
+
+  it("surfaces a duplicate or over-budget add as an error with its code", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["既有条目"]);
+
+    const duplicate = await POST(writeRequest("POST", { target: "memory", content: "既有条目" }));
+    expect(duplicate.status).toBe(409);
+    expect(await duplicate.json()).toMatchObject({ code: "duplicate" });
+
+    const budget = await POST(
+      writeRequest("POST", { target: "memory", content: "长".repeat(2200) }),
+    );
+    expect(budget.status).toBe(409);
+    expect(await budget.json()).toMatchObject({ code: "budget" });
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe("既有条目");
+  });
+});
+
+describe("PATCH /api/memory/entries", () => {
+  it("rejects a body without a valid target, content, index or hash", async () => {
+    createSandbox("pi-work-memory-entries-route-");
+
+    const cases: Array<[unknown, string]> = [
+      [{ content: "新条目", index: 0, hash: "x" }, "target must be memory or user"],
+      [{ target: "memory", index: 0, hash: "x" }, "content must be a string"],
+      [{ target: "memory", content: "新条目", hash: "x" }, "index must be a non-negative integer"],
+      [{ target: "memory", content: "新条目", index: -1, hash: "x" }, "index must be a non-negative integer"],
+      [{ target: "memory", content: "新条目", index: 0 }, "hash is required"],
+      [{ target: "memory", content: "新条目", index: 0, hash: "" }, "hash is required"],
+    ];
+
+    for (const [body, error] of cases) {
+      const response = await PATCH(writeRequest("PATCH", body));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error });
+    }
+  });
+
+  it("updates the pinned entry and returns the write-after snapshot", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+    setGlobalMemory(true);
+
+    const response = await PATCH(
+      writeRequest("PATCH", {
+        target: "memory",
+        index: 1,
+        hash: memoryEntryHash("第二条"),
+        content: "改过的第二条",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.memory.entries.map((entry: { text: string }) => entry.text)).toEqual([
+      "第一条",
+      "改过的第二条",
+    ]);
+    expect(body.memory.used).toBe("第一条\n§\n改过的第二条".length);
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
+      "第一条\n§\n改过的第二条",
+    );
+  });
+
+  it("rejects a stale pin without touching the file", async () => {
+    const sandbox = createSandbox("pi-work-memory-entries-route-");
+    seedMemoryLibrary(sandbox, "memory", ["第一条", "第二条"]);
+
+    const response = await PATCH(
+      writeRequest("PATCH", {
+        target: "memory",
+        index: 0,
+        hash: memoryEntryHash("旧内容"),
+        content: "新内容",
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "stale_entry" });
+    expect(readFileSync(join(sandbox.dataDir, "memory", "MEMORY.md"), "utf8")).toBe(
+      "第一条\n§\n第二条",
+    );
   });
 });
