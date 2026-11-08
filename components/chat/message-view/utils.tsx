@@ -262,54 +262,29 @@ export function CallMetricsBadges({ metrics, hidden }: {
   metrics?: MessageCallMetrics | null;
   hidden?: boolean;
 }) {
-  const items: Array<{ key: string; label: string; compact: string; icon: React.ReactNode }> = [];
+  const parts: string[] = [];
   const ttft = metrics?.ttftMs;
   if (typeof ttft === "number" && Number.isFinite(ttft) && ttft >= 0) {
-    const text = formatTtft(ttft);
-    items.push({
-      key: "ttft",
-      label: `TTFT ${text}`,
-      compact: `TTFT ${text}`,
-      icon: (
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6.6 1.5 3.2 6.6h2.3l-.5 3.9 3.6-5.4H6.2z" />
-        </svg>
-      ),
-    });
+    parts.push(`TTFT: ${formatTtft(ttft)}`);
   }
   const tps = metrics?.generationTps;
   if (typeof tps === "number" && Number.isFinite(tps) && tps > 0) {
-    const text = formatTps(tps);
-    items.push({
-      key: "tps",
-      label: `${text} tok/s`,
-      compact: `TPS ${text}`,
-      icon: (
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M2 8.7a4 4 0 1 1 8 0" /><path d="M6 8.7 8.4 5.6" />
-        </svg>
-      ),
-    });
+    parts.push(`TPS: ${formatTps(tps)} tok/s`);
   }
-  if (items.length === 0) return null;
+  if (parts.length === 0) return null;
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
         gap: 8,
+        color: "var(--text-dim)",
+        fontSize: 11,
         opacity: hidden ? 0 : 1,
         transition: "opacity 0.12s",
       }}
     >
-      {items.map((item) => (
-        <Tooltip key={item.key} content={item.label}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-dim)", fontSize: 11 }}>
-            {item.icon}
-            <span>{item.compact}</span>
-          </span>
-        </Tooltip>
-      ))}
+      {parts.join(" ")}
     </span>
   );
 }
