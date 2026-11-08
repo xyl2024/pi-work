@@ -82,7 +82,6 @@ export async function fetchSchedulerModelMeta(): Promise<SchedulerModelMeta> {
     thinkingLevelMaps: data.thinkingLevelMaps ?? {},
     defaultModel: data.defaultModel ?? null,
     modelIcons: data.modelIcons ?? {},
-    modelIconPreferences: data.modelIconPreferences ?? {},
   };
 }
 

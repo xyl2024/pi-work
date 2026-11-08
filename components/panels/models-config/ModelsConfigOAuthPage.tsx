@@ -4,7 +4,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { OAuthDetail } from "@/components/settings/models-config/OAuthDetail";
 import { reloadModelsConfigOAuthProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import { AuthPageHeader } from "./AuthPageHeader";
-import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 import styles from "./models-config.module.css";
 
 export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
@@ -19,7 +18,6 @@ export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
       {provider ? (
         <>
           <OAuthDetail key={provider.id} provider={provider} loginState={view.oauthLogin} onRefresh={reloadModelsConfigOAuthProviders} />
-          <ProviderModelIconsSection providerId={provider.id} />
         </>
       ) : (
         <div className={styles.muted}>{t("No providers configured")}</div>

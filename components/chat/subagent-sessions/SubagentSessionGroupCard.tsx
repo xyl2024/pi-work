@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 import type { SubagentSessionGroup } from "@/lib/shared/subagent-sessions";
-import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import { SubagentSessionHeader } from "./SubagentSessionHeader";
 import { SubagentSessionMetrics } from "./SubagentSessionMetrics";
 import { SubagentSessionContextRing } from "./SubagentSessionContextRing";
@@ -15,7 +14,6 @@ interface Props {
   onOpenSession: (sessionId: string) => void;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: ModelIconPreferences;
 }
 
 export function SubagentSessionGroupCard({
@@ -23,7 +21,6 @@ export function SubagentSessionGroupCard({
   onOpenSession,
   modelNames,
   modelIcons,
-  modelIconPreferences,
 }: Props) {
   const { t } = useI18n();
   const profiles = useSubagentProfiles();
@@ -58,7 +55,6 @@ export function SubagentSessionGroupCard({
           stats={group.stats}
           modelNames={modelNames}
           modelIcons={modelIcons}
-          modelIconPreferences={modelIconPreferences}
         />
         <SubagentSessionContextRing context={group.stats?.context ?? null} />
       </div>

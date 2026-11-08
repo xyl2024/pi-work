@@ -56,8 +56,6 @@ import {
   subscribeOAuthLogins,
 } from "./oauth-login-store";
 import { OAUTH_LOGIN_IDLE } from "./oauth-login";
-import { subscribeModelIconPreferences } from "./model-icon-preferences";
-import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 
 export const MODELS_CONFIG_ROOT_PAGE: ModelsConfigPage = { kind: "root" };
 
@@ -94,7 +92,6 @@ export interface ModelsConfigViewState {
   oauthProviderId: string | null;
   oauthLogin: OAuthLoginState;
   oauthInProgress: boolean;
-  modelIconPreferences: ModelIconPreferences;
   selected: ModelsConfigProviderSelection | null;
   providerFilter: string;
   pendingDelete: ModelsConfigPendingDelete | null;
@@ -119,7 +116,6 @@ const INITIAL: ModelsConfigViewState = {
   oauthProviderId: null,
   oauthLogin: OAUTH_LOGIN_IDLE,
   oauthInProgress: false,
-  modelIconPreferences: {},
   selected: null,
   providerFilter: "",
   pendingDelete: null,
@@ -302,7 +298,6 @@ function renameProviderPage(
 }
 
 let unsubscribeOAuth: (() => void) | null = null;
-let unsubscribeModelIcons: (() => void) | null = null;
 
 function patchOAuthPhase(writer: PanelViewWriter<ModelsConfigViewState, ModelsConfigPage>): void {
   const providerId = writer.get().oauthProviderId;
@@ -321,17 +316,11 @@ const modelsConfigAdapter: PanelViewAdapter<ModelsConfigViewState, ModelsConfigP
   start(writer) {
     unsubscribeOAuth?.();
     unsubscribeOAuth = subscribeOAuthLogins(() => patchOAuthPhase(writer));
-    unsubscribeModelIcons?.();
-    unsubscribeModelIcons = subscribeModelIconPreferences((modelIconPreferences) => {
-      writer.patch({ modelIconPreferences });
-    });
     patchOAuthPhase(writer);
   },
   stop() {
     unsubscribeOAuth?.();
     unsubscribeOAuth = null;
-    unsubscribeModelIcons?.();
-    unsubscribeModelIcons = null;
   },
   async load(_key, { patch, signal }) {
     patch({ loading: true, loadError: null });
@@ -411,10 +400,6 @@ export function reloadModelsConfigApiKeyProviders(): void {
   void fetchApiKeyProviders()
     .then((apiKeyProviders) => scope.patch({ apiKeyProviders }))
     .catch(() => {});
-}
-
-export function applyModelsConfigModelIconPreferences(preferences: ModelIconPreferences): void {
-  modelsConfigPanel.patch({ modelIconPreferences: preferences });
 }
 
 export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string }> {

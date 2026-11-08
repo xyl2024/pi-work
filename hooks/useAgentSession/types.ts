@@ -148,7 +148,6 @@ export interface UseAgentSessionResult {
   subagentRefreshKey: number;
   modelNames: Record<string, string>;
   modelIcons: Record<string, string>;
-  modelIconPreferences: Record<string, string>;
   modelList: SessionModelOption[];
   modelThinkingLevels: Record<string, string[]>;
   modelThinkingLevelMaps: Record<string, Record<string, string | null>>;

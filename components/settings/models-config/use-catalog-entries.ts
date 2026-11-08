@@ -4,14 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import type { CatalogModelEntry } from "@/lib/shared/catalog-search";
-import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import type { RuntimeCatalog, RuntimeModelInfo } from "./types";
 
 export interface ModelsApiPayload {
   catalog: RuntimeCatalog;
   modelList: RuntimeModelInfo[];
   modelIcons: Record<string, string>;
-  modelIconPreferences: ModelIconPreferences;
 }
 
 export interface ModelsApiState {
@@ -27,7 +25,6 @@ interface ModelsApiResponse {
   catalog?: RuntimeCatalog;
   modelList?: RuntimeModelInfo[];
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: ModelIconPreferences;
 }
 
 const EMPTY_CATALOG: RuntimeCatalog = { providers: [], modelCount: 0 };
@@ -36,7 +33,6 @@ const EMPTY_PAYLOAD: ModelsApiPayload = {
   catalog: EMPTY_CATALOG,
   modelList: [],
   modelIcons: {},
-  modelIconPreferences: {},
 };
 
 export interface ModelsApiMessages {
@@ -86,7 +82,6 @@ export function useModelsApi(input: {
         catalog: body.catalog ?? EMPTY_CATALOG,
         modelList: body.modelList ?? [],
         modelIcons: body.modelIcons ?? {},
-        modelIconPreferences: body.modelIconPreferences ?? {},
       });
       if (isRefresh) toast.show({ kind: "success", message: t(messages.refreshSuccessKey) });
     } catch (e) {

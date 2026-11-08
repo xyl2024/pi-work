@@ -2,7 +2,6 @@ import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-c
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { refreshAuditModelRuntime } from "@/lib/server/llm-audit";
-import { readModelIconPreferences } from "@/lib/server/model-icon-preferences";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -112,7 +111,6 @@ export async function GET(req: Request) {
   const thinkingLevels: Record<string, string[]> = {};
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
   const modelIcons = await readModelIcons();
-  const modelIconPreferences = readModelIconPreferences();
 
   try {
     const agentDir = getAgentDir();
@@ -177,5 +175,5 @@ export async function GET(req: Request) {
     log.warn("models load failed; returning empty list", { error, durationMs: elapsedMs(startedAt) });
   }
 
-  return Response.json({ models: Object.fromEntries(nameMap), modelList, catalog, defaultModel, thinkingLevels, thinkingLevelMaps, modelIcons, modelIconPreferences });
+  return Response.json({ models: Object.fromEntries(nameMap), modelList, catalog, defaultModel, thinkingLevels, thinkingLevelMaps, modelIcons });
 }

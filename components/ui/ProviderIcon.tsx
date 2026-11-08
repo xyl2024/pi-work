@@ -30,10 +30,6 @@ import NvidiaColorIcon from "@lobehub/icons/es/Nvidia/components/Color";
 import BasetenIcon from "@lobehub/icons/es/Baseten/components/Mono";
 import AntGroupColorIcon from "@lobehub/icons/es/AntGroup/components/Color";
 import XiaomiMiMoIcon from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
-import {
-  resolveModelIconId,
-  type ModelIconPreferences,
-} from "@/lib/shared/model-icon-match";
 
 type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
 
@@ -118,9 +114,17 @@ export function resolveProviderIcon(
   provider: string | null | undefined,
   model: string | null | undefined,
   modelIcons?: Record<string, string>,
-  preferences?: ModelIconPreferences,
 ): string | undefined {
-  return resolveModelIconId(provider, model, modelIcons, preferences, hasProviderIcon);
+  if (model) {
+    const explicit = (provider ? modelIcons?.[`${provider}:${model}`] : undefined) ?? modelIcons?.[model];
+    if (explicit && hasProviderIcon(explicit)) return explicit;
+  }
+  if (provider) {
+    const providerIcon = modelIcons?.[provider];
+    if (providerIcon && hasProviderIcon(providerIcon)) return providerIcon;
+    if (hasProviderIcon(provider)) return provider;
+  }
+  return undefined;
 }
 
 export function ProviderIcon({ id, size, fallback }: { id: string; size: number; fallback?: React.ReactNode }) {

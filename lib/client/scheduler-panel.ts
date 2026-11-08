@@ -26,7 +26,6 @@ import {
   parseMaxLifetimeMinutes,
   schedulerFormFromTask,
 } from "@/lib/shared/scheduler-form";
-import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
 import { errorMessage } from "@/lib/shared/error-message";
 import type {
   SchedulerModelMeta,
@@ -92,7 +91,6 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let polling = false;
 let pollWriter: PanelViewWriter<SchedulerViewState, SchedulerPage> | null = null;
-let unsubscribeIconPreferences: (() => void) | null = null;
 let writeGeneration = 0;
 let writesInFlight = 0;
 
@@ -162,8 +160,6 @@ function clearPollingResources(): void {
   if (typeof document !== "undefined") {
     document.removeEventListener("visibilitychange", onVisibilityChange);
   }
-  unsubscribeIconPreferences?.();
-  unsubscribeIconPreferences = null;
 }
 
 export function discardSchedulerForm(): void {
@@ -361,11 +357,6 @@ const schedulerAdapter: PanelViewAdapter<SchedulerViewState, SchedulerPage, void
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", onVisibilityChange);
     }
-    unsubscribeIconPreferences = subscribeModelIconPreferences((modelIconPreferences) => {
-      const meta = writer.get().meta;
-      if (!meta) return;
-      writer.patch({ meta: { ...meta, modelIconPreferences } });
-    });
     void poll();
   },
   stop() {

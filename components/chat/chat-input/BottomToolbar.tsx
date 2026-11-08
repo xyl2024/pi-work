@@ -45,7 +45,6 @@ export interface BottomToolbarProps {
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   cwd?: string | null;
@@ -90,7 +89,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     onInsertComposerText,
     onOpenSkillsPanel,
     composerSlashResources,
-    model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
+    model, modelNames, modelIcons, modelList, onModelChange,
     cwd, onCwdChange,
     contextUsage, sessionStats, contextComposition,
     permissionMode = "confirm",
@@ -280,7 +279,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
               size={chatInputMetrics.toolbarIcon}
               fallback={<ProviderGearIcon size={chatInputMetrics.toolbarIcon} />}
             />
@@ -296,7 +295,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
           model={model ?? null}
           modelNames={modelNames}
           modelIcons={modelIcons}
-          modelIconPreferences={modelIconPreferences}
           modelList={modelList}
           disabled={isStreaming}
           onModelChange={onModelChange}

@@ -15,7 +15,6 @@ interface Props {
   task: ScheduledTask;
   channelMeta: Record<string, ChannelMeta> | null;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: Record<string, string>;
 }
 
 const configValueStyle = { ...codePillStyle, background: "transparent", padding: 0 };
@@ -26,7 +25,7 @@ const OUTCOME_LABEL: Record<SchedulerNotifyOutcome, string> = {
   timeout: "On timeout",
 };
 
-export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelIconPreferences }: Props) {
+export function SchedulerExecutionConfig({ task, channelMeta, modelIcons }: Props) {
   const { t } = useI18n();
   const rows = buildSchedulerConfigRows(task, channelMeta);
 
@@ -63,9 +62,9 @@ export function SchedulerExecutionConfig({ task, channelMeta, modelIcons, modelI
     }
     const icon =
       rowId === "provider"
-        ? resolveProviderIcon(task.provider, undefined, modelIcons, modelIconPreferences)
+        ? resolveProviderIcon(task.provider, undefined, modelIcons)
         : rowId === "model"
-          ? resolveProviderIcon(task.provider, task.modelId, modelIcons, modelIconPreferences)
+          ? resolveProviderIcon(task.provider, task.modelId, modelIcons)
           : null;
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>

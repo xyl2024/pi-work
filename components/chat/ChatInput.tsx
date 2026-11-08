@@ -36,7 +36,6 @@ interface Props {
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   toolSelection?: ToolSelection;
@@ -83,7 +82,7 @@ export interface ChatInputHandle {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
+  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
   toolSelection = "all", onToolSelectionChange,
   availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -593,7 +592,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             model={model}
             modelNames={modelNames}
             modelIcons={modelIcons}
-            modelIconPreferences={modelIconPreferences}
             modelList={modelList}
             onModelChange={onModelChange}
             cwd={cwd}

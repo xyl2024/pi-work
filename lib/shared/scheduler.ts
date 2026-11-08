@@ -89,7 +89,6 @@ export interface SchedulerModelMeta {
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
   defaultModel: { provider: string; modelId: string } | null;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: Record<string, string>;
 }
 
 export interface SchedulerTaskForm {

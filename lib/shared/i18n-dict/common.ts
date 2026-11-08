@@ -40,8 +40,6 @@ export const common = {
   "Off": "关闭",
   "On": "开启",
   "Show": "展开",
-  "Show less": "收起",
-  "Show all ({n})": "显示全部（{n}）",
   "Hide": "收起",
   "Expand": "展开",
   "Expand all": "全部展开",

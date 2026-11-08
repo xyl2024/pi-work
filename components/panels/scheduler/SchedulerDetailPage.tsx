@@ -260,7 +260,6 @@ export function SchedulerDetailPage({
               task={task}
               channelMeta={channelMeta}
               modelIcons={meta?.modelIcons}
-              modelIconPreferences={meta?.modelIconPreferences}
             />
           </Disclosure>
         </div>

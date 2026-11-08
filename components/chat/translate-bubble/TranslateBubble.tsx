@@ -7,7 +7,6 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { copyText } from "@/lib/client/clipboard";
-import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useTranslationStream } from "@/hooks/useTranslationStream";
@@ -33,7 +32,6 @@ interface ModelsApiResponse {
   models?: Record<string, string>;
   defaultModel?: { provider: string; modelId: string } | null;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: Record<string, string>;
 }
 
 interface PersistedBubbleState {
@@ -50,7 +48,6 @@ export function TranslateBubble() {
 
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
-  const [modelIconPreferences, setModelIconPreferences] = useState<Record<string, string>>({});
   const [model, setModel] = useState<{ provider: string; modelId: string } | null>(null);
   const savedModelRef = useRef<{ provider: string; modelId: string } | null>(null);
   const initializedRef = useRef(false);
@@ -91,7 +88,6 @@ export function TranslateBubble() {
         const list = data.modelList ?? [];
         setModelList(list);
         setModelIcons(data.modelIcons ?? {});
-        setModelIconPreferences(data.modelIconPreferences ?? {});
         const saved = savedModelRef.current;
         if (saved && list.some((m) => m.provider === saved.provider && m.id === saved.modelId)) {
           setModel(saved);
@@ -106,8 +102,6 @@ export function TranslateBubble() {
     })();
     return () => { cancelled = true; };
   }, [toast, t]);
-
-  useModelIconPreferencesSync(setModelIconPreferences);
 
   const { output, isStreaming, error, start, stop } = useTranslationStream();
   const [copied, setCopied] = useState(false);
@@ -252,7 +246,7 @@ export function TranslateBubble() {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
               size={11}
               fallback={<ProviderGearIcon size={10} />}
             />

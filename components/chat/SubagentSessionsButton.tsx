@@ -5,7 +5,6 @@ import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { hasRunningSubagentTask, hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
-import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import type { SubagentSessionStatsView, SubagentTaskSummary } from "@/lib/shared/types";
 import { PopoverPortal, useDismissableLayer } from "@/components/ui/popover";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -17,7 +16,6 @@ interface Props {
   onOpenSession: (sessionId: string) => void;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: ModelIconPreferences;
 }
 
 export function SubagentSessionsButton({
@@ -26,7 +24,6 @@ export function SubagentSessionsButton({
   onOpenSession,
   modelNames,
   modelIcons,
-  modelIconPreferences,
 }: Props) {
   const { t } = useI18n();
   const { show: showToast } = useToast();
@@ -233,7 +230,6 @@ export function SubagentSessionsButton({
           onOpenSession={handleOpenSession}
           modelNames={modelNames}
           modelIcons={modelIcons}
-          modelIconPreferences={modelIconPreferences}
         />
       </PopoverPortal>
     </div>

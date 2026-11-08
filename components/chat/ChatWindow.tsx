@@ -136,7 +136,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
 
   const {
     data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, changeMarkers, streamState,
-    agentRunning, modelNames, modelIcons, modelIconPreferences, modelList, modelThinkingLevels, modelThinkingLevelMaps,
+    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel, permissionMode,
     isBackgroundSession,
     retryInfo,
@@ -644,7 +644,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
         model={displayModelValue}
         modelNames={modelNames}
         modelIcons={modelIcons}
-        modelIconPreferences={modelIconPreferences}
         modelList={modelList}
         onModelChange={handleModelChange}
         toolSelection={toolSelection}
@@ -826,7 +825,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     toolResults={toolResultsMap}
                     modelNames={modelNames}
                     modelIcons={modelIcons}
-                    modelIconPreferences={modelIconPreferences}
                     entryId={entryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
                     branchAnchorEntryId={agentRunning ? undefined : anchorEntryId}
@@ -1022,7 +1020,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                               toolResults={toolResultsMap}
                               modelNames={modelNames}
                               modelIcons={modelIcons}
-                              modelIconPreferences={modelIconPreferences}
                               cwd={session?.cwd ?? cwd}
                               onOpenFile={handleOpenFile}
                             />
@@ -1098,7 +1095,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                 toolResults={toolResultsMap}
                 modelNames={modelNames}
                 modelIcons={modelIcons}
-                modelIconPreferences={modelIconPreferences}
                 cwd={session?.cwd ?? cwd}
                 onOpenFile={handleOpenFile}
                 sessionId={session?.id ?? null}
@@ -1145,7 +1141,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
             onOpenSession={onOpenSession}
             modelNames={modelNames}
             modelIcons={modelIcons}
-            modelIconPreferences={modelIconPreferences}
           />
           <Tooltip content={t("Collapse all")}>
             <button
@@ -1232,7 +1227,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
         model={displayModelValue}
         modelNames={modelNames}
         modelIcons={modelIcons}
-        modelIconPreferences={modelIconPreferences}
         modelList={modelList}
         disabled={agentRunning}
         onModelChange={handleModelChange}

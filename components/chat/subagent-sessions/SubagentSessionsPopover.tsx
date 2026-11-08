@@ -5,7 +5,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { type SubagentSessionStatsView, type SubagentTaskSummary } from "@/lib/shared/types";
 import { projectSubagentSessionGroups } from "@/lib/shared/subagent-sessions";
 import { hasUnfinishedSubagentTask } from "@/lib/shared/subagent-task-duration";
-import type { ModelIconPreferences } from "@/lib/shared/model-icon-match";
 import { SubagentSessionGroupCard } from "./SubagentSessionGroupCard";
 
 interface Props {
@@ -18,7 +17,6 @@ interface Props {
   onOpenSession: (sessionId: string) => void;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
-  modelIconPreferences?: ModelIconPreferences;
 }
 
 export function SubagentSessionsPopover({
@@ -31,7 +29,6 @@ export function SubagentSessionsPopover({
   onOpenSession,
   modelNames,
   modelIcons,
-  modelIconPreferences,
 }: Props) {
   const { t } = useI18n();
   const projection = useMemo(
@@ -94,7 +91,6 @@ export function SubagentSessionsPopover({
                 onOpenSession={onOpenSession}
                 modelNames={modelNames}
                 modelIcons={modelIcons}
-                modelIconPreferences={modelIconPreferences}
               />
             </div>
           ))

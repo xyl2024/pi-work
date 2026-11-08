@@ -5,7 +5,6 @@ import { ApiKeyDetail } from "@/components/settings/models-config/runtime";
 import { reloadModelsConfigApiKeyProviders, useModelsConfigPanel } from "@/lib/client/models-config-panel";
 import { ApiKeyModels } from "./ApiKeyModels";
 import { AuthPageHeader } from "./AuthPageHeader";
-import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 import styles from "./models-config.module.css";
 
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
@@ -20,7 +19,6 @@ export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
         <>
           <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigApiKeyProviders} />
           <ApiKeyModels key={`${provider.id}:models:${provider.configured}`} providerId={provider.id} />
-          <ProviderModelIconsSection providerId={provider.id} />
         </>
       ) : (
         <div className={styles.muted}>{t("No providers configured")}</div>
