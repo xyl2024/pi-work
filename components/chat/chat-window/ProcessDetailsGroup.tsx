@@ -1,22 +1,18 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import {
   nextProcessFold,
   processFoldActions,
   processFoldWindow,
-  summarizeFoldWindow,
   type ProcessFoldEvent,
   type ProcessFoldState,
 } from "@/lib/shared/process-fold";
 import { formatDuration } from "../message-view/utils";
-import { Tooltip } from "../../ui/Tooltip";
 import { useCollapseNonce } from "../message-view/context";
 import { useProcessFoldMotion } from "./hooks/useProcessFoldMotion";
-
-const MAX_TOOL_BREAKDOWN = 3;
 
 export interface ProcessDetailsDuration {
   startMs: number;
@@ -26,7 +22,6 @@ export interface ProcessDetailsDuration {
 export interface ProcessDetailsItem {
   key: string;
   node: React.ReactNode;
-  toolCalls: Record<string, number>;
 }
 
 export function ProcessDetailsGroup({
@@ -36,7 +31,7 @@ export function ProcessDetailsGroup({
   items: ProcessDetailsItem[];
   turnDuration?: ProcessDetailsDuration;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const total = items.length;
   const [fold, setFold] = useState<ProcessFoldState>({ kind: "collapsed" });
   const collapseNonce = useCollapseNonce();
@@ -74,41 +69,15 @@ export function ProcessDetailsGroup({
   const actions = processFoldActions(fold, total);
   const visibleItems = items.slice(foldWindow.start, foldWindow.end);
 
-  const toolCallCounts = summarizeFoldWindow(items, fold);
-  const toolCallCount = Object.values(toolCallCounts).reduce((sum, count) => sum + count, 0);
-  const summary = foldWindow.isFraction
-    ? t("{n} / {total} messages")
-        .replace("{n}", String(foldWindow.shown))
-        .replace("{total}", String(total))
-    : t("{n} messages").replace("{n}", String(foldWindow.shown));
-  const durationSummary =
+  const durationText =
     turnDuration && turnDuration.endMs !== undefined
-      ? ` · ${t("Turn took {n}").replace(
-          "{n}",
-          formatDuration(turnDuration.endMs - turnDuration.startMs),
-        )}`
-      : "";
-  const withCalls =
-    toolCallCount > 0
-      ? ` · ${t(toolCallCount === 1 ? "{n} tool call" : "{n} tool calls").replace("{n}", String(toolCallCount))}`
-      : "";
-  const toolEntries = Object.entries(toolCallCounts).sort((a, b) => b[1] - a[1]);
-  const toolSummary = useMemo(() => {
-    if (toolEntries.length === 0) return null;
-    const separator = locale === "zh" ? "、" : ", ";
-    const shown = toolEntries
-      .slice(0, MAX_TOOL_BREAKDOWN)
-      .map(([name, count]) => t("{n}× {tool}").replace("{n}", String(count)).replace("{tool}", name))
-      .join(separator);
-    const rest = toolEntries.length - Math.min(toolEntries.length, MAX_TOOL_BREAKDOWN);
-    return ` · ${shown}${rest > 0 ? " …" : ""}`;
-  }, [locale, t, toolEntries]);
-  const toolFullList = useMemo(() => {
-    if (toolEntries.length <= MAX_TOOL_BREAKDOWN) return null;
-    return toolEntries
-      .map(([name, count]) => t("{n}× {tool}").replace("{n}", String(count)).replace("{tool}", name))
-      .join(locale === "zh" ? "、" : ", ");
-  }, [locale, t, toolEntries]);
+      ? formatDuration(turnDuration.endMs - turnDuration.startMs)
+      : null;
+  const headline = durationText
+    ? t("Turn summary")
+        .replace("{duration}", durationText)
+        .replace("{count}", String(total))
+    : t("{n} messages").replace("{n}", String(total));
 
   const bodyHeight = collapsed
     ? 0
@@ -162,16 +131,7 @@ export function ProcessDetailsGroup({
           <polyline points="4 2.5 7.5 6 4 9.5" />
         </svg>
         <span style={{ minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {summary}
-          {withCalls}
-          {durationSummary}
-          {toolSummary && (toolFullList ? (
-            <Tooltip content={toolFullList}>
-              <span>{toolSummary}</span>
-            </Tooltip>
-          ) : (
-            toolSummary
-          ))}
+          {headline}
         </span>
         {actions.length > 0 && (
           <span
@@ -197,9 +157,9 @@ export function ProcessDetailsGroup({
                   }}
                   style={{
                     flexShrink: 0,
-                    padding: "1px 6px",
+                    padding: "2px 9px",
                     border: "1px solid var(--border)",
-                    borderRadius: 4,
+                    borderRadius: 999,
                     background: "var(--bg-panel)",
                     color: "var(--text-muted)",
                     fontSize: 11,

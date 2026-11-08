@@ -189,6 +189,7 @@ export const chat = {
   "{n} tool call": "{n} 次工具调用",
   "{n} tool calls": "{n} 次工具调用",
   "Turn took {n}": "本轮耗时 {n}",
+  "Turn summary": "本轮耗时 {duration} 共 {count} 条消息",
   "tool calls": "条工具调用",
   "{n} file shown below": "{n} 个文件已显示在下方",
   "{n} files shown below": "{n} 个文件已显示在下方",

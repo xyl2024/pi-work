@@ -23,7 +23,6 @@ interface Props {
   highlightEntryId?: string | null;
   isSearchMatch?: boolean;
   afterContent?: React.ReactNode;
-  turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
   turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
@@ -31,7 +30,7 @@ interface Props {
   sessionId?: string | null;
 }
 
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, branchAnchorEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, branchAnchorEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
   const fileLinkHandler = useMemo(
     () => (onOpenFile ? { openFile: onOpenFile, cwd } : null),
@@ -49,7 +48,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
     return (
       <div className={isFocused ? "search-flash" : undefined}>
         <FileLinkProvider value={fileLinkHandler}>
-          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} modelIconPreferences={modelIconPreferences} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} />
+          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} modelIconPreferences={modelIconPreferences} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} />
         </FileLinkProvider>
       </div>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Tooltip } from "../../ui/Tooltip";
 import { MermaidBlock } from "@/components/renderers/MermaidBlock";
@@ -173,19 +173,6 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
       </a>
     </Tooltip>
   );
-}
-
-export function TurnDuration({ startMs, endMs, running }: { startMs: number; endMs?: number; running: boolean }) {
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
-  useEffect(() => {
-    if (endMs !== undefined || !running) return;
-    const tick = () => setElapsedMs(Date.now() - startMs);
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [endMs, running, startMs]);
-  const ms = endMs !== undefined ? endMs - startMs : (elapsedMs ?? 0);
-  return <span>{formatDuration(ms)}</span>;
 }
 
 export interface UsageIconsProps {

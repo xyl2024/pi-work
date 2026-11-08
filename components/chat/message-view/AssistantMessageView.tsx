@@ -16,7 +16,7 @@ import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { BlockView } from "./blocks";
-import { CallMetricsBadges, formatTime, TurnDuration, UsageIcons } from "./utils";
+import { CallMetricsBadges, formatTime, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
 import { countContentChars, extractMessageText, imageContentSrc } from "@/lib/shared/message-content";
 import { modelDisplayName } from "@/lib/shared/model-display";
@@ -33,7 +33,6 @@ interface AssistantMessageViewProps {
   keywords?: string[];
   isSearchMatch?: boolean;
   afterContent?: React.ReactNode;
-  turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
   turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
@@ -53,7 +52,6 @@ function AssistantMessageViewInner({
   keywords,
   isSearchMatch,
   afterContent,
-  turnDuration,
   readFiles,
   turnDiffStats,
   onOpenFile,
@@ -357,11 +355,6 @@ function AssistantMessageViewInner({
               )}
             </button>
           </Tooltip>
-        )}
-        {turnDuration && (turnDuration.endMs !== undefined || turnDuration.running) && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
-            <TurnDuration startMs={turnDuration.startMs} endMs={turnDuration.endMs} running={!!turnDuration.running} />
-          </span>
         )}
         {((readFiles && readFiles.length > 0) || turnDiffStats) && onOpenFile && (
           <ReadFileChips files={readFiles ?? []} diffStats={turnDiffStats} onOpenFile={onOpenFile} />

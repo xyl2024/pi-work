@@ -6,7 +6,6 @@ import type {
   SessionInfo,
   ReadFileInfo,
 } from "@/lib/shared/types";
-import { countToolCallsByName } from "@/lib/shared/message-display";
 import {
   getChatBottomFrostMaskStyle,
   isChatBottomFrostMaskVisible,
@@ -437,26 +436,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     : [];
   const trailingNodes = [...trailingCompactionNodes, ...trailingChangeNodes];
 
-  const turnDurationMap = useMemo(() => {
-    const map = new Map<number, { startMs: number; endMs?: number; running: boolean }>();
-    for (let i = 0; i < messages.length; i++) {
-      const m = messages[i];
-      if (m.role !== "user" || typeof m.timestamp !== "number") continue;
-      let lastAssistant = -1;
-      for (let j = i + 1; j < messages.length && messages[j].role !== "user"; j++) {
-        if (messages[j].role === "assistant") lastAssistant = j;
-      }
-      if (lastAssistant === -1) continue;
-      const endMs = entryTimestamps[lastAssistant];
-      map.set(lastAssistant, {
-        startMs: m.timestamp,
-        endMs: endMs ?? undefined,
-        running: streamState.isStreaming && lastAssistant === messages.length - 1,
-      });
-    }
-    return map;
-  }, [messages, entryTimestamps, streamState.isStreaming]);
-
   const hasCollapsible = useMemo(
     () => messages.some((m) => hasDisplayableProcessMessage(m) || (m.role === "assistant" && (m.content ?? []).some((b) => b.type === "thinking" || b.type === "toolCall"))),
     [messages],
@@ -857,7 +836,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     highlightEntryId={jumpHighlightEntryId ?? search.highlightEntryId}
                     isSearchMatch={search.matchedEntryIds.has(entryIds[idx])}
                     afterContent={opts.afterContent}
-                    turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
                     turnDiffStats={opts.turnDiffStats}
                     onOpenFile={opts.onOpenFile}
@@ -1002,7 +980,6 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                         }}
                         items={visibleProcessIndices.map((i) => ({
                           key: `proc-${i}`,
-                          toolCalls: countToolCallsByName(messages, [i], []),
                           node: renderProcessNode(i),
                         }))}
                       />,
