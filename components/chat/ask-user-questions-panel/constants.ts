@@ -29,14 +29,6 @@ export const ASK_PANEL_STYLES = `
   .askq-icon-btn:hover { background: var(--bg-hover); color: var(--text); }
   .askq-icon-btn:disabled { opacity: 0.35; cursor: default; }
   .askq-icon-btn:disabled:hover { background: transparent; color: var(--text-dim); }
-  /* ── Option rows (radio / checkbox) ──────────────────────────────────
-     Row: borderless at rest (just a hover wash); when checked it gains
-     a soft accent tint + hairline accent border, like modern pickers
-     (Linear / Notion). The native input stays hidden-but-focusable for
-     keyboard + screen-reader semantics; a drawn marker carries the
-     visual state: a donut radio and an accent-fill checkbox with a
-     stroke-drawn check. Hover / checked / focus-visible states all live
-     here so the JSX only toggles one class. */
   .askq-opt {
     display: flex; align-items: flex-start; gap: 11px;
     padding: 9px 12px; border-radius: 10px;
@@ -53,8 +45,6 @@ export const ASK_PANEL_STYLES = `
     background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
   .askq-input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
-  /* "Recommended" badge on the suggested option's label row. It only
-     appears next to the option the agent picked — it is never preselected. */
   .askq-badge {
     flex-shrink: 0;
     font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
@@ -73,10 +63,7 @@ export const ASK_PANEL_STYLES = `
     box-sizing: border-box; width: 14px; height: 14px; margin-top: 2px;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  /* Tactile press: the marker shrinks a touch while the row is held. */
   .askq-opt:active .askq-marker { transform: scale(0.85); }
-  /* Radio: a thin ring at rest; checked fades the ring out entirely —
-     only the accent check remains, floating over the row tint. */
   .askq-radio {
     border-radius: 50%;
     border: 2px solid color-mix(in srgb, var(--text-dim) 75%, transparent);
@@ -88,8 +75,6 @@ export const ASK_PANEL_STYLES = `
   .askq-opt.askq-checked .askq-radio {
     border-color: transparent;
   }
-  /* Checkbox: rounded square at rest; checked fades the box out — same
-     "check only" treatment as the radio. */
   .askq-checkbox {
     border-radius: 4.5px;
     border: 2px solid color-mix(in srgb, var(--text-dim) 75%, transparent);

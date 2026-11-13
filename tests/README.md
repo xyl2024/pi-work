@@ -20,6 +20,9 @@
   （`electron-shell/lifecycle.js`：关窗是隐藏还是真关、应用是否比窗口活得久、托盘菜单
   有什么）同理（`electron-shell-lifecycle.test.ts`），其中「托盘标签与动作不许各说各话」
   与「结束服务端的调用点只有两处」是源码守卫：Electron 主进程无法被 vitest 驱动。
+  `code-comments.test.ts` 是另一处源码守卫：用 TS 解析器把字符串 / 模板 / 正则 / JSX 文本抹平后
+  再找注释语法，模板里形如 CSS 的片段与 `.css` 文件另外扫块注释；除 `eslint-disable`、`@ts-*`、
+  `@vitest-environment`、`/** @type */` 这类工具指令外，全仓不许有注释（ADR-0040，样式约束见 ADR-0041）。
 - **client 模块契约测试**：直接 import `lib/client` 里的无渲染 module，用假 adapter
   驱动它的 external interface，如 `panel-view-store.test.ts` 驱动
   `createPanelViewStore` 的页栈、保活 / 释放、加载策略与关闭确认。这类测试不渲染

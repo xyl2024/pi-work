@@ -1,19 +1,12 @@
 @import "tailwindcss";
 
-/* Floating-card layout geometry. Theme-independent: light + dark both use
-   the same numbers, so the panels feel carded against either `--bg`. Three
-   values stay locked together visually — bump the gap and the radius
-   should scale with it to keep corners from looking too tight / too loose. */
 :root {
-  --panel-padding: 12px;   /* screen edge → outermost panel */
-  --panel-gap: 10px;       /* gap between adjacent panels */
-  --panel-gap-stack: 4px;  /* tighter gap for stacked cards inside one column (chat + terminal) */
-  --panel-radius: 12px;    /* border-radius on every panel */
+  --panel-padding: 12px;
+  --panel-gap: 10px;
+  --panel-gap-stack: 4px;
+  --panel-radius: 12px;
 }
 
-/* The shared assistant message view keeps a bottom margin for the normal
-   conversation flow. The live viewport owns its own padding, so trim only
-   the last live item to avoid a doubled bottom gap. */
 [data-streaming-message-viewport] > .streaming-message-viewport-content > .streaming-message-item:last-child > div > div {
   margin-bottom: 0 !important;
 }
@@ -39,16 +32,12 @@
   --font-display: var(--font-display-stack);
 }
 
-/* ── Preset: light ──────────────────────────────────────── */
 .theme-light {
   --bg: #ffffff;
   --bg-panel: #f5f5f5;
   --bg-hover: #f0f0f0;
   --bg-selected: #ececec;
   --border: #ededed;
-  /* Panel/card outer outline. Lighter than --border so the five floating
-     panels (sidebar, chat, terminal, right panel, right-bar column) read
-     as subtle separators without competing with inner UI borders. */
   --panel-border: #ededed;
   --text: #1a1a1a;
   --text-muted: #6b7280;
@@ -60,7 +49,6 @@
   --tool-bg: #fefefe;
   --bg-subtle: rgba(0,0,0,0.04);
 
-  /* Git status (FileExplorer badges + GitPanel) */
   --git-status-added: #16a34a;
   --git-status-modified: #d97706;
   --git-status-deleted: #ef4444;
@@ -68,7 +56,6 @@
   --git-status-renamed: #3b82f6;
   --git-status-conflict: #cf222e;
 
-  /* ── Scheduler status palette (StatusBadge, run history) ───── */
   --success: #16a34a;
   --success-bg: rgba(22, 163, 74, 0.10);
   --warning: #d97706;
@@ -79,7 +66,6 @@
   --info-bg: rgba(37, 99, 235, 0.10);
 }
 
-/* ── Preset: dark ───────────────────────────────────────── */
 .theme-dark {
   --bg: #24242a;
   --bg-panel: #2e2e34;
@@ -114,16 +100,9 @@
   --info-bg: rgba(122, 162, 247, 0.14);
 }
 
-/* ── Sidebar-only hover/selected: deeper than the global tokens so session
-   rows read more clearly against the panel. Scoped to .session-sidebar so
-   other surfaces that reuse --bg-hover/--bg-selected (Tiptap, tour) are
-   not affected. */
 .theme-light .session-sidebar { --bg-hover: #e8e8e8; --bg-selected: #e2e2e2; }
 .theme-dark .session-sidebar { --bg-hover: #383838; --bg-selected: #404040; }
 
-/* Theme toggle: circular wipe via View Transitions API.
-   Disable the UA cross-fade; the actual clip-path animation is driven by
-   Element.animate() in hooks/useTheme.ts after transition.ready resolves. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
@@ -140,26 +119,11 @@
   box-sizing: border-box;
 }
 
-/* Hard global: strip the UA default focus outline on every focusable
-   element. Affects buttons, links, inputs, textareas, [tabIndex]
-   containers, .markdown-body anchors, etc.
-
-   Note: this only removes the OUTLINE channel. A few focus indicators
-   use `box-shadow` (`.show-file-carousel:focus-visible`,
-   `.timepicker-wheel:focus-visible`) or a border-color swap
-   (`.scheduler-text-input:focus`) — those are explicit product choices
-   and intentionally remain so the focused element still has some
-   visual cue.
-
-   Accessibility: WCAG 2.4.7 (Focus Visible) is no longer satisfied —
-   keyboard-only users lose the standard focus indicator. */
 *:focus,
 *:focus-visible {
   outline: none !important;
 }
 
-/* Text selection — keep the original text color (no invert) and use a
-   soft light-blue background that stays visible on both light and dark themes. */
 ::selection {
   background: rgba(135, 180, 255, 0.35);
   color: inherit;
@@ -182,18 +146,10 @@ html, body {
 
 body {
   height: 100dvh;
-  /* Electron shell (Windows Window Controls Overlay): the native caption
-     buttons are drawn on top of a strip the app reserves here, so the app
-     never runs under them. `env(titlebar-area-height)` is 0px in a normal
-     browser and in any window without the overlay, which makes this a no-op
-     everywhere else — it is a browser feature, not a platform fork. */
   padding-top: env(titlebar-area-height, 0px);
   box-sizing: border-box;
 }
 
-/* The reserved strip itself: draws nothing, exists only to be the window's
-   drag region (the app owns the title bar; the buttons stay native). Zero
-   height — and therefore invisible and unclickable — outside the shell. */
 .pi-shell-titlebar {
   position: fixed;
   inset: 0 0 auto 0;
@@ -217,10 +173,6 @@ body {
   background: var(--text-dim);
 }
 
-/* Completely hide the scrollbar while keeping the element scrollable
-   via wheel / touch / arrow keys. Independent semantic from the
-   [data-scroll-*] presets — used where the design wants zero visual
-   scrollbar (e.g. the ChatInput textarea). */
 [data-hide-v-scrollbar] {
   scrollbar-width: none;
 }
@@ -228,37 +180,6 @@ body {
   width: 0;
   height: 0;
 }
-
-/* ──────────────────────────────────────────────────────────────────────
-   Scrollbar role presets — pick one with `data-scroll-<role>` on the
-   scrollable element. Three roles cover the visual hierarchy:
-
-     wide  10px  Primary scroll area: main chat pane, large modal bodies,
-                main panel lists. Hidden at rest; fades in / out (0.3s)
-                when the mouse enters / leaves. The thumb's resting
-                color must stay opaque (the side preset's caveat below
-                applies here too); visibility is animated via opacity
-                because background-color transitions on
-                -webkit-scrollbar-thumb are inconsistent across
-                Chromium versions. Firefox degrades to a hard swap
-                because scrollbar-color can't be opacity-transitioned.
-
-     side   4px  Auxiliary scroll: sidebar session / file lists and
-                similar long-lived secondary navigation. Hidden at rest,
-                hard show on hover, no fade.
-
-     inset  6px  Small embedded list: popover-style overflow regions
-                with maxHeight ≤ ~320px where the scroll needs to be
-                easy to grab but the region is secondary in the visual
-                hierarchy. Hidden at rest, hard show on hover, no fade.
-
-   All three (side, inset, wide at rest) honor the same Chromium
-   caveat: the thumb's resting background must stay opaque. A fully
-   transparent thumb is treated as absent and the :hover state never
-   applies — so we tint it with --bg-panel, which is visually identical
-   to the surrounding background in every theme (each theme's --bg vs
-   --bg-panel differ by only a few color stops).
-   ────────────────────────────────────────────────────────────────────── */
 
 [data-scroll-side] {
   scrollbar-width: thin;
@@ -338,8 +259,6 @@ body {
 }
 
 :root {
-  /* Font roles: components consume these stable variables rather than
-     depending on a platform-specific font stack. */
   --font-ui-stack: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono-stack: var(--font-noto-mono), "JetBrains Mono", "Cascadia Code", Consolas,
@@ -353,18 +272,11 @@ pre, code {
   font-family: var(--font-mono);
 }
 
-/* react-markdown output styles */
 .markdown-body {
   font-size: 14px;
   line-height: 1.7;
   color: var(--text);
   word-break: break-word;
-  /* The chat area must never grow a horizontal scrollbar: when one axis is
-     `auto` and the other is `visible`, browsers compute the visible axis as
-     `auto` too, so a single wide element in chat (a table cell with a long
-     unbroken path, a non-responsive embedded SVG, etc.) would otherwise
-     push the whole conversation pane sideways. Clip the overflow here and
-     let the inner elements handle their own wrapping/clipping. */
   overflow-x: hidden;
 }
 .markdown-body p { margin: 0 0 8px; }
@@ -404,8 +316,6 @@ pre, code {
   border-radius: 2px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
-/* File links read as local path references, not as web links: the label keeps
-   the body text color and only a faint rule marks it as clickable. */
 .markdown-body a.markdown-file-link {
   color: var(--text);
   text-decoration-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
@@ -414,8 +324,6 @@ pre, code {
   color: var(--accent-hover);
   text-decoration-color: currentColor;
 }
-/* The external-link glyph keeps its slot at all times so hovering never
-   reflows the surrounding sentence; only its opacity animates. */
 .markdown-body .markdown-link-icon {
   display: inline-block;
   width: 0.72em;
@@ -465,16 +373,7 @@ pre, code {
   accent-color: var(--accent);
 }
 
-/* Thinking blocks — rendered inline like the message body, but smaller & dimmer.
-   The header (chevron + collapsed preview OR chevron + "Thinking" label)
-   stays at exactly the same size in both states so the block never visually
-   swells when toggled — only the body below it appears/disappears.
-   The chevron is always rendered so users keep the "I can collapse again"
-   affordance after expanding. */
 .thinking-collapsed {
-  /* Outer cell of the folded preview. Sits as a flex item next to the
-     chevron; it owns the nowrap/clip so an overflowing flowing line can be
-     trimmed at the cell edge (and right-pinned via [data-follow-end]). */
   flex: 1;
   min-width: 0;
   position: relative;
@@ -484,8 +383,6 @@ pre, code {
   color: var(--text-muted);
 }
 .thinking-collapsed-inner {
-  /* Idle state: plain single-line head preview with an ellipsis, exactly
-     like the pre-flow behaviour. */
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -503,13 +400,10 @@ pre, code {
   transform: rotate(90deg);
 }
 .thinking-expanded {
-  /* Match the header so the block doesn't grow in font size on expand.
-   Tighten line-height and zero out the bottom spacing so the body butts up
-   against the header with the same rhythm the preview had in collapsed mode. */
   font-size: 12px;
   line-height: 1.55;
   color: var(--text-muted);
-  padding: 2px 4px 4px 20px; /* indent to align with chevron's center */
+  padding: 2px 4px 4px 20px;
 }
 .thinking-expanded > *:first-child { margin-top: 0 !important; }
 .thinking-expanded > *:last-child  { margin-bottom: 0 !important; }
@@ -517,13 +411,6 @@ pre, code {
   .thinking-chevron svg { transition: none; }
 }
 
-/* Flowing folded preview while the thinking block is the live stream tail
-   (pure CSS, lifted from deepseek-harness ReasoningRow — no JS motion).
-   Switching the folded cell to a flex row that packs its text to the end
-   right-pins the text's right edge to the cell edge; on every commit the
-   text simply grows and the overflow clips out through the left edge at
-   exactly the pace the model writes. Settled/expanded rows keep the idle
-   ellipsized head preview below. */
 .thinking-collapsed[data-follow-end] {
   display: flex;
   align-items: center;
@@ -564,13 +451,6 @@ pre, code {
   .assistant-typing-dot { animation: none; }
 }
 
-/* Conversation-tree active branch — flowing dashes while the agent works.
-   Applied to the connector paths on the active path via .tree-edge-flow;
-   the dash pattern (stroke-dasharray) is set inline, so this class only
-   supplies the animation. A negative stroke-dashoffset moves the pattern
-   forward along the path direction: from the parent card (start point)
-   toward the child card (end point). One period of the dash pattern is
-   3+9=12px, so -12 loops seamlessly. */
 .tree-edge-flow {
   animation: tree-branch-flow 1s linear infinite;
 }
@@ -583,7 +463,6 @@ pre, code {
   }
 }
 
-/* Hide native disclosure triangles on <summary> elements */
 summary {
   list-style: none;
 }
@@ -591,7 +470,6 @@ summary::-webkit-details-marker {
   display: none;
 }
 
-/* Process details summary row — hover brightens the text */
 .process-summary {
   color: var(--text-muted);
   transition: color 0.12s;
@@ -600,10 +478,6 @@ summary::-webkit-details-marker {
   color: var(--text);
 }
 
-/* Expand-by-page controls live on the summary row and only surface while the
-   row is hovered or keyboard-focused. Hidden controls neither take clicks nor
-   swallow the row toggle; they keep their layout space so the summary text
-   never shifts. Touch devices have no hover, so they are always shown there. */
 .process-fold-actions {
   opacity: 0;
   pointer-events: none;
@@ -626,7 +500,6 @@ summary::-webkit-details-marker {
   }
 }
 
-/* File viewer markdown preview — larger headings */
 .markdown-file-preview h1 { font-size: 1.8em; }
 .markdown-file-preview h2 { font-size: 1.4em; }
 .markdown-file-preview h3 { font-size: 1.15em; }
@@ -653,24 +526,12 @@ summary::-webkit-details-marker {
   padding: 0;
 }
 
-/* Code blocks inside markdown — chat messages, file previews — keep the original always-on 4px scrollbar in both
-   directions. The chat container uses data-scroll-wide which sets
-   scrollbar-width:auto, and Firefox's scrollbar-color implementation
-   cascades to descendant scrollable elements, which would otherwise
-   leave the code block's scrollbar invisible (the chat's hover-to-
-   show behavior leaks in) or its track colored wrong. Pinning the
-   values here restores the stable, plain 4px behavior expected from
-   a code block — long lines and long files stay scrollable at all
-   times without the user having to discover hover. */
 .markdown-body pre,
 .markdown-file-preview pre {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 
-/* Prose wrapping must never alter the source layout of a fenced code block.
-   This is especially visible with Markdown tables: `|` and `---` must stay
-   on their original lines instead of being wrapped character-by-character. */
 .markdown-body pre code,
 .markdown-file-preview pre code {
   white-space: pre !important;
@@ -678,11 +539,6 @@ summary::-webkit-details-marker {
   overflow-wrap: normal !important;
 }
 
-/* Tailwind generates a `.table { display: table }` utility. Prism's Markdown
-   grammar also names table-related token spans `.table`, so that utility can
-   accidentally turn every token into a table-row-like block and stack the
-   source one token per line. This class is shared by chat, file and
-   SkillConfig Prism previews. */
 .syntax-highlighted-code .token {
   display: inline !important;
 }
@@ -700,7 +556,6 @@ summary::-webkit-details-marker {
   border-radius: 2px;
 }
 
-/* syntax highlighter line numbers */
 .markdown-body span.linenumber,
 span.linenumber {
   color: var(--text-dim) !important;
@@ -722,7 +577,6 @@ span.linenumber {
   50%       { opacity: 1;   transform: scale(1.06); }
 }
 
-/* ── In-session search highlight ──────────────────────────── */
 .search-highlight {
   background: var(--accent);
   color: #fff;
@@ -745,8 +599,6 @@ span.linenumber {
   100% { transform: scale(1); opacity: 0; }
 }
 
-/* Pulsing dot for in-progress runs / running-task indicators.
-   Slower than blink so it doesn't compete with the typing cursor. */
 @keyframes scheduler-running-pulse {
   0%, 100% { transform: scale(1);   opacity: 1; }
   50%      { transform: scale(1.4); opacity: 0.55; }
@@ -775,8 +627,6 @@ span.linenumber {
   }
 }
 
-/* Skeleton shimmer for loading states in the scheduler UI (e.g. while
-   fetching runs for a freshly selected task). */
 @keyframes scheduler-shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -787,15 +637,11 @@ span.linenumber {
   to { transform: rotate(360deg); }
 }
 
-/* Used by AudioPlayer's inline `animation: audioDiscSpin 6s linear infinite`.
-   The animation is declared on the element via inline style; this keyframes
-   rule must live globally so the name resolves. */
 @keyframes audioDiscSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-/* ── Show-file carousel ──────────────────────────────────── */
 @keyframes gallery-slide-in-right {
   from { opacity: 0; transform: translateX(26px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -805,14 +651,11 @@ span.linenumber {
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* Keyboard focus ring for the carousel container (←/→ navigation). */
 .show-file-carousel:focus-visible {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Stop the disc spinning for users who opted out of motion. The element
-     still gets the inline animation declaration; this rule overrides it. */
   [style*="audioDiscSpin"] {
     animation: none !important;
   }
@@ -823,22 +666,11 @@ span.linenumber {
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Tooltips are pure decoration: never capture the mouse. Radix renders the
-   tooltip inside a wrapper div (data-radix-popper-content-wrapper) that stays
-   hit-testable even when the inner content has pointer-events:none — that
-   wrapper is what swallows hover/click and blocks the rows underneath (e.g.
-   hovering the bottom file in the vertical FileExplorer then moving the mouse
-   up). Disable the wrapper and its whole subtree. Interactive tooltips opt out
-   with data-interactive-tooltip. */
 [data-radix-popper-content-wrapper]:has([role="tooltip"]):not(:has([data-interactive-tooltip])),
 [data-radix-popper-content-wrapper]:has([role="tooltip"]):not(:has([data-interactive-tooltip])) * {
   pointer-events: none !important;
 }
 
-/* TranslatePanel's target-language toggle: when the user clicks the
-   `to中文` / `to英文` button, the label inside is keyed by `target` so
-   React remounts the <span>; the entrance plays once per click.
-   TranslatePanel.tsx references this name from an inline style. */
 @keyframes lang-swap-in {
   0%   { opacity: 0; transform: translateY(-5px) scale(0.92); filter: blur(2px); }
   55%  { opacity: 1; filter: blur(0); }
@@ -863,25 +695,15 @@ span.linenumber {
   }
 }
 
-/* Running-session title in the sidebar: slow, shallow accent breathing so a
-   long-running session never flickers the whole row. Referenced via inline
-   style from SessionItem; must live globally so the name resolves. */
 @keyframes pi-running-title-breathe {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.7; }
 }
 
-/* Pending-question dot in the sidebar (SessionItem): small, calm amber
-   pulse. Referenced via inline style from SessionItem. Distinct from
-   the running-title breathe so a session that's both running AND has a
-   pending question reads as two separate states, not a flicker. */
 @keyframes ask-sidebar-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(1.35); opacity: 0.7; }
 }
-/* Pending-confirmation dot (SessionItem) reuses the keyframe above but carries
-   its own class: the two dots differ in colour/meaning and must stay
-   independently addressable. */
 @media (prefers-reduced-motion: reduce) {
   .ask-sidebar-pulse, [aria-label="Awaiting your answer"],
   .permission-sidebar-pulse {
@@ -900,13 +722,6 @@ span.linenumber {
   to   { stroke-dashoffset: 0;  opacity: 1; }
 }
 
-/* ── Toast (bottom-right) ───────────────────────────────────────
-   Enter/exit is keyed off CSS classes the ToastCard toggles. The
-   transform-origin stays at top-right so the card "drops in" from the
-   corner it disappears into. The progress bar shrinks from full → empty
-   via `animation-play-state`: a `.paused` class on the inner element
-   freezes it without resetting the timer; the timer keeps running in
-   the React layer so unpausing picks up where the bar stopped. */
 @keyframes pi-toast-enter {
   from { opacity: 0; transform: translateX(28px) scale(0.96); }
   to   { opacity: 1; transform: translateX(0)    scale(1); }
@@ -930,18 +745,12 @@ span.linenumber {
   to   { transform: scaleX(0); }
 }
 .pi-toast-progress {
-  /* animation-duration is set inline per-toast (matches `durationMs`).
-     The .paused modifier freezes the visual countdown so the user can
-     read longer messages without the bar racing them. */
   animation-play-state: running;
 }
 .pi-toast-progress.paused {
   animation-play-state: paused;
 }
 
-/* Browsers that don't support `backdrop-filter` should fall back to a
-   slightly stronger opaque card. The @supports block hides the blur
-   cleanly without affecting the layout. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .pi-toast-enter, .pi-toast-exit {
     backdrop-filter: none !important;
@@ -949,7 +758,6 @@ span.linenumber {
   }
 }
 
-/* Reduced motion: skip the slide/scale and the countdown bar. */
 @media (prefers-reduced-motion: reduce) {
   .pi-toast-enter,
   .pi-toast-exit,
@@ -958,11 +766,6 @@ span.linenumber {
   }
 }
 
-/* Label fade-in on the ThinkingPicker cycle button. Re-runs every
-   time the label `<span>` is keyed to a new level (handled in
-   components/chat/ThinkingPicker.tsx). 120 ms matches the colour
-   `transition: color` on the button itself so both finishes land in
-   the same beat. Suppressed under prefers-reduced-motion. */
 @keyframes thinking-picker-label-in {
   from { opacity: 0; transform: translateY(-2px); }
   to   { opacity: 1; transform: translateY(0);    }
@@ -975,29 +778,18 @@ span.linenumber {
   .thinking-picker-label { animation: none; }
 }
 
-/* ── Floating-card mode ─────────────────────────────────────────────────
-   Every panel that flanks the chat column gets the same look:
-   rounded corners (so corners show as cards against the wrapper bg) and
-   clipping (so child content cannot bleed past the radius on either
-   breakpoint). Position + gap + transitions stay in the per-breakpoint
-   media queries below — only the look itself is shared. */
 .sidebar-container,
 .right-panel-container {
   border-radius: var(--panel-radius);
   overflow: hidden;
 }
 
-/* Desktop sidebar: width driven by inline style (drag-resize) */
 @media (min-width: 641px) {
   .sidebar-overlay-backdrop {
     display: none !important;
   }
   .sidebar-container {
     position: relative;
-    /* Floating-card mode: surface a 10px gap to the center column.
-       `margin-right` joins the width transition so when the sidebar
-       collapses the gap collapses with it — no phantom stripe of `--bg`
-       left behind next to the chat. */
     margin-right: var(--panel-gap);
     transition: width 0.2s ease, min-width 0.2s ease, margin-right 0.2s ease;
   }
@@ -1009,18 +801,9 @@ span.linenumber {
   }
 }
 
-
-/* Right panel: width driven by inline style when in `normal` state */
 @media (min-width: 641px) {
   .right-panel-container {
-    /* Floating-card mode: 10px gap to the center column. `margin-left`
-       joins the same cubic-bezier transition so closing the panel
-       collapses the gap in lockstep — no orphan `--bg` strip. */
     margin-left: var(--panel-gap);
-    /* ease-out-quart style curve: fast start so the click feels responsive,
-       soft landing. flex-grow animates the normal<->expanded transition
-       (expanded keeps flex-basis auto + the inline 32% width, so width stays
-       interpolatable while flex-grow spreads the remaining space). */
     transition: width 0.18s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.18s cubic-bezier(0.32, 0.72, 0, 1), flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), margin-left 0.18s cubic-bezier(0.32, 0.72, 0, 1);
     flex-shrink: 0;
   }
@@ -1040,9 +823,6 @@ span.linenumber {
   }
 }
 
-/* Drag handles were removed — sidebar and right panel widths are now fixed. */
-
-/* Mobile sidebar: slide in/out as overlay */
 @media (max-width: 640px) {
   .chat-stats-center {
     display: none !important;
@@ -1085,7 +865,6 @@ span.linenumber {
   }
 }
 
-/* ── SessionSidebar "..." action menu animation ─────────── */
 @keyframes pi-menu-pop-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -1095,9 +874,6 @@ span.linenumber {
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* ── GrokBot animations (vendored from LaoA-GrokBot, MIT) ── */
-/* Bot color follows the active theme accent — GrokBot has no user-facing
-   color picker; switching theme automatically re-tints the body. */
 .grokbot-stage {
   --bot-color: var(--accent);
 }
@@ -1169,7 +945,6 @@ span.linenumber {
   stroke: none;
 }
 
-/* State motions */
 .grokbot-stage .grokbot-act-bounce { animation: grokbot-bounce 0.85s ease; }
 .grokbot-stage .grokbot-act-tilt { animation: grokbot-tilt 0.8s ease; }
 .grokbot-stage .grokbot-act-scan .grokbot-eyes { animation: grokbot-scan 0.8s ease; }
@@ -1177,7 +952,6 @@ span.linenumber {
 .grokbot-stage .grokbot-act-pulse { animation: grokbot-pulse 0.9s ease; }
 .grokbot-stage .grokbot-act-glitch { animation: grokbot-glitch 0.55s steps(2); }
 
-/* Quick actions */
 .grokbot-stage .grokbot-quick-bounce { animation: grokbot-quick-bounce 0.75s cubic-bezier(0.3, 0.8, 0.4, 1); }
 .grokbot-stage .grokbot-quick-shake { animation: grokbot-quick-shake 0.65s ease; }
 .grokbot-stage .grokbot-quick-peek { animation: grokbot-quick-peek 0.9s ease; }
@@ -1267,7 +1041,6 @@ span.linenumber {
   50% { opacity: 0.25; transform: scale(0.7); }
 }
 
-/* GrokBot Lab — auto-tour toggle (switch-style pill in the modal header) */
 .grok-tour-toggle {
   display: inline-flex;
   align-items: center;
@@ -1317,15 +1090,6 @@ span.linenumber {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ---------------------------------------------------------------------
-   Scheduler text inputs — darken the border while focused.
-   The input's border color is written inline as
-   var(--scheduler-input-border, var(--border)) (see
-   components/Scheduler/styles.ts), so this class only flips the CSS
-   variable — no !important needed, and non-input elements that reuse
-   inputStyle (dropdown summaries, cron code chips) stay unchanged.
-   --------------------------------------------------------------------- */
-
 .scheduler-text-input {
   --scheduler-input-border: var(--border);
   transition: border-color 0.15s ease;
@@ -1335,7 +1099,6 @@ span.linenumber {
   --scheduler-input-border: var(--text-muted);
 }
 
-/* TimePicker column wheel: focus ring only for keyboard focus (not mouse click). */
 .timepicker-wheel:focus {
   outline: none;
 }
@@ -1344,40 +1107,20 @@ span.linenumber {
   transition: box-shadow 0.12s;
 }
 
-/* ---------------------------------------------------------------------
- * Monaco editor (right-side file viewer) decorations.
- *
- * Git gutter marks — `editor.deltaDecorations` applies one of these
- * classes per added/modified line. Whole-line border-left keeps the
- * visual close to the old Prism renderer without fighting Monaco's
- * own selection / current-line styles.
- * ------------------------------------------------------------------- */
-
-/* Spinner used by the SaveButton "saving" state. */
 @keyframes pi-spin {
   to { transform: rotate(360deg); }
 }
 
-/* TextSelectionToolbar: a short scale-in that confirms the toolbar
- * just popped up. The toolbar component sets animation:
- * selection-toolbar-in 0.12s ease-out forwards. */
 @keyframes selection-toolbar-in {
   from { transform: scale(0.92); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
 }
 
-/* TranslateBubble: slightly larger fade-rise than the toolbar so the
- * popover reads as a "real" container instead of another toolbar.
- * The bubble component sets animation:
- * translate-bubble-in 0.14s ease-out forwards. */
 @keyframes translate-bubble-in {
   from { transform: translateY(4px) scale(0.97); opacity: 0; }
   to   { transform: translateY(0)   scale(1);    opacity: 1; }
 }
 
-/* ChatWindow: while the live streaming message viewport is shown, hide the
- * outer conversation scrollbar but keep it scrollable. Defined last so it
- * overrides the [data-scroll-wide] preset above. */
 [data-streaming-hide-scroll] {
   scrollbar-width: none;
 }
@@ -1386,8 +1129,6 @@ span.linenumber {
   height: 0;
 }
 
-/* Hide horizontal scrollbar of edit/write diff tool-call blocks while
- * keeping the content scrollable. */
 .no-scrollbar {
   scrollbar-width: none;
 }
@@ -1396,23 +1137,6 @@ span.linenumber {
   height: 0;
 }
 
-/* ---------------------------------------------------------------------
- * Tool pickers — ToolsPickerModal (active session) + CwdToolsPicker
- * (a project's default tool set).
- *
- * The presentational React pieces live in components/ui/ToolPicker.tsx,
- * which supplies only inline layout metrics (padding / radius / gap) and
- * the hand-drawn checkbox glyph. All hover / selected / focus
- * state lives here as scoped classes so that :hover, :active and the
- * [data-*] driven fills can transition instead of snapping.
- *
- * Design choice: the item keeps a static border line whose color never
- * changes. State is expressed purely through the background wash — hover /
- * press shift it toward gray — plus a soft outer focus glow (a box-shadow,
- * which never recolors the border).
- * The border stays var(--border) in every state so the picker reads calm
- * and stable even when many tools are toggled.
- * ------------------------------------------------------------------- */
 .tool-picker__row {
   cursor: pointer;
   border: 1px solid var(--border);
@@ -1421,8 +1145,6 @@ span.linenumber {
   transition: background-color 0.14s ease, box-shadow 0.14s ease;
 }
 
-/* Hover affordance: only the background warms toward a clickable fill;
-   the border color is untouched. */
 .tool-picker__row:hover {
   background-color: var(--bg-hover);
 }
@@ -1430,21 +1152,10 @@ span.linenumber {
   background-color: var(--bg-selected);
 }
 
-/* Keyboard navigation glow — only while arrow-key navigating. A soft
-   outer accent ring expressed as box-shadow, so it indicates focus without
-   recoloring the static border or adding a fill. The washes below never
-   touch box-shadow, so the glow survives while a row is checked. */
 .tool-picker__row[data-focused="true"] {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-/* Custom-selection rows deliberately get NO selected background wash: the
-   checked state lives entirely in the drawn ✓ marker at the row's left
-   (ToolCheckbox), so a glance reads only the check — never a color flood.
-   The row keeps its static border and plain var(--bg); hover still warms
-   the background via the :hover rule above for an obvious click target. */
-
-/* Small scale-in for the checkbox check glyph when it appears. */
 @keyframes tool-picker-check-pop {
   0%   { transform: scale(0.35); opacity: 0; }
   55%  { transform: scale(1.15); }
@@ -1455,30 +1166,13 @@ span.linenumber {
   animation: tool-picker-check-pop 0.18s ease-out;
 }
 
-/* ── Markdown editor (CodeMirror) ──────────────────────────────────────
-   Shared by the notes panel and the plan detail dialog. Keep the line-number
-   gutter flush with the rest of the editor area (and therefore the panel)
-   instead of its default gray wash, so the editing surface reads as one
-   continuous background. */
 .cm-editor-scoped .cm-editor,
 .cm-editor-scoped .cm-scroller {
   background: var(--bg);
 }
-/* The content surface must stay transparent, and this is load-bearing:
-   `drawSelection` paints the selection rectangles on a layer that sits
-   *behind* the content (CodeMirror's layer z-index is -1 unless it is an
-   overlay), so an opaque background here hides every selection — the wash
-   and the selection become invisible together. The visible background comes
-   from `.cm-editor` / `.cm-scroller` above, which the layer still clears. */
 .cm-editor-scoped .cm-content {
   background: transparent;
 }
-/* Selection: the global `::selection` rule never applies inside CodeMirror
-   (`drawSelection` draws the wash itself and disables the native one), so it
-   is repeated here on that layer. Same accent tint as the rest of the app,
-   stepped down while the editor is unfocused so the caret's home is still
-   readable — `!important` because the theme's own rules (`oneDark` sets
-   `#3E4451`) are more specific and are injected after this file. */
 .cm-editor-scoped .cm-selectionBackground {
   background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
 }
@@ -1496,9 +1190,6 @@ span.linenumber {
   color: var(--text-dim);
 }
 
-/* ── Notes panel ────────────────────────────────────────────────────────
-   Tree rows: hover reveals a compact action strip that overlays the
-   (dimmed) child-count meta, VSCode-explorer style. */
 .notes-row-actions {
   position: absolute;
   right: 4px;
@@ -1523,7 +1214,6 @@ span.linenumber {
   opacity: 0;
 }
 
-/* Soft fade for panel view switches (list ↔ editor, edit ↔ preview). */
 @keyframes notes-fade-in {
   from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: none; }
@@ -1532,7 +1222,6 @@ span.linenumber {
   animation: notes-fade-in 0.16s ease-out;
 }
 
-/* Pulsing dot for the "saving…" status in the notes footer bar. */
 @keyframes notes-saving-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }

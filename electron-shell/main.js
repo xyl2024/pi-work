@@ -50,9 +50,6 @@ function errorPage(errorDescription) {
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 display:flex;justify-content:center;align-items:center;height:100vh;
 background:#0f0f1a;color:#c8c8d0}
-/* Windows draws the caption buttons over a frameless window, so this page
-   needs its own drag region — the app's one only exists once the app loads.
-   Zero height (and therefore inert) when there is no overlay. */
 .drag{position:fixed;inset:0 0 auto 0;height:env(titlebar-area-height, 0px);
 -webkit-app-region:drag}
 .container{text-align:center;max-width:440px;padding:0 24px}

@@ -275,7 +275,6 @@ function LoginStyles() {
         outline: none;
         font-size: 13.5px;
       }
-      /* the visible focus ring lives on .pi-login-field:focus-within */
       .pi-login-input:-webkit-autofill {
         -webkit-text-fill-color: var(--text);
         transition: background-color 9999s;
