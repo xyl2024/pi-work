@@ -9,6 +9,7 @@
 | 镜像 | Dockerfile | 说明 |
 | --- | --- | --- |
 | `piwork-base:node24-dev` | [`node24-dev/Dockerfile`](node24-dev/Dockerfile) | Node 24（bookworm-slim）+ Python 3 + Git + build-essential/cmake 等基础开发工具；可直接作为根目录 `Dockerfile` 的 `BASE_IMAGE` |
+| `piwork-base:node24-dws` | [`node24-dws/Dockerfile`](node24-dws/Dockerfile) | 增量自 `node24-dev`：加装钉钉 [dws](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli) CLI（`/usr/local/bin/dws`）+ 16 个 `dingtalk-*` Agent Skills |
 
 ## 网络与代理（这台机器实测结论）
 
@@ -25,6 +26,20 @@ Dockerfile 只把代理声明成 `ARG HTTP_PROXY/HTTPS_PROXY/NO_PROXY`，不写�
 apt 代理临时写进 `/etc/apt/apt.conf.d/99-build-proxy` 并在同一层删除。
 
 代理没在跑（或者换了机器）时：`PROXY=http://127.0.0.1:7890 ./build.sh node24-dev`。
+
+## dws 增量镜像（node24-dws）
+
+- 二进制：官方 `install.sh` 装到 `/usr/local/bin/dws`（`DWS_VERSION` 可固定版本）。
+- Skills：装在 `/opt/dws-home/.agents/skills`（multi 布局，16 个 `dingtalk-*`）。
+- **为什么不放 `/root`**：运行容器把宿主机目录挂到 `/root`（HOME），镜像里 `/root` 下的东西会被整个盖掉。
+  所以镜像带 `ENTRYPOINT /usr/local/bin/piwork-entrypoint.sh`，启动时把 skills 播种到
+  `$HOME/.agents/skills` 和 `$HOME/.pi/agent/skills`（已存在的同名 skill 不覆盖），然后 exec 原 CMD。
+  想换成用户自己 `dws skill setup` 的版本：删掉 `$HOME/.agents/skills/dingtalk-*` 再重启即可。
+- 首次使用需登录：`docker exec -it <容器> dws auth login --device`，凭据落在 `~/.dws` + `~/.local/share/dws-cli`（即挂在 `/root` 的卷里，可持久化）。
+
+```bash
+cd docker-base-images && ./build.sh node24-dev node24-dws
+```
 
 ## 用法
 
@@ -71,6 +86,21 @@ docker buildx build --network host \
 
 代理参数照样要传：根目录 `Dockerfile` 没声明 `ARG HTTP_PROXY`，但 Docker 保留名会自动注入到 RUN 环境
 （实测可用）；`--network host` 也必需，否则 corepack 下载 pnpm 会超时。
+
+用 dws 基础镜像时把 `BASE_IMAGE` 换成 `piwork-base:node24-dws`，tag 建议 `pi-work:dws`。
+
+> 本机实测坑：容器内经代理拉 `registry.npmjs.org` 只有 ~150KB/s 且大包（typescript / @next/swc）频繁超时，
+> `pnpm install` 直接失败。构建时临时给 `.npmrc` 追加 `registry=https://registry.npmmirror.com`（直连 2.9MB/s）即可，
+> 构建完还原：
+>
+> ```bash
+> cp .npmrc /tmp/npmrc.bak && printf 'registry=https://registry.npmmirror.com\n' >> .npmrc
+> docker buildx build --network host \
+>   --build-arg HTTP_PROXY=http://127.0.0.1:7897 --build-arg HTTPS_PROXY=http://127.0.0.1:7897 \
+>   --build-arg BASE_IMAGE=piwork-base:node24-dws --build-arg COREPACK_HOME=/usr/local/corepack \
+>   -t pi-work:dws .
+> cp /tmp/npmrc.bak .npmrc
+> ```
 
 `COREPACK_HOME` 是新加的参数（默认 `/root/.cache/node/corepack`）：本基础镜像把 corepack 缓存固定在
 `/usr/local/corepack`，要告诉根目录的 `Dockerfile` 去哪里修 `gyp_main.py` 的执行位。
