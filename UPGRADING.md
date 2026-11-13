@@ -67,6 +67,8 @@ pnpm add @earendil-works/pi-ai@<last-good-version> \
 | 耦合点 | 说明 |
 |---|---|
 | `.jsonl` session 文件格式 | pi 升级可能改字段名/结构，`lib/normalize.ts` 的规范化逻辑可能失效 |
+| provider 上报的 usage 口径 | token-audit 与上下文构成锚定 provider 总量（ADR-0005）；1.5.1 起 Anthropic message threads 默认开，请求只带新消息，`usage.input` 可能不再等于整段上下文 |
+| `cacheWarming` 默认值 | 1.5.1 起默认 `"idle"`，turn 结束后仍会后台续热缓存（花钱、产生审计行）；需要旧行为就在 settings.json 里显式写 `"streaming"` |
 | ToolCall 格式 | `normalizeToolCalls()` 处理 `{id,name,arguments}` ↔ `{toolCallId,toolName,input}` 映射 |
 | `AgentSession` RPC 方法 | `rpc-manager.ts` 调用的 `session.prompt()` 等 |
 | `parentSession` header | 影响 sidebar 树展示 |
@@ -77,3 +79,5 @@ pnpm add @earendil-works/pi-ai@<last-good-version> \
 |---|---|---|
 | 0.75.5 | — | 初始版本 |
 | 0.78.0 | 2026-03-26 | 升级，验证通过 |
+| 1.5.0 | 2026-11-02 | 升级，验证通过 |
+| 1.5.2 | 2026-11-14 | 升级，typecheck/lint 通过；Anthropic threads 与 cacheWarming 新默认值待冒烟 |
