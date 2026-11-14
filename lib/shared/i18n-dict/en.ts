@@ -156,6 +156,8 @@ export const EN_TRANSLATIONS = {
   "Start voice input": "Start voice input",
   "Finish voice input": "Finish voice input",
   "Transcribing...": "Transcribing...",
+  "Input level": "Input level",
+  "Voice input nearing limit": "Voice input nearing limit",
   "DeepSeek API key is not configured": "DeepSeek API key is not configured",
   "Microphone access was denied": "Microphone access was denied",
   "Didn't catch that, say it again": "Didn't catch that, say it again",

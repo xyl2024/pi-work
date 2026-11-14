@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createVoiceRecorder,
   type VoiceRecorderAdapter,
   type VoiceRecorderAdapterHandlers,
 } from "@/lib/client/voice-recorder";
-import { VOICE_INPUT_SAMPLE_RATE } from "@/lib/shared/voice-input";
+import { VOICE_INPUT_MAX_DURATION_MS, VOICE_INPUT_SAMPLE_RATE } from "@/lib/shared/voice-input";
 
 function createFakeAdapter() {
   let handlers: VoiceRecorderAdapterHandlers | null = null;
@@ -44,6 +44,10 @@ function pcmValues(wav: Uint8Array): number[] {
 }
 
 describe("createVoiceRecorder", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns an encoded wav and the wall-clock duration when stopped", async () => {
     const fake = createFakeAdapter();
     let clock = 1_000;
@@ -97,6 +101,30 @@ describe("createVoiceRecorder", () => {
     expect(fake.closed).toBe(1);
     expect(recorder.getSnapshot().phase).toBe("idle");
     fake.emit([8]);
+    expect(await recorder.stop()).toBeNull();
+  });
+
+  it("auto-stops at the recording cap and hands over the audio once", async () => {
+    vi.useFakeTimers();
+    const fake = createFakeAdapter();
+    let clock = 0;
+    const autoStopped: { durationMs: number; wav: Uint8Array }[] = [];
+    const recorder = createVoiceRecorder({
+      adapter: fake.adapter,
+      now: () => clock,
+      onAutoStop: (result) => autoStopped.push(result),
+    });
+
+    await recorder.start();
+    fake.emit([4, 5]);
+    clock = VOICE_INPUT_MAX_DURATION_MS;
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(autoStopped).toHaveLength(1);
+    expect(autoStopped[0].durationMs).toBe(VOICE_INPUT_MAX_DURATION_MS);
+    expect(pcmValues(autoStopped[0].wav)).toEqual([4, 5]);
+    expect(recorder.getSnapshot()).toEqual({ phase: "idle", elapsedMs: 0, level: 0 });
+    expect(fake.closed).toBe(1);
     expect(await recorder.stop()).toBeNull();
   });
 

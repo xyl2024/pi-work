@@ -3,6 +3,7 @@ import {
   type VoiceRecorder,
   type VoiceRecorderAdapter,
   type VoiceRecorderAdapterHandlers,
+  type VoiceRecorderOptions,
 } from "./voice-recorder";
 import { VOICE_INPUT_SAMPLE_RATE } from "@/lib/shared/voice-input";
 
@@ -81,6 +82,11 @@ export function createBrowserVoiceRecorderAdapter(): VoiceRecorderAdapter {
   };
 }
 
-export function createBrowserVoiceRecorder(): VoiceRecorder {
-  return createVoiceRecorder({ adapter: createBrowserVoiceRecorderAdapter() });
+export function createBrowserVoiceRecorder(
+  options: Pick<VoiceRecorderOptions, "onAutoStop"> = {},
+): VoiceRecorder {
+  return createVoiceRecorder({
+    adapter: createBrowserVoiceRecorderAdapter(),
+    onAutoStop: options.onAutoStop,
+  });
 }
