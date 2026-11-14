@@ -2,7 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { chatInputMetrics } from "./metrics";
-import { VOICE_INPUT_MAX_DURATION_MS, type VoiceInputPhase } from "@/lib/shared/voice-input";
+import { isVoiceInputNearLimit, type VoiceInputPhase } from "@/lib/shared/voice-input";
 
 export interface VoiceInputButtonProps {
   phase: VoiceInputPhase;
@@ -17,6 +17,13 @@ const LABEL_KEYS: Record<VoiceInputPhase, string> = {
   recording: "Finish voice input",
   transcribing: "Transcribing...",
 };
+
+function formatElapsed(elapsedMs: number): string {
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
 
 function MicIcon() {
   return (
@@ -44,7 +51,8 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
   const { t } = useI18n();
   const label = t(LABEL_KEYS[phase]);
   const active = phase === "recording";
-  const progress = Math.min(1, elapsedMs / VOICE_INPUT_MAX_DURATION_MS);
+  const nearLimit = isVoiceInputNearLimit(elapsedMs);
+  const inputLevel = Math.min(1, Math.max(0, level));
 
   return (
     <button
@@ -77,24 +85,40 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
       {phase === "recording" && (
         <span
           style={{
-            width: 10,
-            height: 10,
-            borderRadius: "50%",
-            background: "#ef4444",
-            transform: `scale(${1 + Math.min(level, 1) * 0.6})`,
-            transition: "transform 0.08s",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
           }}
-        />
+        >
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444" }} />
+          <span
+            aria-label={nearLimit ? t("Voice input nearing limit") : undefined}
+            style={{
+              fontSize: 9,
+              lineHeight: 1,
+              fontVariantNumeric: "tabular-nums",
+              color: nearLimit ? "#f59e0b" : "#ef4444",
+            }}
+          >
+            {formatElapsed(elapsedMs)}
+          </span>
+        </span>
       )}
       {phase === "transcribing" && <SpinnerIcon />}
       {active && (
         <span
+          role="progressbar"
+          aria-label={t("Input level")}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(inputLevel * 100)}
           style={{
             position: "absolute",
             left: 0,
             bottom: 0,
             height: 2,
-            width: `${progress * 100}%`,
+            width: `${inputLevel * 100}%`,
             background: "#ef4444",
           }}
         />

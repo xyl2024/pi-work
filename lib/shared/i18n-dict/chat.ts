@@ -27,6 +27,8 @@ export const chat = {
   "Start voice input": "开始语音输入",
   "Finish voice input": "结束语音输入",
   "Transcribing...": "正在转写...",
+  "Input level": "输入电平",
+  "Voice input nearing limit": "语音输入即将达到上限",
   "DeepSeek API key is not configured": "尚未配置 DeepSeek API Key",
   "Microphone access was denied": "麦克风权限被拒绝",
   "Didn't catch that, say it again": "没听清，再说一次",

@@ -8,8 +8,14 @@ import { ChatInputAttachments } from "@/components/chat/ChatInputAttachments";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { SlashResource } from "@/lib/shared/slash-commands";
-import type { VoiceRecorder } from "@/lib/client/voice-recorder";
-import type { VoiceInputState } from "@/lib/shared/voice-input";
+import type { VoiceRecorder, VoiceRecorderResult } from "@/lib/client/voice-recorder";
+import type { VoiceRecorderFactory } from "@/components/chat/chat-input/hooks/useVoiceInput";
+import {
+  VOICE_INPUT_MAX_DURATION_MS,
+  VOICE_INPUT_MIN_DURATION_MS,
+  VOICE_INPUT_WARN_REMAINING_MS,
+  type VoiceInputState,
+} from "@/lib/shared/voice-input";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -198,9 +204,10 @@ describe("ChatInput voice input", () => {
     vi.unstubAllGlobals();
   });
 
-  function createFakeRecorder() {
+  function createFakeRecorder(durationMs = 1200) {
     const listeners = new Set<() => void>();
     let snapshot: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
+    let autoStop: ((result: VoiceRecorderResult) => void) | null = null;
     const emit = () => {
       for (const listener of listeners) listener();
     };
@@ -210,9 +217,9 @@ describe("ChatInput voice input", () => {
         emit();
       },
       async stop() {
-        snapshot = { phase: "idle", elapsedMs: 1200, level: 0 };
+        snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
         emit();
-        return { wav: new Uint8Array([1, 2, 3, 4]), durationMs: 1200 };
+        return { wav: new Uint8Array([1, 2, 3, 4]), durationMs };
       },
       async cancel() {
         snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
@@ -228,10 +235,24 @@ describe("ChatInput voice input", () => {
         return snapshot;
       },
     };
-    return recorder;
+    return {
+      recorder,
+      bindAutoStop(handler: ((result: VoiceRecorderResult) => void) | undefined) {
+        autoStop = handler ?? null;
+      },
+      advance(elapsedMs: number, level: number) {
+        snapshot = { ...snapshot, elapsedMs, level };
+        emit();
+      },
+      autoStop(at = VOICE_INPUT_MAX_DURATION_MS) {
+        snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
+        emit();
+        autoStop?.({ wav: new Uint8Array([1, 2, 3, 4]), durationMs: at });
+      },
+    };
   }
 
-  function renderInput(recorder: VoiceRecorder) {
+  function renderInput(recorder: VoiceRecorder, factory?: VoiceRecorderFactory) {
     const onSend = vi.fn();
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -245,7 +266,7 @@ describe("ChatInput voice input", () => {
             onSend,
             onAbort: () => undefined,
             isStreaming: false,
-            voiceRecorderFactory: () => recorder,
+            voiceRecorderFactory: factory ?? (() => recorder),
           }),
         ),
       );
@@ -286,7 +307,7 @@ describe("ChatInput voice input", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const { textarea, onSend } = renderInput(createFakeRecorder());
+    const { textarea, onSend } = renderInput(createFakeRecorder().recorder);
     typeInto(textarea, "Hello  world");
     act(() => {
       textarea.setSelectionRange(6, 6);
@@ -315,5 +336,98 @@ describe("ChatInput voice input", () => {
     expect(textarea.value).toBe("Hello voice text world");
     expect(textarea.selectionStart).toBe(6 + "voice text".length);
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("shows the elapsed timer and live level while recording, then returns to the mic", async () => {
+    const fake = createFakeRecorder(VOICE_INPUT_MIN_DURATION_MS - 1);
+    renderInput(fake.recorder);
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+    const finishButton = findButton("Finish voice input");
+    expect(finishButton?.textContent).toBe("00:00");
+
+    act(() => fake.advance(65_000, 0.6));
+    expect(finishButton?.textContent).toBe("01:05");
+    expect(finishButton?.querySelector("[role=progressbar]")?.getAttribute("aria-valuenow")).toBe("60");
+
+    await act(async () => {
+      finishButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(findButton("Start voice input")).not.toBeNull();
+    expect(container.querySelector("[role=progressbar]")).toBeNull();
+  });
+
+  it("marks the timer when the recording nears the cap", async () => {
+    const fake = createFakeRecorder(VOICE_INPUT_MIN_DURATION_MS - 1);
+    renderInput(fake.recorder);
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+    const finishButton = findButton("Finish voice input");
+
+    const warningLabel = `[aria-label="${ZH_TRANSLATIONS["Voice input nearing limit"]}"], [aria-label="Voice input nearing limit"]`;
+    act(() => fake.advance(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS - 1, 0.2));
+    expect(finishButton?.querySelector(warningLabel)).toBeNull();
+
+    act(() => fake.advance(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS + 1, 0.2));
+    expect(finishButton?.querySelector(warningLabel)).not.toBeNull();
+  });
+
+  it("transcribes automatically when the recorder reaches the cap", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0));
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ text: "long phrase" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder, (options) => {
+      fake.bindAutoStop(options.onAutoStop);
+      return fake.recorder;
+    });
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+    act(() => fake.advance(VOICE_INPUT_MAX_DURATION_MS - 1_000, 0.3));
+    expect(findButton("Finish voice input")?.textContent).toBe("01:59");
+
+    await act(async () => {
+      fake.autoStop();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/voice/transcribe");
+    expect(textarea.value).toBe("long phrase");
+  });
+
+  it("skips the request when the recording is shorter than the minimum", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder(VOICE_INPUT_MIN_DURATION_MS - 1);
+    renderInput(fake.recorder);
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+    await act(async () => {
+      findButton("Finish voice input")?.click();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(findButton("Start voice input")).not.toBeNull();
+    expect(container.textContent).not.toContain(ZH_TRANSLATIONS["Didn't catch that, say it again"]);
   });
 });

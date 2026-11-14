@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createBrowserVoiceRecorder, isVoiceInputSupported } from "@/lib/client/voice-recorder-browser";
 import { transcribeVoiceAudio } from "@/lib/client/voice-transcribe-io";
-import type { VoiceRecorder } from "@/lib/client/voice-recorder";
+import type { VoiceRecorder, VoiceRecorderResult } from "@/lib/client/voice-recorder";
 import {
   VOICE_INPUT_MIN_DURATION_MS,
   type VoiceInputErrorCode,
   type VoiceInputState,
 } from "@/lib/shared/voice-input";
 
-export type VoiceRecorderFactory = () => VoiceRecorder;
+export interface VoiceRecorderFactoryOptions {
+  onAutoStop?: (result: VoiceRecorderResult) => void;
+}
+
+export type VoiceRecorderFactory = (options: VoiceRecorderFactoryOptions) => VoiceRecorder;
 
 export interface UseVoiceInputOptions {
   insertText: (text: string) => void;
@@ -31,9 +35,13 @@ const IDLE: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
 
 export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputController {
   const { insertText, recorderFactory, onError } = options;
+  const autoStopRef = useRef<(result: VoiceRecorderResult) => void>(() => undefined);
   const [recorder] = useState<VoiceRecorder | null>(() => {
-    if (recorderFactory) return recorderFactory();
-    return isVoiceInputSupported() ? createBrowserVoiceRecorder() : null;
+    const factoryOptions: VoiceRecorderFactoryOptions = {
+      onAutoStop: (result) => autoStopRef.current(result),
+    };
+    if (recorderFactory) return recorderFactory(factoryOptions);
+    return isVoiceInputSupported() ? createBrowserVoiceRecorder(factoryOptions) : null;
   });
   const [snapshot, setSnapshot] = useState<VoiceInputState>(() => recorder?.getSnapshot() ?? IDLE);
   const [transcribing, setTranscribing] = useState(false);
@@ -61,6 +69,41 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     };
   }, [recorder]);
 
+  const finish = useCallback(
+    async (result: VoiceRecorderResult | null) => {
+      if (!result || result.durationMs < VOICE_INPUT_MIN_DURATION_MS) return;
+      if (transcribingRef.current) return;
+
+      transcribingRef.current = true;
+      setTranscribing(true);
+      const controller = new AbortController();
+      inFlightRef.current = controller;
+      const outcome = await transcribeVoiceAudio(result.wav, { signal: controller.signal });
+      if (inFlightRef.current !== controller) return;
+      inFlightRef.current = null;
+      transcribingRef.current = false;
+      setTranscribing(false);
+
+      if (!outcome.ok) {
+        onError?.(outcome.code);
+        return;
+      }
+      const transcript = outcome.text.trim();
+      if (!transcript) {
+        onError?.("empty_transcript");
+        return;
+      }
+      insertText(transcript);
+    },
+    [insertText, onError],
+  );
+
+  useEffect(() => {
+    autoStopRef.current = (result) => {
+      void finish(result);
+    };
+  }, [finish]);
+
   const toggle = useCallback(async () => {
     if (!recorder || transcribingRef.current) return;
     const current = recorder.getSnapshot();
@@ -75,30 +118,8 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     }
     if (current.phase !== "recording") return;
 
-    const result = await recorder.stop();
-    if (!result || result.durationMs < VOICE_INPUT_MIN_DURATION_MS) return;
-
-    transcribingRef.current = true;
-    setTranscribing(true);
-    const controller = new AbortController();
-    inFlightRef.current = controller;
-    const outcome = await transcribeVoiceAudio(result.wav, { signal: controller.signal });
-    if (inFlightRef.current !== controller) return;
-    inFlightRef.current = null;
-    transcribingRef.current = false;
-    setTranscribing(false);
-
-    if (!outcome.ok) {
-      onError?.(outcome.code);
-      return;
-    }
-    const transcript = outcome.text.trim();
-    if (!transcript) {
-      onError?.("empty_transcript");
-      return;
-    }
-    insertText(transcript);
-  }, [recorder, insertText, onError]);
+    await finish(await recorder.stop());
+  }, [recorder, finish, onError]);
 
   return {
     supported: recorder !== null,

@@ -6,6 +6,8 @@ import {
   VOICE_INPUT_MIN_DURATION_MS,
   VOICE_INPUT_SAMPLE_RATE,
   VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS,
+  VOICE_INPUT_WARN_REMAINING_MS,
+  isVoiceInputNearLimit,
   voiceInputErrorMessageKey,
   type VoiceInputErrorCode,
 } from "@/lib/shared/voice-input";
@@ -29,6 +31,16 @@ describe("voice input constants", () => {
     expect(VOICE_INPUT_MIN_DURATION_MS).toBe(500);
     expect(VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS).toBe(60_000);
     expect(VOICE_INPUT_MAX_BYTES).toBe(8 * 1024 * 1024);
+    expect(VOICE_INPUT_WARN_REMAINING_MS).toBe(15_000);
+  });
+});
+
+describe("isVoiceInputNearLimit", () => {
+  it("reports the warning window before the recording cap", () => {
+    expect(isVoiceInputNearLimit(0)).toBe(false);
+    expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS - 1)).toBe(false);
+    expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS)).toBe(true);
+    expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS)).toBe(true);
   });
 });
 

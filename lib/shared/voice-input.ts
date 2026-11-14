@@ -4,11 +4,17 @@ export const VOICE_INPUT_MAX_DURATION_MS = 120_000;
 
 export const VOICE_INPUT_MIN_DURATION_MS = 500;
 
+export const VOICE_INPUT_WARN_REMAINING_MS = 15_000;
+
 export const VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS = 60_000;
 
 export const VOICE_INPUT_MAX_BYTES = 8 * 1024 * 1024;
 
 export type VoiceInputPhase = "idle" | "recording" | "transcribing";
+
+export function isVoiceInputNearLimit(elapsedMs: number): boolean {
+  return elapsedMs >= VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS;
+}
 
 export interface VoiceInputState {
   phase: VoiceInputPhase;
