@@ -112,7 +112,7 @@ export function NumericField({
     height: 34,
     padding: "4px 9px",
     border: `1px solid ${error ? "var(--error)" : focused ? "var(--accent)" : "transparent"}`,
-    borderRadius: 8,
+    borderRadius: "var(--radius-sm)",
     background: "var(--bg-panel)",
     color: "var(--text)",
     fontSize: 12,
@@ -168,7 +168,9 @@ function stepButtonStyle(side: "left" | "right", disabled: boolean): CSSProperti
     height: 34,
     padding: 0,
     border: "none",
-    borderRadius: side === "left" ? "8px 0 0 8px" : "0 8px 8px 0",
+    borderRadius: side === "left"
+      ? "var(--radius-sm) 0 0 var(--radius-sm)"
+      : "0 var(--radius-sm) var(--radius-sm) 0",
     background: "var(--bg-panel)",
     color: disabled ? "var(--text-dim)" : "var(--text-muted)",
     cursor: disabled ? "default" : "pointer",

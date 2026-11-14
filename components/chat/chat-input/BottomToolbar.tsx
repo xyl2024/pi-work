@@ -266,7 +266,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
               cursor: isStreaming ? "not-allowed" : "pointer",
               fontSize: chatInputMetrics.font,
               opacity: isStreaming ? 0.5 : 1,
-              transition: "background 0.12s, color 0.12s",
+              transition: "background var(--dur-base), color var(--dur-base)",
             }}
             onMouseEnter={(e) => {
               if (isStreaming) return;
@@ -366,7 +366,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 color: "var(--text-muted)",
                 cursor: "pointer",
                 fontSize: chatInputMetrics.font,
-                transition: "background 0.12s, color 0.12s",
+                transition: "background var(--dur-base), color var(--dur-base)",
               }}
               onMouseEnter={(e) => {
                 if (toolsPickerOpen) return;
@@ -431,7 +431,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 borderRadius: "50%",
                 color: permissionFullAccess ? FULL_ACCESS_RED : "var(--text-muted)",
                 cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
+                transition: "background var(--dur-base), color var(--dur-base)",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = permissionFullAccess

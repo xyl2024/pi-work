@@ -50,22 +50,21 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
               zIndex: 9999,
               pointerEvents: interactive ? "auto" : "none",
               maxWidth: maxWidthProp ?? 280,
-              padding: "4px 10px",
-              background: "var(--bg-panel)",
+              padding: "5px 9px",
+              background: "var(--bg-elevated)",
               color: "var(--text)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               fontSize: 12,
               lineHeight: 1.5,
               whiteSpace: "pre-line",
               fontFamily: "var(--font-sans)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-              animation: "tooltip-in 200ms ease",
+              boxShadow: "var(--elevation-prominent)",
+              animation: "tooltip-in 140ms var(--ease-out)",
             }}
           >
             {content}
             <TooltipPrimitive.Arrow
-              style={{ fill: "var(--bg-panel)", stroke: "var(--border)", strokeWidth: 1 }}
+              style={{ fill: "var(--bg-elevated)" }}
               width={8}
               height={4}
             />

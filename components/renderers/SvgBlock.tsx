@@ -100,7 +100,7 @@ export function SvgBlock({ code, isStreaming }: Props) {
       style={{
         marginTop: 4,
         marginBottom: 4,
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         overflow: "hidden",
         border: "1px solid var(--border)",
       }}
@@ -119,7 +119,7 @@ export function SvgBlock({ code, isStreaming }: Props) {
       {error && !isStreaming && (
         <div
           style={{
-            color: "#f87171",
+            color: "var(--error)",
             fontSize: 11,
             padding: "4px 10px",
             borderTop: "1px solid var(--border)",
@@ -278,7 +278,7 @@ function HeaderButton({
         cursor: disabled ? "default" : "pointer",
         fontSize: 11,
         padding: "2px 6px",
-        borderRadius: 3,
+        borderRadius: "var(--radius-xs)",
         fontFamily: "var(--font-mono)",
         opacity: disabled ? 0.5 : 1,
       }}

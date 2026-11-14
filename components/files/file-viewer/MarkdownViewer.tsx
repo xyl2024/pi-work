@@ -99,7 +99,7 @@ export function MarkdownViewer({
 					display: "flex",
 					alignItems: "center",
 					justifyContent: "center",
-					color: "#f87171",
+					color: "var(--error)",
 					fontSize: 13,
 				}}
 			>
@@ -135,7 +135,7 @@ export function MarkdownViewer({
 					style={{
 						padding: "1px 6px",
 						background: "var(--bg-panel)",
-						borderRadius: 3,
+						borderRadius: "var(--radius-xs)",
 						fontSize: 10,
 					}}
 				>

@@ -27,7 +27,7 @@ export function ChannelsListPage() {
           type="button"
           onClick={openChannelForm}
           aria-label={t("New channel")}
-          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
+          style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, padding: 0, background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer" }}
         >
           <PlusIcon width={12} height={12} />
         </button>
@@ -41,7 +41,7 @@ export function ChannelsListPage() {
             <button
               type="button"
               onClick={reloadChannels}
-              style={{ marginTop: 6, padding: "4px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, background: "none", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ marginTop: 6, padding: "4px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "none", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" }}
             >
               {t("Retry")}
             </button>
@@ -92,8 +92,8 @@ function ChannelRow({
         padding: "9px 11px",
         cursor: "pointer",
         background: selected ? "var(--bg-selected)" : "transparent",
-        borderRadius: 8,
-        transition: "background 0.12s",
+        borderRadius: "var(--radius-sm)",
+        transition: "background var(--dur-base) var(--ease-standard)",
       }}
     >
       <span
@@ -101,7 +101,7 @@ function ChannelRow({
         style={{
           width: 7,
           height: 7,
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           background: channelStatusColor(channel.status),
           flexShrink: 0,
         }}

@@ -1,0 +1,52 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  gap: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.subtle {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+.active {
+  background: var(--bg-selected);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .button:not(:disabled):hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  .active:not(:disabled):hover {
+    background: var(--bg-selected);
+  }
+
+  .primary:not(:disabled):hover {
+    background: var(--accent-hover);
+    color: #fff;
+  }
+}

@@ -466,8 +466,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {retryInfo && (
           <div style={{
             marginBottom: 8, padding: chatInputMetrics.retryBarPadding,
-            background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)",
-            borderRadius: 6, fontSize: 12, color: "rgba(180,130,0,0.9)",
+            background: "color-mix(in srgb, var(--warning) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--warning) 25%, transparent)",
+            borderRadius: "var(--radius-sm)", fontSize: 12, color: "var(--warning)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <svg width={chatInputMetrics.retryIcon} height={chatInputMetrics.retryIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -512,7 +512,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             borderRadius: chatInputMetrics.boxBorderRadius,
             padding: chatInputMetrics.boxPadding,
             boxShadow: "none",
-            transition: "border-color 0.15s, background 0.15s",
+            transition: "border-color var(--dur-base), background var(--dur-base)",
             position: "relative",
           } as React.CSSProperties}
         >
@@ -588,17 +588,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: chatInputMetrics.sendButton, height: chatInputMetrics.sendButton, padding: 0,
-                background: "#ef4444",
+                background: "var(--error)",
                 border: "none",
                 borderRadius: "50%",
                 color: "#fff",
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.6 : 1,
-                boxShadow: "0 1px 3px rgba(239,68,68,0.35)",
-                transition: "background 0.15s, box-shadow 0.15s",
+                boxShadow: "var(--elevation-1)",
+                transition: "background var(--dur-base), box-shadow var(--dur-base)",
               }}
-              onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "#dc2626"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#ef4444"; }}
+              onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "color-mix(in srgb, var(--error) 85%, #000)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--error)"; }}
             >
               <svg width={chatInputMetrics.stopIcon} height={chatInputMetrics.stopIcon} viewBox="0 0 10 10" fill="none">
                 <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
@@ -619,8 +619,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: "50%",
                 color: canSend ? "#fff" : "var(--text-dim)",
                 cursor: canSend ? "pointer" : "not-allowed",
-                boxShadow: canSend ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
+                boxShadow: canSend ? "var(--elevation-1)" : "none",
+                transition: "background var(--dur-base), box-shadow var(--dur-base)",
               }}
             >
               <svg width={chatInputMetrics.sendIcon} height={chatInputMetrics.sendIcon} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -638,7 +638,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 position: "absolute", bottom: `calc(100% + ${chatInputMetrics.menuOffset}px)`, left: 0,
                 zIndex: 200, width: "min(560px, 100%)",
                 background: "var(--bg)", border: "1px solid var(--border)",
-                borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                borderRadius: "var(--radius-sm)", boxShadow: "var(--elevation-prominent)",
                 overflow: "hidden",
               }}>
                 <SlashCommandMenu
@@ -653,7 +653,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 position: "absolute", bottom: `calc(100% + ${chatInputMetrics.menuOffset}px)`, left: 0,
                 zIndex: 200, width: "min(560px, 100%)", maxHeight: 320,
                 background: "var(--bg)", border: "1px solid var(--border)",
-                borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                borderRadius: "var(--radius-sm)", boxShadow: "var(--elevation-prominent)",
                 overflow: "auto",
               }}>
                 <FileMentionMenu

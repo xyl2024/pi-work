@@ -1,0 +1,83 @@
+.strip {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  gap: 2px;
+  padding: 0 6px;
+  overflow-x: auto;
+  background: transparent;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  max-width: 200px;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-12);
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+
+.tabActive {
+  background: var(--bg-selected);
+  color: var(--text);
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .tab:not(.tabActive):hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.tabActive .icon {
+  opacity: 1;
+}
+
+.label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+
+@media (hover: hover) {
+  .close:hover {
+    background: var(--bg-selected);
+    color: var(--text);
+  }
+}

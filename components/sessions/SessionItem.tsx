@@ -193,9 +193,9 @@ export function SessionItem({
   const itemShadow = confirmDelete
     ? "none"
     : isSelected
-      ? "0 1px 3px rgba(0,0,0,0.10)"
+      ? "var(--elevation-1)"
       : hovered
-        ? "0 1px 2px rgba(0,0,0,0.06)"
+        ? "var(--elevation-1)"
         : "none";
 
   return (
@@ -210,11 +210,11 @@ export function SessionItem({
         alignItems: "center",
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
-          ? "rgba(239,68,68,0.06)"
+          ? "var(--error-bg)"
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         boxShadow: itemShadow,
-        transition: "background 0.1s, box-shadow 0.15s",
+        transition: "background var(--dur-fast), box-shadow var(--dur-base)",
         opacity: deleting ? 0.5 : 1,
         overflow: "hidden",
       }}
@@ -230,8 +230,8 @@ export function SessionItem({
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 height: 28, padding: "0 10px",
-                background: "#ef4444", border: "none",
-                borderRadius: 6, color: "#fff",
+                background: "var(--error)", border: "none",
+                borderRadius: "var(--radius-sm)", color: "#fff",
                 cursor: "pointer", fontSize: 11, fontWeight: 600,
                 whiteSpace: "nowrap",
               }}
@@ -250,7 +250,7 @@ export function SessionItem({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 height: 28, padding: "0 10px",
                 background: "var(--bg)", border: "1px solid var(--border)",
-                borderRadius: 6, color: "var(--text-muted)",
+                borderRadius: "var(--radius-sm)", color: "var(--text-muted)",
                 cursor: "pointer", fontSize: 11, fontWeight: 500,
                 whiteSpace: "nowrap",
               }}
@@ -275,7 +275,7 @@ export function SessionItem({
             fontSize: 12,
             padding: "4px 8px",
             border: "1px solid var(--accent)",
-            borderRadius: 5,
+            borderRadius: "var(--radius-sm)",
             background: "var(--bg)",
             color: "var(--text)",
             height: 28,
@@ -304,8 +304,8 @@ export function SessionItem({
                     width: 7,
                     height: 7,
                     borderRadius: "50%",
-                    background: "#ef4444",
-                    boxShadow: "0 0 0 2px color-mix(in srgb, #ef4444 20%, transparent)",
+                    background: "var(--error)",
+                    boxShadow: "0 0 0 2px color-mix(in srgb, var(--error) 20%, transparent)",
                     animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
                   }}
                 />
@@ -321,8 +321,8 @@ export function SessionItem({
                     width: 7,
                     height: 7,
                     borderRadius: "50%",
-                    background: "#f59e0b",
-                    boxShadow: "0 0 0 2px color-mix(in srgb, #f59e0b 20%, transparent)",
+                    background: "var(--warning)",
+                    boxShadow: "0 0 0 2px color-mix(in srgb, var(--warning) 20%, transparent)",
                     animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
                   }}
                 />
@@ -377,10 +377,10 @@ export function SessionItem({
                   width: 24, height: 24, padding: 0,
                   background: menuOpen ? "var(--bg-selected)" : "none",
                   border: menuOpen ? "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" : "1px solid transparent",
-                  borderRadius: 6,
+                  borderRadius: "var(--radius-sm)",
                   color: menuOpen ? "var(--accent)" : "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  transition: "background var(--dur-base), color var(--dur-base), border-color var(--dur-base)",
                 }}
                 onMouseOver={(e) => {
                   if (menuOpen) return;
@@ -417,8 +417,8 @@ export function SessionItem({
             minWidth: 168,
             background: "var(--bg-panel)",
             border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 6px 20px rgba(0,0,0,0.32)",
+            borderRadius: "var(--radius-sm)",
+            boxShadow: "var(--elevation-prominent)",
             padding: 4,
             display: "flex",
             flexDirection: "column",
@@ -431,7 +431,7 @@ export function SessionItem({
               ? "translateY(0) scale(1)"
               : "translateY(-6px) scale(0.96)",
             transition:
-              "opacity 140ms ease-out, transform 160ms cubic-bezier(0.22, 1, 0.36, 1)",
+              "opacity 140ms var(--ease-standard), transform var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1)",
             pointerEvents: menuVisible ? "auto" : "none",
           }}
         >
@@ -481,16 +481,16 @@ function MenuRow({
         alignItems: "center",
         gap: 8,
         padding: "6px 9px",
-        borderRadius: 5,
+        borderRadius: "var(--radius-sm)",
         cursor: "pointer",
         userSelect: "none",
-        color: destructive ? (hover ? "#fca5a5" : "#f87171") : "var(--text)",
-        background: hover ? (destructive ? "rgba(239,68,68,0.10)" : "var(--bg-hover)") : "transparent",
+        color: destructive ? (hover ? "#fca5a5" : "var(--error)") : "var(--text)",
+        background: hover ? (destructive ? "var(--error-bg)" : "var(--bg-hover)") : "transparent",
         animation: "pi-menu-row-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both",
         animationDelay: `${40 + index * 28}ms`,
       }}
     >
-      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, color: destructive ? "#ef4444" : "var(--text-muted)", opacity: destructive ? 0.95 : 0.85 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, color: destructive ? "var(--error)" : "var(--text-muted)", opacity: destructive ? 0.95 : 0.85 }}>
         {icon}
       </span>
       <span style={{ flex: 1 }}>{label}</span>

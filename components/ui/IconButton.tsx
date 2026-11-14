@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { Tooltip } from "./Tooltip";
+import styles from "./IconButton.module.css";
 
 export type IconButtonSize = "xs" | "sm" | "md";
 export type IconButtonVariant = "ghost" | "subtle" | "primary";
@@ -22,9 +23,9 @@ export interface IconButtonProps {
 }
 
 const sizes: Record<IconButtonSize, CSSProperties> = {
-  xs: { width: 20, height: 20, minWidth: 20, borderRadius: 4, fontSize: 12 },
-  sm: { width: 28, height: 28, minWidth: 28, borderRadius: 5, fontSize: 12 },
-  md: { width: 32, height: 32, minWidth: 32, borderRadius: 6, fontSize: 13 },
+  xs: { width: 22, height: 22, minWidth: 22, borderRadius: "var(--radius-xs)", fontSize: 12 },
+  sm: { width: 30, height: 30, minWidth: 30, borderRadius: "var(--radius-sm)", fontSize: 12 },
+  md: { width: 34, height: 34, minWidth: 34, borderRadius: "var(--radius-sm)", fontSize: 13 },
 };
 
 export function IconButton({
@@ -41,20 +42,13 @@ export function IconButton({
   style,
   className,
 }: IconButtonProps) {
-  const baseColor = disabled
-    ? "var(--text-dim)"
-    : variant === "primary"
-      ? "var(--bg)"
-      : active
-        ? "var(--text)"
-        : "var(--text-muted)";
-  const baseBackground = variant === "primary"
-    ? "var(--accent)"
+  const variantClass = variant === "primary"
+    ? styles.primary
     : active
-      ? "var(--bg-selected)"
+      ? styles.active
       : variant === "subtle"
-        ? "var(--bg-subtle)"
-        : "transparent";
+        ? styles.subtle
+        : "";
 
   const button = (
     <button
@@ -62,36 +56,9 @@ export function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={className}
-      style={{
-        ...sizes[size],
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-        padding: 0,
-        gap: 4,
-        background: baseBackground,
-        color: baseColor,
-        border: variant === "subtle" || active ? "1px solid var(--border)" : "1px solid transparent",
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        lineHeight: 1,
-        transition: "background 0.12s, color 0.12s, border-color 0.12s",
-        ...style,
-      }}
-      onMouseEnter={(event) => {
-        if (!disabled && variant !== "primary") {
-          event.currentTarget.style.background = active ? "var(--bg-selected)" : "var(--bg-hover)";
-          event.currentTarget.style.color = "var(--text)";
-        }
-      }}
-      onMouseLeave={(event) => {
-        if (!disabled) {
-          event.currentTarget.style.background = baseBackground;
-          event.currentTarget.style.color = baseColor;
-        }
-      }}
+      aria-pressed={active || undefined}
+      className={[styles.button, variantClass, className].filter(Boolean).join(" ")}
+      style={{ ...sizes[size], ...style }}
     >
       {children ?? icon}
     </button>

@@ -57,34 +57,29 @@ function nextId(): string {
 interface KindTone {
   fg: string;
   bg: string;
-  border: string;
   iconBg: string;
 }
 
 const KIND_TONE: Record<ToastKind, KindTone> = {
   success: {
-    fg: "#16a34a",
-    bg: "rgba(22,163,74,0.10)",
-    border: "rgba(22,163,74,0.32)",
-    iconBg: "rgba(22,163,74,0.16)",
+    fg: "var(--success)",
+    bg: "var(--success-bg)",
+    iconBg: "color-mix(in srgb, var(--success) 16%, transparent)",
   },
   error: {
-    fg: "#dc2626",
-    bg: "rgba(220,38,38,0.10)",
-    border: "rgba(220,38,38,0.32)",
-    iconBg: "rgba(220,38,38,0.16)",
+    fg: "var(--error)",
+    bg: "var(--error-bg)",
+    iconBg: "color-mix(in srgb, var(--error) 16%, transparent)",
   },
   info: {
-    fg: "#2563eb",
-    bg: "rgba(37,99,235,0.08)",
-    border: "rgba(37,99,235,0.28)",
-    iconBg: "rgba(37,99,235,0.14)",
+    fg: "var(--info)",
+    bg: "var(--info-bg)",
+    iconBg: "color-mix(in srgb, var(--info) 14%, transparent)",
   },
   warning: {
-    fg: "#d97706",
-    bg: "rgba(217,119,6,0.10)",
-    border: "rgba(217,119,6,0.32)",
-    iconBg: "rgba(217,119,6,0.16)",
+    fg: "var(--warning)",
+    bg: "var(--warning-bg)",
+    iconBg: "color-mix(in srgb, var(--warning) 16%, transparent)",
   },
 };
 
@@ -284,17 +279,16 @@ function ToastCard({
         pointerEvents: "auto",
         position: "relative",
         width: "100%",
-        background: "var(--bg-panel)",
-        border: `1px solid ${tone.border}`,
-        borderRadius: 10,
+        background: "var(--bg-elevated)",
+        border: "none",
+        borderRadius: "var(--radius-md)",
         padding: "12px 14px 12px 12px",
         fontSize: 13,
         lineHeight: 1.45,
         color: "var(--text)",
         cursor: "pointer",
         overflow: "hidden",
-        boxShadow:
-          "0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.10)",
+        boxShadow: "var(--elevation-prominent)",
         backdropFilter: "blur(8px) saturate(140%)",
         WebkitBackdropFilter: "blur(8px) saturate(140%)",
         willChange: "transform, opacity",
@@ -421,8 +415,8 @@ function ToastCard({
           height: 2,
           background: "transparent",
           overflow: "hidden",
-          borderBottomLeftRadius: 10,
-          borderBottomRightRadius: 10,
+          borderBottomLeftRadius: "var(--radius-md)",
+          borderBottomRightRadius: "var(--radius-md)",
         }}
       >
         <div
@@ -465,7 +459,7 @@ function ToastIcon({
         flexShrink: 0,
         width: 26,
         height: 26,
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         background: tone.iconBg,
         display: "inline-flex",
         alignItems: "center",

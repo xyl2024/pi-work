@@ -55,7 +55,7 @@ export function CodeBlock({ code, lang }: Props) {
           left: 34,
           right: -2,
           bottom: -2,
-          borderRadius: 12,
+          borderRadius: "var(--radius-md)",
           background: isDark ? "rgba(0,0,0,0.26)" : "rgba(0,0,0,0.06)",
           filter: "blur(8px)",
         }}
@@ -63,7 +63,7 @@ export function CodeBlock({ code, lang }: Props) {
       <div
         style={{
           position: "relative",
-          borderRadius: 10,
+          borderRadius: "var(--radius-md)",
           overflow: "hidden",
           border: "1px solid var(--border)",
           background: "var(--bg)",
@@ -108,7 +108,7 @@ export function CodeBlock({ code, lang }: Props) {
           padding: "2px 4px",
           opacity: hovered ? 1 : 0,
           pointerEvents: hovered ? "auto" : "none",
-          transition: "opacity 0.15s ease",
+          transition: "opacity var(--dur-base) var(--ease-standard)",
         }}
       >
         {lang && (
@@ -135,7 +135,7 @@ export function CodeBlock({ code, lang }: Props) {
               alignItems: "center",
               background: "none",
               border: "none",
-              color: copied ? "#22c55e" : buttonColor,
+              color: copied ? "var(--success)" : buttonColor,
               cursor: "pointer",
               padding: 2,
               lineHeight: 0,

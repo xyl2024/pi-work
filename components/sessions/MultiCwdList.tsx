@@ -91,7 +91,7 @@ export function MultiCwdList({
         </div>
       )}
       {workspaceLoadError && !loadingWorkspaces && workspaces.length === 0 && (
-        <div style={{ padding: "16px 8px 6px", color: "#f87171", fontSize: 12 }}>
+        <div style={{ padding: "16px 8px 6px", color: "var(--error)", fontSize: 12 }}>
           {workspaceLoadError}
         </div>
       )}
@@ -159,7 +159,7 @@ export function MultiCwdList({
             padding: "5px 14px",
             background: "var(--bg-hover)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             color: "var(--text-muted)",
             cursor: "pointer",
             fontSize: 11,
@@ -416,7 +416,7 @@ function CwdGroup({
           gap: 6,
           padding: "6px 6px 6px 4px",
           background: "transparent",
-          borderRadius: 7,
+          borderRadius: "var(--radius-sm)",
           cursor: "pointer",
         }}
       >
@@ -457,7 +457,7 @@ function CwdGroup({
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
               color: "var(--text-dim)",
-              transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+              transition: "transform var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1)",
               transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
             }}
           >
@@ -480,10 +480,10 @@ function CwdGroup({
                 width: 22, height: 22, padding: 0, flexShrink: 0,
                 background: "transparent",
                 border: "1px solid transparent",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 color: "var(--text-muted)",
                 cursor: "pointer",
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                transition: "background var(--dur-base), color var(--dur-base), border-color var(--dur-base)",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "var(--bg-hover)";
@@ -521,10 +521,10 @@ function CwdGroup({
               width: 22, height: 22, padding: 0,
               background: loadMenuOpen ? "var(--bg-selected)" : "transparent",
               border: loadMenuOpen ? "1px solid color-mix(in srgb, var(--accent) 35%, transparent)" : "1px solid transparent",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: loadMenuOpen ? "var(--accent)" : "var(--text-muted)",
               cursor: "pointer", flexShrink: 0,
-              transition: "background 0.12s, color 0.12s, border-color 0.12s",
+              transition: "background var(--dur-base), color var(--dur-base), border-color var(--dur-base)",
             }}
             onMouseOver={(e) => {
               if (loadMenuOpen) return;
@@ -557,8 +557,8 @@ function CwdGroup({
               minWidth: 168,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 8,
-              boxShadow: "0 6px 20px rgba(0,0,0,0.32)",
+              borderRadius: "var(--radius-sm)",
+              boxShadow: "var(--elevation-prominent)",
               padding: 4,
               display: "flex",
               flexDirection: "column",
@@ -571,7 +571,7 @@ function CwdGroup({
                 ? "translateY(0) scale(1)"
                 : "translateY(-6px) scale(0.96)",
               transition:
-                "opacity 140ms ease-out, transform 160ms cubic-bezier(0.22, 1, 0.36, 1)",
+                "opacity 140ms var(--ease-standard), transform var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1)",
               pointerEvents: loadMenuVisible ? "auto" : "none",
             }}
           >
@@ -648,7 +648,7 @@ function CwdGroup({
             opacity: collapsed ? 0 : 1,
             transition:
               allowAnim && bodyHeight != null
-                ? "height 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 110ms ease 55ms"
+                ? "height var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1), opacity 110ms var(--ease-standard) 55ms"
                 : "none",
           }}
         >
@@ -659,7 +659,7 @@ function CwdGroup({
             </div>
           )}
           {group?.loadError && !group.loading && sessions.length === 0 && (
-            <div style={{ padding: "10px 6px 4px", color: "#f87171", fontSize: 11 }}>
+            <div style={{ padding: "10px 6px 4px", color: "var(--error)", fontSize: 11 }}>
               {group.loadError}
             </div>
           )}
@@ -739,7 +739,7 @@ function CwdMenuRow({
         alignItems: "center",
         gap: 8,
         padding: "6px 9px",
-        borderRadius: 5,
+        borderRadius: "var(--radius-sm)",
         cursor: disabled ? "default" : "pointer",
         userSelect: "none",
         color: disabled ? "var(--text-dim)" : "var(--text)",
@@ -802,13 +802,13 @@ function LoadMoreRow({ loadingMore, onClick }: { loadingMore: boolean; onClick: 
         gap: 6,
         paddingLeft: 8,
         paddingRight: 8,
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         cursor: disabled ? "default" : "pointer",
         userSelect: "none",
         color: disabled ? "var(--text-dim)" : "var(--text-muted)",
         background: hover && !disabled ? "var(--bg-hover)" : "transparent",
         fontSize: 12,
-        transition: "background 0.1s",
+        transition: "background var(--dur-fast)",
       }}
     >
       <LoadMoreIcon />

@@ -52,7 +52,7 @@ function ImageBlock({ block, onImageClick }: { block: ImageContent; onImageClick
           src={src}
           alt=""
           loaderSize={96}
-          style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+          style={{ maxWidth: 240, maxHeight: 240, borderRadius: "var(--radius-sm)", objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
         />
       </span>
     </Tooltip>
@@ -129,7 +129,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
         height: contentHeight ?? "auto",
         overflow: "hidden",
         cursor: "pointer",
-        transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+        transition: allowAnim ? "height var(--dur-slow) var(--ease-standard)" : "none",
       }}
     >
       <div ref={contentRef} style={{ overflow: "hidden" }}>
@@ -219,7 +219,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         }}
         style={{ ...TOOL_HEADER_STYLE, cursor: "pointer" }}
       >
-        <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: isError ? "var(--error)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {title.name}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -227,12 +227,12 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         </span>
         {diffStats && (
           <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11 }}>
-            <span style={{ color: "#16a34a" }}>+{diffStats.additions}</span>
-            {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
+            <span style={{ color: "var(--success)" }}>+{diffStats.additions}</span>
+            {diffStats.deletions > 0 && <span style={{ color: "var(--error)", marginLeft: 3 }}>-{diffStats.deletions}</span>}
           </span>
         )}
         <ToolDuration ms={result?.durationMs} />
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--dur-base)" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
       </div>
@@ -243,11 +243,11 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     return (
       <div
         style={{
-          borderRadius: 7,
+          borderRadius: "var(--radius-sm)",
           overflow: "hidden",
           fontSize: 12,
-          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid transparent",
-          background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+          border: isError ? "1px solid color-mix(in srgb, var(--error) 45%, transparent)" : "1px solid transparent",
+          background: isError ? "color-mix(in srgb, var(--error) 5%, transparent)" : "color-mix(in srgb, var(--success) 4%, transparent)",
         }}
       >
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} annotation={formatToolAnnotation({ timeout: block.input.timeout, durationMs: result?.durationMs }, t)} cwd={cwd} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
@@ -258,16 +258,16 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   return (
     <div
       style={{
-        borderRadius: 7,
+        borderRadius: "var(--radius-sm)",
         overflow: "hidden",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        border: isError ? "1px solid color-mix(in srgb, var(--error) 45%, transparent)" : "1px solid color-mix(in srgb, var(--success) 25%, transparent)",
+        background: isError ? "color-mix(in srgb, var(--error) 5%, transparent)" : "color-mix(in srgb, var(--success) 4%, transparent)",
       }}
     >
       {renderHeader()}
 
-      <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
+      <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height var(--dur-slow) var(--ease-standard)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>
           {expanded && isFileMutation ? (
             <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultImages={resultImages} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
@@ -284,7 +284,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
                   overflowX: "hidden",
                   overflowY: "auto",
                   background: "var(--bg-subtle)",
-                  borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+                  borderTop: isError ? "1px solid color-mix(in srgb, var(--error) 25%, transparent)" : "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-all",
                 }}
@@ -366,7 +366,7 @@ function DiffToolCallContent({ toolName, input, resultText, resultImages, result
       style={{
         overflow: "hidden",
         background: isDark ? "#1e1e1e" : "#fafafa",
-        borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+        borderTop: isError ? "1px solid color-mix(in srgb, var(--error) 25%, transparent)" : "1px solid color-mix(in srgb, var(--success) 20%, transparent)",
         fontFamily: "var(--font-mono)",
         fontSize: 12,
         lineHeight: 1.5,
@@ -383,8 +383,8 @@ function DiffToolCallContent({ toolName, input, resultText, resultImages, result
                 padding: "1px 10px",
                 color: line.kind === "added" ? (isDark ? "#b7f7c0" : "#166534") : (isDark ? "#ffc1c1" : "#991b1b"),
                 background: line.kind === "added"
-                  ? (isDark ? "rgba(46,160,67,0.22)" : "rgba(34,197,94,0.13)")
-                  : (isDark ? "rgba(248,81,73,0.22)" : "rgba(248,113,113,0.14)"),
+                  ? (isDark ? "color-mix(in srgb, var(--success) 22%, transparent)" : "color-mix(in srgb, var(--success) 13%, transparent)")
+                  : (isDark ? "color-mix(in srgb, var(--error) 22%, transparent)" : "color-mix(in srgb, var(--error) 14%, transparent)"),
                 whiteSpace: "pre",
               }}
             >
@@ -431,7 +431,7 @@ function BashToolCallContent({ command, annotation, cwd, resultText, resultImage
         position: "relative",
         height: expandedAll ? (contentHeight === null ? "auto" : contentHeight) : (contentHeight === null ? "auto" : Math.min(contentHeight, BASH_DETAIL_MAX_HEIGHT)),
         overflow: "hidden",
-        transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+        transition: allowAnim ? "height var(--dur-slow) var(--ease-standard)" : "none",
       }}
     >
     <div
@@ -451,7 +451,7 @@ function BashToolCallContent({ command, annotation, cwd, resultText, resultImage
       {annotation !== null && (
         <div style={{ color: dimFg }}>{annotation}</div>
       )}
-      <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
+      <span style={{ color: isError ? "var(--error)" : "var(--success)" }}>{prompt}</span>
       <SyntaxHighlighter
         language="bash"
         style={isDark ? vscDarkPlus : vs}
@@ -468,7 +468,7 @@ function BashToolCallContent({ command, annotation, cwd, resultText, resultImage
               margin: 0,
               marginTop: "1.5em",
               padding: 0,
-              color: isError ? "#f87171" : dimFg,
+              color: isError ? "var(--error)" : dimFg,
               font: "inherit",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
@@ -484,7 +484,7 @@ function BashToolCallContent({ command, annotation, cwd, resultText, resultImage
               margin: 0,
               marginTop: "1.5em",
               padding: 0,
-              color: "#f87171",
+              color: "var(--error)",
               font: "inherit",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
@@ -562,7 +562,7 @@ function ToolResultImages({ images }: { images: ImageContent[] }) {
               src={item.src}
               alt=""
               loaderSize={96}
-              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: "var(--radius-sm)", objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
             />
           </span>
         </Tooltip>
@@ -583,8 +583,8 @@ function PairedResult({ text, images, isEmpty, isError }: {
   return (
     <div
       style={{
-        borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
+        borderTop: `1px solid ${isError ? "color-mix(in srgb, var(--error) 30%, transparent)" : "color-mix(in srgb, var(--success) 15%, transparent)"}`,
+        background: isError ? "color-mix(in srgb, var(--error) 4%, transparent)" : "var(--bg-subtle)",
       }}
     >
       <ToolResultImages images={images} />
@@ -593,7 +593,7 @@ function PairedResult({ text, images, isEmpty, isError }: {
         style={{
           margin: 0,
           padding: "8px 10px",
-          color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+          color: isError ? "var(--error)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
           fontSize: 12,
           lineHeight: 1.5,
           overflowX: "hidden",

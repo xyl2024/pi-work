@@ -82,16 +82,16 @@ export function ImageViewer({ filePath }: { filePath: string }) {
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
         <span
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
+          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}
         >
           <span
             style={{
               width: 7,
               height: 7,
               borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
+              background: watching ? "var(--success)" : "var(--border)",
               display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
+              boxShadow: watching ? "0 0 4px var(--success)" : "none",
             }}
           />
           {watching ? t("live") : t("static")}
@@ -114,7 +114,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
         }}
       >
         {error ? (
-          <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>
+          <div style={{ color: "var(--error)", fontSize: 13 }}>{error}</div>
         ) : (
           <SmartImage
             src={src}
@@ -134,7 +134,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
               maxWidth: "100%",
               maxHeight: "100%",
               objectFit: "contain",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              boxShadow: "var(--elevation-1)",
               cursor: "zoom-in",
             }}
           />

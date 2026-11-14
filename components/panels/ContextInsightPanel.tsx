@@ -99,7 +99,7 @@ function CollapsibleRow({
         <span style={{ display: "inline-flex", flexShrink: 0, color: "var(--text-dim)" }}>
           {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         </span>
-        {color && <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: color }} />}
+        {color && <span style={{ width: 8, height: 8, borderRadius: "var(--radius-xs)", flexShrink: 0, background: color }} />}
         <span
           title={label}
           style={{

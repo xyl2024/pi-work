@@ -45,7 +45,7 @@ const sectionStyle = {
   flexDirection: "column",
   gap: 8,
   padding: 12,
-  borderRadius: 8,
+  borderRadius: "var(--radius-sm)",
   background: "var(--bg)",
 } as const;
 
@@ -54,7 +54,7 @@ const primaryButtonStyle = {
   background: "var(--accent)",
   color: "#fff",
   border: "none",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
   fontSize: 12,
   fontWeight: 600,
   fontFamily: "inherit",
@@ -65,7 +65,7 @@ const ghostButtonStyle = {
   background: "transparent",
   color: "var(--text-muted)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
   fontSize: 12,
   fontFamily: "inherit",
 } as const;
@@ -224,12 +224,12 @@ export function ChannelDetailPage({
             type="button"
             onClick={onBack}
             aria-label={t("Back")}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: "var(--radius-sm)", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
           >
             <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
           </button>
         )}
-        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: channelStatusColor(channel.status), flexShrink: 0 }} />
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "var(--radius-xs)", background: channelStatusColor(channel.status), flexShrink: 0 }} />
         <strong style={{ flex: 1, minWidth: 0, color: "var(--text)", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {channel.name}
         </strong>
@@ -244,7 +244,7 @@ export function ChannelDetailPage({
             <span style={{ color: "var(--text-muted)" }}>{t("channels.boundUser")}</span>
             <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{userId ?? t("channels.notScanned")}</code>
             <span style={{ color: "var(--text-muted)" }}>{t("channels.currentWorkspace")}</span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: workspaceBroken ? "#ef4444" : "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={workspace ?? undefined}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: workspaceBroken ? "var(--error)" : "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={workspace ?? undefined}>
               {workspace ? shortenPath(workspace) : t("channels.notSet")}
               {workspaceBroken ? ` (${t("channels.workspaceUnavailable")})` : ""}
             </span>
@@ -263,7 +263,7 @@ export function ChannelDetailPage({
               type="button"
               onClick={() => void deleteChannel()}
               disabled={busy}
-              style={{ ...ghostButtonStyle, marginLeft: "auto", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)", cursor: busy ? "not-allowed" : "pointer" }}
+              style={{ ...ghostButtonStyle, marginLeft: "auto", color: "var(--error)", border: "1px solid rgba(239,68,68,0.4)", cursor: busy ? "not-allowed" : "pointer" }}
             >
               {t("channels.delete")}
             </button>
@@ -282,7 +282,7 @@ export function ChannelDetailPage({
               onKeyDown={(e) => { if (e.key === "Enter") void submitRename(); }}
               maxLength={50}
               placeholder={t("channels.channelName")}
-              style={{ flex: 1, minWidth: 0, padding: "5px 8px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }}
+              style={{ flex: 1, minWidth: 0, padding: "5px 8px", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }}
             />
             <button
               type="button"
@@ -301,7 +301,7 @@ export function ChannelDetailPage({
             <button
               type="button"
               onClick={() => setWorkspaceMenuOpen((v) => !v)}
-              style={{ marginLeft: "auto", background: "var(--bg-hover)", border: "1px solid var(--border)", color: "var(--text-muted)", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
+              style={{ marginLeft: "auto", background: "var(--bg-hover)", border: "1px solid var(--border)", color: "var(--text-muted)", borderRadius: "var(--radius-sm)", padding: "3px 10px", fontSize: 11, cursor: "pointer", flexShrink: 0, fontFamily: "inherit" }}
             >
               {t("channels.recent")}
             </button>
@@ -309,7 +309,7 @@ export function ChannelDetailPage({
           {workspaceMenuOpen && (
             <div
               data-scroll-inset
-              style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 240, overflowY: "auto" }}
+              style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", boxShadow: "var(--elevation-prominent)", maxHeight: 240, overflowY: "auto" }}
             >
               {recentCwds.length === 0 ? (
                 <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{t("channels.noWorkspaces")}</div>
@@ -357,7 +357,7 @@ export function ChannelDetailPage({
                 </a>
               )}
               {login.phase && (
-                <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg-hover)", borderRadius: 4, textAlign: "center", maxWidth: "100%" }}>
+                <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg-hover)", borderRadius: "var(--radius-xs)", textAlign: "center", maxWidth: "100%" }}>
                   {t(loginPhaseLabelKey(login.phase))}
                   {login.phaseMessage ? ` — ${t(login.phaseMessage)}` : ""}
                 </div>
@@ -371,13 +371,13 @@ export function ChannelDetailPage({
                     placeholder={t("channels.pairingCode")}
                     autoFocus
                     inputMode="numeric"
-                    style={{ width: 140, height: 28, padding: "4px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
+                    style={{ width: 140, height: 28, padding: "4px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-xs)", color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
                   />
                   <button
                     type="button"
                     onClick={() => void submitCode()}
                     disabled={login.busy || !login.code.trim()}
-                    style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, fontSize: 12, cursor: login.busy || !login.code.trim() ? "not-allowed" : "pointer", opacity: login.busy || !login.code.trim() ? 0.5 : 1, fontFamily: "inherit" }}
+                    style={{ padding: "4px 12px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-xs)", fontSize: 12, cursor: login.busy || !login.code.trim() ? "not-allowed" : "pointer", opacity: login.busy || !login.code.trim() ? 0.5 : 1, fontFamily: "inherit" }}
                   >
                     {t("channels.submit")}
                   </button>

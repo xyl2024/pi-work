@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import styles from "./ToggleSwitch.module.css";
 
 export interface ToggleSwitchProps {
   on: boolean;
@@ -20,8 +21,10 @@ export function ToggleSwitch({
   const isSm = size === "sm";
   const width = isSm ? 32 : 40;
   const height = isSm ? 18 : 22;
-  const knob = height - 4;
-  const travel = width - knob - 4;
+  const knob = height - 6;
+  const travel = width - knob - 6;
+  const trackStyle = { width, height };
+  const knobStyle = { width: knob, height: knob };
   return (
     <button
       type="button"
@@ -35,34 +38,10 @@ export function ToggleSwitch({
         onChange(!on);
       }}
       onKeyDown={(event) => event.stopPropagation()}
-      style={{
-        width,
-        height,
-        borderRadius: height / 2,
-        background: on ? "var(--accent)" : "var(--bg-hover)",
-        border: "1px solid var(--border)",
-        boxSizing: "border-box",
-        cursor: disabled ? "not-allowed" : "pointer",
-        position: "relative",
-        opacity: disabled ? 0.55 : 1,
-        transition: "background 0.2s",
-        flexShrink: 0,
-        padding: 0,
-      }}
+      className={[styles.track, on ? styles.on : ""].filter(Boolean).join(" ")}
+      style={{ ...trackStyle, "--knob-travel": `${travel}px` } as React.CSSProperties}
     >
-      <span
-        style={{
-          position: "absolute",
-          top: 2,
-          left: on ? travel + 2 : 2,
-          width: knob,
-          height: knob,
-          borderRadius: knob / 2,
-          background: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-          transition: "left 0.2s",
-        }}
-      />
+      <span className={styles.knob} style={knobStyle} />
     </button>
   );
 }

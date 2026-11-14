@@ -9,12 +9,9 @@
   height: min(760px, calc(100vh - 72px));
   min-height: 420px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--bg);
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.24),
-    0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--elevation-prominent);
 }
 
 .rail {
@@ -67,14 +64,14 @@
   padding: 0 10px;
   margin-bottom: 2px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-family: inherit;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }
 
 .navItem:hover {
@@ -86,7 +83,7 @@
   background: var(--bg);
   color: var(--text);
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--elevation-1);
 }
 
 .navItemActive:hover {
@@ -165,11 +162,11 @@
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }
 
 .close:hover {
@@ -200,7 +197,7 @@
   width: min(920px, calc(100vw - 40px));
   height: 200px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--bg);
   font-size: 13px;
   color: var(--text-muted);

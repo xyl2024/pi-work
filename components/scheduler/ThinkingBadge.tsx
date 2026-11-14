@@ -16,7 +16,7 @@ export function ThinkingBadge({ level }: { level: string }) {
         display: "inline-flex",
         alignItems: "center",
         padding: "3px 8px",
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         background: `color-mix(in srgb, ${color} 14%, transparent)`,
         color,
         fontSize: 12,

@@ -250,7 +250,7 @@ function AssistantMessageViewInner({
                     {tps !== null && (() => {
                       const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
                       return (
-                        <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
+                        <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: "var(--radius-xs)", background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
                           {tps.toFixed(1)} t/s
                         </span>
                       );
@@ -267,10 +267,10 @@ function AssistantMessageViewInner({
         <div
           style={{
             padding: "8px 12px",
-            borderRadius: 6,
-            border: "1px solid rgba(248,113,113,0.45)",
-            background: "rgba(248,113,113,0.06)",
-            color: "#f87171",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid color-mix(in srgb, var(--error) 45%, transparent)",
+            background: "color-mix(in srgb, var(--error) 6%, transparent)",
+            color: "var(--error)",
             fontSize: 12,
             fontFamily: "var(--font-mono)",
             marginBottom: 8,
@@ -305,10 +305,10 @@ function AssistantMessageViewInner({
                 padding: 0,
                 background: "none",
                 border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-sm)",
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
-                transition: "color 0.12s",
+                transition: "color var(--dur-base)",
               }}
               onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -332,10 +332,10 @@ function AssistantMessageViewInner({
                 padding: 0,
                 background: "none",
                 border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-sm)",
                 color: "var(--text-dim)",
                 cursor: exporting ? "wait" : "pointer",
-                transition: "color 0.12s",
+                transition: "color var(--dur-base)",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -369,10 +369,10 @@ function AssistantMessageViewInner({
                 padding: 0,
                 background: "none",
                 border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-sm)",
                 color: "var(--text-dim)",
                 cursor: downloading ? "wait" : "pointer",
-                transition: "color 0.12s",
+                transition: "color var(--dur-base)",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -406,10 +406,10 @@ function AssistantMessageViewInner({
                 padding: 0,
                 background: "none",
                 border: "none",
-                borderRadius: 5,
+                borderRadius: "var(--radius-sm)",
                 color: readAloudActive ? "var(--accent)" : "var(--text-dim)",
                 cursor: readAloudPhase === "synthesizing" ? "wait" : "pointer",
-                transition: "color 0.12s",
+                transition: "color var(--dur-base)",
               }}
               onMouseEnter={(e) => { if (!readAloudActive) e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { if (!readAloudActive) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -440,7 +440,7 @@ function AssistantMessageViewInner({
             gap: 6,
             opacity: hovered ? 1 : 0,
             pointerEvents: hovered ? "auto" : "none",
-            transition: "opacity 0.12s",
+            transition: "opacity var(--dur-base)",
           }}>
             <UsageIcons usage={message.usage} durationMs={message.durationMs} />
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}

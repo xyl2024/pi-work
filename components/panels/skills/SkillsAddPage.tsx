@@ -43,7 +43,7 @@ function ResultCard({
         gap: 8,
         padding: "12px 12px",
         border: "1px solid var(--border)",
-        borderRadius: 10,
+        borderRadius: "var(--radius-md)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -89,10 +89,10 @@ function ResultCard({
             padding: "3px 9px",
             fontSize: 11.5,
             fontWeight: 500,
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border)",
             cursor: blocked ? "not-allowed" : "pointer",
-            background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
+            background: isInstalled ? "var(--success-bg)" : "none",
             color: isInstalled ? "var(--success)" : isInstalling ? "var(--accent)" : "var(--text-muted)",
           }}
         >
@@ -282,7 +282,7 @@ export function SkillsAddPage() {
             flexShrink: 0,
             padding: "4px 12px",
             fontSize: 12,
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border)",
             background: "none",
             color: "var(--text-muted)",
@@ -309,7 +309,7 @@ export function SkillsAddPage() {
               fontSize: 12.5,
               background: "var(--bg)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
             }}
           />
@@ -321,7 +321,7 @@ export function SkillsAddPage() {
               flexShrink: 0,
               padding: "6px 14px",
               fontSize: 12.5,
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               border: "none",
               background: "var(--accent)",
               color: "#fff",
@@ -338,7 +338,7 @@ export function SkillsAddPage() {
             style={{
               display: "flex",
               flexShrink: 0,
-              borderRadius: 5,
+              borderRadius: "var(--radius-sm)",
               border: "1px solid var(--border)",
               overflow: "hidden",
               fontSize: 11.5,
@@ -383,7 +383,7 @@ export function SkillsAddPage() {
         </div>
 
         {showInstallBlock && (
-          <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
             {running && (
               <div
                 style={{
@@ -463,7 +463,7 @@ export function SkillsAddPage() {
                   style={{
                     padding: "3px 12px",
                     fontSize: 12,
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border)",
                     background: "none",
                     color: "var(--text-muted)",
@@ -487,7 +487,7 @@ export function SkillsAddPage() {
                 alignSelf: "flex-start",
                 padding: "3px 12px",
                 fontSize: 12,
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--border)",
                 background: "none",
                 color: "var(--text-muted)",
@@ -533,7 +533,7 @@ export function SkillsAddPage() {
                   style={{
                     padding: "5px 18px",
                     fontSize: 12,
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     border: "1px solid var(--border)",
                     background: "none",
                     color: "var(--text-muted)",

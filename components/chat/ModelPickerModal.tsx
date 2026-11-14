@@ -191,8 +191,8 @@ export function ModelPickerModal({
           flexDirection: "column",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 12,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           overflow: "hidden",
         }}
       >
@@ -206,7 +206,7 @@ export function ModelPickerModal({
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 24, height: 24, padding: 0,
-              background: "none", border: "none", borderRadius: 6,
+              background: "none", border: "none", borderRadius: "var(--radius-sm)",
               color: "var(--text-dim)", cursor: "pointer",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
@@ -220,7 +220,7 @@ export function ModelPickerModal({
         </div>
 
         <div style={{ padding: "0 14px 10px", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "0 8px" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -307,7 +307,7 @@ export function ModelPickerModal({
                           padding: "7px 10px", textAlign: "left",
                           background: active ? "var(--bg-selected)" : "none",
                           border: `1px solid ${currentRow ? "var(--accent)" : "transparent"}`,
-                          borderRadius: 7,
+                          borderRadius: "var(--radius-sm)",
                           cursor: disabled ? "not-allowed" : "pointer",
                           opacity: disabled ? 0.55 : 1,
                         }}

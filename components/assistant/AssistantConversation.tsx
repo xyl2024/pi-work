@@ -20,7 +20,7 @@ import type { SessionInfo } from "@/lib/shared/types";
 const bubbleBaseStyle: CSSProperties = {
   maxWidth: "78%",
   padding: "8px 12px",
-  borderRadius: 16,
+  borderRadius: "var(--radius-lg)",
   fontSize: 14,
   lineHeight: 1.5,
   whiteSpace: "pre-wrap",
@@ -57,7 +57,7 @@ function TypingIndicator() {
           style={{
             width: 6,
             height: 6,
-            borderRadius: 3,
+            borderRadius: "var(--radius-xs)",
             background: "var(--text-muted)",
             animationDelay: `${index * 0.18}s`,
           }}
@@ -275,7 +275,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
             alignItems: "flex-end",
             gap: 8,
             padding: "8px 8px 8px 14px",
-            borderRadius: 18,
+            borderRadius: "var(--radius-lg)",
             border: "1px solid var(--text-dim)",
             background: "transparent",
           }}
@@ -317,7 +317,7 @@ function AssistantChat({ tabId, isActive, cwd, session, history, onAgentStatusCh
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: 16,
+              borderRadius: "var(--radius-lg)",
               border: "none",
               cursor: agentRunning || draft.trim() ? "pointer" : "default",
               background: agentRunning || draft.trim() ? "var(--accent)" : "var(--bg-hover)",

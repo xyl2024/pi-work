@@ -23,7 +23,7 @@ interface Props {
 
 export function MermaidBlock({ code, isStreaming }: Props) {
   const { t } = useI18n();
-  const { preset, isDark } = useTheme();
+  const { preset } = useTheme();
   const [lib, setLib] = useState<typeof BeautifulMermaid | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
@@ -154,13 +154,11 @@ export function MermaidBlock({ code, isStreaming }: Props) {
       style={{
         marginTop: 8,
         marginBottom: 8,
-        borderRadius: 10,
+        borderRadius: "var(--radius-md)",
         overflow: "hidden",
         border: "1px solid var(--border)",
         background: "var(--bg)",
-        boxShadow: isDark
-          ? "0 6px 18px rgba(0,0,0,0.35)"
-          : "0 4px 14px rgba(0,0,0,0.08)",
+        boxShadow: "var(--elevation-2)",
       }}
     >
       <Header
@@ -179,7 +177,7 @@ export function MermaidBlock({ code, isStreaming }: Props) {
       {error && !isStreaming && (
         <div
           style={{
-            color: "#f87171",
+            color: "var(--error)",
             fontSize: 11,
             padding: "4px 10px",
             borderTop: "1px solid var(--border)",
@@ -265,14 +263,13 @@ function Header({
   onToggleView: () => void;
 }) {
   const { t } = useI18n();
-  const { isDark } = useTheme();
   return (
     <div
       style={{
         position: "relative",
         minHeight: 32,
         padding: "0 12px",
-        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.025)",
+        background: "var(--bg-subtle)",
         borderBottom: "1px solid var(--border)",
         fontSize: 11,
         color: "var(--text-dim)",
@@ -369,7 +366,7 @@ function HeaderButton({
         cursor: disabled ? "default" : "pointer",
         fontSize: 11,
         padding: "2px 6px",
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         fontFamily: "var(--font-mono)",
         opacity: disabled ? 0.5 : 1,
       }}

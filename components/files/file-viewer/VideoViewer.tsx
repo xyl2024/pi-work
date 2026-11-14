@@ -81,16 +81,16 @@ export function VideoViewer({ filePath }: { filePath: string }) {
         {size != null && <span>{formatSize(size)}</span>}
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
         <span
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
+          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}
         >
           <span
             style={{
               width: 7,
               height: 7,
               borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
+              background: watching ? "var(--success)" : "var(--border)",
               display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
+              boxShadow: watching ? "0 0 4px var(--success)" : "none",
             }}
           />
           {watching ? t("live") : t("static")}
@@ -110,7 +110,7 @@ export function VideoViewer({ filePath }: { filePath: string }) {
       >
         <div style={{ width: "min(900px, 100%)", maxHeight: "100%" }}>
           {error && (
-            <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
+            <div style={{ color: "var(--error)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
               {error}
             </div>
           )}

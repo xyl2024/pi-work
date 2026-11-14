@@ -78,10 +78,10 @@ export function CwdAliasDialog({
         style={{
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
+          borderRadius: "var(--radius-md)",
           width: 400,
           maxWidth: "100%",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -99,7 +99,7 @@ export function CwdAliasDialog({
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 24, height: 24, padding: 0,
               background: "transparent", border: "none",
-              color: "var(--text-muted)", cursor: "pointer", borderRadius: 6,
+              color: "var(--text-muted)", cursor: "pointer", borderRadius: "var(--radius-sm)",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -128,7 +128,7 @@ export function CwdAliasDialog({
               padding: "7px 10px",
               background: "var(--bg-input, var(--bg))",
               border: "1px solid var(--border)",
-              borderRadius: 7,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
               fontSize: 12,
               outline: "none",
@@ -144,7 +144,7 @@ export function CwdAliasDialog({
               flex: 1, padding: "7px 8px",
               background: "none",
               border: "1px solid var(--border)",
-              borderRadius: 7,
+              borderRadius: "var(--radius-sm)",
               color: trimmed.length === 0 ? "var(--text-dim)" : "var(--text-muted)",
               cursor: saving || trimmed.length === 0 ? "default" : "pointer",
               fontSize: 11,
@@ -160,7 +160,7 @@ export function CwdAliasDialog({
               flex: 1, padding: "7px 8px",
               background: "var(--accent)",
               border: "1px solid var(--accent)",
-              borderRadius: 7,
+              borderRadius: "var(--radius-sm)",
               color: "#fff",
               cursor: saving ? "default" : "pointer",
               fontSize: 11,

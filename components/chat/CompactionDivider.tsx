@@ -26,7 +26,7 @@ export function CompactionDivider({ point }: Props) {
         borderTop: "1px dashed color-mix(in srgb, var(--accent) 45%, transparent)",
         borderBottom: "1px dashed color-mix(in srgb, var(--accent) 45%, transparent)",
         background: "color-mix(in srgb, var(--accent) 6%, var(--bg-panel))",
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         padding: expanded ? "10px 14px 14px" : "7px 14px",
         userSelect: "none",
       }}
@@ -87,7 +87,7 @@ export function CompactionDivider({ point }: Props) {
             marginLeft: "auto",
             flexShrink: 0,
             transform: expanded ? "rotate(180deg)" : "none",
-            transition: "transform 0.15s",
+            transition: "transform var(--dur-base)",
           }}
         >
           <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -98,7 +98,7 @@ export function CompactionDivider({ point }: Props) {
         style={{
           height: contentHeight ?? 0,
           overflow: "hidden",
-          transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+          transition: allowAnim ? "height var(--dur-slow) var(--ease-standard)" : "none",
         }}
       >
         <div ref={contentRef} style={{ overflow: "hidden" }}>
@@ -126,7 +126,7 @@ export function CompactionDivider({ point }: Props) {
                           style={{
                             background: "var(--bg-selected)",
                             padding: "10px 12px",
-                            borderRadius: 6,
+                            borderRadius: "var(--radius-sm)",
                             overflow: "auto",
                             fontFamily: "var(--font-mono)",
                             fontSize: 12,
@@ -142,7 +142,7 @@ export function CompactionDivider({ point }: Props) {
                         style={{
                           background: "var(--bg-selected)",
                           padding: "1px 4px",
-                          borderRadius: 3,
+                          borderRadius: "var(--radius-xs)",
                           fontFamily: "var(--font-mono)",
                           fontSize: "0.9em",
                           color: "var(--accent)",

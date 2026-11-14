@@ -26,12 +26,12 @@
   box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
-  transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+  transition: background-color var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
 }
 
 .input::placeholder {
@@ -88,7 +88,7 @@
   padding: 0;
   transform: translateY(-50%);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -124,13 +124,13 @@
   height: 32px;
   padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard);
 }
 
 .button:disabled {
@@ -185,7 +185,7 @@
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: var(--bg-panel);
 }
 
@@ -194,13 +194,13 @@
   height: 28px;
   padding: 0 14px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease;
+  transition: background-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
 }
 
 .segment:hover {
@@ -210,7 +210,7 @@
 .segmentActive {
   background: var(--bg);
   color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--elevation-1);
 }
 
 .segmentActive:hover {

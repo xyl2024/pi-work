@@ -180,7 +180,7 @@ export function SubagentSessionsButton({
               minWidth: 18,
               height: 18,
               padding: "0 5px",
-              borderRadius: 9,
+              borderRadius: "var(--radius-md)",
               background: "var(--accent)",
               color: "var(--bg)",
               fontSize: 10,
@@ -216,8 +216,8 @@ export function SubagentSessionsButton({
           background: "var(--bg-panel)",
           color: "var(--text)",
           border: "1px solid var(--border)",
-          borderRadius: 8,
-          boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+          borderRadius: "var(--radius-sm)",
+          boxShadow: "var(--elevation-prominent)",
         }}
       >
         <SubagentSessionsPopover

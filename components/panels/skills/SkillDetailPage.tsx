@@ -103,7 +103,7 @@ export function SkillDetailPage({ filePath, onBack }: { filePath: string; onBack
             type="button"
             onClick={onBack}
             aria-label={t("Back")}
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: "var(--radius-sm)", color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
           >
             <ArrowLeftIcon width={14} height={14} aria-hidden="true" />
           </button>
@@ -138,7 +138,7 @@ export function SkillDetailPage({ filePath, onBack }: { filePath: string; onBack
               style={{
                 fontSize: 10,
                 padding: "1px 5px",
-                borderRadius: 3,
+                borderRadius: "var(--radius-xs)",
                 flexShrink: 0,
                 background:
                   skillGroup(skill) === "project"
@@ -179,7 +179,7 @@ export function SkillDetailPage({ filePath, onBack }: { filePath: string; onBack
               color: "var(--text-muted)",
               background: "var(--bg-selected)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               padding: "8px 10px",
             }}
           >
@@ -251,7 +251,7 @@ export function SkillDetailPage({ filePath, onBack }: { filePath: string; onBack
                       <div
                         style={{
                           border: "1px solid var(--border)",
-                          borderRadius: 6,
+                          borderRadius: "var(--radius-sm)",
                           overflow: "hidden",
                           background: "var(--bg)",
                         }}

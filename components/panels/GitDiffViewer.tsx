@@ -26,8 +26,8 @@ export function GitDiffViewer({ diff, truncated }: { diff: string; truncated: bo
       {truncated && (
         <div style={{
           margin: "4px 10px", padding: "6px 10px", fontSize: 11,
-          background: "rgba(234,179,8,0.12)", color: "#d97706",
-          border: "1px solid rgba(234,179,8,0.3)", borderRadius: 6,
+          background: "var(--warning-bg)", color: "var(--warning)",
+          border: "1px solid rgba(234,179,8,0.3)", borderRadius: "var(--radius-sm)",
         }}>
           {t("Diff truncated")}
         </div>

@@ -24,12 +24,12 @@ export function pillTriggerStyle(open: boolean): CSSProperties {
     boxSizing: "border-box",
     background: open ? "var(--bg-hover)" : "none",
     border: "1px solid var(--border)",
-    borderRadius: 9,
+    borderRadius: "var(--radius-md)",
     color: "var(--text-muted)",
     cursor: "pointer",
     fontSize: 13,
     fontFamily: "inherit",
-    transition: "background 0.12s, color 0.12s",
+    transition: "background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard)",
     overflow: "hidden",
   };
 }
@@ -42,8 +42,8 @@ export const dropdownPanelStyle: CSSProperties = {
   zIndex: 1100,
   background: "var(--bg)",
   border: "1px solid var(--border)",
-  borderRadius: 10,
-  boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+  borderRadius: "var(--radius-md)",
+  boxShadow: "var(--elevation-prominent)",
 };
 
 export function dropdownOptionStyle(active: boolean): CSSProperties {

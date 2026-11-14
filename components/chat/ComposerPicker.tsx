@@ -157,7 +157,7 @@ export function ComposerPicker({
           borderRadius: chatInputMetrics.toolbarRadius,
           color: snapshot.open ? "var(--text)" : "var(--text-muted)",
           cursor: "pointer",
-          transition: "background 0.12s, color 0.12s",
+          transition: "background var(--dur-base), color var(--dur-base)",
         }}
         onMouseEnter={(event) => {
           event.currentTarget.style.background = "var(--bg-hover)";
@@ -187,8 +187,8 @@ export function ComposerPicker({
           width: Math.max(0, Math.min(snapshot.view === "main" ? MAIN_WIDTH : SECONDARY_WIDTH, available.maxWidth)),
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 -4px 16px rgba(0,0,0,0.10), 0 10px 32px rgba(0,0,0,0.18)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
         }}
       >
         {snapshot.view === "main" ? (
@@ -254,10 +254,10 @@ function PickerRow({ index, action, active, opensView, label, onActivate, onHove
         display: "flex", alignItems: "center", gap: 10,
         width: "100%", padding: "9px 10px",
         background: active ? "var(--bg-selected)" : "none",
-        border: "none", borderRadius: 7,
+        border: "none", borderRadius: "var(--radius-sm)",
         color: active ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", textAlign: "left", fontSize: 12,
-        transition: "background 0.12s, color 0.12s",
+        transition: "background var(--dur-base), color var(--dur-base)",
       }}
     >
       <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 17, flexShrink: 0, color: "var(--accent)" }}>

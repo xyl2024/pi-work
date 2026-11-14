@@ -201,8 +201,8 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
       className="session-search-bar"
       style={{
         flexShrink: 0,
-        borderBottom: "1px solid var(--border, #333)",
-        background: "var(--bg-panel, #1a1a2e)",
+        borderBottom: "1px solid var(--border)",
+        background: "var(--bg-panel)",
       }}
     >
       <div
@@ -218,7 +218,7 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
           height="14"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="var(--text-muted, #888)"
+          stroke="var(--text-muted)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -238,13 +238,13 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             flex: 1,
             background: "none",
             border: "none",
-            color: "var(--text, #e0e0e0)",
+            color: "var(--text)",
             fontSize: 13,
             fontFamily: "inherit",
           }}
         />
         {status === "results" && (
-          <span style={{ fontSize: 11, color: "var(--text-dim, #666)", flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
             {selectedIndex + 1}/{totalMatches}
           </span>
         )}
@@ -260,9 +260,9 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
                 width: 22,
                 height: 22,
                 background: "none",
-                border: "1px solid var(--border, #444)",
-                borderRadius: 4,
-                color: selectedIndex === 0 ? "var(--text-dim, #444)" : "var(--text-muted, #888)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-xs)",
+                color: selectedIndex === 0 ? "var(--text-dim)" : "var(--text-muted)",
                 cursor: selectedIndex === 0 ? "default" : "pointer",
                 flexShrink: 0,
                 opacity: selectedIndex === 0 ? 0.4 : 1,
@@ -282,9 +282,9 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
                 width: 22,
                 height: 22,
                 background: "none",
-                border: "1px solid var(--border, #444)",
-                borderRadius: 4,
-                color: selectedIndex >= Math.min(results.length, MAX_LIST_ITEMS) - 1 ? "var(--text-dim, #444)" : "var(--text-muted, #888)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-xs)",
+                color: selectedIndex >= Math.min(results.length, MAX_LIST_ITEMS) - 1 ? "var(--text-dim)" : "var(--text-muted)",
                 cursor: selectedIndex >= Math.min(results.length, MAX_LIST_ITEMS) - 1 ? "default" : "pointer",
                 flexShrink: 0,
                 opacity: selectedIndex >= Math.min(results.length, MAX_LIST_ITEMS) - 1 ? 0.4 : 1,
@@ -301,8 +301,8 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             style={{
               width: 14,
               height: 14,
-              border: "2px solid var(--border, #333)",
-              borderTopColor: "var(--accent, #6c8cff)",
+              border: "2px solid var(--border)",
+              borderTopColor: "var(--accent)",
               borderRadius: "50%",
               animation: "spin 0.6s linear infinite",
               flexShrink: 0,
@@ -319,10 +319,10 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             height: 22,
             background: "none",
             border: "none",
-            color: "var(--text-dim, #666)",
+            color: "var(--text-dim)",
             cursor: "pointer",
             flexShrink: 0,
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
           }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -338,7 +338,7 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
           style={{
             maxHeight: 240,
             overflowY: "auto",
-            borderTop: "1px solid var(--border, #333)",
+            borderTop: "1px solid var(--border)",
           }}
         >
           {status === "no_results" && (
@@ -346,7 +346,7 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
               style={{
                 padding: "20px 16px",
                 textAlign: "center",
-                color: "var(--text-muted, #888)",
+                color: "var(--text-muted)",
                 fontSize: 13,
               }}
             >
@@ -356,17 +356,17 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
 
           {status === "error" && (
             <div style={{ padding: "16px", textAlign: "center" }}>
-              <div style={{ color: "var(--danger, #e0556a)", fontSize: 12, marginBottom: 8 }}>
+              <div style={{ color: "var(--danger)", fontSize: 12, marginBottom: 8 }}>
                 {errorMessage}
               </div>
               <button
                 onClick={() => performSearch(query)}
                 style={{
                   padding: "4px 12px",
-                  background: "var(--bg-hover, #333)",
-                  border: "1px solid var(--border, #444)",
-                  borderRadius: 4,
-                  color: "var(--text, #e0e0e0)",
+                  background: "var(--bg-hover)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-xs)",
+                  color: "var(--text)",
                   cursor: "pointer",
                   fontSize: 11,
                 }}
@@ -385,9 +385,9 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
               style={{
                 padding: "8px 16px",
                 cursor: "pointer",
-                background: idx === selectedIndex ? "var(--bg-selected, #2a2a3e)" : "transparent",
-                borderLeft: idx === selectedIndex ? "3px solid var(--accent, #6c8cff)" : "3px solid transparent",
-                transition: "background 0.08s",
+                background: idx === selectedIndex ? "var(--bg-selected)" : "transparent",
+                borderLeft: idx === selectedIndex ? "3px solid var(--accent)" : "3px solid transparent",
+                transition: "background var(--dur-fast)",
               }}
             >
               <div
@@ -405,15 +405,15 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
                     textTransform: "uppercase",
                     letterSpacing: "0.03em",
                     padding: "1px 5px",
-                    borderRadius: 3,
+                    borderRadius: "var(--radius-xs)",
                     background:
-                      result.role === "user" ? "rgba(59,130,246,0.15)" :
+                      result.role === "user" ? "var(--accent-soft)" :
                       result.role === "assistant" ? "rgba(139,92,246,0.15)" :
-                      "rgba(34,197,94,0.15)",
+                      "var(--success-bg)",
                     color:
-                      result.role === "user" ? "var(--accent, #6c8cff)" :
+                      result.role === "user" ? "var(--accent)" :
                       result.role === "assistant" ? "#a78bfa" :
-                      "#4ade80",
+                      "var(--success)",
                   }}
                 >
                   {roleLabel(result.role)}
@@ -422,7 +422,7 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
               <div
                 style={{
                   fontSize: 12,
-                  color: "var(--text-muted, #888)",
+                  color: "var(--text-muted)",
                   lineHeight: 1.4,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -439,7 +439,7 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
               style={{
                 padding: "8px 16px",
                 fontSize: 11,
-                color: "var(--text-dim, #666)",
+                color: "var(--text-dim)",
                 textAlign: "center",
               }}
             >

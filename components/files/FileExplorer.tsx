@@ -462,16 +462,16 @@ function TreeNode({
                 : "transparent",
           outline: dragOver ? "1px dashed var(--accent)" : "none",
           outlineOffset: -1,
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           userSelect: "none",
-          transition: "background 0.3s",
+          transition: "background var(--dur-slow)",
         }}
       >
         {node.isDir && (
           <svg
             width="10" height="10" viewBox="0 0 10 10" fill="none"
             stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform var(--dur-fast)" }}
           >
             <polyline points="3 2 7 5 3 8" />
           </svg>
@@ -506,15 +506,15 @@ function TreeNode({
               style={{
                 fontSize: 12,
                 padding: "1px 4px",
-                border: "1px solid " + (renameError ? "#f87171" : "var(--accent)"),
-                borderRadius: 3,
+                border: "1px solid " + (renameError ? "var(--error)" : "var(--accent)"),
+                borderRadius: "var(--radius-xs)",
                 background: "var(--bg)",
                 color: "var(--text)",
                 width: "100%",
               }}
             />
             {renameError && (
-              <span style={{ fontSize: 10, color: "#f87171" }}>{renameError}</span>
+              <span style={{ fontSize: 10, color: "var(--error)" }}>{renameError}</span>
             )}
           </span>
         ) : (
@@ -567,7 +567,7 @@ function TreeNode({
               height: 20,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-xs)",
               color: "var(--accent)",
               cursor: "pointer",
               fontSize: 11,
@@ -621,15 +621,15 @@ function TreeNode({
                   style={{
                     fontSize: 12,
                     padding: "1px 4px",
-                    border: "1px solid " + (createError ? "#f87171" : "var(--accent)"),
-                    borderRadius: 3,
+                    border: "1px solid " + (createError ? "var(--error)" : "var(--accent)"),
+                    borderRadius: "var(--radius-xs)",
                     background: "var(--bg)",
                     color: "var(--text)",
                     width: "100%",
                   }}
                 />
                 {createError && (
-                  <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "normal" }}>{createError}</span>
+                  <span style={{ fontSize: 10, color: "var(--error)", whiteSpace: "normal" }}>{createError}</span>
                 )}
               </span>
             </div>
@@ -768,7 +768,7 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
 
   if (error) {
     return (
-      <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>
+      <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--error)" }}>
         {error}
       </div>
     );

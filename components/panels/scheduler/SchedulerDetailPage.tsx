@@ -309,7 +309,7 @@ function Disclosure({
           width={12}
           height={12}
           aria-hidden="true"
-          style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s" }}
+          style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform var(--dur-base) var(--ease-standard)" }}
         />
         {label}
       </button>
@@ -393,7 +393,7 @@ const backButtonStyle = {
   padding: "3px 8px 3px 5px",
   background: "transparent",
   border: "1px solid var(--border)",
-  borderRadius: 5,
+  borderRadius: "var(--radius-sm)",
   color: "var(--text-muted)",
   fontSize: 12,
   cursor: "pointer",
@@ -409,7 +409,7 @@ const actionButtonStyle = {
   fontSize: 12,
   background: "var(--bg)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
   color: "var(--text-muted)",
   cursor: "pointer",
   fontFamily: "inherit",
@@ -424,7 +424,7 @@ const iconButtonStyle = {
   padding: 0,
   background: "var(--bg)",
   border: "1px solid var(--border)",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
   cursor: "pointer",
   fontFamily: "inherit",
 } as const;

@@ -228,7 +228,7 @@ export function TranslatePanel() {
               maxWidth: 240, overflow: "hidden",
               background: modelDropdownOpen ? "var(--bg-hover)" : "var(--bg)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
               cursor: isStreaming ? "not-allowed" : "pointer",
               fontSize: 12,
@@ -256,8 +256,8 @@ export function TranslatePanel() {
               zIndex: 500,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 10,
-              boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+              borderRadius: "var(--radius-md)",
+              boxShadow: "var(--elevation-prominent)",
               width: "max-content",
               minWidth: modelDropdownRect?.width ?? 0,
             }}
@@ -324,13 +324,13 @@ export function TranslatePanel() {
               minWidth: 96,
               background: "var(--bg)",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
               cursor: isStreaming ? "not-allowed" : "pointer",
               fontSize: 12, fontWeight: 500,
               opacity: isStreaming ? 0.5 : 1,
               overflow: "hidden",
-              transition: "background-color 0.15s, border-color 0.15s, transform 0.1s",
+              transition: "background-color var(--dur-base) var(--ease-standard), border-color var(--dur-base) var(--ease-standard), transform var(--dur-fast) var(--ease-standard)",
             }}
             onMouseEnter={(e) => {
               if (isStreaming) return;
@@ -379,7 +379,7 @@ export function TranslatePanel() {
               width: 28, padding: 0, height: 28,
               background: isStreaming ? "var(--bg)" : "var(--accent)",
               color: isStreaming ? "var(--text)" : "var(--accent-fg, #fff)",
-              border: "1px solid var(--border)", borderRadius: 6,
+              border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
               cursor: (!isStreaming && (!input.trim() || !model)) ? "not-allowed" : "pointer",
               fontSize: 12, fontWeight: 600,
               opacity: (!isStreaming && (!input.trim() || !model)) ? 0.5 : 1,
@@ -410,9 +410,9 @@ export function TranslatePanel() {
               width: 28, padding: 0, height: 28,
               background: previewOpen ? "var(--bg-hover)" : "var(--bg)",
               color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: 6,
+              border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
               cursor: "pointer", fontSize: 12,
-              transition: "gap 0.15s",
+              transition: "gap var(--dur-base) var(--ease-standard)",
             }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -451,7 +451,7 @@ export function TranslatePanel() {
                   width: 20, height: 20, padding: 0,
                   background: "transparent",
                   color: "var(--text-dim)",
-                  border: "none", borderRadius: 4,
+                  border: "none", borderRadius: "var(--radius-xs)",
                   cursor: "pointer",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -470,7 +470,7 @@ export function TranslatePanel() {
             background: "transparent",
             color: "var(--text)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             fontFamily: "var(--font-mono)",
             fontSize: 11,
             lineHeight: 1.5,
@@ -510,7 +510,7 @@ export function TranslatePanel() {
             background: "transparent",
             color: "var(--text)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             lineHeight: 1.5,
@@ -537,7 +537,7 @@ export function TranslatePanel() {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 24, height: 20, padding: 0,
                   background: "transparent", color: "var(--text-muted)",
-                  border: "none", borderRadius: 4,
+                  border: "none", borderRadius: "var(--radius-xs)",
                   cursor: !output ? "not-allowed" : "pointer",
                   opacity: !output ? 0.5 : 1,
                 }}
@@ -559,7 +559,7 @@ export function TranslatePanel() {
                     width: 18, height: 18, padding: 0,
                     background: "transparent",
                     border: "1px solid var(--border)",
-                    borderRadius: 4,
+                    borderRadius: "var(--radius-xs)",
                     color: "var(--text-muted)",
                     cursor: "pointer",
                   }}
@@ -580,9 +580,9 @@ export function TranslatePanel() {
             flex: 1, minHeight: 0, overflowY: "auto",
             padding: "10px 12px",
             background: "transparent",
-            color: error ? "#ef4444" : "var(--text)",
+            color: error ? "var(--error)" : "var(--text)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             fontSize: 13, lineHeight: 1.6,
             whiteSpace: "pre-wrap", wordBreak: "break-word",
             fontFamily: "var(--font-mono)",

@@ -10,10 +10,10 @@ export function HumanCallBadge() {
         fontSize: 10,
         fontWeight: 600,
         padding: "1px 6px",
-        borderRadius: 3,
+        borderRadius: "var(--radius-xs)",
         flexShrink: 0,
         whiteSpace: "nowrap",
-        background: "rgba(120,120,120,0.12)",
+        background: "var(--bg-subtle)",
         color: "var(--text-dim)",
       }}
     >

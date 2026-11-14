@@ -85,7 +85,7 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
         cursor: disabled || phase === "transcribing" ? "default" : "pointer",
         opacity: disabled ? 0.6 : 1,
         overflow: "hidden",
-        transition: "background 0.15s, color 0.15s",
+        transition: "background var(--dur-base), color var(--dur-base)",
       }}
     >
       {phase === "idle" && <MicIcon />}

@@ -172,10 +172,10 @@ export function QuestionCard({
                     fontFamily: "inherit",
                     background: "var(--bg)",
                     border: "1px solid var(--border)",
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     color: "var(--text)",
                     outline: "none",
-                    transition: "border-color 0.12s ease",
+                    transition: "border-color var(--dur-base) var(--ease-standard)",
                   }}
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "var(--accent)";

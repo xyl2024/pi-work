@@ -93,11 +93,11 @@ export function CwdIconPicker({
         style={{
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
+          borderRadius: "var(--radius-md)",
           width: 420,
           maxWidth: "100%",
           maxHeight: "80vh",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -114,7 +114,7 @@ export function CwdIconPicker({
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 24, height: 24, padding: 0,
               background: "transparent", border: "none",
-              color: "var(--text-muted)", cursor: "pointer", borderRadius: 6,
+              color: "var(--text-muted)", cursor: "pointer", borderRadius: "var(--radius-sm)",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -140,12 +140,12 @@ export function CwdIconPicker({
                 padding: "5px 14px",
                 background: tab === key ? "var(--bg-selected)" : "transparent",
                 border: tab === key ? "1px solid color-mix(in srgb, var(--accent) 40%, transparent)" : "1px solid transparent",
-                borderRadius: 7,
+                borderRadius: "var(--radius-sm)",
                 color: tab === key ? "var(--accent)" : "var(--text-muted)",
                 cursor: "pointer",
                 fontSize: 12,
                 fontWeight: tab === key ? 600 : 400,
-                transition: "background 0.12s, color 0.12s",
+                transition: "background var(--dur-base), color var(--dur-base)",
               }}
               onMouseEnter={(e) => { if (tab !== key) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
               onMouseLeave={(e) => { if (tab !== key) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; } }}
@@ -175,7 +175,7 @@ export function CwdIconPicker({
                 padding: "6px 10px 6px 26px",
                 background: "var(--bg-input, var(--bg))",
                 border: "1px solid var(--border)",
-                borderRadius: 7,
+                borderRadius: "var(--radius-sm)",
                 color: "var(--text)",
                 fontSize: 12,
                 outline: "none",
@@ -192,7 +192,7 @@ export function CwdIconPicker({
               width: "100%", boxSizing: "border-box",
               padding: "8px 10px",
               background: current === null ? "var(--bg-selected)" : "transparent",
-              border: "none", borderRadius: 7,
+              border: "none", borderRadius: "var(--radius-sm)",
               color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
             }}
           >
@@ -224,10 +224,10 @@ export function CwdIconPicker({
                       height: 40, padding: 0,
                       background: selected ? "var(--bg-selected)" : "transparent",
                       border: selected ? "1px solid var(--accent)" : "1px solid transparent",
-                      borderRadius: 7,
+                      borderRadius: "var(--radius-sm)",
                       color: selected ? "var(--accent)" : "var(--text-muted)",
                       cursor: "pointer",
-                      transition: "background 0.12s, color 0.12s",
+                      transition: "background var(--dur-base), color var(--dur-base)",
                     }}
                     onMouseEnter={(e) => { if (!selected) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
                     onMouseLeave={(e) => { if (!selected) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; } }}
@@ -253,10 +253,10 @@ export function CwdIconPicker({
                       height: 40, padding: 0,
                       background: selected ? "var(--bg-selected)" : "transparent",
                       border: selected ? "1px solid var(--accent)" : "1px solid transparent",
-                      borderRadius: 7,
+                      borderRadius: "var(--radius-sm)",
                       cursor: "pointer",
                       fontSize: 20,
-                      transition: "background 0.12s",
+                      transition: "background var(--dur-base)",
                     }}
                     onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                     onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}

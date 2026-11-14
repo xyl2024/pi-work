@@ -108,7 +108,7 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
           aria-label={t("Back")}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24,
-            padding: 0, background: "none", border: "none", borderRadius: 6,
+            padding: 0, background: "none", border: "none", borderRadius: "var(--radius-sm)",
             color: "var(--text-muted)", cursor: "pointer",
           }}
         >
@@ -156,7 +156,7 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", padding: "7px 8px",
                     background: active ? "var(--bg-selected)" : "none",
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     color: active ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer", fontSize: 12,
                   }}
@@ -195,7 +195,7 @@ export function FilePickerView({ picker, cwd, onInsertText }: ComposerPickerView
             style={{
               flexShrink: 0, padding: "4px 9px", fontSize: 11, fontWeight: 600,
               color: "var(--bg-panel)", background: "var(--accent)",
-              border: "none", borderRadius: 6, cursor: "pointer",
+              border: "none", borderRadius: "var(--radius-sm)", cursor: "pointer",
             }}
           >
             {t("Add {n} items", { n: selectedCount })}

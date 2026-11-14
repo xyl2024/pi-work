@@ -128,8 +128,8 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
           maxHeight: "calc(100vh - 64px)",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 12,
-          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -198,11 +198,11 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
               justifyContent: "center",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: exporting ? "var(--text-dim)" : "var(--text-muted)",
               cursor: exporting ? "wait" : "pointer",
               flexShrink: 0,
-              transition: "background 0.12s",
+              transition: "background var(--dur-base)",
             }}
           >
             {exporting ? (
@@ -256,12 +256,12 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
               justifyContent: "center",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text-muted)",
               cursor: "pointer",
               fontSize: 14,
               flexShrink: 0,
-              transition: "background 0.12s",
+              transition: "background var(--dur-base)",
             }}
           >
             ✕
@@ -352,8 +352,8 @@ function CompactionSummaryView({
           maxHeight: "calc(100vh - 64px)",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 12,
-          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -420,12 +420,12 @@ function CompactionSummaryView({
               justifyContent: "center",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text-muted)",
               cursor: "pointer",
               fontSize: 14,
               flexShrink: 0,
-              transition: "background 0.12s",
+              transition: "background var(--dur-base)",
             }}
           >
             ✕
@@ -460,7 +460,7 @@ function CompactionSummaryView({
                       style={{
                         background: "var(--bg-selected)",
                         padding: "10px 12px",
-                        borderRadius: 6,
+                        borderRadius: "var(--radius-sm)",
                         overflow: "auto",
                         fontFamily: "var(--font-mono)",
                         fontSize: 12,
@@ -477,7 +477,7 @@ function CompactionSummaryView({
                     style={{
                       background: "var(--bg-selected)",
                       padding: "1px 4px",
-                      borderRadius: 3,
+                      borderRadius: "var(--radius-xs)",
                       fontFamily: "var(--font-mono)",
                       fontSize: "0.9em",
                       color: "var(--accent)",
@@ -499,7 +499,7 @@ function CompactionSummaryView({
               gap: 4,
               padding: "10px 12px",
               background: "var(--bg-subtle)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               fontSize: 11,
               color: "var(--text-dim)",
               fontFamily: "var(--font-mono)",

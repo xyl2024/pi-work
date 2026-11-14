@@ -85,7 +85,7 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
         <div
           style={{
             fontSize: 11,
-            color: "#f87171",
+            color: "var(--error)",
             padding: "4px 8px",
             borderTop: "1px solid var(--border)",
             background: "var(--bg-panel)",

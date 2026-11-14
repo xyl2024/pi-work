@@ -269,7 +269,7 @@ useEffect(() => {
 					flexDirection: "column",
 					alignItems: "center",
 					justifyContent: "center",
-					color: "#f87171",
+					color: "var(--error)",
 					fontSize: 13,
 					gap: 12,
 					padding: 24,
@@ -286,7 +286,7 @@ useEffect(() => {
 						padding: "4px 12px",
 						background: "var(--bg-hover)",
 						border: "1px solid var(--border)",
-						borderRadius: 5,
+						borderRadius: "var(--radius-sm)",
 						color: "var(--text)",
 						cursor: "pointer",
 						fontSize: 12,
@@ -306,7 +306,7 @@ useEffect(() => {
 					display: "flex",
 					alignItems: "center",
 					justifyContent: "center",
-					color: "#f87171",
+					color: "var(--error)",
 					fontSize: 13,
 				}}
 			>
@@ -346,7 +346,7 @@ useEffect(() => {
 					style={{
 						padding: "1px 6px",
 						background: "var(--bg-panel)",
-						borderRadius: 3,
+						borderRadius: "var(--radius-xs)",
 						fontSize: 10,
 					}}
 				>
@@ -357,7 +357,7 @@ useEffect(() => {
 
 				{dirty && (
 					<Tooltip content={t("Unsaved changes")}>
-						<span style={{ color: "#f87171", fontSize: 14 }}>●</span>
+						<span style={{ color: "var(--error)", fontSize: 14 }}>●</span>
 					</Tooltip>
 				)}
 
@@ -392,7 +392,7 @@ useEffect(() => {
 				</Tooltip>
 
 				{degraded && (
-					<span style={{ color: "#fbbf24", fontSize: 10 }}>
+					<span style={{ color: "var(--warning)", fontSize: 10 }}>
 						{t("File opened read-only because it is very large")}
 					</span>
 				)}
@@ -426,7 +426,7 @@ function SaveButton({
 		padding: "2px 10px",
 		fontSize: 11,
 		border: "1px solid var(--border)",
-		borderRadius: 5,
+		borderRadius: "var(--radius-sm)",
 		cursor: "pointer",
 		display: "flex",
 		alignItems: "center",
@@ -452,7 +452,7 @@ function SaveButton({
 	}
 	if (state === "saved") {
 		return (
-			<button style={{ ...baseStyle, background: "#16a34a", color: "white", borderColor: "#16a34a" }} disabled>
+			<button style={{ ...baseStyle, background: "var(--success)", color: "white", borderColor: "var(--success)" }} disabled>
 				<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
 					<polyline points="5 12 10 17 19 8" />
 				</svg>
@@ -465,7 +465,7 @@ function SaveButton({
 			<Tooltip content={error ?? t("Save failed")}>
 				<button
 					onClick={onClick}
-					style={{ ...baseStyle, background: "#7f1d1d", color: "white", borderColor: "#7f1d1d" }}
+					style={{ ...baseStyle, background: "var(--error)", color: "white", borderColor: "var(--error)" }}
 				>
 					{t("Save failed")}
 				</button>

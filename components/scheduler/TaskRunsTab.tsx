@@ -97,7 +97,7 @@ export function TaskRunsTab({
                   borderColor: active ? "var(--accent)" : "var(--border)",
                   background: active ? "var(--bg-selected)" : "transparent",
                   color: active ? "var(--accent)" : "var(--text-muted)",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   display: "inline-flex",
@@ -192,7 +192,7 @@ function RunRow({
         height: 38,
         padding: "0 10px",
         margin: "0 10px",
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         cursor: "pointer",
         background: expanded ? "var(--bg-selected)" : "transparent",
         borderBottom: expanded ? "none" : "1px solid var(--border)",
@@ -225,7 +225,7 @@ function RunRow({
                 padding: "2px 6px",
                 background: "var(--warning-bg)",
                 color: "var(--warning)",
-                borderRadius: 999,
+                borderRadius: "var(--radius-pill)",
                 fontSize: 12,
                 fontWeight: 600,
                 lineHeight: 1.4,
@@ -250,7 +250,7 @@ function RunRow({
               style={{
                 background: "transparent",
                 border: "none",
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 color: "var(--text-muted)",
                 padding: "2px 6px",
                 cursor: "pointer",
@@ -270,7 +270,7 @@ function RunRow({
         style={{
           color: expanded ? "var(--accent)" : "var(--text-dim)",
           transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
-          transition: "transform 0.15s",
+          transition: "transform var(--dur-base) var(--ease-standard)",
         }}
       />
     </div>
@@ -298,7 +298,7 @@ function RunOutput({ run }: { run: TaskRun }) {
             background:
               run.status === "timeout" || run.status === "interrupted" ? "var(--warning-bg)" : "var(--error-bg)",
             padding: "6px 10px",
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
             marginBottom: run.replyText?.trim() ? 10 : 0,
             wordBreak: "break-word",
           }}
@@ -332,5 +332,5 @@ const outputBodyStyle: CSSProperties = {
   boxSizing: "border-box",
   margin: "0 10px 8px",
   padding: "10px 12px",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
 };

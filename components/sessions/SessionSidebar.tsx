@@ -172,7 +172,7 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
         width: "100%",
         height: SESSION_ROW_HEIGHT_PX,
         padding: "0 10px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         background: restBackground,
         border: "none",
         color: "var(--text)",
@@ -180,11 +180,11 @@ function SidebarNavButton({ onClick, active = false, badge, children }: { onClic
         fontSize: 12,
         fontWeight: 500,
         flexShrink: 0,
-        transition: "background 0.1s, box-shadow 0.15s",
+        transition: "background var(--dur-fast), box-shadow var(--dur-base)",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = "var(--bg-hover)";
-        e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+        e.currentTarget.style.boxShadow = "var(--elevation-1)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = restBackground;
@@ -791,10 +791,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                   color: "var(--text-muted)",
                   cursor: "pointer",
                   width: 32, height: 32,
-                  borderRadius: 7,
+                  borderRadius: "var(--radius-sm)",
                   padding: 0,
                   flexShrink: 0,
-                  transition: "color 0.12s, background 0.12s",
+                  transition: "color var(--dur-base), background var(--dur-base)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.color = "var(--text)";
@@ -847,7 +847,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                       flexShrink: 0,
                       color: "var(--text-muted)",
                       transform: moreExpanded ? "rotate(-90deg)" : "none",
-                      transition: "transform 0.12s",
+                      transition: "transform var(--dur-base)",
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -875,8 +875,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                 background: "var(--bg-panel)",
                 color: "var(--text)",
                 border: "1px solid var(--border)",
-                borderRadius: 8,
-                boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
+                borderRadius: "var(--radius-sm)",
+                boxShadow: "var(--elevation-prominent)",
               }}
             >
               {navLayout.overflow.map((kind) => renderMainViewButton(kind, closeMore))}
@@ -910,7 +910,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 26, height: 26, padding: 0, marginRight: 4,
-                border: "none", borderRadius: 5,
+                border: "none", borderRadius: "var(--radius-sm)",
                 cursor: todaySessions === null ? "default" : "pointer",
                 opacity: todaySessions === null ? 0.45 : 1,
                 color: todayOnly ? "var(--accent)" : "var(--text-dim)",
@@ -975,14 +975,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 26, height: 26, padding: 0, marginRight: 4,
-                  background: explorerCollapseDone ? "rgba(74,222,128,0.18)" : "none",
+                  background: explorerCollapseDone ? "var(--success-bg)" : "none",
                   border: "none",
-                  color: explorerCollapseDone ? "#4ade80" : "var(--text-dim)",
+                  color: explorerCollapseDone ? "var(--success)" : "var(--text-dim)",
                   opacity: explorerExpandedCount === 0 && !explorerCollapseDone ? 0.45 : 1,
                   cursor: explorerExpandedCount === 0 ? "default" : "pointer",
-                  borderRadius: 5,
+                  borderRadius: "var(--radius-sm)",
                   flexShrink: 0,
-                  transition: "color 0.3s, background 0.3s, opacity 0.3s",
+                  transition: "color var(--dur-slow), background var(--dur-slow), opacity var(--dur-slow)",
                 }}
                 onMouseEnter={(e) => { if (explorerExpandedCount === 0) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { if (explorerExpandedCount === 0) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}

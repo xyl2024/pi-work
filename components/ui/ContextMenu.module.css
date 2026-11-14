@@ -1,0 +1,49 @@
+.menu {
+  position: fixed;
+  z-index: 10001;
+  min-width: 180px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--elevation-prominent);
+}
+
+.separator {
+  height: 1px;
+  margin: 4px;
+  background: var(--border-soft);
+}
+
+.row {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-12);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--dur-fast) var(--ease-standard);
+}
+
+.rowDisabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.rowDestructive {
+  color: var(--error);
+}
+
+@media (hover: hover) {
+  .row:not(.rowDisabled):hover {
+    background: var(--bg-hover);
+  }
+
+  .rowDestructive:not(.rowDisabled):hover {
+    background: var(--error-bg);
+  }
+}

@@ -152,7 +152,7 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
           strokeDasharray={ring.circumference}
           strokeDashoffset={ring.dashOffset}
           transform="rotate(-90 8 8)"
-          style={{ transition: "stroke-dashoffset 0.25s ease, stroke 0.2s ease" }}
+          style={{ transition: "stroke-dashoffset var(--dur-slow) var(--ease-standard), stroke var(--dur-base) var(--ease-standard)" }}
         />
       </svg>
       {!compact && (

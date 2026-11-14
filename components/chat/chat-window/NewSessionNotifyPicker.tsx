@@ -79,7 +79,7 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
             background: open ? "var(--bg-hover)" : "none",
             color: selected ? "var(--accent)" : "var(--text-muted)",
             cursor: "pointer",
-            transition: "background 0.12s, color 0.12s",
+            transition: "background var(--dur-base), color var(--dur-base)",
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "var(--bg-hover)";
@@ -105,8 +105,8 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
           zIndex: 120,
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           minWidth: 220,
           maxWidth: 320,
         }}
@@ -117,7 +117,7 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
             onClick={() => { onChange(null); setOpen(false); }}
             style={{
               display: "flex", width: "100%", alignItems: "center", gap: 8,
-              padding: "8px 10px", border: "none", borderRadius: 6,
+              padding: "8px 10px", border: "none", borderRadius: "var(--radius-sm)",
               background: value === null ? "var(--bg-selected)" : "transparent",
               color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5,
             }}
@@ -138,9 +138,9 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
               const isSelected = value === channel.id;
               const statusColor =
                 channel.status === "connected" ? "var(--accent)"
-                  : channel.status === "expired" ? "#ef4444"
+                  : channel.status === "expired" ? "var(--error)"
                     : channel.status === "disabled" ? "var(--text-muted)"
-                      : "#f59e0b";
+                      : "var(--warning)";
               return (
                 <button
                   key={channel.id}
@@ -149,13 +149,13 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
                   onClick={() => { onChange(channel.id); setOpen(false); }}
                   style={{
                     display: "flex", width: "100%", alignItems: "center", gap: 8,
-                    padding: "8px 10px", border: "none", borderRadius: 6,
+                    padding: "8px 10px", border: "none", borderRadius: "var(--radius-sm)",
                     background: isSelected ? "var(--bg-selected)" : "transparent",
                     color: "var(--text)", cursor: selectable ? "pointer" : "not-allowed",
                     textAlign: "left", fontSize: 12.5, opacity: selectable ? 1 : 0.5,
                   }}
                 >
-                  <span style={{ width: 7, height: 7, borderRadius: 4, background: statusColor, flexShrink: 0 }} />
+                  <span style={{ width: 7, height: 7, borderRadius: "var(--radius-xs)", background: statusColor, flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {channel.name}
                   </span>

@@ -182,7 +182,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
 const pageBtnStyle = (active: boolean, disabled: boolean): CSSProperties => ({
   minWidth: 26,
   padding: "3px 6px",
-  borderRadius: 6,
+  borderRadius: "var(--radius-sm)",
   border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
   cursor: disabled ? "default" : "pointer",
   background: active ? "var(--accent)" : "transparent",
@@ -284,7 +284,7 @@ function Pagination({
           style={{
             width: 44,
             padding: "3px 6px",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             border: "1px solid var(--border)",
             background: "transparent",
             color: "var(--text)",
@@ -338,7 +338,7 @@ function Toolbar({
             style={{
               padding: "3px 10px",
               fontSize: 12,
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               border: "1px solid var(--border)",
               cursor: "pointer",
               background: filter === o.value ? "var(--accent)" : "transparent",
@@ -365,7 +365,7 @@ function Toolbar({
             style={{
               padding: "3px 10px",
               fontSize: 12,
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               border: "1px solid var(--border)",
               cursor: "pointer",
               background: sourceFilter === value ? "var(--accent)" : "transparent",
@@ -389,7 +389,7 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent: b
       style={{
         flex: 1,
         padding: "10px 14px",
-        borderRadius: 10,
+        borderRadius: "var(--radius-md)",
         border: "1px solid var(--border)",
         background: "transparent",
       }}
@@ -400,7 +400,7 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent: b
           fontSize: 20,
           fontWeight: 600,
           fontFamily: "var(--font-mono)",
-          color: accent ? "var(--danger, #e5484d)" : "var(--text)",
+          color: accent ? "var(--danger)" : "var(--text)",
         }}
       >
         {value}
@@ -431,7 +431,7 @@ function CallList({
           <div
             key={row.id}
             style={{
-              borderRadius: 10,
+              borderRadius: "var(--radius-md)",
               border: "1px solid var(--border)",
               background: "transparent",
               overflow: "hidden",
@@ -456,13 +456,13 @@ function CallList({
                 style={{
                   minWidth: 34,
                   padding: "2px 6px",
-                  borderRadius: 5,
+                  borderRadius: "var(--radius-sm)",
                   fontSize: 12,
                   fontFamily: "var(--font-mono)",
                   textAlign: "center",
                   color: "#fff",
                   background:
-                    row.status === null ? "var(--danger, #e5484d)" : row.status >= 500 ? "var(--danger, #e5484d)" : row.status >= 400 ? "#b7791f" : "#2f9e44",
+                    row.status === null ? "var(--danger)" : row.status >= 500 ? "var(--danger)" : row.status >= 400 ? "var(--warning)" : "var(--success)",
                 }}
               >
                 {statusLabel(row.status)}
@@ -517,7 +517,7 @@ function DetailView({ row }: { row: ProviderCall }) {
       <Section title={`${t("Request URL")}`} body={row.url} mono />
 
       {row.error && (
-        <div style={{ color: "var(--danger, #e5484d)", background: "rgba(229,72,77,0.08)", border: "1px solid rgba(229,72,77,0.3)", borderRadius: 8, padding: "8px 10px" }}>
+        <div style={{ color: "var(--danger)", background: "var(--error-bg)", border: "1px solid rgba(229,72,77,0.3)", borderRadius: "var(--radius-sm)", padding: "8px 10px" }}>
           {row.error}
         </div>
       )}
@@ -550,10 +550,10 @@ function MetaTag({ label, danger }: { label: string; danger?: boolean }) {
     <span
       style={{
         padding: "1px 7px",
-        borderRadius: 5,
+        borderRadius: "var(--radius-sm)",
         border: "1px solid var(--border)",
         background: "transparent",
-        color: danger ? "var(--danger, #e5484d)" : "var(--text-muted)",
+        color: danger ? "var(--danger)" : "var(--text-muted)",
       }}
     >
       {label}
@@ -587,7 +587,7 @@ function Section({ title, body, mono }: { title: string; body: string; mono?: bo
               display: "flex",
               alignItems: "center",
               padding: "2px 5px",
-              borderRadius: 5,
+              borderRadius: "var(--radius-sm)",
               border: "none",
               background: "transparent",
               color: "var(--text-muted)",
@@ -612,7 +612,7 @@ function Section({ title, body, mono }: { title: string; body: string; mono?: bo
         style={{
           margin: 0,
           padding: "8px 10px",
-          borderRadius: 8,
+          borderRadius: "var(--radius-sm)",
           background: "transparent",
           border: "1px solid var(--border)",
           fontSize: 11,

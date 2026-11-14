@@ -56,7 +56,7 @@ export function SkillsInstallGuide() {
           background: "var(--accent)",
           color: "#fff",
           border: "none",
-          borderRadius: 6,
+          borderRadius: "var(--radius-sm)",
           padding: "7px 14px",
           fontSize: 13,
           fontWeight: 600,

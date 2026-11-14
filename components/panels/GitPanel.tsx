@@ -139,7 +139,7 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
             style={{
               maxWidth: 120, fontSize: 11, padding: "2px 4px",
               background: "var(--bg)", color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: 5,
+              border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
               cursor: (branchLoading || !branches) ? "not-allowed" : "pointer",
             }}
           >
@@ -155,7 +155,7 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
             key={m}
             onClick={() => setMode(m)}
             style={{
-              padding: "3px 10px", fontSize: 11, borderRadius: 6,
+              padding: "3px 10px", fontSize: 11, borderRadius: "var(--radius-sm)",
               border: "1px solid var(--border)",
               background: mode === m ? "var(--bg-selected)" : "var(--bg)",
               color: mode === m ? "var(--text)" : "var(--text-muted)",
@@ -174,7 +174,7 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
           style={{
             background: "var(--bg)",
             border: "1px solid var(--border)",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             opacity: (!cwd || busy) ? 0.5 : 1,
             cursor: (!cwd || busy) ? "not-allowed" : "pointer",
           }}
@@ -192,13 +192,13 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
         </div>
       ) : error ? (
         <div style={{ padding: "24px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 12, color: "#f87171", textAlign: "center" }}>{error}</div>
+          <div style={{ fontSize: 12, color: "var(--error)", textAlign: "center" }}>{error}</div>
           <button
             onClick={() => void loadStatus()}
             style={{
               padding: "4px 12px", fontSize: 12,
               background: "var(--bg)", color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer",
+              border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer",
             }}
           >
             {t("Retry")}

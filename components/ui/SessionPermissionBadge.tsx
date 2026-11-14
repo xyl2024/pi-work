@@ -56,7 +56,7 @@ export function SessionPermissionBadge({
           width: 15,
           height: 15,
           flexShrink: 0,
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           background: `color-mix(in srgb, ${color} 16%, transparent)`,
           color,
         }}

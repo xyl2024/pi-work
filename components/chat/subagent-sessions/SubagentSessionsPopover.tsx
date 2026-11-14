@@ -52,10 +52,10 @@ export function SubagentSessionsPopover({
             style={{
               flexShrink: 0,
               padding: "2px 8px",
-              border: "1px solid rgba(239,68,68,0.35)",
-              borderRadius: 4,
+              border: "1px solid color-mix(in srgb, var(--error) 35%, transparent)",
+              borderRadius: "var(--radius-xs)",
               background: "transparent",
-              color: stoppingAll ? "var(--text-dim)" : "#ef4444",
+              color: stoppingAll ? "var(--text-dim)" : "var(--error)",
               font: "inherit",
               fontSize: 10,
               fontWeight: 600,

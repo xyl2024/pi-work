@@ -69,9 +69,9 @@ export function ConversationTreeCard({
         width,
         height,
         background,
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         cursor: disabled ? "not-allowed" : "pointer",
-        transition: "background 0.12s",
+        transition: "background var(--dur-base)",
         color: "var(--text)",
         overflow: "hidden",
       }}
@@ -178,11 +178,11 @@ export function ConversationTreeCard({
           background: isUser ? "rgba(99,102,241,0.4)" : "var(--bg-hover)",
           color: isUser ? "#c7d2fe" : "var(--text)",
           border: "none",
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           cursor: disabled ? "not-allowed" : "pointer",
           opacity: hovered && !disabled ? 1 : 0,
           pointerEvents: hovered && !disabled ? "auto" : "none",
-          transition: "opacity 0.12s, background 0.12s, color 0.12s",
+          transition: "opacity var(--dur-base), background var(--dur-base), color var(--dur-base)",
           zIndex: 2,
         }}
       >

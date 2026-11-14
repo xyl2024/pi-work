@@ -46,7 +46,9 @@ export function AnimatedPopover({ open, style, maxHeight, role, inertWhenClosed 
         overflow: !open || !settled ? "hidden" : "auto",
         opacity: open ? 1 : 0,
         pointerEvents: open ? "auto" : "none",
-        transition: allowAnim ? "height 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease" : "none",
+        transition: allowAnim
+          ? "height var(--dur-slow) var(--ease-standard), opacity var(--dur-base) var(--ease-standard)"
+          : "none",
       }}
     >
       <div ref={contentRef} style={{ display: "flex", flexDirection: "column" }}>

@@ -42,8 +42,8 @@ export function RefreshIconButton({
     timerRef.current = setTimeout(() => setDone(false), doneMs);
   }, [disabled, onClick, doneMs]);
 
-  const finalColor = done ? "#4ade80" : "var(--text-dim)";
-  const finalBg = done ? "rgba(74,222,128,0.18)" : "none";
+  const finalColor = done ? "var(--success)" : "var(--text-dim)";
+  const finalBg = done ? "var(--success-bg)" : "none";
   const finalCursor = disabled ? "default" : "pointer";
 
   return (
@@ -60,9 +60,9 @@ export function RefreshIconButton({
           background: finalBg, border: "none",
           color: finalColor,
           cursor: finalCursor,
-          borderRadius: 5,
+          borderRadius: "var(--radius-sm)",
           flexShrink: 0,
-          transition: "color 0.3s, background 0.3s",
+          transition: "color var(--dur-slow), background var(--dur-slow)",
           ...style,
         }}
         onMouseEnter={(e) => {

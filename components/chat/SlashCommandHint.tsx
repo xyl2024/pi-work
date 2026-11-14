@@ -15,7 +15,7 @@ export function SlashCommandHint({ resource, onRemove }: {
         display: "inline-flex", alignItems: "center", gap: 6,
         maxWidth: "100%", padding: "4px 8px",
         background: "var(--bg-panel)", border: "1px solid var(--border)",
-        borderRadius: 7, color: "var(--text-muted)", fontSize: 12,
+        borderRadius: "var(--radius-sm)", color: "var(--text-muted)", fontSize: 12,
       }}>
         <span style={{
           color: "#059669",

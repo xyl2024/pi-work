@@ -140,9 +140,9 @@ export function TextSelectionToolbar({ state, onQuote, onHide, actions = DEFAULT
         background: "var(--bg-panel)",
         color: "var(--text)",
         border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.08)",
-        animation: "selection-toolbar-in 0.12s ease-out forwards",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--elevation-prominent)",
+        animation: "selection-toolbar-in var(--dur-base) var(--ease-standard) forwards",
         transformOrigin: "bottom center",
       } as React.CSSProperties}
       onMouseDown={(e) => {
@@ -163,11 +163,11 @@ export function TextSelectionToolbar({ state, onQuote, onHide, actions = DEFAULT
             background: "transparent",
             color: "var(--text)",
             border: "none",
-            borderRadius: 6,
+            borderRadius: "var(--radius-sm)",
             cursor: "pointer",
             fontSize: 12,
             lineHeight: 1,
-            transition: "background-color 0.12s",
+            transition: "background-color var(--dur-base)",
           } as React.CSSProperties}
           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}

@@ -42,9 +42,9 @@ export function SlashCommandMenu({
           >
             <span style={{
               alignSelf: "start", justifySelf: "start",
-              padding: "2px 6px", borderRadius: 5,
-              background: item.source === "skill" ? "rgba(5,150,105,0.10)" : "rgba(234,179,8,0.10)",
-              color: item.source === "skill" ? "#059669" : "rgba(180,130,0,0.9)",
+              padding: "2px 6px", borderRadius: "var(--radius-sm)",
+              background: item.source === "skill" ? "rgba(5,150,105,0.10)" : "color-mix(in srgb, var(--warning) 10%, transparent)",
+              color: item.source === "skill" ? "#059669" : "var(--warning)",
               fontSize: 10, fontWeight: 700, textTransform: "uppercase",
             }}>
               {item.source}

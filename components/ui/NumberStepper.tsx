@@ -93,7 +93,7 @@ export function NumberStepper({
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      transition: "background 0.1s, color 0.1s",
+      transition: "background var(--dur-fast), color var(--dur-fast)",
     };
   };
 
@@ -107,11 +107,11 @@ export function NumberStepper({
         alignItems: "stretch",
         height: 28,
         border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         background: "var(--bg)",
         overflow: "hidden",
         opacity: disabled ? 0.5 : 1,
-        transition: "border-color 0.1s",
+        transition: "border-color var(--dur-fast)",
       }}
     >
       <button

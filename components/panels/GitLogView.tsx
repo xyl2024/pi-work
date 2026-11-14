@@ -292,7 +292,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
               style={{
                 padding: "2px 7px", fontSize: 11,
                 background: "var(--bg)", color: "var(--text-muted)",
-                border: "1px solid var(--border)", borderRadius: 5,
+                border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
                 cursor: "pointer", flexShrink: 0,
                 fontFamily: "inherit",
               }}
@@ -303,10 +303,10 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
         </div>
         {listError ? (
           <div style={{ padding: "16px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 12, color: "#f87171", textAlign: "center" }}>{listError}</div>
+            <div style={{ fontSize: 12, color: "var(--error)", textAlign: "center" }}>{listError}</div>
             <button
               onClick={() => void loadFirstPage()}
-              style={{ padding: "4px 12px", fontSize: 12, background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer" }}
+              style={{ padding: "4px 12px", fontSize: 12, background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}
             >
               {t("Retry")}
             </button>
@@ -326,7 +326,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
                   display: "flex", flexDirection: "column", gap: 2,
                   width: "calc(100% - 12px)", boxSizing: "border-box", margin: "3px 6px", padding: "7px 10px",
                   background: active ? "var(--bg-selected)" : "transparent",
-                  border: "none", borderRadius: 6,
+                  border: "none", borderRadius: "var(--radius-sm)",
                   color: "var(--text)", cursor: "pointer", textAlign: "left",
                   fontSize: 12, overflowWrap: "anywhere",
                 }}
@@ -375,13 +375,13 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
               {detailLoading ? (
                 <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-dim)" }}>{t("Loading…")}</div>
               ) : detailError ? (
-                <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{detailError}</div>
+                <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--error)" }}>{detailError}</div>
               ) : !detail ? null : (
                 <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>{detail.commit.fullHash}</span>
                     {detail.commit.isMerge && (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#3b82f6", border: "1px solid #3b82f6", borderRadius: 3, padding: "0 4px" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: "var(--radius-xs)", padding: "0 4px" }}>
                         {t("Merge commit")}
                       </span>
                     )}
@@ -402,7 +402,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
                     </div>
                   )}
                   {detail.commit.isMerge ? (
-                    <div style={{ marginTop: 6, padding: "6px 10px", fontSize: 11, background: "rgba(59,130,246,0.1)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.25)", borderRadius: 6 }}>
+                    <div style={{ marginTop: 6, padding: "6px 10px", fontSize: 11, background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "var(--radius-sm)" }}>
                       {t("Merge commit")} — {t("Per-file stats are unavailable for merge commits")}
                     </div>
                   ) : (
@@ -427,23 +427,23 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
                                   display: "flex", alignItems: "center", gap: 8,
                                   width: "100%", padding: "4px 6px",
                                   background: active ? "var(--bg-selected)" : "transparent",
-                                  border: "none", borderRadius: 4,
+                                  border: "none", borderRadius: "var(--radius-xs)",
                                   cursor: "pointer", textAlign: "left", fontSize: 11.5,
                                   color: "var(--text)",
                                 }}
                                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
                               >
-                                <span style={{ width: 16, flexShrink: 0, textAlign: "center", fontSize: 10, fontWeight: 700, color: badge.color, border: `1px solid ${badge.color}`, borderRadius: 3, padding: "0 1px" }}>
+                                <span style={{ width: 16, flexShrink: 0, textAlign: "center", fontSize: 10, fontWeight: 700, color: badge.color, border: `1px solid ${badge.color}`, borderRadius: "var(--radius-xs)", padding: "0 1px" }}>
                                   {badge.label}
                                 </span>
                                 <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {f.path}
                                 </span>
                                 <span style={{ flexShrink: 0, fontSize: 10, fontFamily: "var(--font-mono)" }}>
-                                  {f.additions > 0 && <span style={{ color: "#16a34a" }}>+{f.additions}</span>}
+                                  {f.additions > 0 && <span style={{ color: "var(--git-status-added)" }}>+{f.additions}</span>}
                                   {f.additions > 0 && f.deletions > 0 && " "}
-                                  {f.deletions > 0 && <span style={{ color: "#ef4444" }}>-{f.deletions}</span>}
+                                  {f.deletions > 0 && <span style={{ color: "var(--git-status-deleted)" }}>-{f.deletions}</span>}
                                 </span>
                               </button>
                             );
@@ -470,7 +470,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
             />
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
               {fileDiffError ? (
-                <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{fileDiffError}</div>
+                <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--error)" }}>{fileDiffError}</div>
               ) : fileDiffLoading ? (
                 <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-dim)" }}>{t("Loading…")}</div>
               ) : !selectedFile ? (

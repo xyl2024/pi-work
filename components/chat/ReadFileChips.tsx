@@ -145,8 +145,8 @@ function DiffStatChip({ stats }: { stats: ToolDiffStats }) {
           whiteSpace: "nowrap",
         }}
       >
-        <span style={{ color: "#16a34a" }}>+{stats.additions}</span>
-        {stats.deletions > 0 && <span style={{ color: "#f87171" }}>-{stats.deletions}</span>}
+        <span style={{ color: "var(--success)" }}>+{stats.additions}</span>
+        {stats.deletions > 0 && <span style={{ color: "var(--error)" }}>-{stats.deletions}</span>}
       </span>
     </Tooltip>
   );
@@ -211,8 +211,8 @@ function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
   if (!stats || (stats.additions <= 0 && stats.deletions <= 0)) return null;
   return (
     <span style={{ flexShrink: 0 }}>
-      <span style={{ color: "#16a34a" }}>+{stats.additions}</span>
-      {stats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{stats.deletions}</span>}
+      <span style={{ color: "var(--success)" }}>+{stats.additions}</span>
+      {stats.deletions > 0 && <span style={{ color: "var(--error)", marginLeft: 3 }}>-{stats.deletions}</span>}
     </span>
   );
 }
@@ -255,13 +255,13 @@ function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
         width: BUBBLE_WIDTH,
         height: open ? targetHeight : 0,
         overflow: !open || !settled ? "hidden" : "auto",
-        transition: allowAnim ? "height 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease" : "none",
+        transition: allowAnim ? "height var(--dur-slow) var(--ease-standard), opacity var(--dur-base) var(--ease-standard)" : "none",
         opacity: open ? 1 : 0,
         pointerEvents: open ? "auto" : "none",
         background: "var(--bg-panel)",
         border: "none",
-        borderRadius: 10,
-        boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--elevation-prominent)",
         transformOrigin: direction === "down" ? "top" : "bottom",
       }}
     >
@@ -292,7 +292,7 @@ function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
                 padding: "0 8px",
                 background: "none",
                 border: "none",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 color: "var(--text-muted)",
                 cursor: "pointer",
                 fontSize: 12,

@@ -61,7 +61,7 @@ export function ChannelFormPage() {
           onKeyDown={(e) => { if (e.key === "Enter" && canCreate) void create(); }}
           autoFocus
           maxLength={50}
-          style={{ padding: "7px 10px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text)", fontFamily: "inherit" }}
+          style={{ padding: "7px 10px", fontSize: 13, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg)", color: "var(--text)", fontFamily: "inherit" }}
         />
       </div>
 
@@ -71,14 +71,14 @@ export function ChannelFormPage() {
           type="button"
           onClick={() => setWorkspaceMenuOpen((v) => !v)}
           title={workspaceDraft ?? undefined}
-          style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: workspaceDraft ? "var(--text)" : "var(--text-muted)", fontFamily: "var(--font-mono)", textAlign: "left", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", fontSize: 13, border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", background: "var(--bg)", color: workspaceDraft ? "var(--text)" : "var(--text-muted)", fontFamily: "var(--font-mono)", textAlign: "left", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         >
           {workspaceDraft ? shortenPath(workspaceDraft) : t("channels.notSet")}
         </button>
         {workspaceMenuOpen && (
           <div
             data-scroll-inset
-            style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 240, overflowY: "auto" }}
+            style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", boxShadow: "var(--elevation-prominent)", maxHeight: 240, overflowY: "auto" }}
           >
             {recentCwds.length === 0 ? (
               <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{t("channels.noWorkspaces")}</div>
@@ -107,7 +107,7 @@ export function ChannelFormPage() {
           type="button"
           onClick={() => void create()}
           disabled={!canCreate}
-          style={{ padding: "7px 16px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: canCreate ? "pointer" : "not-allowed", opacity: canCreate ? 1 : 0.6 }}
+          style={{ padding: "7px 16px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: canCreate ? "pointer" : "not-allowed", opacity: canCreate ? 1 : 0.6 }}
         >
           {busy ? t("channels.creating") : t("Create")}
         </button>
@@ -115,7 +115,7 @@ export function ChannelFormPage() {
           type="button"
           onClick={discardChannelForm}
           disabled={busy}
-          style={{ padding: "7px 16px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", cursor: busy ? "not-allowed" : "pointer" }}
+          style={{ padding: "7px 16px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 13, fontFamily: "inherit", cursor: busy ? "not-allowed" : "pointer" }}
         >
           {t("channels.discard")}
         </button>

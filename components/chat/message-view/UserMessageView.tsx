@@ -32,7 +32,7 @@ const ORIGIN_ICON_COMPONENTS = {
   CalendarClock,
   Bot,
 } as const;
-const BUBBLE_VERTICAL_EXTRA = 18;
+const BUBBLE_VERTICAL_EXTRA = 20;
 
 function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntryId, onEditContent, keywords, isSearchMatch }: {
   message: UserMessage;
@@ -177,12 +177,11 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
           style={{
             position: "relative",
             background: "var(--user-bg)",
-            border: "1px solid rgba(59,130,246,0.2)",
-            borderRadius: 12,
-            padding: "8px 12px",
+            borderRadius: "var(--radius-xl)",
+            padding: "10px 14px",
             height: isOpen ? naturalHeight : (contentHeight === null ? "auto" : Math.min(contentHeight + BUBBLE_VERTICAL_EXTRA, COLLAPSED_USER_MSG_HEIGHT)),
             overflow: "hidden",
-            transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+            transition: allowAnim ? "height var(--dur-slow) var(--ease-standard)" : "none",
           }}
         >
           <div ref={contentRef}>
@@ -200,7 +199,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
                           src={src}
                           alt=""
                           loaderSize={96}
-                          style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+                          style={{ maxWidth: 240, maxHeight: 240, borderRadius: "var(--radius-sm)", objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
                         />
                       </span>
                     </Tooltip>
@@ -223,9 +222,9 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
                     style={{
                       marginBottom: skillInvocation.userMessage ? 8 : 0,
                       padding: "8px 10px",
-                      background: "rgba(59,130,246,0.06)",
-                      borderLeft: "3px solid rgba(59,130,246,0.35)",
-                      borderRadius: 6,
+                      background: "color-mix(in srgb, var(--accent) 6%, transparent)",
+                      borderLeft: "3px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+                      borderRadius: "var(--radius-sm)",
                       fontSize: 12,
                       lineHeight: 1.55,
                       fontFamily: "var(--font-mono)",
@@ -304,13 +303,13 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
                     height: 22,
                     background: "none",
                     border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-sm)",
                     color: copied ? "var(--accent)" : "var(--text-dim)",
                     cursor: "pointer",
                     fontSize: 11,
                     fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--dur-base)",
                   }}
                   onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -343,13 +342,13 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
                     height: 22,
                     background: "none",
                     border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-sm)",
                     color: "var(--text-dim)",
                     cursor: "pointer",
                     fontSize: 11,
                     fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--dur-base)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -375,13 +374,13 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
                     height: 22,
                     background: "none",
                     border: "none",
-                    borderRadius: 5,
+                    borderRadius: "var(--radius-sm)",
                     color: "var(--text-dim)",
                     cursor: "pointer",
                     fontSize: 11,
                     fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--dur-base)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -394,7 +393,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
               </Tooltip>
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity 0.12s" }}>{time}</span>}
+          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity var(--dur-base)" }}>{time}</span>}
         </div>
       )}
       {lightbox.lightbox}
@@ -424,18 +423,18 @@ function SkillInvocationPill({ name, expanded, onToggle }: {
           maxWidth: "100%",
           height: 22,
           padding: "0 9px",
-          background: "rgba(59,130,246,0.10)",
-          border: "1px solid rgba(59,130,246,0.28)",
+          background: "color-mix(in srgb, var(--accent) 10%, transparent)",
+          border: "1px solid color-mix(in srgb, var(--accent) 28%, transparent)",
           borderRadius: 999,
           color: "var(--accent)",
           cursor: "pointer",
           fontSize: 11,
           fontFamily: "var(--font-mono)",
           whiteSpace: "nowrap",
-          transition: "background 0.12s",
+          transition: "background var(--dur-base)",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(59,130,246,0.18)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(59,130,246,0.10)"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 18%, transparent)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)"; }}
       >
         <ToolIcon size={12} style={{ flexShrink: 0 }} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
@@ -448,7 +447,7 @@ function SkillInvocationPill({ name, expanded, onToggle }: {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s", opacity: 0.7 }}
+          style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--dur-base)", opacity: 0.7 }}
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>

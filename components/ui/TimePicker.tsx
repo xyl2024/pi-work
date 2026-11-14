@@ -215,8 +215,8 @@ export function TimePicker({
         style={{
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 12,
-          boxShadow: "0 16px 40px rgba(0,0,0,0.36), 0 2px 6px rgba(0,0,0,0.18)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           padding: 0,
           width: 280,
           userSelect: "none",
@@ -264,7 +264,7 @@ export function TimePicker({
                 display: "inline-flex",
                 flexDirection: "column",
                 border: "1px solid var(--border)",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 overflow: "hidden",
                 background: "var(--bg)",
                 flexShrink: 0,
@@ -374,8 +374,8 @@ const footerBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
   padding: "4px 8px",
-  borderRadius: 4,
-  transition: "background 0.1s",
+  borderRadius: "var(--radius-xs)",
+  transition: "background var(--dur-fast)",
 };
 
 interface ColumnWheelProps {
@@ -488,7 +488,7 @@ function ColumnWheel({
         flex: 1,
         height: COLUMN_HEIGHT,
         position: "relative",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         background: "color-mix(in srgb, var(--bg-panel) 78%, var(--bg) 22%)",
         border: "1px solid var(--border)",
       }}
@@ -500,7 +500,7 @@ function ColumnWheel({
           left: 4, right: 4,
           top: MIDDLE_TOP,
           height: ITEM_HEIGHT,
-          borderRadius: 6,
+          borderRadius: "var(--radius-sm)",
           background: "color-mix(in srgb, var(--accent) 14%, transparent)",
           pointerEvents: "none",
           zIndex: 0,
@@ -561,7 +561,7 @@ function ColumnWheel({
                       : "var(--text-muted)",
                 fontWeight: selected ? 700 : 500,
                 opacity: disabled ? 0.4 : 1,
-                transition: "color 0.08s",
+                transition: "color var(--dur-fast)",
                 padding: 0,
                 width: "100%",
               }}
@@ -603,7 +603,7 @@ function SegmentButton({
         cursor: "pointer",
         fontFamily: "inherit",
         letterSpacing: "0.04em",
-        transition: "background 0.12s, color 0.12s",
+        transition: "background var(--dur-base), color var(--dur-base)",
       }}
     >
       {label}

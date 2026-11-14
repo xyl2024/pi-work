@@ -69,7 +69,7 @@ export function SubagentSessionGroupCard({
               alignSelf: "flex-start",
               padding: "2px 6px",
               border: "none",
-              borderRadius: 4,
+              borderRadius: "var(--radius-xs)",
               background: "transparent",
               color: "var(--text-muted)",
               font: "inherit",

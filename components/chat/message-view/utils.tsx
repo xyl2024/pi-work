@@ -101,7 +101,7 @@ export function useMarkdownComponents(
             style={{
               background: "var(--bg-subtle)",
               padding: "1px 4px",
-              borderRadius: 3,
+              borderRadius: "var(--radius-xs)",
               fontFamily: "var(--font-mono)",
               fontSize: "0.9em",
               color: "var(--accent-hover)",
@@ -281,7 +281,7 @@ export function CallMetricsBadges({ metrics, hidden }: {
         color: "var(--text-dim)",
         fontSize: 11,
         opacity: hidden ? 0 : 1,
-        transition: "opacity 0.12s",
+        transition: "opacity var(--dur-base)",
       }}
     >
       {parts.join(" ")}

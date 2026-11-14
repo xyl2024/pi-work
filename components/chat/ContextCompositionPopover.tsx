@@ -105,7 +105,7 @@ function CompositionRow({
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}
+          style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform var(--dur-base)" }}
           aria-hidden
         >
           <polyline points="6 3 11 8 6 13" />
@@ -113,7 +113,7 @@ function CompositionRow({
       ) : (
         <span style={{ width: 9, flexShrink: 0 }} />
       )}
-      <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: color, opacity }} />
+      <span style={{ width: 8, height: 8, borderRadius: "var(--radius-xs)", flexShrink: 0, background: color, opacity }} />
       <span
         style={{
           flex: 1,
@@ -151,7 +151,7 @@ function CompositionRow({
     padding: `3px 4px 3px ${4 + depth * 14}px`,
     background: "none",
     border: "none",
-    borderRadius: 4,
+    borderRadius: "var(--radius-xs)",
     color: "var(--text)",
     font: "inherit",
     fontSize: 11,
@@ -260,7 +260,7 @@ function TopToolResults({
     padding: `3px 4px 3px ${MESSAGE_ROW_INDENT}px`,
     background: "none",
     border: "none",
-    borderRadius: 4,
+    borderRadius: "var(--radius-xs)",
     color: "var(--text)",
     font: "inherit",
     fontSize: 11,
@@ -376,9 +376,9 @@ export function ContextCompositionPopover({ composition, contextWindow, fallback
         overflowY: "auto",
         background: "var(--bg-panel)",
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         padding: "8px 10px 7px",
-        boxShadow: "0 -6px 24px rgba(0,0,0,0.18)",
+        boxShadow: "var(--elevation-prominent)",
         fontSize: 11,
         lineHeight: 1.5,
       }}

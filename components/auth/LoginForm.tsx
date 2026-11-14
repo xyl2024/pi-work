@@ -258,11 +258,11 @@ function LoginStyles() {
       .pi-login-card {
         background: color-mix(in srgb, var(--bg) 82%, transparent);
         border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-        border-radius: 1.25rem;
+        border-radius: var(--radius-xl);
         box-shadow: 0 24px 80px color-mix(in srgb, var(--text) 10%, transparent);
         backdrop-filter: blur(18px);
       }
-      .pi-login-glow { position: absolute; width: 28rem; height: 28rem; border-radius: 999px; filter: blur(70px); opacity: .16; pointer-events: none; }
+      .pi-login-glow { position: absolute; width: 28rem; height: 28rem; border-radius: var(--radius-pill); filter: blur(70px); opacity: .16; pointer-events: none; }
       .pi-login-glow-one { background: var(--accent); top: -12rem; left: -8rem; }
       .pi-login-glow-two { background: #8b5cf6; right: -10rem; bottom: -14rem; }
       .pi-login-mark { background: linear-gradient(135deg, var(--accent), #8b5cf6); box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 30%, transparent); }
@@ -283,7 +283,7 @@ function LoginStyles() {
       .pi-login-field {
         background: transparent;
         border: 1px solid var(--border);
-        transition: border-color .12s ease;
+        transition: border-color var(--dur-base) var(--ease-standard);
       }
       .pi-login-field:focus-within { border-color: var(--accent); }
 
@@ -292,12 +292,12 @@ function LoginStyles() {
         place-items: center;
         width: 30px;
         height: 30px;
-        border-radius: 7px;
+        border-radius: var(--radius-sm);
         border: 1px solid transparent;
         background: transparent;
         color: var(--text-muted);
         cursor: pointer;
-        transition: color .12s ease, background-color .12s ease;
+        transition: color var(--dur-base) var(--ease-standard), background-color var(--dur-base) var(--ease-standard);
       }
       .pi-login-theme:hover { color: var(--text); background: var(--bg-hover); }
       .pi-login-theme-inline { bottom: calc(2.5rem + env(safe-area-inset-bottom)); }
@@ -306,7 +306,7 @@ function LoginStyles() {
         outline-offset: 1px;
       }
 
-      .pi-login-toggle { transition: color .12s ease; }
+      .pi-login-toggle { transition: color var(--dur-base) var(--ease-standard); }
       .pi-login-toggle:hover { color: var(--text); }
       .pi-login-toggle:focus-visible {
         outline: 2px solid var(--accent);
@@ -316,7 +316,7 @@ function LoginStyles() {
       .pi-login-submit {
         background: linear-gradient(135deg, var(--accent), var(--accent-hover));
         box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 25%, transparent);
-        transition: filter .12s ease, opacity .12s ease, box-shadow .12s ease;
+        transition: filter var(--dur-base) var(--ease-standard), opacity var(--dur-base) var(--ease-standard), box-shadow var(--dur-base) var(--ease-standard);
       }
       .pi-login-submit:hover:not(:disabled) {
         filter: brightness(1.08);

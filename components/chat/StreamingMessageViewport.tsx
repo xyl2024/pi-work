@@ -153,7 +153,7 @@ export function StreamingMessageViewport({ tabId, maxHeight, children, userScrol
         marginBottom: STREAMING_VIEWPORT_MARGIN_BOTTOM_PX,
         padding: 12,
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         background: "transparent",
       }}
     >

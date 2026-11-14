@@ -215,7 +215,7 @@ function Toolbar({ range, cwdFilter, cwds, onChangeRange, onChangeCwd }: Toolbar
           minWidth: 120,
           padding: "2px 6px",
           border: "1px solid var(--border)",
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           background: "var(--bg)",
           color: "var(--text-muted)",
           fontSize: 10,
@@ -285,13 +285,13 @@ function KpiCard({
   accent?: boolean;
   warn?: boolean;
 }) {
-  const color = warn ? "#f87171" : accent ? "var(--accent)" : "var(--text)";
+  const color = warn ? "var(--error)" : accent ? "var(--accent)" : "var(--text)";
   return (
     <div
       style={{
         background: "transparent",
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         padding: "10px 12px",
         display: "flex",
         flexDirection: "column",
@@ -320,7 +320,7 @@ function ChartCard({
       style={{
         background: "transparent",
         border: "1px solid var(--border)",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         padding: "8px 10px 6px",
         display: "flex",
         flexDirection: "column",
@@ -638,13 +638,13 @@ function ChipButton({ active, onClick, label }: { active: boolean; onClick: () =
         fontSize: 10,
         fontWeight: 600,
         padding: "2px 8px",
-        borderRadius: 4,
+        borderRadius: "var(--radius-xs)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
         background: active ? "var(--bg-selected)" : "transparent",
         color: active ? "var(--accent)" : "var(--text-muted)",
         cursor: "pointer",
         fontFamily: "var(--font-mono)",
-        transition: "all 0.1s",
+        transition: "all var(--dur-fast) var(--ease-standard)",
       }}
     >
       {label}

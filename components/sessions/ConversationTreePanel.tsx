@@ -450,7 +450,7 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
           borderRadius: 999,
           background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
           border: "1px solid var(--border)",
-          boxShadow: "0 2px 10px color-mix(in srgb, #000 16%, transparent)",
+          boxShadow: "var(--elevation-2)",
           backdropFilter: "blur(6px)",
           zIndex: 4,
         }}
@@ -472,7 +472,7 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
             padding: "2px 4px",
             background: "transparent",
             border: "none",
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
             color: "var(--text-muted)",
             fontFamily: "var(--font-mono)",
             fontSize: 10,

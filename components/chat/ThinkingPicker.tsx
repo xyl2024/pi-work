@@ -113,7 +113,7 @@ export function ThinkingPicker({
         cursor: "pointer",
         fontSize: chatInputMetrics.font, fontWeight: 500, whiteSpace: "nowrap",
         fontFamily: "var(--font-mono)",
-        transition: "background 0.12s, color 0.12s",
+        transition: "background var(--dur-base), color var(--dur-base)",
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}

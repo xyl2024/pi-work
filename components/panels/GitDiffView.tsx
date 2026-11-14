@@ -147,7 +147,7 @@ export function GitDiffView({ cwd, status }: Props) {
             onClick={() => setStaged(side)}
             disabled={diffLoading}
             style={{
-              padding: "3px 10px", fontSize: 11, borderRadius: 6,
+              padding: "3px 10px", fontSize: 11, borderRadius: "var(--radius-sm)",
               border: "1px solid var(--border)",
               background: staged === side ? "var(--bg-selected)" : "var(--bg)",
               color: staged === side ? "var(--text)" : "var(--text-muted)",
@@ -183,7 +183,7 @@ export function GitDiffView({ cwd, status }: Props) {
                   display: "flex", alignItems: "center", gap: 8,
                   width: "calc(100% - 12px)", boxSizing: "border-box", margin: "3px 6px", padding: "6px 10px",
                   background: active ? "var(--bg-selected)" : "transparent",
-                  border: "none", borderRadius: 6,
+                  border: "none", borderRadius: "var(--radius-sm)",
                   color: "var(--text)", cursor: "pointer", textAlign: "left",
                   fontSize: 12, overflowWrap: "anywhere",
                 }}
@@ -195,7 +195,7 @@ export function GitDiffView({ cwd, status }: Props) {
                   fontSize: 10, fontWeight: 700,
                   color: GIT_STATUS_COLOR[f.status],
                   border: `1px solid ${GIT_STATUS_COLOR[f.status]}`,
-                  borderRadius: 3, padding: "0 1px",
+                  borderRadius: "var(--radius-xs)", padding: "0 1px",
                 }}>
                   {GIT_STATUS_LABEL[f.status]}
                 </span>
@@ -206,9 +206,9 @@ export function GitDiffView({ cwd, status }: Props) {
                   {f.path}
                 </span>
                 <span style={{ flexShrink: 0, fontSize: 10, fontFamily: "var(--font-mono)" }}>
-                  {f.additions > 0 && <span style={{ color: "#16a34a" }}>+{f.additions}</span>}
+                  {f.additions > 0 && <span style={{ color: "var(--git-status-added)" }}>+{f.additions}</span>}
                   {f.additions > 0 && f.deletions > 0 && " "}
-                  {f.deletions > 0 && <span style={{ color: "#ef4444" }}>-{f.deletions}</span>}
+                  {f.deletions > 0 && <span style={{ color: "var(--git-status-deleted)" }}>-{f.deletions}</span>}
                 </span>
               </button>
             );
@@ -231,7 +231,7 @@ export function GitDiffView({ cwd, status }: Props) {
       />
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
         {diffError ? (
-          <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{diffError}</div>
+          <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--error)" }}>{diffError}</div>
         ) : diffLoading ? (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-dim)" }}>
             {t("Loading…")}

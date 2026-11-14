@@ -18,10 +18,10 @@ export function ToolCheckbox({ checked }: { checked: boolean }) {
         height: 16,
         boxSizing: "border-box",
         flexShrink: 0,
-        borderRadius: 5,
+        borderRadius: "var(--radius-sm)",
         background: "transparent",
         border: `2px solid ${checked ? "transparent" : "color-mix(in srgb, var(--text-dim) 70%, transparent)"}`,
-        transition: "border-color 0.15s ease",
+        transition: "border-color var(--dur-base) var(--ease-standard)",
       }}
     >
       {checked && (
@@ -71,7 +71,7 @@ export const ToolCheckRow = forwardRef<HTMLLabelElement, ToolCheckRowProps & Row
           gap: 9,
           minWidth: 0,
           padding: "7px 10px",
-          borderRadius: 8,
+          borderRadius: "var(--radius-sm)",
           fontSize: 12,
           userSelect: "none",
           ...(style as CSSProperties),
@@ -116,7 +116,7 @@ export const ToolCheckRow = forwardRef<HTMLLabelElement, ToolCheckRowProps & Row
               alignItems: "center",
               gap: 3,
               padding: "1px 6px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
               background: accentTint(12),
               color: "var(--text-muted)",
               fontFamily: "var(--font-mono)",

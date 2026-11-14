@@ -104,7 +104,7 @@ function ConfirmDialogView({
         position: "fixed",
         inset: 0,
         zIndex: 10000,
-        background: "rgba(0,0,0,0.45)",
+        background: "rgba(0, 0, 0, 0.45)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -113,13 +113,12 @@ function ConfirmDialogView({
     >
       <div
         style={{
-          background: "var(--bg-panel)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
+          background: "var(--bg-elevated)",
+          borderRadius: "var(--radius-lg)",
           padding: 20,
           minWidth: 320,
           maxWidth: 480,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.32)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -136,10 +135,10 @@ function ConfirmDialogView({
           <button
             onClick={() => onResolve(false)}
             style={{
-              padding: "6px 14px",
+              padding: "7px 14px",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 4,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
               cursor: "pointer",
               fontSize: 12,
@@ -151,11 +150,11 @@ function ConfirmDialogView({
             autoFocus
             onClick={() => onResolve(true)}
             style={{
-              padding: "6px 14px",
-              background: destructive ? "#f87171" : "var(--accent)",
-              border: "1px solid " + (destructive ? "#f87171" : "var(--accent)"),
-              borderRadius: 4,
-              color: destructive ? "#1a1a1a" : "var(--bg)",
+              padding: "7px 14px",
+              background: destructive ? "var(--error)" : "var(--accent)",
+              border: "1px solid transparent",
+              borderRadius: "var(--radius-sm)",
+              color: "#fff",
               cursor: "pointer",
               fontSize: 12,
               fontWeight: 600,

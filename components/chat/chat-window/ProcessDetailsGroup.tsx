@@ -125,7 +125,7 @@ export function ProcessDetailsGroup({
           style={{
             flexShrink: 0,
             transform: collapsed ? "none" : "rotate(90deg)",
-            transition: "transform 0.15s",
+            transition: "transform var(--dur-base)",
           }}
         >
           <polyline points="4 2.5 7.5 6 4 9.5" />
@@ -180,7 +180,7 @@ export function ProcessDetailsGroup({
           height: bodyHeight,
           overflow: "hidden",
           overflowAnchor: "none",
-          transition: motion === "animate" ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+          transition: motion === "animate" ? "height var(--dur-slow) var(--ease-standard)" : "none",
         }}
       >
         <div ref={contentRef} style={{ overflow: "hidden" }}>

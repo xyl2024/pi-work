@@ -212,9 +212,9 @@ export function TranslateBubble() {
         background: "var(--bg-panel)",
         color: "var(--text)",
         border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 10px 28px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08)",
-        animation: "translate-bubble-in 0.14s ease-out forwards",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "var(--elevation-prominent)",
+        animation: "translate-bubble-in 0.14s var(--ease-standard) forwards",
         transformOrigin: "bottom center",
         overflow: "hidden",
       } as React.CSSProperties}
@@ -238,7 +238,7 @@ export function TranslateBubble() {
               maxWidth: 200, overflow: "hidden",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text-muted)",
               fontSize: 11,
               cursor: "default",
@@ -265,7 +265,7 @@ export function TranslateBubble() {
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 22, height: 22, padding: 0,
               background: "transparent", color: "var(--text-muted)",
-              border: "none", borderRadius: 4,
+              border: "none", borderRadius: "var(--radius-xs)",
               cursor: !output ? "not-allowed" : "pointer",
               opacity: !output ? 0.5 : 1,
             }}
@@ -281,7 +281,7 @@ export function TranslateBubble() {
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 22, height: 22, padding: 0,
               background: "transparent", color: "var(--text-muted)",
-              border: "none", borderRadius: 4,
+              border: "none", borderRadius: "var(--radius-xs)",
               cursor: "pointer",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -308,7 +308,7 @@ export function TranslateBubble() {
           maxHeight: 320,
           overflowY: "auto",
           background: "transparent",
-          color: error ? "#ef4444" : "var(--text)",
+          color: error ? "var(--error)" : "var(--text)",
           fontSize: 12.5, lineHeight: 1.6,
           whiteSpace: "pre-wrap", wordBreak: "break-word",
           fontFamily: "var(--font-mono)",

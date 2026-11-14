@@ -118,15 +118,15 @@ export function ToolsPickerModal({
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={t("Choose tools")} style={backdropStyle} onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ ...panelStyle, width: "min(760px, calc(100vw - 32px))", maxHeight: "min(680px, calc(100vh - 64px))", display: "flex", flexDirection: "column", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.22)", overflow: "hidden" }} onMouseDown={(e) => e.stopPropagation()}>
+      <div style={{ ...panelStyle, width: "min(760px, calc(100vw - 32px))", maxHeight: "min(680px, calc(100vh - 64px))", display: "flex", flexDirection: "column", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--elevation-prominent)", overflow: "hidden" }} onMouseDown={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px", flexShrink: 0 }}>
           <span style={{ flex: 1, color: "var(--text)", fontSize: 13, fontWeight: 600 }}>{t("Choose tools")}</span>
-          <button type="button" onClick={requestClose} aria-label={t("Close")} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: 6, color: "var(--text-dim)", cursor: "pointer" }}>
+          <button type="button" onClick={requestClose} aria-label={t("Close")} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "none", borderRadius: "var(--radius-sm)", color: "var(--text-dim)", cursor: "pointer" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></svg>
           </button>
         </div>
         <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "0 8px" }}>
             <span style={{ color: "var(--text-dim)", fontSize: 12 }}>⌕</span>
             <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search tools...")} spellCheck={false} style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, padding: "8px 2px" }} />
           </div>
@@ -137,7 +137,7 @@ export function ToolsPickerModal({
         </div>
         <div style={{ flex: 1, minHeight: 80, overflowY: "auto", padding: "0 14px 10px" }} data-hide-v-scrollbar>
           {toolsLoading ? <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}><InlineSpinner /> {t("Loading tools...")}</div>
-            : toolsError ? <div style={{ padding: 16, color: "#ef4444", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}><span style={{ flex: 1 }}>{t("Failed to load tools")}: {toolsError}</span><button type="button" onClick={() => void onRetryEnsureTools?.()}>{t("Retry")}</button></div>
+            : toolsError ? <div style={{ padding: 16, color: "var(--error)", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}><span style={{ flex: 1 }}>{t("Failed to load tools")}: {toolsError}</span><button type="button" onClick={() => void onRetryEnsureTools?.()}>{t("Retry")}</button></div>
             : filteredRows.length === 0 ? <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{availableTools.length ? t("No matches") : t("No tools available for this session")}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>{filteredRows.map((row, index) => {
               const checked = isToolChecklistRowChecked(row, selectedSet, allNames);

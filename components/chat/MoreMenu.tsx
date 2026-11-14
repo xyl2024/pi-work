@@ -64,7 +64,7 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
           background: open ? "var(--bg-hover)" : "none",
           color: "var(--text-muted)",
           cursor: "pointer",
-          transition: "background 0.12s, color 0.12s",
+          transition: "background var(--dur-base), color var(--dur-base)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = "var(--bg-hover)";
@@ -92,8 +92,8 @@ export function MoreMenu({ collapsedItems }: MoreMenuProps) {
           zIndex: 120,
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           minWidth: 180,
         }}
       >

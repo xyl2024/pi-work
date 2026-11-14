@@ -43,7 +43,7 @@ export function StatusBadge({ status, size = "sm", bare = false, className, styl
         padding: bare ? 0 : padding,
         background: bare ? "transparent" : bg,
         color: fg,
-        borderRadius: 999,
+        borderRadius: "var(--radius-pill)",
         fontSize,
         fontWeight: 600,
         lineHeight: 1.4,

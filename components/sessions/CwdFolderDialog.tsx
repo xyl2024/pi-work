@@ -115,7 +115,7 @@ function DirRow({
         padding: "6px 10px",
         background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "none",
         border: "none",
-        borderRadius: 6,
+        borderRadius: "var(--radius-sm)",
         color: "var(--text)",
         cursor: "pointer",
         textAlign: "left",
@@ -239,8 +239,8 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
           height: "min(480px, 80vh)",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 12,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -333,7 +333,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               fontFamily: "var(--font-mono)",
               padding: "5px 8px",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               background: "var(--bg)",
               color: "var(--text)",
               boxSizing: "border-box",
@@ -370,7 +370,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               flexShrink: 0,
               background: showHidden ? "var(--accent)" : "var(--bg)",
               border: "1px solid " + (showHidden ? "var(--accent)" : "var(--border)"),
-              borderRadius: 4,
+              borderRadius: "var(--radius-xs)",
               cursor: "pointer",
               padding: 0,
               color: "#fff",
@@ -394,7 +394,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               {t("Loading...")}
             </div>
           ) : loadError ? (
-            <div style={{ padding: "14px 10px", fontSize: 11, color: "#f87171" }}>{loadError}</div>
+            <div style={{ padding: "14px 10px", fontSize: 11, color: "var(--error)" }}>{loadError}</div>
           ) : visibleDirs.length === 0 ? (
             <div style={{ padding: "14px 10px", fontSize: 11, color: "var(--text-dim)" }}>
               {t("Empty folder")}
@@ -429,7 +429,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               padding: "6px 14px",
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text)",
               cursor: "pointer",
               fontSize: 12,
@@ -445,7 +445,7 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               padding: "6px 14px",
               background: "var(--accent)",
               border: "1px solid var(--accent)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--bg)",
               cursor: currentPath ? "pointer" : "default",
               fontSize: 12,

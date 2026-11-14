@@ -111,8 +111,8 @@ export function MoreActionsRow() {
               zIndex: 120,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 10,
-              boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+              borderRadius: "var(--radius-md)",
+              boxShadow: "var(--elevation-prominent)",
               minWidth: 180,
             }}
           >
@@ -131,7 +131,7 @@ export function MoreActionsRow() {
                   }}
                   style={{
                     display: "flex", width: "100%", alignItems: "center", gap: 8,
-                    padding: "8px 10px", border: "none", borderRadius: 6,
+                    padding: "8px 10px", border: "none", borderRadius: "var(--radius-sm)",
                     background: "transparent", color: "var(--text)",
                     cursor: "pointer", textAlign: "left", fontSize: 12.5,
                   }}
@@ -215,8 +215,8 @@ export function MoreActionsRow() {
               zIndex: 120,
               background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 10,
-              boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+              borderRadius: "var(--radius-md)",
+              boxShadow: "var(--elevation-prominent)",
               minWidth: 220,
               maxWidth: 320,
             }}
@@ -230,7 +230,7 @@ export function MoreActionsRow() {
                 }}
                 style={{
                   display: "flex", width: "100%", alignItems: "center", gap: 8,
-                  padding: "8px 10px", border: "none", borderRadius: 6,
+                  padding: "8px 10px", border: "none", borderRadius: "var(--radius-sm)",
                   background: headerActions.currentNotifyChannelId == null ? "var(--bg-selected)" : "transparent",
                   color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12.5,
                 }}
@@ -253,9 +253,9 @@ export function MoreActionsRow() {
                   const isSelected = headerActions.currentNotifyChannelId === channel.id;
                   const statusColor =
                     channel.status === "connected" ? "var(--accent)"
-                      : channel.status === "expired" ? "#ef4444"
+                      : channel.status === "expired" ? "var(--error)"
                         : channel.status === "disabled" ? "var(--text-muted)"
-                          : "#f59e0b";
+                          : "var(--warning)";
                   return (
                     <button
                       key={channel.id}
@@ -267,13 +267,13 @@ export function MoreActionsRow() {
                       }}
                       style={{
                         display: "flex", width: "100%", alignItems: "center", gap: 8,
-                        padding: "8px 10px", border: "none", borderRadius: 6,
+                        padding: "8px 10px", border: "none", borderRadius: "var(--radius-sm)",
                         background: isSelected ? "var(--bg-selected)" : "transparent",
                         color: "var(--text)", cursor: selectable ? "pointer" : "not-allowed",
                         textAlign: "left", fontSize: 12.5, opacity: selectable ? 1 : 0.5,
                       }}
                     >
-                      <span style={{ width: 7, height: 7, borderRadius: 4, background: statusColor, flexShrink: 0 }} />
+                      <span style={{ width: 7, height: 7, borderRadius: "var(--radius-xs)", background: statusColor, flexShrink: 0 }} />
                       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {channel.name}
                       </span>

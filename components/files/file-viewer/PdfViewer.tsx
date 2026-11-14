@@ -217,7 +217,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
     background: "var(--bg-hover)",
     color: "var(--text)",
     border: "1px solid var(--border)",
-    borderRadius: 5,
+    borderRadius: "var(--radius-sm)",
     fontFamily: "var(--font-mono)",
     lineHeight: "18px",
   };
@@ -257,7 +257,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
             textAlign: "center",
             background: "var(--bg-panel)",
             border: "1px solid var(--border)",
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
             color: "var(--text)",
             fontSize: 11,
             padding: "2px 2px",
@@ -327,8 +327,8 @@ export function PdfViewer({ filePath }: FileViewerProps) {
                   overflow: "auto",
                   background: "var(--bg)",
                   border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+                  borderRadius: "var(--radius-sm)",
+                  boxShadow: "var(--elevation-2)",
                   zIndex: 100,
                   padding: "4px 0",
                 }}
@@ -360,15 +360,15 @@ export function PdfViewer({ filePath }: FileViewerProps) {
 
         <span style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px" }} />
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "var(--success)" : "var(--text-dim)" }}>
             <span
               style={{
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: watching ? "#4ade80" : "var(--border)",
+                background: watching ? "var(--success)" : "var(--border)",
                 display: "inline-block",
-                boxShadow: watching ? "0 0 4px #4ade80" : "none",
+                boxShadow: watching ? "0 0 4px var(--success)" : "none",
               }}
             />
             {watching ? t("live") : t("static")}
@@ -389,7 +389,7 @@ export function PdfViewer({ filePath }: FileViewerProps) {
         }}
       >
         {error ? (
-          <div style={{ color: "#f87171", fontSize: 13, marginTop: 40 }}>{error}</div>
+          <div style={{ color: "var(--error)", fontSize: 13, marginTop: 40 }}>{error}</div>
         ) : (
           <Document
             file={src}

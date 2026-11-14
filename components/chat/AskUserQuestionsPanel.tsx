@@ -66,8 +66,8 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           width: "100%",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           height: PANEL_HEIGHT_PX,
@@ -129,7 +129,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 5,
-                      transition: "color 0.1s, border-color 0.1s",
+                      transition: "color var(--dur-fast), border-color var(--dur-fast)",
                       flexShrink: 0,
                     }}
                   >
@@ -179,7 +179,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
               width: 34,
               height: 34,
               borderRadius: "50%",
-              background: "#16a34a",
+              background: "var(--success)",
               color: "#fff",
               display: "flex",
               alignItems: "center",
@@ -252,7 +252,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                 padding: "0 14px",
                 flexShrink: 0,
                 fontSize: 11,
-                color: "#f87171",
+                color: "var(--error)",
               }}
             >
               {submitError}
@@ -286,10 +286,10 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                     fontFamily: "inherit",
                     background: "var(--bg)",
                     border: "1px solid var(--border)",
-                    borderRadius: 6,
+                    borderRadius: "var(--radius-sm)",
                     color: "var(--text)",
                     outline: "none",
-                    transition: "border-color 0.12s ease",
+                    transition: "border-color var(--dur-base) var(--ease-standard)",
                   }}
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "var(--accent)";
@@ -305,9 +305,9 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                   style={{
                     padding: "5px 14px",
                     background: "transparent",
-                    border: "1px solid #f87171",
-                    borderRadius: 5,
-                    color: "#f87171",
+                    border: "1px solid var(--error)",
+                    borderRadius: "var(--radius-sm)",
+                    color: "var(--error)",
                     cursor: submitting ? "not-allowed" : "pointer",
                     fontSize: 12,
                     fontWeight: 500,
@@ -361,9 +361,9 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                 style={{
                   padding: "5px 14px",
                   background: "transparent",
-                  border: "1px solid #f87171",
-                  borderRadius: 5,
-                  color: "#f87171",
+                  border: "1px solid var(--error)",
+                  borderRadius: "var(--radius-sm)",
+                  color: "var(--error)",
                   cursor: submitting ? "not-allowed" : "pointer",
                   fontSize: 12,
                   fontWeight: 500,
@@ -380,7 +380,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                   padding: "5px 14px",
                   background: canSubmit ? "var(--accent)" : "var(--bg-hover)",
                   border: `1px solid ${canSubmit ? "var(--accent)" : "var(--border)"}`,
-                  borderRadius: 5,
+                  borderRadius: "var(--radius-sm)",
                   color: canSubmit ? "var(--bg)" : "var(--text-dim)",
                   cursor: canSubmit ? "pointer" : "not-allowed",
                   fontSize: 12,

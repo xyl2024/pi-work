@@ -1458,7 +1458,7 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - env(titlebar-area-height, 0px))", overflow: "hidden", padding: "var(--panel-padding)", paddingBottom: 4, border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - env(titlebar-area-height, 0px))", overflow: "hidden", padding: "var(--panel-padding)", paddingBottom: 0, background: "var(--bg-app)" }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
@@ -1565,12 +1565,12 @@ export function AppShell() {
           alignItems: "center",
           padding: "0 2px",
           border: "none",
-          borderRadius: "var(--panel-radius)",
-          background: "var(--bg)",
-          color: "var(--text-muted)",
+          background: "transparent",
+          color: "var(--text-dim)",
           fontSize: 11,
           lineHeight: 1,
-          marginTop: 4,
+          height: 26,
+          marginTop: 2,
           overflow: "hidden",
         }}
       >
@@ -1583,7 +1583,7 @@ export function AppShell() {
             alignItems: "center",
             gap: 2,
             border: "none",
-            borderRadius: 6,
+            borderRadius: "var(--radius-xs)",
             background: "transparent",
             color: terminalOpen ? "var(--accent)" : "inherit",
             padding: "2px 0",
@@ -1614,11 +1614,11 @@ export function AppShell() {
             alignItems: "center",
             gap: 2,
             border: "none",
-            borderRadius: 6,
+            borderRadius: "var(--radius-xs)",
             background: "transparent",
             color: "inherit",
-            padding: "2px 0",
-            margin: "0 0 0 10px",
+            padding: "3px 6px",
+            margin: "0 0 0 2px",
             font: "inherit",
             lineHeight: 1,
             cursor: "pointer",
@@ -1634,13 +1634,13 @@ export function AppShell() {
           <ICONS.gitBranch size={12} />
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
             {statusBar.git.branch}
-            {statusBar.git.additions > 0 && <span style={{ color: "#16a34a" }}>+{statusBar.git.additions}</span>}
-            {statusBar.git.deletions > 0 && <span style={{ color: "#ef4444" }}>-{statusBar.git.deletions}</span>}
+            {statusBar.git.additions > 0 && <span style={{ color: "var(--git-status-added)" }}>+{statusBar.git.additions}</span>}
+            {statusBar.git.deletions > 0 && <span style={{ color: "var(--git-status-deleted)" }}>-{statusBar.git.deletions}</span>}
           </span>
         </button>
         )}
-        <span style={{ marginLeft: 10 }}>Active: <span style={{ color: runningSessionCount > 0 ? "var(--accent)" : "inherit" }}>{runningSessionCount}</span></span>
-        <span style={{ marginLeft: 10 }}>{t("Channels")}: {statusBar.channels}</span>
+        <span style={{ marginLeft: 8 }}>Active: <span style={{ color: runningSessionCount > 0 ? "var(--accent)" : "inherit" }}>{runningSessionCount}</span></span>
+        <span style={{ marginLeft: 8 }}>{t("Channels")}: {statusBar.channels}</span>
         {statusBar.session && (() => {
           const usage = statusBar.session;
           if (
@@ -1677,7 +1677,7 @@ export function AppShell() {
           ];
           return items.map((item) => (
             <Tooltip key={item.key} content={item.title}>
-              <span style={{ marginLeft: 10, whiteSpace: "nowrap" }}>
+              <span style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
                 {item.label} {item.value}
               </span>
             </Tooltip>

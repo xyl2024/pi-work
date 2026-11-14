@@ -178,7 +178,7 @@ function DayChips({ days, onChange, invalid }: { days: number[]; onChange: (d: n
               }}
               style={{
                 padding: "4px 11px",
-                borderRadius: 999,
+                borderRadius: "var(--radius-pill)",
                 border: "1px solid",
                 borderColor: active ? "var(--accent)" : "var(--border)",
                 background: active ? "var(--bg-selected)" : "transparent",
@@ -305,7 +305,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
             onClick={() => switchMode(tab.id)}
             style={{
               padding: "5px 12px",
-              borderRadius: 999,
+              borderRadius: "var(--radius-pill)",
               border: "1px solid",
               borderColor: state.mode === tab.id ? "var(--accent)" : "var(--border)",
               background: state.mode === tab.id ? "var(--bg-selected)" : "transparent",
@@ -422,7 +422,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
                   background: value === p.cron ? "var(--bg-selected)" : "transparent",
                   border: "1px solid var(--border)",
                   borderColor: value === p.cron ? "var(--accent)" : "var(--border)",
-                  borderRadius: 999,
+                  borderRadius: "var(--radius-pill)",
                   color: value === p.cron ? "var(--accent)" : "var(--text-muted)",
                   cursor: "pointer",
                   fontFamily: "inherit",

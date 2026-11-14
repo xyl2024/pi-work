@@ -48,7 +48,7 @@ export function MarkdownImage({ src, alt, resolveSrc, onImageClick, maxWidth = "
           display: "inline-block",
           padding: "4px 10px",
           border: "1px dashed var(--border)",
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           color: "var(--text-dim)",
           fontSize: 12,
           fontFamily: "var(--font-mono)",
@@ -192,7 +192,7 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
     background: "rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.9)",
     border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: 5,
+    borderRadius: "var(--radius-sm)",
     fontFamily: "var(--font-mono)",
     lineHeight: 1.2,
   };
@@ -251,7 +251,7 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
         }}
       >
         {loadError ? (
-          <div style={{ color: "#f87171", fontSize: 13 }}>{t("Failed to load image")}</div>
+          <div style={{ color: "var(--error)", fontSize: 13 }}>{t("Failed to load image")}</div>
         ) : (
           <SmartImage
             src={current.src}
@@ -265,7 +265,7 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
               maxHeight: "100%",
               objectFit: "contain",
               transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
-              transition: dragging ? "none" : "transform 0.1s ease-out",
+              transition: dragging ? "none" : "transform var(--dur-fast) var(--ease-out)",
               cursor: scale > 1 ? (dragging ? "grabbing" : "grab") : "default",
               userSelect: "none",
             }}

@@ -247,8 +247,8 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           background: "var(--bg)",
           color: "var(--text)",
           border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 10px 36px rgba(0,0,0,0.4)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--elevation-prominent)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -303,7 +303,7 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
               padding: 0,
               background: "transparent",
               border: "1px solid var(--border)",
-              borderRadius: 6,
+              borderRadius: "var(--radius-sm)",
               color: "var(--text-muted)",
               cursor: "pointer",
               flexShrink: 0,
@@ -378,7 +378,7 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
                 border: "none",
                 color: "var(--text-dim)",
                 cursor: "pointer",
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 flexShrink: 0,
               }}
             >
@@ -408,7 +408,7 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
 
           {page.error && (
             <div style={{ padding: "24px 16px", textAlign: "center", display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-              <div style={{ color: "#f87171", fontSize: 12, fontFamily: "var(--font-mono)" }}>
+              <div style={{ color: "var(--error)", fontSize: 12, fontFamily: "var(--font-mono)" }}>
                 {page.error}
               </div>
               <button
@@ -418,7 +418,7 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
                   padding: "4px 12px",
                   background: "var(--bg-hover)",
                   border: "1px solid var(--border)",
-                  borderRadius: 4,
+                  borderRadius: "var(--radius-xs)",
                   color: "var(--text)",
                   cursor: "pointer",
                   fontSize: 12,
@@ -512,12 +512,12 @@ function SessionRow({
         flexDirection: "column",
         gap: 4,
         padding: "10px 12px",
-        borderRadius: 8,
+        borderRadius: "var(--radius-sm)",
         cursor: "pointer",
         background: hover ? "var(--bg-hover)" : "transparent",
         border: `1px solid ${hover ? "var(--border)" : "transparent"}`,
         marginBottom: 4,
-        transition: "background 0.1s, border-color 0.1s",
+        transition: "background var(--dur-fast), border-color var(--dur-fast)",
       }}
     >
       <div

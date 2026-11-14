@@ -16,7 +16,7 @@ export function AttachmentList({ images, onRemove }: {
             src={img.previewUrl}
             alt=""
             loaderSize={24}
-            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
+            style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", display: "block" }}
           />
           <button
             onClick={() => onRemove(i)}

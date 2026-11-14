@@ -1,11 +1,11 @@
 export const TOOLBAR_ICON_STROKE = 1.8;
 
-export const VOICE_INPUT_ACCENT_COLOR = "#ef4444";
+export const VOICE_INPUT_ACCENT_COLOR = "var(--error)";
 
-export const VOICE_INPUT_WARNING_COLOR = "#f59e0b";
+export const VOICE_INPUT_WARNING_COLOR = "var(--warning)";
 
 export const voiceInputMetrics = {
-  activeBackground: "rgba(239,68,68,0.12)",
+  activeBackground: "color-mix(in srgb, var(--error) 12%, transparent)",
   dot: 6,
   timerFont: 9,
   timerLineHeight: 1,
@@ -20,9 +20,9 @@ export const chatInputMetrics = {
   lineHeight: 1.6,
   textAreaMinHeight: 20,
   textAreaMaxHeight: 170,
-  containerPadding: "0 14px 7px",
+  containerPadding: "0 16px 10px",
   boxPadding: "8px 8px 8px 12px",
-  boxBorderRadius: 12,
+  boxBorderRadius: "var(--radius-xl)",
   boxGap: 7,
   toolbarGap: 7,
   menuOffset: 37,
@@ -32,7 +32,7 @@ export const chatInputMetrics = {
   toolbarButton: 27,
   toolbarIcon: 14,
   toolbarLabelPadding: "0 8px",
-  toolbarRadius: 8,
+  toolbarRadius: "var(--radius-sm)",
   labeledPadding: "7px 10px",
   groupGap: 2,
   retryBarPadding: "4px 8px",

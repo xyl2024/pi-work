@@ -76,7 +76,7 @@ export function FullscreenOverlay({
               background: "rgba(255,255,255,0.08)",
               color: "rgba(255,255,255,0.9)",
               border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 5,
+              borderRadius: "var(--radius-sm)",
               fontFamily: "var(--font-mono)",
               lineHeight: 1.2,
             }}
@@ -109,7 +109,7 @@ export function FullscreenOverlay({
             alignItems: "center",
             justifyContent: "center",
             ...FLOATING_CLOSE_STYLE_BASE,
-            borderRadius: 8,
+            borderRadius: "var(--radius-sm)",
             fontFamily: "var(--font-mono)",
           }}
         >

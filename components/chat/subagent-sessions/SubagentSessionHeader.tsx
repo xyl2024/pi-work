@@ -74,7 +74,7 @@ export function SubagentSessionHeader({
             flexShrink: 0,
             padding: "3px 8px",
             border: "1px solid var(--border)",
-            borderRadius: 4,
+            borderRadius: "var(--radius-xs)",
             background: "transparent",
             color: "var(--accent)",
             font: "inherit",

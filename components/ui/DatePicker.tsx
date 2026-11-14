@@ -214,8 +214,8 @@ export function DatePicker({
         style={{
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
-          borderRadius: 8,
-          boxShadow: "0 10px 28px rgba(0,0,0,0.32)",
+          borderRadius: "var(--radius-sm)",
+          boxShadow: "var(--elevation-prominent)",
           padding: 10,
           width: 240,
           userSelect: "none",
@@ -273,7 +273,7 @@ export function DatePicker({
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 11,
                   border: "none",
-                  borderRadius: 5,
+                  borderRadius: "var(--radius-sm)",
                   cursor: disabled ? "default" : "pointer",
                   background: isSelected ? "var(--accent)" : "transparent",
                   color: isSelected ? "#fff" : disabled ? "var(--text-dim)" : "var(--text)",
@@ -282,7 +282,7 @@ export function DatePicker({
                   opacity: disabled ? 0.35 : 1,
                   fontFamily: "inherit",
                   padding: 0,
-                  transition: "background 0.1s",
+                  transition: "background var(--dur-fast)",
                 }}
               >
                 {cell.day}
@@ -317,7 +317,7 @@ const navBtnStyle: React.CSSProperties = {
   width: 22, height: 22,
   background: "transparent",
   border: "1px solid var(--border)",
-  borderRadius: 4,
+  borderRadius: "var(--radius-xs)",
   color: "var(--text-muted)",
   cursor: "pointer",
   fontFamily: "inherit",
@@ -333,7 +333,7 @@ const footerBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontFamily: "inherit",
   padding: "2px 6px",
-  borderRadius: 3,
+  borderRadius: "var(--radius-xs)",
 };
 
 function CalendarIcon({ size = 11 }: { size?: number }) {

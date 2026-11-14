@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import styles from "./ContextMenu.module.css";
 
 export interface ContextMenuItem {
   key: string;
@@ -180,23 +181,8 @@ function ContextMenuView({ state, onItem }: { state: ContextMenuState; onItem: (
       data-pi-context-menu
       ref={menuRef}
       role="menu"
-      style={{
-        position: "fixed",
-        left: state.x,
-        top: state.y,
-        zIndex: 10001,
-        minWidth: 180,
-        maxHeight: "calc(100vh - 16px)",
-        overflowY: "auto",
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 6,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.32)",
-        padding: 4,
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-      }}
+      className={styles.menu}
+      style={{ left: state.x, top: state.y }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {state.items.map((it) => (
@@ -211,14 +197,7 @@ function ContextMenuRow({ item, onPick }: { item: ContextMenuItem; onPick: () =>
   if (item.separatorBefore) {
     return (
       <>
-        <div
-          role="separator"
-          style={{
-            height: 1,
-            background: "var(--border)",
-            margin: "4px 4px",
-          }}
-        />
+        <div role="separator" className={styles.separator} />
         <RowInner item={item} onPick={onPick} />
       </>
     );
@@ -239,25 +218,11 @@ function RowInner({ item, onPick }: { item: ContextMenuItem; onPick: () => void 
         item.onSelect();
         onPick();
       }}
-      style={{
-        padding: "5px 10px",
-        fontSize: 12,
-        color: item.disabled
-          ? "var(--text-dim)"
-          : item.destructive
-            ? "#f87171"
-            : "var(--text)",
-        cursor: item.disabled ? "default" : "pointer",
-        borderRadius: 4,
-        userSelect: "none",
-        background: "transparent",
-      }}
-      onMouseEnter={(e) => {
-        if (!item.disabled) e.currentTarget.style.background = "var(--bg-hover)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-      }}
+      className={[
+        styles.row,
+        item.disabled ? styles.rowDisabled : "",
+        item.destructive ? styles.rowDestructive : "",
+      ].filter(Boolean).join(" ")}
     >
       {item.label}
     </div>

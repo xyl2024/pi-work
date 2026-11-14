@@ -49,7 +49,7 @@ const SECTION_TITLE_STYLE = {
 const BADGE_STYLE = {
   flexShrink: 0,
   padding: "1px 6px",
-  borderRadius: 4,
+  borderRadius: "var(--radius-xs)",
   background: "color-mix(in srgb, var(--warning) 18%, transparent)",
   color: "var(--warning)",
   fontSize: 10,

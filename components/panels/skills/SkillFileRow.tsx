@@ -59,7 +59,7 @@ export function SkillFileRow({
           alignItems: "center",
           gap: 6,
           padding: "4px 8px",
-          borderRadius: 4,
+          borderRadius: "var(--radius-xs)",
           cursor: file.isText ? "pointer" : "default",
           fontSize: 12,
           fontFamily: "var(--font-mono)",
@@ -76,7 +76,7 @@ export function SkillFileRow({
             alignItems: "center",
             justifyContent: "center",
             color: "var(--text-dim)",
-            transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+            transition: "transform var(--dur-base) var(--ease-out)",
             transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
             visibility: file.isText ? undefined : "hidden",
           }}
@@ -136,7 +136,7 @@ export function SkillFileRow({
               customStyle={{
                 margin: 0,
                 padding: 10,
-                borderRadius: 4,
+                borderRadius: "var(--radius-xs)",
                 background: "var(--bg)",
                 fontSize: 11,
                 lineHeight: 1.5,

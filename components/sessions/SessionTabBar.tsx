@@ -54,7 +54,7 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
         height: 6,
         borderRadius: "50%",
         flexShrink: 0,
-        background: status === "error" ? "#ef4444" : "#22c55e",
+        background: status === "error" ? "var(--error)" : "var(--success)",
       }}
     />
   );
@@ -288,8 +288,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               maxWidth: 200,
               flexShrink: 0,
               userSelect: "none",
-              transition: "background 0.1s, color 0.1s",
-              borderRadius: 4,
+              transition: "background var(--dur-fast), color var(--dur-fast)",
+              borderRadius: "var(--radius-xs)",
             }}
           >
             <StatusMark status={tab.status} />
@@ -302,7 +302,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               <Tooltip content={t("Unsaved draft")}>
                 <span
                   aria-label={t("Unsaved draft")}
-                  style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }}
+                  style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--warning)", flexShrink: 0 }}
                 />
               </Tooltip>
             )}
@@ -344,7 +344,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   flexShrink: 0,
                   border: "none",
                   background: "transparent",
-                  borderRadius: 3,
+                  borderRadius: "var(--radius-xs)",
                   color: "var(--text-muted)",
                   cursor: "pointer",
                   fontSize: 14,
@@ -375,7 +375,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               padding: 0,
               border: "none",
               background: "transparent",
-              borderRadius: 4,
+              borderRadius: "var(--radius-xs)",
               color: "var(--text-muted)",
               cursor: "pointer",
               fontSize: 16,
