@@ -1,3 +1,5 @@
+import { deepSeekTranscriptionErrorCodeForStatus } from "./deepseek";
+
 export const VOICE_INPUT_SAMPLE_RATE = 16000;
 
 export const VOICE_INPUT_MAX_DURATION_MS = 120_000;
@@ -66,6 +68,11 @@ const ERROR_MESSAGE_KEYS: Record<VoiceInputErrorCode, string> = {
 
 export function voiceInputErrorMessageKey(code: VoiceInputErrorCode): string {
   return ERROR_MESSAGE_KEYS[code];
+}
+
+export function voiceInputErrorCodeForStatus(status: number): VoiceInputErrorCode {
+  const code = deepSeekTranscriptionErrorCodeForStatus(status);
+  return code === "aborted" ? "failed" : code;
 }
 
 export function voiceInputErrorCodeForRecorderError(error: unknown): VoiceInputErrorCode {

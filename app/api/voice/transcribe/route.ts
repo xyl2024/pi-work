@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
 import { createDeepSeekClient } from "@/lib/server/deepseek/client";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
-import type { DeepSeekTranscriptionErrorCode } from "@/lib/shared/deepseek";
+import { DEEPSEEK_TRANSCRIPTION_ERROR_STATUS } from "@/lib/shared/deepseek";
 import { VOICE_INPUT_MAX_BYTES, VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS } from "@/lib/shared/voice-input";
 
 const log = createLogger("api/voice/transcribe");
 
 export const dynamic = "force-dynamic";
-
-const ERROR_STATUS: Record<DeepSeekTranscriptionErrorCode, number> = {
-  missing_key: 409,
-  invalid_audio: 400,
-  too_large: 413,
-  rate_limited: 429,
-  busy: 503,
-  timeout: 504,
-  aborted: 502,
-  failed: 502,
-};
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -37,12 +26,13 @@ export async function POST(req: Request) {
     }).transcribe({ audio, mimeType: file.type });
 
     if (!result.ok) {
+      const status = DEEPSEEK_TRANSCRIPTION_ERROR_STATUS[result.code];
       log.error("voice transcription failed", {
         code: result.code,
-        status: ERROR_STATUS[result.code],
+        status,
         durationMs: elapsedMs(startedAt),
       });
-      return NextResponse.json({ error: result.code }, { status: ERROR_STATUS[result.code] });
+      return NextResponse.json({ error: result.code }, { status });
     }
 
     log.info("voice transcription completed", {

@@ -12,6 +12,26 @@ export type DeepSeekTranscriptionErrorCode =
   | "aborted"
   | "failed";
 
+export const DEEPSEEK_TRANSCRIPTION_ERROR_STATUS = {
+  missing_key: 409,
+  invalid_audio: 400,
+  too_large: 413,
+  rate_limited: 429,
+  busy: 503,
+  timeout: 504,
+  failed: 502,
+  aborted: 502,
+} as const satisfies Record<DeepSeekTranscriptionErrorCode, number>;
+
+export function deepSeekTranscriptionErrorCodeForStatus(
+  status: number,
+): DeepSeekTranscriptionErrorCode {
+  const entries = Object.entries(DEEPSEEK_TRANSCRIPTION_ERROR_STATUS) as Array<
+    [DeepSeekTranscriptionErrorCode, number]
+  >;
+  return entries.find(([, value]) => value === status)?.[0] ?? "failed";
+}
+
 export interface DeepSeekTranscription {
   text: string;
   durationMs: number | null;

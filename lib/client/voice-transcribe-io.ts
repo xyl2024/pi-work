@@ -1,5 +1,7 @@
 import {
+  VOICE_INPUT_ERROR_CODES,
   VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS,
+  voiceInputErrorCodeForStatus,
   type VoiceInputErrorCode,
 } from "@/lib/shared/voice-input";
 
@@ -11,30 +13,10 @@ export interface VoiceTranscribeOptions {
   signal?: AbortSignal;
 }
 
-const KNOWN_CODES: readonly VoiceInputErrorCode[] = [
-  "missing_key",
-  "permission_denied",
-  "empty_transcript",
-  "rate_limited",
-  "too_large",
-  "busy",
-  "timeout",
-  "invalid_audio",
-  "failed",
-];
-
 function isVoiceInputErrorCode(value: unknown): value is VoiceInputErrorCode {
-  return typeof value === "string" && (KNOWN_CODES as readonly string[]).includes(value);
-}
-
-function statusCode(status: number): VoiceInputErrorCode {
-  if (status === 409) return "missing_key";
-  if (status === 413) return "too_large";
-  if (status === 429) return "rate_limited";
-  if (status === 503) return "busy";
-  if (status === 504) return "timeout";
-  if (status === 400) return "invalid_audio";
-  return "failed";
+  return (
+    typeof value === "string" && (VOICE_INPUT_ERROR_CODES as readonly string[]).includes(value)
+  );
 }
 
 async function errorCodeFrom(response: Response): Promise<VoiceInputErrorCode> {
@@ -42,9 +24,9 @@ async function errorCodeFrom(response: Response): Promise<VoiceInputErrorCode> {
     const body = (await response.json()) as { error?: unknown };
     if (isVoiceInputErrorCode(body.error)) return body.error;
   } catch {
-    return statusCode(response.status);
+    return voiceInputErrorCodeForStatus(response.status);
   }
-  return statusCode(response.status);
+  return voiceInputErrorCodeForStatus(response.status);
 }
 
 export async function transcribeVoiceAudio(

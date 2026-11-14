@@ -1,7 +1,12 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { chatInputMetrics } from "./metrics";
+import {
+  chatInputMetrics,
+  VOICE_INPUT_ACCENT_COLOR,
+  VOICE_INPUT_WARNING_COLOR,
+  voiceInputMetrics,
+} from "./metrics";
 import { isVoiceInputNearLimit, type VoiceInputPhase } from "@/lib/shared/voice-input";
 
 export interface VoiceInputButtonProps {
@@ -12,10 +17,10 @@ export interface VoiceInputButtonProps {
   disabled?: boolean;
 }
 
-const LABEL_KEYS: Record<VoiceInputPhase, string> = {
-  idle: "Start voice input",
-  recording: "Finish voice input",
-  transcribing: "Transcribing...",
+const PHASE_TEXT: Record<VoiceInputPhase, { label: string; title: string }> = {
+  idle: { label: "Start voice input", title: "Start voice input (⌘⇧M / Ctrl+Shift+M)" },
+  recording: { label: "Finish voice input", title: "Finish voice input (⌘⇧M / Ctrl+Shift+M)" },
+  transcribing: { label: "Transcribing...", title: "Transcribing..." },
 };
 
 function formatElapsed(elapsedMs: number): string {
@@ -24,12 +29,6 @@ function formatElapsed(elapsedMs: number): string {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
 }
-
-const TITLE_KEYS: Record<VoiceInputPhase, string> = {
-  idle: "Start voice input (⌘⇧M / Ctrl+Shift+M)",
-  recording: "Finish voice input (⌘⇧M / Ctrl+Shift+M)",
-  transcribing: "Transcribing...",
-};
 
 function MicIcon() {
   return (
@@ -55,8 +54,8 @@ function SpinnerIcon() {
 
 export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = false }: VoiceInputButtonProps) {
   const { t } = useI18n();
-  const label = t(LABEL_KEYS[phase]);
-  const title = t(TITLE_KEYS[phase]);
+  const label = t(PHASE_TEXT[phase].label);
+  const title = t(PHASE_TEXT[phase].title);
   const active = phase === "recording";
   const nearLimit = isVoiceInputNearLimit(elapsedMs);
   const inputLevel = Math.min(1, Math.max(0, level));
@@ -79,10 +78,10 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
         width: chatInputMetrics.sendButton,
         height: chatInputMetrics.sendButton,
         padding: 0,
-        background: active ? "rgba(239,68,68,0.12)" : "var(--bg-panel)",
+        background: active ? voiceInputMetrics.activeBackground : "var(--bg-panel)",
         border: "none",
         borderRadius: "50%",
-        color: active ? "#ef4444" : "var(--text-dim)",
+        color: active ? VOICE_INPUT_ACCENT_COLOR : "var(--text-dim)",
         cursor: disabled || phase === "transcribing" ? "default" : "pointer",
         opacity: disabled ? 0.6 : 1,
         overflow: "hidden",
@@ -99,14 +98,21 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
             gap: 1,
           }}
         >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444" }} />
+          <span
+            style={{
+              width: voiceInputMetrics.dot,
+              height: voiceInputMetrics.dot,
+              borderRadius: "50%",
+              background: VOICE_INPUT_ACCENT_COLOR,
+            }}
+          />
           <span
             aria-label={nearLimit ? t("Voice input nearing limit") : undefined}
             style={{
-              fontSize: 9,
-              lineHeight: 1,
+              fontSize: voiceInputMetrics.timerFont,
+              lineHeight: voiceInputMetrics.timerLineHeight,
               fontVariantNumeric: "tabular-nums",
-              color: nearLimit ? "#f59e0b" : "#ef4444",
+              color: nearLimit ? VOICE_INPUT_WARNING_COLOR : VOICE_INPUT_ACCENT_COLOR,
             }}
           >
             {formatElapsed(elapsedMs)}
@@ -125,9 +131,9 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
             position: "absolute",
             left: 0,
             bottom: 0,
-            height: 2,
+            height: voiceInputMetrics.levelBarHeight,
             width: `${inputLevel * 100}%`,
-            background: "#ef4444",
+            background: VOICE_INPUT_ACCENT_COLOR,
           }}
         />
       )}
