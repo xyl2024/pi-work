@@ -89,6 +89,24 @@ describe("POST /api/read-aloud/synthesize", () => {
     });
   });
 
+  it("sends only the shaped readable text upstream", async () => {
+    const response = await POST(
+      post({ text: "朗读这句。\n\n```js\nconst skipped = 1;\n```\n\n见 [文档](https://example.dev)。" }),
+    );
+
+    expect(response.status).toBe(200);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string).text).toBe("朗读这句。\n\n见 文档。");
+  });
+
+  it("applies the billing ceiling to the shaped text", async () => {
+    const text = `汉`.repeat(READ_ALOUD_MAX_BILLING_CHARS / 2) + "\n\n```\n" + "x".repeat(50) + "\n```";
+
+    const response = await POST(post({ text }));
+
+    expect(response.status).toBe(200);
+  });
+
   it("honours an explicit voice id", async () => {
     const response = await POST(post({ text: "hello", voiceId: "tide" }));
 

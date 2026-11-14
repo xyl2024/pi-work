@@ -8,6 +8,7 @@ import {
   hasReadableReadAloudText,
   readAloudBillingChars,
   readAloudVoiceId,
+  shapeReadAloudText,
 } from "@/lib/shared/read-aloud";
 
 const log = createLogger("api/read-aloud/synthesize");
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "blocked" }, { status: 400 });
     }
 
-    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const text = shapeReadAloudText(typeof body.text === "string" ? body.text : "");
     if (!hasReadableReadAloudText(text)) {
       return NextResponse.json({ error: "blocked" }, { status: 400 });
     }

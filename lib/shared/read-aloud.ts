@@ -59,6 +59,165 @@ export function readAloudVoiceId(value: unknown): ReadAloudVoiceId {
 
 const HAN_CHARACTER = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 
+const SPEAKABLE_CHARACTER =
+  /[0-9A-Za-z\u00c0-\u024f\u0370-\u04ff\u0590-\u05ff\u0600-\u06ff\u0900-\u097f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff]/;
+
+const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+
+const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})\s*$/;
+
+const TABLE_DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+
+const HORIZONTAL_RULE = /^ {0,3}([-*_])(?:\s*\1){2,}\s*$/;
+
+const REFERENCE_DEFINITION = /^ {0,3}\[[^\]]+\]:\s*\S/;
+
+const IMAGE = /!\[[^\]]*\]\([^)]*\)|!\[[^\]]*\]\[[^\]]*\]/g;
+
+const LINK = /\[([^\]]*)\]\([^)]*\)/g;
+
+const REFERENCE_LINK = /\[([^\]]*)\]\[[^\]]*\]/g;
+
+const FOOTNOTE_REFERENCE = /\[\^[^\]]*\]/g;
+
+const HTML_TAG = /<[^>]*>/g;
+
+const BARE_URL = /(?:https?:\/\/|www\.)[^\s，。、；：！？）】」』]+/g;
+
+const EMPHASIS = /\*\*\*|\*\*|\*|~~|__/g;
+
+const HEADING = /^\s{0,3}#{1,6}\s+/;
+
+const BLOCKQUOTE = /^\s{0,3}(?:>\s?)+/;
+
+const LIST_MARKER = /^\s{0,3}(?:[-*+]|\d{1,9}[.)])\s+/;
+
+const TASK_CHECKBOX = /^\[[ xX]\]\s+/;
+
+const ENTITIES: Record<string, string> = {
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+};
+
+function stripInlineCode(line: string): string {
+  let out = "";
+  let index = 0;
+  while (index < line.length) {
+    if (line[index] !== "`") {
+      out += line[index];
+      index += 1;
+      continue;
+    }
+    let runLength = 0;
+    while (line[index + runLength] === "`") runLength += 1;
+    const fence = "`".repeat(runLength);
+    const close = line.indexOf(fence, index + runLength);
+    if (close === -1) {
+      out += fence;
+      index += runLength;
+      continue;
+    }
+    index = close + runLength;
+  }
+  return out;
+}
+
+function isFenceClose(line: string, marker: string, length: number): boolean {
+  const match = FENCE_CLOSE.exec(line);
+  return match !== null && match[1][0] === marker && match[1].length >= length;
+}
+
+function isTableDelimiter(line: string): boolean {
+  return line.includes("|") && TABLE_DELIMITER.test(line);
+}
+
+function shapeReadAloudLine(line: string): string {
+  if (HORIZONTAL_RULE.test(line) || REFERENCE_DEFINITION.test(line)) return "";
+  let text = stripInlineCode(line);
+  text = text.replace(IMAGE, "");
+  text = text.replace(LINK, "$1");
+  text = text.replace(REFERENCE_LINK, "$1");
+  text = text.replace(FOOTNOTE_REFERENCE, "");
+  text = text.replace(HTML_TAG, "");
+  text = text.replace(BARE_URL, "");
+  text = text.replace(EMPHASIS, "");
+  text = text.replace(BLOCKQUOTE, "");
+  text = text.replace(HEADING, "");
+  text = text.replace(LIST_MARKER, "");
+  text = text.replace(TASK_CHECKBOX, "");
+  text = text.replace(/\s*\|\s*/g, " ");
+  for (const [entity, replacement] of Object.entries(ENTITIES)) {
+    text = text.replaceAll(entity, replacement);
+  }
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function shapeTableRow(line: string): string {
+  return line
+    .split("|")
+    .map(shapeReadAloudLine)
+    .filter((cell) => cell !== "")
+    .join(" ");
+}
+
+function tightenCjkPunctuation(text: string): string {
+  return text
+    .replace(/([（「『【])\s+/g, "$1")
+    .replace(/\s+([，。、；：！？）」』】])/g, "$1");
+}
+
+export function shapeReadAloudText(markdown: string): string {
+  const lines = markdown.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
+  const paragraphs: string[] = [];
+  let pending: string[] = [];
+
+  const flush = () => {
+    const paragraph = pending.filter((line) => line !== "").join("\n");
+    if (paragraph !== "") paragraphs.push(paragraph);
+    pending = [];
+  };
+
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    const fence = FENCE_OPEN.exec(line);
+    if (fence) {
+      index += 1;
+      while (index < lines.length && !isFenceClose(lines[index], fence[1][0], fence[1].length)) {
+        index += 1;
+      }
+      index += 1;
+      continue;
+    }
+    if (line.trim() === "") {
+      flush();
+      index += 1;
+      continue;
+    }
+    if (isTableDelimiter(lines[index + 1] ?? "")) {
+      const rows = [shapeReadAloudLine(line)];
+      index += 2;
+      while (index < lines.length && lines[index].includes("|") && lines[index].trim() !== "") {
+        rows.push(shapeTableRow(lines[index]));
+        index += 1;
+      }
+      flush();
+      const table = rows.filter((row) => row !== "").join("\n");
+      if (table !== "") paragraphs.push(table);
+      continue;
+    }
+    pending.push(shapeReadAloudLine(line));
+    index += 1;
+  }
+  flush();
+
+  return tightenCjkPunctuation(paragraphs.join("\n\n")).trim();
+}
+
 export function readAloudBillingChars(text: string): number {
   let count = 0;
   for (const character of text) {
@@ -68,14 +227,14 @@ export function readAloudBillingChars(text: string): number {
 }
 
 export function hasReadableReadAloudText(text: string): boolean {
-  return text.trim().length > 0;
+  return SPEAKABLE_CHARACTER.test(text);
 }
 
 export function readAloudTextFromMessage(message: AssistantMessage): string {
   const { answerBlocks } = splitFinalAssistantBlocks(message);
   return answerBlocks
     .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("\n\n")
-    .trim();
+    .map((block) => shapeReadAloudText(block.text))
+    .filter((text) => text !== "")
+    .join("\n\n");
 }
