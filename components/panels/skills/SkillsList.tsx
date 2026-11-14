@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { SearchIcon } from "@/components/ui/icons";
 import { filterSkills, groupSkills } from "@/lib/shared/skills";
+import { toggleSkillInvocation } from "@/lib/client/skills-panel";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
   openSkillsForm,
   reloadSkills,
@@ -15,7 +17,7 @@ import {
 export function SkillsList() {
   const { t } = useI18n();
   const { view } = useSkillsPanel();
-  const { cwd, skills, loading, loaded, loadError, query, selectedFilePath, install } = view;
+  const { cwd, skills, loading, loaded, loadError, query, selectedFilePath, install, toggleBusy } = view;
 
   const groups = useMemo(() => groupSkills(filterSkills(skills, query)), [skills, query]);
   const searching = query.trim() !== "";
@@ -184,42 +186,57 @@ export function SkillsList() {
                 {groupSkills.map((skill) => {
                   const selected = skill.filePath === selectedFilePath;
                   return (
-                    <button
+                    <div
                       key={skill.filePath}
-                      type="button"
-                      onClick={() => selectSkill(skill.filePath)}
-                      aria-pressed={selected}
-                      title={skill.description || skill.name}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                        width: "100%",
-                        minWidth: 0,
-                        padding: "7px 9px",
-                        border: "none",
                         borderRadius: "var(--radius-sm)",
                         background: selected ? "var(--bg-selected)" : "none",
-                        color: "var(--text)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 12.5,
                       }}
                     >
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => selectSkill(skill.filePath)}
+                        aria-pressed={selected}
+                        title={skill.description || skill.name}
                         style={{
                           flex: 1,
                           minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          color: skill.disableModelInvocation ? "var(--text-dim)" : "var(--text)",
+                          padding: "7px 0 7px 9px",
+                          border: "none",
+                          background: "none",
+                          color: "var(--text)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 12.5,
                         }}
                       >
-                        {skill.name}
+                        <span
+                          style={{
+                            display: "block",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {skill.name}
+                        </span>
+                      </button>
+                      <span style={{ flexShrink: 0, padding: "7px 9px 7px 0", display: "inline-flex" }}>
+                        <ToggleSwitch
+                          size="sm"
+                          on={!skill.disableModelInvocation}
+                          disabled={toggleBusy.includes(skill.filePath)}
+                          label={skill.disableModelInvocation ? t("Enable") : t("Disable")}
+                          onChange={(enabled) =>
+                            void toggleSkillInvocation(skill.filePath, !enabled)
+                          }
+                        />
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
