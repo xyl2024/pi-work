@@ -51,6 +51,7 @@
     "start": "next start -p 30141",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:hermetic": "PI_WORK_TEST_SKIP_INSTANCE=1 vitest run --exclude \"tests/unit/*-api.test.ts\" --exclude \"tests/unit/api-smoke.test.ts\" --exclude \"tests/unit/settings.test.ts\" --exclude \"tests/unit/network-proxy.test.ts\" --exclude \"tests/unit/workspaces.test.ts\"",
     "test:watch": "vitest",
     "check:deadcode": "knip",
     "release": "pnpm version patch --no-git-tag-version && pnpm run build && pnpm publish --access public"

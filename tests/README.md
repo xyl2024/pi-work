@@ -11,7 +11,9 @@
 - **接口测试**：用 `tests/unit/helpers.ts` 的 `api()` 打隔离实例的 HTTP 接口，
   如 `api-smoke.test.ts`、`settings.test.ts`。
 - **纯单元测试**：直接 import `lib/shared` 等纯模块，不发请求、不用 cookie，
-  如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。`electron-shell/window-rules.js`
+  如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。
+  只要纯单元测试时跑 `pnpm run test:hermetic`：不启动隔离实例，排除全部接口测试，
+  结果应为全绿；并行 worktree 子代理默认用这条，不要为验证改动去抢 30143 端口。`electron-shell/window-rules.js`
   （外壳窗口的 URL 与「什么算离开应用」两条规则）也走这条路：
   `electron-shell-window-rules.test.ts`。外壳的服务端决策（`electron-shell/server-process.js`：
   是否由外壳拉起、用什么命令与环境、如何签名注入 cookie、如何结束进程树、何时算就绪）
