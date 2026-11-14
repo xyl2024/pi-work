@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createDeepSeekClient } from "@/lib/server/deepseek/client";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import {
+  coalesceSynthesis,
+  createSynthesisCache,
+  synthesisCacheKey,
+} from "@/lib/server/synthesis-cache";
 import { DEEPSEEK_SYNTHESIS_ERROR_STATUS } from "@/lib/shared/deepseek";
+import type { DeepSeekSynthesisErrorCode } from "@/lib/shared/deepseek";
 import {
   READ_ALOUD_MAX_BILLING_CHARS,
   READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
@@ -20,6 +26,10 @@ interface SynthesisRequestBody {
   voiceId?: unknown;
 }
 
+type SynthesisOutcome =
+  | { ok: true; audio: Uint8Array; cached: boolean }
+  | { ok: false; code: DeepSeekSynthesisErrorCode };
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
@@ -34,37 +44,52 @@ export async function POST(req: Request) {
     if (!hasReadableReadAloudText(text)) {
       return NextResponse.json({ error: "blocked" }, { status: 400 });
     }
-    if (readAloudBillingChars(text) > READ_ALOUD_MAX_BILLING_CHARS) {
+    const billingChars = readAloudBillingChars(text);
+    if (billingChars > READ_ALOUD_MAX_BILLING_CHARS) {
       return NextResponse.json({ error: "too_long" }, { status: 413 });
     }
 
-    const result = await createDeepSeekClient({
-      timeoutMs: READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
-    }).synthesize({ text, voiceId: readAloudVoiceId(body.voiceId) });
+    const voiceId = readAloudVoiceId(body.voiceId);
+    const cache = createSynthesisCache();
+    const key = synthesisCacheKey(text, voiceId);
+
+    const result = await coalesceSynthesis(key, async (): Promise<SynthesisOutcome> => {
+      const cached = await cache.read(key);
+      if (cached) return { ok: true, audio: cached, cached: true };
+
+      const synthesized = await createDeepSeekClient({
+        timeoutMs: READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
+      }).synthesize({ text, voiceId });
+      if (!synthesized.ok) return { ok: false, code: synthesized.code };
+
+      await cache.write(key, synthesized.data.audio);
+      return { ok: true, audio: synthesized.data.audio, cached: false };
+    });
 
     if (!result.ok) {
       const status = DEEPSEEK_SYNTHESIS_ERROR_STATUS[result.code];
       log.error("read-aloud synthesis failed", {
         code: result.code,
         status,
-        billingChars: readAloudBillingChars(text),
+        billingChars,
         durationMs: elapsedMs(startedAt),
       });
       return NextResponse.json({ error: result.code }, { status });
     }
 
+    const audio = new Uint8Array(result.audio.byteLength);
+    audio.set(result.audio);
     log.info("read-aloud synthesis completed", {
-      bytes: result.data.audio.byteLength,
-      billingChars: readAloudBillingChars(text),
+      bytes: audio.byteLength,
+      cached: result.cached,
+      billingChars,
       durationMs: elapsedMs(startedAt),
     });
-    const audio = new Uint8Array(result.data.audio.byteLength);
-    audio.set(result.data.audio);
     return new NextResponse(new Blob([audio], { type: "audio/wav" }), {
       status: 200,
       headers: {
         "Content-Type": "audio/wav",
-        "Content-Length": String(result.data.audio.byteLength),
+        "Content-Length": String(audio.byteLength),
         "Cache-Control": "no-store",
       },
     });
