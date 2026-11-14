@@ -118,6 +118,27 @@ describe("parseDiffBlock", () => {
     expect(result.deletions).toBe(1);
   });
 
+  it("reports hasHunks based on presence of @@ headers", () => {
+    expect(parseDiffBlock(unified).hasHunks).toBe(true);
+    expect(parseDiffBlock("plain\n-removed\n+added\n").hasHunks).toBe(false);
+    expect(parseDiffBlock("just text\n").hasHunks).toBe(false);
+  });
+
+  it("marks binary files with no body lines", () => {
+    const binary = [
+      "diff --git a/logo.png b/logo.png",
+      "index 1111111..2222222 100644",
+      "Binary files a/logo.png and b/logo.png differ",
+      "diff --git a/app.ts b/app.ts",
+      "+++ b/app.ts",
+      "+x",
+    ].join("\n");
+    const result = parseDiffBlock(binary);
+    expect(result.files).toHaveLength(2);
+    expect(result.files[0].lines.filter((l) => l.type === "add" || l.type === "del")).toHaveLength(0);
+    expect(result.files[0].newPath).toBe("logo.png");
+  });
+
   it("falls back when there is no add or delete line", () => {
     const result = parseDiffBlock("just some\nplain text\n@@ -1,2 +1,2 @@\n");
     expect(result.renderable).toBe(false);

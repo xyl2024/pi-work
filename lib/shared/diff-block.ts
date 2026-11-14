@@ -21,6 +21,7 @@ export interface DiffFile {
 
 export interface DiffParseResult {
   renderable: boolean;
+  hasHunks: boolean;
   files: DiffFile[];
   additions: number;
   deletions: number;
@@ -186,8 +187,15 @@ export function parseDiffBlock(text: string): DiffParseResult {
   }
 
   const renderable = state.additions > 0 || state.deletions > 0;
+  const hasHunks = state.files.some((f) => f.lines.some((l) => l.type === "hunk"));
   if (!renderable) {
-    return { renderable: false, files: [], additions: 0, deletions: 0 };
+    return { renderable: false, hasHunks, files: [], additions: 0, deletions: 0 };
   }
-  return { renderable: true, files: state.files, additions: state.additions, deletions: state.deletions };
+  return {
+    renderable: true,
+    hasHunks,
+    files: state.files,
+    additions: state.additions,
+    deletions: state.deletions,
+  };
 }

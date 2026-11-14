@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { parseDiffBlock } from "@/lib/shared/diff-block";
+import { parseDiffBlock, type DiffFile } from "@/lib/shared/diff-block";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -20,6 +20,13 @@ const LINE_STYLE: Record<string, React.CSSProperties> = {
   del: { background: "var(--diff-del-bg)", color: "var(--diff-del-text)" },
   context: {},
 };
+
+function fileLabel(file: DiffFile): string {
+  if (file.oldPath && file.newPath && file.oldPath !== file.newPath) {
+    return `${file.oldPath} → ${file.newPath}`;
+  }
+  return file.newPath ?? file.oldPath ?? "";
+}
 
 function HunkSeparator() {
   return (
@@ -102,25 +109,72 @@ export function DiffBlock({ code }: Props) {
             whiteSpace: "pre",
           }}
         >
-          {result.files.map((file, fi) =>
-            file.lines.map((line, li) => {
-              if (line.type === "meta" || line.type === "file") return null;
-              if (line.type === "hunk") return <HunkSeparator key={`${fi}-${li}`} />;
-              return (
-                <div
-                  key={`${fi}-${li}`}
-                  style={{
-                    display: "block",
-                    padding: "0 12px",
-                    minHeight: "1.6em",
-                    ...LINE_STYLE[line.type],
-                  }}
-                >
-                  {line.text}
-                </div>
-              );
-            }),
-          )}
+          {result.files.map((file, fi) => (
+            <div key={fi}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 12px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--text)",
+                  background: "var(--bg-elevated)",
+                  borderTop: fi > 0 ? "1px solid var(--border-soft)" : undefined,
+                  borderBottom: "1px solid var(--border-soft)",
+                }}
+              >
+                {fileLabel(file)}
+              </div>
+              {file.lines.map((line, li) => {
+                if (line.type === "meta" || line.type === "file") return null;
+                if (line.type === "hunk") return <HunkSeparator key={`${fi}-${li}`} />;
+                return (
+                  <div
+                    key={`${fi}-${li}`}
+                    style={{
+                      display: "flex",
+                      padding: "0 12px",
+                      minHeight: "1.6em",
+                      ...LINE_STYLE[line.type],
+                    }}
+                  >
+                    {result.hasHunks && (
+                      <>
+                        <span
+                          style={{
+                            width: "3.5em",
+                            flexShrink: 0,
+                            textAlign: "right",
+                            paddingRight: 8,
+                            color: "var(--text-muted)",
+                            userSelect: "none",
+                          }}
+                        >
+                          {line.oldLine ?? ""}
+                        </span>
+                        <span
+                          style={{
+                            width: "3.5em",
+                            flexShrink: 0,
+                            textAlign: "right",
+                            paddingRight: 8,
+                            color: "var(--text-muted)",
+                            userSelect: "none",
+                          }}
+                        >
+                          {line.newLine ?? ""}
+                        </span>
+                      </>
+                    )}
+                    <span style={{ flex: 1, whiteSpace: "pre" }}>{line.text}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
         <div
           style={{
