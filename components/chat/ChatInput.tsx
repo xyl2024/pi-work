@@ -20,6 +20,7 @@ import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/use
 import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
 import { canToggleVoiceInput } from "@/lib/shared/chat-shortcuts";
+import { canCancelVoiceInput, decideVoiceInputEscape } from "@/lib/shared/voice-input";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import { createComposerPicker } from "@/lib/client/composer-picker";
@@ -228,12 +229,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const voiceInput = useVoiceInput({
     insertText: insertTextAtCursor,
+    sessionKey: sessionId,
     recorderFactory: voiceRecorderFactory,
   });
 
   const voiceInputSupported = voiceInput.supported;
   const voiceInputPhase = voiceInput.phase;
   const toggleVoiceInput = voiceInput.toggle;
+  const cancelVoiceInput = voiceInput.cancel;
 
   useEffect(() => {
     if (!voiceInputShortcutActive || !voiceInputSupported) return;
@@ -304,6 +307,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const msg = buildMessage(value);
     if (!msg && !attachedImages.length) return;
     if (isStreaming) return;
+    if (canCancelVoiceInput(voiceInputPhase)) void cancelVoiceInput();
     onSend(msg, attachedImages.length ? attachedImages : undefined);
     exitHistoryMode();
     setValue("");
@@ -314,7 +318,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [value, attachedImages, isStreaming, onSend, clearImages, buildMessage, exitHistoryMode, setSelectedSlashResource, setSlashMenuOpen]);
+  }, [value, attachedImages, isStreaming, onSend, clearImages, buildMessage, exitHistoryMode, setSelectedSlashResource, setSlashMenuOpen, voiceInputPhase, cancelVoiceInput]);
 
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
@@ -377,6 +381,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [slashMenuOpen, setSlashMenuOpen],
   );
 
+  const handleVoiceEscape = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+      if (e.key !== "Escape") return false;
+      const action = decideVoiceInputEscape({
+        menuOpen: slashMenuOpen || mentionMenuOpen,
+        phase: voiceInputPhase,
+      });
+      if (action !== "cancel") return false;
+      e.preventDefault();
+      void cancelVoiceInput();
+      return true;
+    },
+    [slashMenuOpen, mentionMenuOpen, voiceInputPhase, cancelVoiceInput],
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleShiftBackspaceClear(e)) return;
@@ -384,10 +403,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (handleFileMentionKeyDown(e)) return;
       if (handleSlashKeyDown(e)) return;
       if (handleSlashEscape(e)) return;
+      if (handleVoiceEscape(e)) return;
       if (handleHistoryKeyDown(e)) return;
       handleEnterAndBuiltin(e);
     },
-    [handleShiftBackspaceClear, handleSuggestedPromptTab, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
+    [handleShiftBackspaceClear, handleSuggestedPromptTab, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleVoiceEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
   );
 
   useImperativeHandle(ref, () => ({

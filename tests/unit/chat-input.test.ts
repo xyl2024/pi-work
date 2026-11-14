@@ -199,7 +199,7 @@ describe("ChatInput voice input", () => {
   let root: Root;
 
   afterEach(() => {
-    act(() => root?.unmount());
+    if (container?.isConnected) act(() => root?.unmount());
     container?.remove();
     vi.unstubAllGlobals();
   });
@@ -211,6 +211,10 @@ describe("ChatInput voice input", () => {
     const emit = () => {
       for (const listener of listeners) listener();
     };
+    const cancelSpy = vi.fn(async () => {
+      snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
+      emit();
+    });
     const recorder: VoiceRecorder = {
       async start() {
         snapshot = { phase: "recording", elapsedMs: 0, level: 0.2 };
@@ -221,10 +225,7 @@ describe("ChatInput voice input", () => {
         emit();
         return { wav: new Uint8Array([1, 2, 3, 4]), durationMs };
       },
-      async cancel() {
-        snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
-        emit();
-      },
+      cancel: cancelSpy,
       subscribe(listener: () => void) {
         listeners.add(listener);
         return () => {
@@ -237,6 +238,7 @@ describe("ChatInput voice input", () => {
     };
     return {
       recorder,
+      cancelSpy,
       bindAutoStop(handler: ((result: VoiceRecorderResult) => void) | undefined) {
         autoStop = handler ?? null;
       },
@@ -252,28 +254,38 @@ describe("ChatInput voice input", () => {
     };
   }
 
-  function renderInput(recorder: VoiceRecorder, factory?: VoiceRecorderFactory) {
+  interface RenderOptions {
+    sessionId?: string | null;
+    suggestedPrompt?: string | null;
+    userMessageHistory?: string[];
+  }
+
+  function renderInput(recorder: VoiceRecorder, factory?: VoiceRecorderFactory, options: RenderOptions = {}) {
     const onSend = vi.fn();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => {
-      root.render(
-        createElement(
-          I18nProvider,
-          null,
-          createElement(ChatInput, {
-            onSend,
-            onAbort: () => undefined,
-            isStreaming: false,
-            voiceRecorderFactory: factory ?? (() => recorder),
-          }),
-        ),
-      );
-    });
+    const render = (next: RenderOptions) => {
+      act(() => {
+        root.render(
+          createElement(
+            I18nProvider,
+            null,
+            createElement(ChatInput, {
+              onSend,
+              onAbort: () => undefined,
+              isStreaming: false,
+              voiceRecorderFactory: factory ?? (() => recorder),
+              ...next,
+            }),
+          ),
+        );
+      });
+    };
+    render(options);
     const textarea = container.querySelector("textarea");
     if (!textarea) throw new Error("textarea not rendered");
-    return { textarea, onSend };
+    return { textarea, onSend, rerender: render };
   }
 
   function typeInto(textarea: HTMLTextAreaElement, text: string) {
@@ -306,6 +318,18 @@ describe("ChatInput voice input", () => {
       target.dispatchEvent(
         new KeyboardEvent("keydown", { key: "m", shiftKey: true, bubbles: true, cancelable: true, ...init }),
       );
+    });
+  }
+
+  function pressKey(target: EventTarget, key: string, init: KeyboardEventInit = {}) {
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+    });
+  }
+
+  async function startRecording() {
+    await act(async () => {
+      findButton("Start voice input")?.click();
     });
   }
 
@@ -539,5 +563,147 @@ describe("ChatInput voice input", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(textarea.value).toBe("voice text");
+  });
+
+  it("cancels the recording on escape without transcribing or touching the draft", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder);
+    typeInto(textarea, "draft");
+
+    await startRecording();
+    expect(findButton("Finish voice input")).not.toBeNull();
+
+    pressKey(textarea, "Escape");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fake.cancelSpy).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("draft");
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
+  it("aborts the in-flight transcription on escape and never inserts the late response", async () => {
+    let finishTranscription: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn<typeof fetch>(
+      () => new Promise<Response>((resolve) => {
+        finishTranscription = resolve;
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder);
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(findButton("Transcribing...")).not.toBeNull();
+    const signal = fetchMock.mock.calls[0][1]?.signal;
+
+    pressKey(textarea, "Escape");
+    expect(signal?.aborted).toBe(true);
+
+    await act(async () => {
+      finishTranscription?.(new Response(JSON.stringify({ text: "late voice text" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(textarea.value).toBe("");
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
+  it("cancels the recording when the session changes", async () => {
+    const fake = createFakeRecorder();
+    const { rerender } = renderInput(fake.recorder, undefined, { sessionId: "session-a" });
+
+    await startRecording();
+    expect(findButton("Finish voice input")).not.toBeNull();
+
+    act(() => rerender({ sessionId: "session-b" }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fake.cancelSpy).toHaveBeenCalled();
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
+  it("cancels the recording when the composer unmounts", async () => {
+    const fake = createFakeRecorder();
+    renderInput(fake.recorder);
+
+    await startRecording();
+    act(() => root.unmount());
+    container.remove();
+
+    expect(fake.cancelSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the existing draft on enter while recording and never transcribes", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea, onSend } = renderInput(fake.recorder);
+    typeInto(textarea, "hello");
+
+    await startRecording();
+    pressKey(textarea, "Enter", { ctrlKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onSend).toHaveBeenCalledWith("hello", undefined);
+    expect(fake.cancelSpy).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("");
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
+  it("adopts the suggested prompt with tab while recording", async () => {
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder, undefined, { suggestedPrompt: "Explain this repo" });
+
+    await startRecording();
+    pressKey(textarea, "Tab");
+
+    expect(textarea.value).toBe("Explain this repo");
+    expect(findButton("Finish voice input")).not.toBeNull();
+  });
+
+  it("walks the message history with arrow up while recording", async () => {
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder, undefined, { userMessageHistory: ["older question"] });
+
+    await startRecording();
+    pressKey(textarea, "ArrowUp");
+
+    expect(textarea.value).toBe("older question");
+    expect(findButton("Finish voice input")).not.toBeNull();
+  });
+
+  it("closes the slash menu on escape before cancelling the recording", async () => {
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder);
+
+    await startRecording();
+    typeInto(textarea, "/usage");
+    expect(container.textContent).toContain("查询订阅模型服务用量");
+
+    pressKey(textarea, "Escape");
+
+    expect(container.textContent).not.toContain("查询订阅模型服务用量");
+    expect(fake.cancelSpy).not.toHaveBeenCalled();
+    expect(findButton("Finish voice input")).not.toBeNull();
   });
 });
