@@ -1,7 +1,22 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  truncateSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  SYNTHESIS_CACHE_DIRECTORY,
+  SYNTHESIS_CACHE_MAX_ENTRY_BYTES,
+  synthesisCacheKey,
+} from "@/lib/server/synthesis-cache";
 import { DEEPSEEK_TTS_PATH } from "@/lib/shared/deepseek";
 import {
   READ_ALOUD_DEFAULT_VOICE_ID,
@@ -54,10 +69,13 @@ beforeAll(async () => {
   ({ POST } = await import("@/app/api/read-aloud/synthesize/route"));
 });
 
+const cacheDir = join(root, SYNTHESIS_CACHE_DIRECTORY);
+
 beforeEach(() => {
   process.env.DEEPSEEK_API_KEY = "route-key-1234";
   fetchMock = vi.fn(async () => audioResponse());
   globalThis.fetch = fetchMock as unknown as typeof fetch;
+  rmSync(cacheDir, { recursive: true, force: true });
 });
 
 afterAll(() => {
@@ -159,5 +177,121 @@ describe("POST /api/read-aloud/synthesize", () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: "failed" });
+  });
+
+  it("serves a repeated text from the synthesis cache without calling upstream", async () => {
+    const text = "重复点播的回答正文";
+
+    const first = await POST(post({ text }));
+    const second = await POST(post({ text }));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(WAV);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keys the cache by voice as well as text", async () => {
+    const text = "同一段文本两个音色";
+
+    await POST(post({ text, voiceId: "stella" }));
+    await POST(post({ text, voiceId: "tide" }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(readdirSync(cacheDir).sort()).toEqual(
+      [
+        `${synthesisCacheKey(text, "stella")}.wav`,
+        `${synthesisCacheKey(text, "tide")}.wav`,
+      ].sort(),
+    );
+  });
+
+  it("merges concurrent requests for the same text into one upstream call", async () => {
+    const text = "并发双击不要花两次钱";
+    fetchMock.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return audioResponse();
+    });
+
+    const [first, second] = await Promise.all([POST(post({ text })), POST(post({ text }))]);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(new Uint8Array(await first.arrayBuffer())).toEqual(WAV);
+    expect(new Uint8Array(await second.arrayBuffer())).toEqual(WAV);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("evicts the least recently used entry after a write pushes past the total ceiling", async () => {
+    const seeded = ["a", "b", "c"].map((prefix) => ({
+      name: `${prefix.repeat(64).slice(0, 64)}.wav`,
+      size: 50 * 1024 * 1024,
+    }));
+    mkdirSync(cacheDir, { recursive: true });
+    const nowMs = Date.now();
+    seeded.forEach((entry, index) => {
+      const path = join(cacheDir, entry.name);
+      writeFileSync(path, "");
+      truncateSync(path, entry.size);
+      const usedAt = new Date(nowMs - (seeded.length - index) * 60_000);
+      utimesSync(path, usedAt, usedAt);
+    });
+
+    const text = "淘汰最久未用";
+    const response = await POST(post({ text }));
+
+    expect(response.status).toBe(200);
+    const names = readdirSync(cacheDir);
+    expect(names).not.toContain(seeded[0].name);
+    expect(names).toContain(seeded[1].name);
+    expect(names).toContain(seeded[2].name);
+    expect(names).toContain(`${synthesisCacheKey(text, READ_ALOUD_DEFAULT_VOICE_ID)}.wav`);
+  });
+
+  it("refreshes the access time on a hit so eviction spares the reread entry", async () => {
+    const hitText = "刚被读过的那一条";
+    const untouchedText = "很久没被读过的那一条";
+    const hitKey = synthesisCacheKey(hitText, READ_ALOUD_DEFAULT_VOICE_ID);
+    const untouchedKey = synthesisCacheKey(untouchedText, READ_ALOUD_DEFAULT_VOICE_ID);
+    mkdirSync(cacheDir, { recursive: true });
+    const hitPath = join(cacheDir, `${hitKey}.wav`);
+    const untouchedPath = join(cacheDir, `${untouchedKey}.wav`);
+    const nowMs = Date.now();
+    for (const [path, size, ageMs] of [
+      [hitPath, 8 * 1024 * 1024, 120_000],
+      [untouchedPath, 125 * 1024 * 1024, 240_000],
+    ] as const) {
+      writeFileSync(path, "");
+      truncateSync(path, size);
+      const usedAt = new Date(nowMs - ageMs);
+      utimesSync(path, usedAt, usedAt);
+    }
+
+    const hit = await POST(post({ text: hitText }));
+    expect(hit.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(statSync(hitPath).atimeMs).toBeGreaterThan(nowMs);
+
+    const written = await POST(post({ text: "写入后触发淘汰" }));
+
+    expect(written.status).toBe(200);
+    expect(existsSync(untouchedPath)).toBe(false);
+    expect(existsSync(hitPath)).toBe(true);
+  });
+
+  it("returns audio above the cache entry ceiling without persisting it", async () => {
+    const text = "超大的音频只返回这一次";
+    const oversized = new Uint8Array(SYNTHESIS_CACHE_MAX_ENTRY_BYTES + 1024 * 1024);
+    oversized.set(WAV);
+    fetchMock.mockImplementation(async () => audioResponse(oversized));
+
+    const first = await POST(post({ text }));
+    const second = await POST(post({ text }));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect((await first.arrayBuffer()).byteLength).toBe(oversized.byteLength);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(existsSync(cacheDir) ? readdirSync(cacheDir) : []).toEqual([]);
   });
 });
