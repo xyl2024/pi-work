@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   READ_ALOUD_DEFAULT_VOICE_ID,
+  READ_ALOUD_ERROR_CODES,
   READ_ALOUD_MAX_BILLING_CHARS,
+  READ_ALOUD_RETRY_DELAY_MS,
   hasReadableReadAloudText,
+  isReadAloudRetryableError,
   readAloudBillingChars,
   readAloudErrorCodeForStatus,
   readAloudErrorMessageKey,
@@ -60,18 +63,36 @@ describe("read-aloud shared logic", () => {
   });
 
   it("has a localized message key for every error code", () => {
+    for (const code of READ_ALOUD_ERROR_CODES) {
+      const key = readAloudErrorMessageKey(code);
+      expect(ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS]).toBeTruthy();
+      expect(EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS]).toBeTruthy();
+    }
+  });
+
+  it("gives every error code its own distinct message", () => {
+    const keys = READ_ALOUD_ERROR_CODES.map(readAloudErrorMessageKey);
+    expect(new Set(keys).size).toBe(READ_ALOUD_ERROR_CODES.length);
+  });
+
+  it("separates the too-long hint from the blocked hint", () => {
+    expect(readAloudErrorMessageKey("too_long")).toContain("shorten");
+    expect(readAloudErrorMessageKey("blocked")).toContain("rephrasing");
+  });
+
+  it("retries only busy, timeout and network failures", () => {
+    expect(READ_ALOUD_RETRY_DELAY_MS).toBe(1000);
+    for (const code of ["busy", "timeout", "network"] as const) {
+      expect(isReadAloudRetryableError(code)).toBe(true);
+    }
     for (const code of [
       "missing_key",
       "too_long",
       "blocked",
       "rate_limited",
-      "busy",
-      "timeout",
       "failed",
     ] as const) {
-      const key = readAloudErrorMessageKey(code);
-      expect(ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS]).toBeTruthy();
-      expect(EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS]).toBeTruthy();
+      expect(isReadAloudRetryableError(code)).toBe(false);
     }
   });
 

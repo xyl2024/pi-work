@@ -5,7 +5,11 @@ import {
   synthesizeReadAloud,
   type ReadAloudSynthesisResult,
 } from "@/lib/client/read-aloud-io";
-import type { ReadAloudErrorCode } from "@/lib/shared/read-aloud";
+import {
+  READ_ALOUD_RETRY_DELAY_MS,
+  isReadAloudRetryableError,
+  type ReadAloudErrorCode,
+} from "@/lib/shared/read-aloud";
 
 export type ReadAloudPhase = "idle" | "synthesizing" | "playing" | "paused";
 
@@ -31,11 +35,14 @@ export type ReadAloudSynthesizer = (
   signal: AbortSignal,
 ) => Promise<ReadAloudSynthesisResult>;
 
+export type ReadAloudRetryWait = (signal: AbortSignal) => Promise<boolean>;
+
 export interface ReadAloudPlayerOptions {
   synthesize?: ReadAloudSynthesizer;
   createAudio?: (src: string) => ReadAloudAudio;
   createObjectUrl?: (audio: Blob) => string;
   revokeObjectUrl?: (url: string) => void;
+  waitForRetry?: ReadAloudRetryWait;
 }
 
 export interface ReadAloudPlayer {
@@ -43,6 +50,24 @@ export interface ReadAloudPlayer {
   stop(): void;
   subscribe(listener: () => void): () => void;
   getSnapshot(): ReadAloudSnapshot;
+}
+
+function defaultWaitForRetry(signal: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(true);
+    }, READ_ALOUD_RETRY_DELAY_MS);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 const IDLE: ReadAloudSnapshot = {
@@ -58,6 +83,7 @@ export function createReadAloudPlayer(options: ReadAloudPlayerOptions = {}): Rea
   const createAudio = options.createAudio ?? ((src: string) => new Audio(src) as ReadAloudAudio);
   const createObjectUrl = options.createObjectUrl ?? ((audio: Blob) => URL.createObjectURL(audio));
   const revokeObjectUrl = options.revokeObjectUrl ?? ((url: string) => URL.revokeObjectURL(url));
+  const waitForRetry = options.waitForRetry ?? defaultWaitForRetry;
 
   const listeners = new Set<() => void>();
   let snapshot: ReadAloudSnapshot = IDLE;
@@ -106,6 +132,14 @@ export function createReadAloudPlayer(options: ReadAloudPlayerOptions = {}): Rea
     });
   }
 
+  async function runSynthesis(text: string, signal: AbortSignal): Promise<ReadAloudSynthesisResult> {
+    try {
+      return await synthesize(text, signal);
+    } catch {
+      return { ok: false, code: "network" };
+    }
+  }
+
   async function start(key: string, text: string): Promise<void> {
     releaseAudio();
     abortSynthesis();
@@ -114,13 +148,21 @@ export function createReadAloudPlayer(options: ReadAloudPlayerOptions = {}): Rea
     synthAbort = controller;
     patch({ phase: "synthesizing", key, error: null });
 
-    let result: ReadAloudSynthesisResult;
-    try {
-      result = await synthesize(text, controller.signal);
-    } catch {
-      result = { ok: false, code: "failed" };
-    }
+    let result = await runSynthesis(text, controller.signal);
     if (current !== token) return;
+
+    if (!result.ok && isReadAloudRetryableError(result.code)) {
+      const retry = await waitForRetry(controller.signal);
+      if (current !== token) return;
+      if (!retry) {
+        synthAbort = null;
+        return;
+      }
+      patch({ phase: "synthesizing", key, error: null });
+      result = await runSynthesis(text, controller.signal);
+      if (current !== token) return;
+    }
+
     synthAbort = null;
     if (!result.ok) {
       fail(result.code);

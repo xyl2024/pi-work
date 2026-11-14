@@ -147,7 +147,7 @@ export function DeepSeekKeySection({ onDirtyChange }: { onDirtyChange?: DirtyRep
       </SettingsGroup>
 
       <SettingsNote>
-        {t("Web search/fetch and voice transcription share this key")}
+        {t("Web search/fetch, voice transcription and read-aloud share this key")}
       </SettingsNote>
 
       <SettingsNote>
