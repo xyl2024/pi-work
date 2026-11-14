@@ -7,6 +7,7 @@ import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { MemoryStoreUsage, MemoryUsageReport } from "@/lib/shared/memory";
 import { formatMemoryCharCounts } from "@/lib/shared/memory";
 import { SecondaryButton } from "../controls";
+import { SettingsGroup, SettingsRow } from "../rows";
 import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 
 async function loadMemoryUsage(): Promise<MemoryUsageReport> {
@@ -26,28 +27,23 @@ function usageText(usage: MemoryStoreUsage | undefined): string {
 }
 
 function MemoryUsageRow({
+  title,
   file,
   usage,
 }: {
+  title: string;
   file: string;
   usage: MemoryStoreUsage | undefined;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        padding: "8px 0",
-        borderTop: "1px solid var(--border)",
-      }}
+    <SettingsRow
+      title={title}
+      description={<span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{file}</span>}
     >
-      <span style={{ fontSize: 13, color: "var(--text)" }}>{file}</span>
-      <span style={{ fontSize: 13, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 12, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
         {usageText(usage)}
       </span>
-    </div>
+    </SettingsRow>
   );
 }
 
@@ -67,11 +63,11 @@ export function MemorySection({
   const enabled = config.memory.enabled;
 
   return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <span style={{ fontSize: 13, color: "var(--text)" }}>
-          {enabled ? t("Memory on") : t("Memory off")}
-        </span>
+    <SettingsGroup>
+      <SettingsRow
+        title={t("Memory")}
+        description={t("Let the agent keep notes about you and your work across sessions.")}
+      >
         <ToggleSwitch
           on={enabled}
           onChange={(next) => {
@@ -79,16 +75,14 @@ export function MemorySection({
           }}
           label={t("Memory")}
         />
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <MemoryUsageRow file="MEMORY.md" usage={usage?.memory} />
-        <MemoryUsageRow file="USER.md" usage={usage?.user} />
-      </div>
+      </SettingsRow>
+      <MemoryUsageRow title={t("Agent notes")} file="MEMORY.md" usage={usage?.memory} />
+      <MemoryUsageRow title={t("User profile")} file="USER.md" usage={usage?.user} />
       {onOpenMemoryPanel && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 14 }}>
           <SecondaryButton onClick={onOpenMemoryPanel}>{t("View entries")}</SecondaryButton>
         </div>
       )}
-    </>
+    </SettingsGroup>
   );
 }

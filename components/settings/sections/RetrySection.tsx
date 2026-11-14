@@ -4,8 +4,9 @@ import { useState, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
-import { NumberRow } from "../rows";
 import { SecondaryButton } from "../controls";
+import { SettingsGroup, SettingsNote, SettingsRow } from "../rows";
+import { NumericField } from "@/components/ui/NumericField";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
   DEFAULT_AGENT_RETRY,
@@ -131,108 +132,130 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
     }
   }, [t, toast, flashRetryResetOk, mutateRetryConfig]);
 
+  if (retryLoading) return <SettingsNote>{t("Loading...")}</SettingsNote>;
+  if (!retryConfig) return <SettingsNote tone="error">{t("Failed to load settings")}</SettingsNote>;
+
+  const backoff = formatBackoffPreview(retryConfig.baseDelayMs, retryConfig.maxRetries);
+  const backoffText = backoff.total === 0
+    ? t("no retries")
+    : `${backoff.shown.map((seconds) => `${seconds}s`).join(", ")}${backoff.total > backoff.shown.length ? ", …" : ""}`;
+
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 4 }}>
-        <SecondaryButton
-          onClick={() => void handleRetryReset()}
-          disabled={retryResetting || retryResetOk || !retryConfig}
-          style={retryResetOk ? { borderColor: "var(--success)", color: "var(--success)" } : undefined}
+      <SettingsGroup
+        action={(
+          <SecondaryButton
+            onClick={() => void handleRetryReset()}
+            disabled={retryResetting || retryResetOk}
+            style={retryResetOk ? { color: "var(--success)" } : undefined}
+          >
+            {retryResetOk ? t("Saved") : t("Reset to defaults")}
+          </SecondaryButton>
+        )}
+      >
+        <SettingsRow
+          title={t("Enable retry")}
+          description={t("Retry failed agent runs with exponential backoff.")}
         >
-          {retryResetOk && (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-          <span>{retryResetOk ? t("Saved") : t("Reset to defaults")}</span>
-        </SecondaryButton>
-      </div>
-      {retryLoading ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading...")}</div>
-      ) : !retryConfig ? (
-        <div style={{ fontSize: 12, color: "var(--error)" }}>{t("Failed to load settings")}</div>
-      ) : (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 13, color: "var(--text)" }}>{t("Enable retry")}</span>
-            <ToggleSwitch
-              on={retryConfig.enabled}
-              onChange={(next) => void handleRetryEnabledChange(next)}
-              label={t("Enable retry")}
-            />
-          </div>
+          <ToggleSwitch
+            on={retryConfig.enabled}
+            onChange={(next) => void handleRetryEnabledChange(next)}
+            label={t("Enable retry")}
+          />
+        </SettingsRow>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 12 }}>
-            <NumberRow
-              label={t("Max retries")}
-              min={RETRY_LIMITS.maxRetries.min}
-              max={RETRY_LIMITS.maxRetries.max}
-              value={retryConfig.maxRetries}
-              placeholder={String(DEFAULT_AGENT_RETRY.maxRetries)}
-              optional={false}
-              onCommit={handleRetryMaxRetriesChange}
-            />
-            <NumberRow
-              label={t("Base delay (ms)")}
-              min={RETRY_LIMITS.baseDelayMs.min}
-              max={RETRY_LIMITS.baseDelayMs.max}
-              value={retryConfig.baseDelayMs}
-              placeholder={String(DEFAULT_AGENT_RETRY.baseDelayMs)}
-              optional={false}
-              unitSuffix="ms"
-              onCommit={handleRetryBaseDelayChange}
-            />
-          </div>
+        <SettingsRow
+          title={t("Max retries")}
+          description={t("Range: {min}–{max}", {
+            min: RETRY_LIMITS.maxRetries.min,
+            max: RETRY_LIMITS.maxRetries.max,
+          })}
+        >
+          <NumericField
+            value={retryConfig.maxRetries}
+            onCommit={handleRetryMaxRetriesChange}
+            min={RETRY_LIMITS.maxRetries.min}
+            max={RETRY_LIMITS.maxRetries.max}
+            placeholder={String(DEFAULT_AGENT_RETRY.maxRetries)}
+            ariaLabel={t("Max retries")}
+          />
+        </SettingsRow>
 
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 18 }}>
-            {(() => {
-              const { shown, total } = formatBackoffPreview(retryConfig.baseDelayMs, retryConfig.maxRetries);
-              if (total === 0) return t("Backoff sequence preview") + ": " + t("no retries");
-              const parts = shown.map((s) => `${s}s`);
-              if (total > shown.length) parts.push("…");
-              return t("Backoff sequence preview") + ": " + parts.join(", ") + ` (${t("exponential, max {max} retries", { max: total })})`;
-            })()}
-          </div>
+        <SettingsRow
+          title={t("Base delay")}
+          description={t("Backoff sequence: {sequence}", { sequence: backoffText })}
+        >
+          <NumericField
+            value={retryConfig.baseDelayMs}
+            onCommit={handleRetryBaseDelayChange}
+            min={RETRY_LIMITS.baseDelayMs.min}
+            max={RETRY_LIMITS.baseDelayMs.max}
+            placeholder={String(DEFAULT_AGENT_RETRY.baseDelayMs)}
+            unit="ms"
+            ariaLabel={t("Base delay (ms)")}
+          />
+        </SettingsRow>
+      </SettingsGroup>
 
-          <h4 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", margin: "0 0 10px 0", textTransform: "uppercase", letterSpacing: 0.5 }}>
-            {t("Provider retry settings (advanced)")}
-          </h4>
-
-          <NumberRow
-            label={t("HTTP request timeout (ms)")}
+      <SettingsGroup title={t("Provider retry settings (advanced)")}>
+        <SettingsRow
+          title={t("HTTP request timeout")}
+          description={t("Range: {min}–{max} (empty = SDK default)", {
+            min: RETRY_LIMITS.provider.timeoutMs.min,
+            max: RETRY_LIMITS.provider.timeoutMs.max,
+          })}
+        >
+          <NumericField
+            value={retryConfig.provider.timeoutMs ?? null}
+            onCommit={(n) => handleRetryProviderFieldChange("timeoutMs", n)}
             min={RETRY_LIMITS.provider.timeoutMs.min}
             max={RETRY_LIMITS.provider.timeoutMs.max}
-            value={retryConfig.provider.timeoutMs ?? null}
             placeholder={t("SDK default")}
-            optional={true}
-            unitSuffix="ms"
-            onCommit={(n) => handleRetryProviderFieldChange("timeoutMs", n)}
+            optional
+            unit="ms"
+            ariaLabel={t("HTTP request timeout (ms)")}
           />
-          <NumberRow
-            label={t("Provider retries")}
+        </SettingsRow>
+        <SettingsRow
+          title={t("Provider retries")}
+          description={t("Range: {min}–{max}", {
+            min: RETRY_LIMITS.provider.maxRetries.min,
+            max: RETRY_LIMITS.provider.maxRetries.max,
+          })}
+        >
+          <NumericField
+            value={retryConfig.provider.maxRetries ?? null}
+            onCommit={(n) => handleRetryProviderFieldChange("maxRetries", n)}
             min={RETRY_LIMITS.provider.maxRetries.min}
             max={RETRY_LIMITS.provider.maxRetries.max}
-            value={retryConfig.provider.maxRetries ?? null}
             placeholder={String(DEFAULT_AGENT_RETRY.provider.maxRetries)}
-            optional={true}
-            onCommit={(n) => handleRetryProviderFieldChange("maxRetries", n)}
+            optional
+            ariaLabel={t("Provider retries")}
           />
-          <NumberRow
-            label={t("Max server-requested delay (ms)")}
+        </SettingsRow>
+        <SettingsRow
+          title={t("Max server-requested delay")}
+          description={t("Range: {min}–{max} (empty = SDK default)", {
+            min: RETRY_LIMITS.provider.maxRetryDelayMs.min,
+            max: RETRY_LIMITS.provider.maxRetryDelayMs.max,
+          })}
+        >
+          <NumericField
+            value={retryConfig.provider.maxRetryDelayMs ?? null}
+            onCommit={(n) => handleRetryProviderFieldChange("maxRetryDelayMs", n)}
             min={RETRY_LIMITS.provider.maxRetryDelayMs.min}
             max={RETRY_LIMITS.provider.maxRetryDelayMs.max}
-            value={retryConfig.provider.maxRetryDelayMs ?? null}
             placeholder={String(DEFAULT_AGENT_RETRY.provider.maxRetryDelayMs)}
-            optional={true}
-            unitSuffix="ms"
-            onCommit={(n) => handleRetryProviderFieldChange("maxRetryDelayMs", n)}
+            optional
+            unit="ms"
+            ariaLabel={t("Max server-requested delay (ms)")}
           />
+        </SettingsRow>
 
-          <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "10px 0 0 0", lineHeight: 1.4 }}>
-            ⚠ {t("Applies to new sessions only — active sessions keep their current settings.")}
-          </p>
-        </>
-      )}
+        <SettingsNote>
+          {t("Applies to new sessions only — active sessions keep their current settings.")}
+        </SettingsNote>
+      </SettingsGroup>
     </>
   );
 }

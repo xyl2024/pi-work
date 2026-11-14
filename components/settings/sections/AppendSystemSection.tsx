@@ -6,6 +6,7 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { TextArea } from "../controls";
+import { SettingsGroup, SettingsRow } from "../rows";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { DirtyReporter } from "../use-unsaved-changes";
@@ -80,69 +81,67 @@ export function AppendSystemSection({
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
-          {t("Append System Prompt")}
-        </h4>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <UnsavedHint show={appendSystemDirty} />
-          <SaveButton
-            canSave={appendSystemDirty}
-            saving={appendSystemSaving}
-            saved={appendSystemSavedOk}
-            onClick={handleAppendSystemSave}
-          />
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 13, color: "var(--text)" }}>
-          {config.append_system.enabled ? t("Loading on") : t("Loading off")}
-        </span>
-        <ToggleSwitch
-          on={config.append_system.enabled}
-          onChange={(next) => {
-            void apply((prev) => ({
-              ...prev,
-              append_system: { enabled: next },
-            }));
-          }}
-          label={t("Loading on")}
-        />
-      </div>
-      <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)",
-        padding: "4px 8px", marginBottom: 10,
-        background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>
-        {appendSystem?.path ?? "~/.pi/agent/APPEND_SYSTEM.md"}
-        {appendSystem && !appendSystem.exists && (
-          <span style={{ marginLeft: 8, color: "var(--text-dim)" }}>({t("file does not exist yet — saving will create it")})</span>
+      <SettingsGroup
+        action={(
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <UnsavedHint show={appendSystemDirty} />
+            <SaveButton
+              canSave={appendSystemDirty}
+              saving={appendSystemSaving}
+              saved={appendSystemSavedOk}
+              onClick={handleAppendSystemSave}
+            />
+          </div>
         )}
-      </div>
-      <TextArea
-        value={content}
-        onChange={setDraft}
-        disabled={appendSystemLoading || !appendSystem}
-        placeholder={appendSystemLoading ? t("Loading...") : t("Markdown content appended after the built-in system prompt.")}
-        mono
-        style={{ height: 220 }}
-      />
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-        <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: "0 0 10px" }}>
-          {t("Pi documentation")}
-        </h4>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "var(--text)" }}>
-            {config.load_pi_docs ? t("Loading on") : t("Loading off")}
-          </span>
+      >
+        <SettingsRow
+          title={t("Append System Prompt")}
+          description={(
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, wordBreak: "break-all" }}>
+              {appendSystem?.path ?? "~/.pi/agent/APPEND_SYSTEM.md"}
+              {appendSystem && !appendSystem.exists && ` (${t("file does not exist yet — saving will create it")})`}
+            </span>
+          )}
+          stacked
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ToggleSwitch
+              on={config.append_system.enabled}
+              onChange={(next) => {
+                void apply((prev) => ({
+                  ...prev,
+                  append_system: { enabled: next },
+                }));
+              }}
+              label={t("Loading on")}
+            />
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              {config.append_system.enabled ? t("Loading on") : t("Loading off")}
+            </span>
+          </div>
+        </SettingsRow>
+        <TextArea
+          value={content}
+          onChange={setDraft}
+          disabled={appendSystemLoading || !appendSystem}
+          placeholder={appendSystemLoading ? t("Loading...") : t("Markdown content appended after the built-in system prompt.")}
+          mono
+          style={{ height: 220, marginTop: 12 }}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup>
+        <SettingsRow
+          title={t("Pi documentation")}
+          description={t("Include Pi's built-in documentation in the system prompt.")}
+        >
           <ToggleSwitch
             on={config.load_pi_docs}
             onChange={(next) => void apply((prev) => ({ ...prev, load_pi_docs: next }))}
             label={t("Pi documentation")}
           />
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsGroup>
     </>
   );
 }

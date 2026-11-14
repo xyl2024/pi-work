@@ -5,8 +5,9 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { NumberRow } from "../rows";
+import { NumericField } from "@/components/ui/NumericField";
 import { SecondaryButton } from "../controls";
+import { SettingsGroup, SettingsNote, SettingsRow } from "../rows";
 import {
   COMPACTION_LIMITS,
   DEFAULT_AGENT_COMPACTION,
@@ -87,62 +88,69 @@ export function CompactionSection({ pageCache }: { pageCache: SettingsPageDataCa
     }
   }, [t, toast, flashResetOk, mutate]);
 
+  if (loading) return <SettingsNote>{t("Loading...")}</SettingsNote>;
+  if (!compactionConfig) return <SettingsNote tone="error">{t("Failed to load settings")}</SettingsNote>;
+
   return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 4 }}>
+    <SettingsGroup
+      action={(
         <SecondaryButton
           onClick={() => void handleReset()}
-          disabled={resetting || resetOk || !compactionConfig}
-          style={resetOk ? { borderColor: "var(--success)", color: "var(--success)" } : undefined}
+          disabled={resetting || resetOk}
+          style={resetOk ? { color: "var(--success)" } : undefined}
         >
-          <span>{resetOk ? t("Saved") : t("Reset to defaults")}</span>
+          {resetOk ? t("Saved") : t("Reset to defaults")}
         </SecondaryButton>
-      </div>
-      {loading ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading...")}</div>
-      ) : !compactionConfig ? (
-        <div style={{ fontSize: 12, color: "var(--error)" }}>{t("Failed to load settings")}</div>
-      ) : (
-        <>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 13, color: "var(--text)" }}>{t("Auto compaction")}</span>
-            <ToggleSwitch
-              on={compactionConfig.enabled}
-              onChange={(next) => void commit({ enabled: next })}
-              label={t("Auto compaction")}
-            />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 12 }}>
-            <NumberRow
-              label={t("Reserve tokens")}
-              min={COMPACTION_LIMITS.reserveTokens.min}
-              max={COMPACTION_LIMITS.reserveTokens.max}
-              value={compactionConfig.reserveTokens}
-              placeholder={String(DEFAULT_AGENT_COMPACTION.reserveTokens)}
-              optional={false}
-              onCommit={(next) => { if (next !== null) void commit({ reserveTokens: next }); }}
-            />
-            <NumberRow
-              label={t("Keep recent tokens")}
-              min={COMPACTION_LIMITS.keepRecentTokens.min}
-              max={COMPACTION_LIMITS.keepRecentTokens.max}
-              value={compactionConfig.keepRecentTokens}
-              placeholder={String(DEFAULT_AGENT_COMPACTION.keepRecentTokens)}
-              optional={false}
-              onCommit={(next) => { if (next !== null) void commit({ keepRecentTokens: next }); }}
-            />
-          </div>
-
-          <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "0 0 10px 0", lineHeight: 1.4 }}>
-            {t("Compacts when the context exceeds the model window minus the reserve.")}
-          </p>
-
-          <p style={{ fontSize: 11, color: "var(--text-dim)", margin: 0, lineHeight: 1.4 }}>
-            {t("Applies to new sessions only — active sessions keep their current settings.")}
-          </p>
-        </>
       )}
-    </>
+    >
+      <SettingsRow
+        title={t("Auto compaction")}
+        description={t("Compacts when the context exceeds the model window minus the reserve.")}
+      >
+        <ToggleSwitch
+          on={compactionConfig.enabled}
+          onChange={(next) => void commit({ enabled: next })}
+          label={t("Auto compaction")}
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        title={t("Reserve tokens")}
+        description={t("Range: {min}–{max}", {
+          min: COMPACTION_LIMITS.reserveTokens.min,
+          max: COMPACTION_LIMITS.reserveTokens.max,
+        })}
+      >
+        <NumericField
+          value={compactionConfig.reserveTokens}
+          onCommit={(next) => { if (next !== null) void commit({ reserveTokens: next }); }}
+          min={COMPACTION_LIMITS.reserveTokens.min}
+          max={COMPACTION_LIMITS.reserveTokens.max}
+          placeholder={String(DEFAULT_AGENT_COMPACTION.reserveTokens)}
+          ariaLabel={t("Reserve tokens")}
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        title={t("Keep recent tokens")}
+        description={t("Range: {min}–{max}", {
+          min: COMPACTION_LIMITS.keepRecentTokens.min,
+          max: COMPACTION_LIMITS.keepRecentTokens.max,
+        })}
+      >
+        <NumericField
+          value={compactionConfig.keepRecentTokens}
+          onCommit={(next) => { if (next !== null) void commit({ keepRecentTokens: next }); }}
+          min={COMPACTION_LIMITS.keepRecentTokens.min}
+          max={COMPACTION_LIMITS.keepRecentTokens.max}
+          placeholder={String(DEFAULT_AGENT_COMPACTION.keepRecentTokens)}
+          ariaLabel={t("Keep recent tokens")}
+        />
+      </SettingsRow>
+
+      <SettingsNote>
+        {t("Applies to new sessions only — active sessions keep their current settings.")}
+      </SettingsNote>
+    </SettingsGroup>
   );
 }

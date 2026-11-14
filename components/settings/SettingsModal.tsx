@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
+import { ICONS } from "@/components/ui/icons";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { UNSAVED_CHANGES_CONFIRM_KEY, selectIsDirty, selectSectionLeave } from "@/lib/shared/settings-unsaved";
 import {
   DEFAULT_SETTINGS_SECTION_ID,
   SETTINGS_GROUPS,
+  SETTINGS_SECTIONS,
   sectionsForGroup,
   type SettingsSectionId,
 } from "./registry";
@@ -17,9 +19,8 @@ import { createSettingsPageCache } from "@/lib/client/settings-page-cache";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { SETTINGS_PAGES } from "./pages";
-import { SettingsSection } from "./SettingsSection";
-
-const MODAL_WIDTH = "min(960px, calc(100vw - 32px))";
+import { SettingsSection, settingsPageTitleId } from "./SettingsSection";
+import styles from "./SettingsModal.module.css";
 
 export function SettingsModal({
   onClose,
@@ -86,27 +87,21 @@ export function SettingsModal({
     shouldConfirm,
   });
 
-  if (loading) {
+  if (loading || !config) {
     return (
-      <div style={backdropStyle}
+      <div style={backdropStyle} className={styles.backdrop}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: MODAL_WIDTH, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
-          {t("Loading...")}
+        <div style={panelStyle}>
+          <div className={`${styles.status} ${loading ? "" : styles.statusError}`}>
+            {loading ? t("Loading...") : t("Failed to load settings")}
+          </div>
         </div>
       </div>
     );
   }
 
-  if (!config) {
-    return (
-      <div style={backdropStyle}
-        onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: MODAL_WIDTH, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--error)" }}>
-          {t("Failed to load settings")}
-        </div>
-      </div>
-    );
-  }
+  const activeSection = SETTINGS_SECTIONS.find((section) => section.id === activeSectionId)
+    ?? SETTINGS_SECTIONS[0];
 
   const page = SETTINGS_PAGES[activeSectionId]({
     config,
@@ -118,95 +113,36 @@ export function SettingsModal({
   });
 
   return (
-    <div style={backdropStyle}
+    <div style={backdropStyle} className={styles.backdrop}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ ...panelStyle, width: MODAL_WIDTH, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={panelStyle} className={styles.panel}>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Settings")}</span>
-          <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: "180px 1fr",
-            columnGap: 0,
-            padding: "18px",
-          }}
-        >
-          <nav
-            aria-label={t("Settings sections")}
-            style={{
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: 12,
-              marginRight: 12,
-              borderRight: "1px solid var(--border)",
-            }}
-          >
+        <aside className={styles.rail}>
+          <div className={styles.railTitle}>{t("Settings")}</div>
+          <nav className={styles.nav} aria-label={t("Settings sections")} data-scroll-side>
             {SETTINGS_GROUPS.map((group) => (
-              <div key={group.id} style={{ marginBottom: 10 }}>
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: "var(--text-dim)",
-                    padding: "0 10px 4px",
-                  }}
-                >
-                  {t(group.labelKey)}
-                </div>
+              <div key={group.id} className={styles.group}>
+                <div className={styles.groupLabel}>{t(group.labelKey)}</div>
                 {sectionsForGroup(group.id).map((section) => {
                   const active = activeSectionId === section.id;
                   const dirtyDot = selectIsDirty(unsaved, section.id);
+                  const Icon = ICONS[section.icon];
                   return (
                     <button
                       key={section.id}
                       onClick={() => goToSection(section.id)}
                       aria-current={active ? "page" : undefined}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "6px 10px 6px 18px",
-                        marginBottom: 2,
-                        background: active ? "var(--bg-selected)" : "transparent",
-                        border: "none",
-                        borderRadius: 6,
-                        color: active ? "var(--text)" : "var(--text-muted)",
-                        fontSize: 13,
-                        fontWeight: active ? 600 : 400,
-                        cursor: "pointer",
-                        transition: "background-color 0.15s, color 0.15s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!active) e.currentTarget.style.background = "var(--bg-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!active) e.currentTarget.style.background = "transparent";
-                      }}
+                      className={[styles.navItem, active ? styles.navItemActive : ""].filter(Boolean).join(" ")}
                     >
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t(section.labelKey)}
+                      <span className={styles.navIcon} aria-hidden="true">
+                        <Icon size={15} />
                       </span>
+                      <span className={styles.navLabel}>{t(section.labelKey)}</span>
                       {dirtyDot && (
                         <span
                           title={t("Unsaved changes")}
-                          style={{
-                            width: 6,
-                            height: 6,
-                            flexShrink: 0,
-                            borderRadius: "50%",
-                            background: "var(--warning)",
-                          }}
+                          aria-hidden="true"
+                          className={styles.dirtyDot}
                         />
                       )}
                     </button>
@@ -215,15 +151,26 @@ export function SettingsModal({
               </div>
             ))}
           </nav>
+        </aside>
+
+        <div className={styles.content}>
+          <header className={styles.contentHeader}>
+            <h2 id={settingsPageTitleId(activeSection.id)} className={styles.pageTitle}>
+              {t(activeSection.labelKey)}
+            </h2>
+            <button
+              onClick={requestClose}
+              className={styles.close}
+              aria-label={t("Close")}
+            >
+              <ICONS.close size={16} />
+            </button>
+          </header>
 
           <div
             key={activeSectionId}
             data-scroll-wide
-            style={{
-              minHeight: 0,
-              overflowY: "auto",
-              paddingRight: 6,
-            }}
+            className={styles.scroll}
           >
             <SettingsSection id={activeSectionId}>{page}</SettingsSection>
           </div>

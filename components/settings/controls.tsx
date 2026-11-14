@@ -4,22 +4,9 @@ import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { IconPicker } from "../ui/IconPicker";
-export const SETTINGS_RADIUS = 6;
-export const SETTINGS_CONTROL_FONT_SIZE = 13;
-export const SETTINGS_CONTROL_HEIGHT = 32;
-export const SETTINGS_CONTROL_PADDING = "6px 10px";
+import styles from "./controls.module.css";
 
-export const inputStyle: CSSProperties = {
-  padding: SETTINGS_CONTROL_PADDING,
-  background: "var(--bg)",
-  border: "1px solid var(--border)",
-  borderRadius: SETTINGS_RADIUS,
-  color: "var(--text)",
-  fontSize: SETTINGS_CONTROL_FONT_SIZE,
-  height: SETTINGS_CONTROL_HEIGHT,
-  width: "100%",
-  boxSizing: "border-box",
-};
+export const SETTINGS_RADIUS = 8;
 
 export function Field({
   label,
@@ -33,11 +20,11 @@ export function Field({
   error?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
+    <div className={styles.field}>
+      <label className={styles.fieldLabel}>{label}</label>
       {children}
-      {error && <span role="alert" style={{ fontSize: 10, color: "var(--error)", marginTop: 2 }}>{error}</span>}
-      {hint && <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{hint}</span>}
+      {error && <span role="alert" className={`${styles.fieldMessage} ${styles.fieldError}`}>{error}</span>}
+      {hint && <span className={styles.fieldMessage}>{hint}</span>}
     </div>
   );
 }
@@ -51,6 +38,7 @@ export function TextInput({
   disabled,
   maxLength,
   invalid,
+  style,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -60,6 +48,7 @@ export function TextInput({
   disabled?: boolean;
   maxLength?: number;
   invalid?: boolean;
+  style?: CSSProperties;
 }) {
   return (
     <input
@@ -72,7 +61,8 @@ export function TextInput({
       placeholder={placeholder}
       disabled={disabled}
       maxLength={maxLength}
-      style={{ ...inputStyle, borderColor: invalid ? "var(--error)" : "var(--border)", fontFamily: mono ? "var(--font-mono)" : "inherit" }}
+      className={[styles.input, mono ? styles.mono : "", invalid ? styles.invalid : ""].filter(Boolean).join(" ")}
+      style={style}
     />
   );
 }
@@ -121,7 +111,7 @@ export function SecretTextInput({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        style={{ ...inputStyle, paddingRight: 34, fontFamily: mono ? "var(--font-mono)" : "inherit" }}
+        className={[styles.input, styles.secret, mono ? styles.mono : ""].filter(Boolean).join(" ")}
         autoComplete={autoComplete}
         spellCheck={spellCheck}
       />
@@ -130,22 +120,7 @@ export function SecretTextInput({
           type="button"
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? t("Hide API key") : t("Show API key")}
-          style={{
-            position: "absolute",
-            right: 5,
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: 24,
-            height: 24,
-            padding: 0,
-            border: "none",
-            background: "transparent",
-            color: "var(--text-dim)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className={styles.revealButton}
         >
           {visible ? (
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -175,7 +150,7 @@ export function NumInput({
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
+  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={styles.input} />;
 }
 
 export function Select({
@@ -202,7 +177,8 @@ export function Select({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)", ...style }}
+      className={styles.input}
+      style={{ color: value ? "var(--text)" : "var(--text-dim)", ...style }}
     >
       {!required && <option value="">— {t("inherit")} / {t("none")} —</option>}
       {options.map((o) => {
@@ -224,8 +200,8 @@ export function Check({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ width: 13, height: 13, accentColor: "var(--accent)", cursor: "pointer" }} />
+    <label className={styles.check}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className={styles.checkbox} />
       {label}
     </label>
   );
@@ -251,7 +227,8 @@ export function GroupedSelect({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, ...style }}
+      className={styles.input}
+      style={style}
     >
       {leadingOption && <option value={leadingOption.value}>{leadingOption.label}</option>}
       {groups.map((group) => (
@@ -266,20 +243,19 @@ export function GroupedSelect({
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{children}</div>;
+  return <div className={styles.sectionTitle}>{children}</div>;
 }
 
 export function IconField({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
   const { t } = useI18n();
   return (
-    <Field label={t("Icon")}>
+    <Field label={t("Icon")} hint={t("Icon source hint")}>
       <IconPicker
         value={value}
         onChange={onChange}
         autoLabel={t("Inherit / automatic")}
         dialogLabel={t("Choose icon")}
       />
-      <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Icon source hint")}</span>
     </Field>
   );
 }
@@ -294,19 +270,6 @@ interface ButtonProps {
   style?: CSSProperties;
 }
 
-const BUTTON_BASE: CSSProperties = {
-  height: SETTINGS_CONTROL_HEIGHT,
-  padding: "6px 12px",
-  borderRadius: SETTINGS_RADIUS,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  whiteSpace: "nowrap",
-  transition: "background-color 0.15s, border-color 0.15s, color 0.15s",
-};
-
 export function PrimaryButton({ children, onClick, disabled, title, ariaLabel, type = "button", style }: ButtonProps) {
   return (
     <button
@@ -315,17 +278,8 @@ export function PrimaryButton({ children, onClick, disabled, title, ariaLabel, t
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
-      style={{
-        ...BUTTON_BASE,
-        background: "var(--accent)",
-        border: "none",
-        color: "#fff",
-        fontSize: SETTINGS_CONTROL_FONT_SIZE,
-        fontWeight: 600,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        ...style,
-      }}
+      className={`${styles.button} ${styles.primary}`}
+      style={style}
     >
       {children}
     </button>
@@ -340,19 +294,8 @@ export function SecondaryButton({ children, onClick, disabled, title, ariaLabel,
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
-      style={{
-        ...BUTTON_BASE,
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        color: "var(--text)",
-        fontSize: 12,
-        fontWeight: 500,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        ...style,
-      }}
-      onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; } }}
-      onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text)"; } }}
+      className={`${styles.button} ${styles.secondary}`}
+      style={style}
     >
       {children}
     </button>
@@ -376,21 +319,8 @@ export function DangerButton({
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
-      style={{
-        ...BUTTON_BASE,
-        ...(size === "compact"
-          ? { height: 22, padding: "0 4px", borderRadius: 4, gap: 4, fontSize: 11 }
-          : { fontSize: 12 }),
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        color: "var(--text-muted)",
-        fontWeight: 500,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        ...style,
-      }}
-      onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.borderColor = "var(--error)"; e.currentTarget.style.color = "var(--error)"; } }}
-      onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; } }}
+      className={[styles.button, styles.danger, size === "compact" ? styles.compact : ""].filter(Boolean).join(" ")}
+      style={style}
     >
       {children}
     </button>
@@ -409,7 +339,7 @@ export function SegmentedControl({
   ariaLabel?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} style={{ display: "flex", gap: 6 }}>
+    <div role="radiogroup" aria-label={ariaLabel} className={styles.segmented}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -420,20 +350,7 @@ export function SegmentedControl({
             aria-checked={active}
             title={option.title}
             onClick={() => onChange(option.value)}
-            style={{
-              flex: 1,
-              height: 36,
-              background: active ? "var(--accent)" : "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: SETTINGS_RADIUS,
-              color: active ? "#fff" : "var(--text)",
-              fontSize: SETTINGS_CONTROL_FONT_SIZE,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              cursor: "pointer",
-            }}
+            className={[styles.segment, active ? styles.segmentActive : ""].filter(Boolean).join(" ")}
           >
             {option.label}
           </button>
@@ -467,17 +384,8 @@ export function TextArea({
       placeholder={placeholder}
       disabled={disabled}
       spellCheck={false}
-      style={{
-        ...inputStyle,
-        height: "auto",
-        minHeight: 80,
-        padding: "8px 10px",
-        resize: "vertical",
-        lineHeight: 1.5,
-        borderColor: invalid ? "var(--error)" : "var(--border)",
-        fontFamily: mono ? "var(--font-mono)" : "inherit",
-        ...style,
-      }}
+      className={[styles.input, styles.textarea, mono ? styles.mono : "", invalid ? styles.invalid : ""].filter(Boolean).join(" ")}
+      style={style}
     />
   );
 }

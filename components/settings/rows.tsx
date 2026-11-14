@@ -1,78 +1,59 @@
 "use client";
 
-import { useI18n } from "@/hooks/useI18n";
-import { NumericField } from "@/components/ui/NumericField";
+import type { ReactNode } from "react";
+import styles from "./rows.module.css";
 
-export function FileViewerLimitRow({
-  label,
-  min,
-  max,
-  value,
-  onCommit,
+export function SettingsGroup({
+  title,
+  action,
+  children,
 }: {
-  label: string;
-  min: number;
-  max: number;
-  value: number;
-  onCommit: (next: number) => void;
+  title?: string;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
-  const { t } = useI18n();
   return (
-    <div style={{ marginBottom: 12 }}>
-      <NumericField
-        label={label}
-        value={value}
-        onCommit={(next) => { if (next !== null) onCommit(next); }}
-        min={min}
-        max={max}
-        unit="MB"
-        hint={t("Range: {min}–{max} MB", { min, max })}
-        emptyHint={t("Value must not be empty")}
-        rangeError={t("Must be between {min} and {max}", { min, max })}
-        ariaLabel={label}
-      />
+    <section className={styles.group}>
+      {(title || action) && (
+        <div className={styles.groupHeader}>
+          {title ? <h3 className={styles.groupTitle}>{title}</h3> : <span />}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function SettingsRow({
+  title,
+  description,
+  children,
+  stacked,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+  stacked?: boolean;
+}) {
+  return (
+    <div className={[styles.row, stacked ? styles.rowStacked : ""].filter(Boolean).join(" ")}>
+      <div className={styles.rowText}>
+        <span className={styles.rowTitle}>{title}</span>
+        {description && <span className={styles.rowDescription}>{description}</span>}
+      </div>
+      {children && <div className={styles.rowControl}>{children}</div>}
     </div>
   );
 }
 
-export function NumberRow({
-  label,
-  min,
-  max,
-  value,
-  placeholder,
-  optional,
-  unitSuffix,
-  onCommit,
+export function SettingsNote({
+  children,
+  tone = "muted",
 }: {
-  label: string;
-  min: number;
-  max: number;
-  value: number | null;
-  placeholder: string;
-  optional: boolean;
-  unitSuffix?: string;
-  onCommit: (next: number | null) => void;
+  children: ReactNode;
+  tone?: "muted" | "error" | "success";
 }) {
-  const { t } = useI18n();
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <NumericField
-        label={label}
-        value={value}
-        onCommit={onCommit}
-        min={min}
-        max={max}
-        placeholder={placeholder}
-        unit={unitSuffix}
-        optional={optional}
-        emptyHint={t("Value must not be empty")}
-        rangeError={t("Must be between {min} and {max}", { min, max })}
-        hint={optional
-          ? t("Range: {min}–{max} (empty = use SDK default)", { min, max })
-          : t("Range: {min}–{max}", { min, max })}
-        ariaLabel={label}
-      />
-    </div>
-  );
+  const toneClass = tone === "error" ? styles.noteError : tone === "success" ? styles.noteSuccess : "";
+  return <p className={[styles.note, toneClass].filter(Boolean).join(" ")}>{children}</p>;
 }

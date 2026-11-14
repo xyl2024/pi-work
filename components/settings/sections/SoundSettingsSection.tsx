@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SecondaryButton, Select } from "../controls";
+import { SettingsGroup, SettingsRow } from "../rows";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
 import {
@@ -88,56 +89,40 @@ export function SoundSettingsSection({
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "var(--text)" }}>
-            {t("Sounds enabled")}
-          </span>
+      <SettingsGroup>
+        <SettingsRow title={t("Sounds enabled")}>
           <ToggleSwitch
             on={sounds.enabled}
             onChange={(next) => updateSounds({ enabled: next })}
             label={t("UI Sounds")}
           />
-        </div>
+        </SettingsRow>
+        <SettingsRow title={t("Master volume")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, width: 240 }}>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={volume}
+              onChange={(event) => setVolume(Number(event.target.value))}
+              onPointerUp={commitVolume}
+              onBlur={commitVolume}
+              onKeyUp={commitVolume}
+              style={{ flex: 1, accentColor: "var(--accent)" }}
+            />
+            <span style={{ fontSize: 12, color: "var(--text-muted)", width: 38, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+              {volume}%
+            </span>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "var(--text)", minWidth: 100 }}>
-            {t("Master volume")}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={volume}
-            onChange={(event) => setVolume(Number(event.target.value))}
-            onPointerUp={commitVolume}
-            onBlur={commitVolume}
-            onKeyUp={commitVolume}
-            style={{ flex: 1, accentColor: "var(--accent)" }}
-          />
-          <span style={{ fontSize: 12, color: "var(--text-muted)", width: 38, textAlign: "right" }}>
-            {volume}%
-          </span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <SettingsGroup title={t("Events")}>
         {UI_SOUND_EVENT_IDS.map((eventId) => {
           const current = sounds.events[eventId] ?? "";
           return (
-            <div
-              key={eventId}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr minmax(180px, 220px)",
-                gap: 12,
-                alignItems: "center",
-              }}
-            >
-              <label htmlFor={`sound-event-${eventId}`} style={{ fontSize: 13, color: "var(--text)" }}>
-                {t(EVENT_LABEL_KEYS[eventId])}
-              </label>
+            <SettingsRow key={eventId} title={t(EVENT_LABEL_KEYS[eventId])}>
               <Select
                 id={`sound-event-${eventId}`}
                 value={current}
@@ -147,32 +132,23 @@ export function SoundSettingsSection({
                   ...SOUND_IDS.map((id) => ({ value: id, label: t(id) })),
                 ]}
                 onChange={(value) => setEventSound(eventId, value)}
+                style={{ width: 200 }}
               />
-            </div>
+            </SettingsRow>
           );
         })}
-      </div>
+      </SettingsGroup>
 
-      <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <SecondaryButton onClick={restoreDefaults}>
-          {t("Restore sound defaults")}
-        </SecondaryButton>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {t("Preview:")}
-        </span>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <SettingsGroup title={t("Preview")} action={<SecondaryButton onClick={restoreDefaults}>{t("Restore sound defaults")}</SecondaryButton>}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 10 }}>
           {SOUND_IDS.map((id) => (
-            <SecondaryButton
-              key={id}
-              onClick={() => playNamedSound(id)}
-              style={{ height: 26, padding: "4px 10px", fontSize: 11 }}
-            >
-              <span style={{ marginRight: 6 }}>♪</span>
+            <SecondaryButton key={id} onClick={() => playNamedSound(id)}>
+              <span aria-hidden="true">♪</span>
               {t(id)}
             </SecondaryButton>
           ))}
         </div>
-      </div>
+      </SettingsGroup>
     </>
   );
 }

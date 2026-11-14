@@ -3,6 +3,7 @@
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { useI18n } from "@/hooks/useI18n";
 import type { SubagentProfile } from "@/lib/shared/subagent";
+import { DangerButton, SecondaryButton } from "../controls";
 
 export function SubagentCard({
   profile,
@@ -66,20 +67,8 @@ export function SubagentCard({
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
-        <button
-          type="button"
-          onClick={onEdit}
-          style={{ padding: "3px 9px", fontSize: 11, borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--text)", cursor: "pointer" }}
-        >
-          {t("Edit")}
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          style={{ padding: "3px 9px", fontSize: 11, borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--error)", cursor: "pointer" }}
-        >
-          {t("Delete")}
-        </button>
+        <SecondaryButton onClick={onEdit}>{t("Edit")}</SecondaryButton>
+        <DangerButton onClick={onDelete}>{t("Delete")}</DangerButton>
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ import {
   updateDangerousRule,
   type DangerousRulesDraft,
 } from "@/lib/shared/dangerous-commands-draft";
-import { Field, PrimaryButton, SETTINGS_RADIUS, TextInput, inputStyle } from "../controls";
+import { Field, PrimaryButton, SETTINGS_RADIUS, TextInput } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { useSettingsPageData } from "../use-page-data";
@@ -196,20 +196,12 @@ function CommandTester() {
         }}
         style={{ display: "flex", gap: 8, alignItems: "center" }}
       >
-        <input
+                <TextInput
           value={command}
-          onChange={(event) => setCommand(event.target.value)}
+          onChange={setCommand}
           placeholder="pkill node"
-          aria-label={t("Command to test")}
-          spellCheck={false}
-          autoComplete="off"
-          style={{
-            ...inputStyle,
-            flex: 1,
-            minWidth: 0,
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-          }}
+          mono
+          style={{ flex: 1, minWidth: 0 }}
         />
         <PrimaryButton type="submit" disabled={testing}>
           {testing ? t("Testing…") : t("Test")}

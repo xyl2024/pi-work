@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { DangerButton, SecondaryButton, TextInput } from "../controls";
+import { SettingsGroup, SettingsRow } from "../rows";
 import type { DirtyReporter } from "../use-unsaved-changes";
 
 const SUPPORTED_AVATAR_TYPES = [
@@ -149,86 +150,93 @@ export function ProfileSection({
   }, [onProfileSaved, t, toast]);
 
   return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 4 }}>
-        <UnsavedHint show={profileDirty} />
-        <SaveButton
-          canSave={profileCanSave}
-          saving={profileSaving}
-          saved={profileSavedOk}
-          onClick={handleProfileSave}
-        />
-      </div>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
-        {t("Avatar and display name shown at the bottom of the sidebar.")}
-      </p>
-
-      <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 14 }}>
-        <div
-          style={{
-            width: 64, height: 64, flexShrink: 0,
-            borderRadius: "50%", overflow: "hidden",
-            background: "var(--bg)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px solid var(--border)",
-            position: "relative",
-          }}
-        >
-          {hasAvatar && !avatarRemoved ? (
-            <SmartImage
-              key={`preview-${avatarAttempt}`}
-              src={`/api/profile/avatar?k=${avatarAttempt}`}
-              alt=""
-              loaderSize={28}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              onError={() => setHasAvatar(false)}
-            />
-          ) : (
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-          )}
-        </div>
-
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={AVATAR_ACCEPT}
-            onChange={handleAvatarFileChange}
-            style={{ display: "none" }}
+    <SettingsGroup
+      action={(
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <UnsavedHint show={profileDirty} />
+          <SaveButton
+            canSave={profileCanSave}
+            saving={profileSaving}
+            saved={profileSavedOk}
+            onClick={handleProfileSave}
           />
-          <SecondaryButton onClick={() => fileInputRef.current?.click()}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            {t("Upload avatar")}
-          </SecondaryButton>
-          <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
-            {t("Common image types · up to 5MB")}
-          </span>
-          {hasAvatar && !avatarRemoved && (
-            <DangerButton
-              onClick={handleAvatarRemove}
-              style={{ alignSelf: "flex-start", height: 26, padding: "4px 10px", fontSize: 11 }}
-            >
-              {t("Remove avatar")}
-            </DangerButton>
-          )}
         </div>
-      </div>
+      )}
+    >
+      <SettingsRow
+        title={t("Avatar")}
+        description={t("Avatar and display name shown at the bottom of the sidebar.")}
+        stacked
+      >
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div
+            style={{
+              width: 64, height: 64, flexShrink: 0,
+              borderRadius: "50%", overflow: "hidden",
+              background: "var(--bg-panel)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--border)",
+              position: "relative",
+            }}
+          >
+            {hasAvatar && !avatarRemoved ? (
+              <SmartImage
+                key={`preview-${avatarAttempt}`}
+                src={`/api/profile/avatar?k=${avatarAttempt}`}
+                alt=""
+                loaderSize={28}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={() => setHasAvatar(false)}
+              />
+            ) : (
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            )}
+          </div>
 
-      <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>{t("Username")}</div>
-      <TextInput
-        placeholder={t("Your display name")}
-        value={profileUsername}
-        onChange={setProfileUsername}
-        disabled={profileLoading}
-        maxLength={64}
-      />
-    </>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={AVATAR_ACCEPT}
+              onChange={handleAvatarFileChange}
+              style={{ display: "none" }}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <SecondaryButton onClick={() => fileInputRef.current?.click()}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                {t("Upload avatar")}
+              </SecondaryButton>
+              {hasAvatar && !avatarRemoved && (
+                <DangerButton onClick={handleAvatarRemove}>
+                  {t("Remove avatar")}
+                </DangerButton>
+              )}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+              {t("Common image types · up to 5MB")}
+            </span>
+          </div>
+        </div>
+      </SettingsRow>
+
+      <SettingsRow title={t("Username")}>
+        <div style={{ width: 240 }}>
+          <TextInput
+            placeholder={t("Your display name")}
+            value={profileUsername}
+            onChange={setProfileUsername}
+            disabled={profileLoading}
+            maxLength={64}
+          />
+        </div>
+      </SettingsRow>
+    </SettingsGroup>
   );
 }

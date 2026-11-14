@@ -3,6 +3,9 @@
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { SecondaryButton } from "../controls";
+import { SettingsGroup, SettingsRow } from "../rows";
+import { IconButton } from "@/components/ui/IconButton";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/panels/right-bar/desc";
 import {
   resolveSessionBoundAlignment,
@@ -148,33 +151,32 @@ export function RightBarSection({
 
   return (
     <>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
-            {t("Button order")}
-          </h4>
-          {config.right_side_bar.order !== undefined && (
-            <SecondaryButton
-              onClick={handleRightBarResetOrder}
-              style={{ height: 26, padding: "4px 10px" }}
-            >
+      <SettingsGroup
+        action={config.right_side_bar.order !== undefined
+          ? (
+            <SecondaryButton onClick={handleRightBarResetOrder}>
               {t("Reset to defaults")}
             </SecondaryButton>
-          )}
-        </div>
+          )
+          : undefined}
+      >
         {orderGroups.map((group, groupIdx) => (
-          <div key={group.key} style={{ marginTop: groupIdx === 0 ? 0 : 14 }}>
+          <div key={group.key}>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                marginBottom: 6,
+                paddingTop: groupIdx === 0 ? 8 : 18,
+                paddingBottom: 2,
                 fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.07em",
+                textTransform: "uppercase",
                 color: "var(--text-dim)",
               }}
             >
-              <span style={{ fontWeight: 600 }}>
+              <span>
                 {group.sessionBound === null
                   ? t("All buttons")
                   : group.sessionBound
@@ -182,114 +184,90 @@ export function RightBarSection({
                     : t("Other buttons")}
               </span>
               {group.sessionBound !== null && (
-                <span>
+                <span style={{ fontWeight: 500, letterSpacing: 0 }}>
                   · {t(groupIdx === 0 ? "top section" : "bottom section")}
                 </span>
               )}
             </div>
-            <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-              {group.ids.map((id, idx) => {
-                const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id);
-                const labelKey = descriptor?.labelKey ?? "";
-                const enabled = config.right_side_bar[id] !== false;
-                const isFirst = idx === 0;
-                const isLast = idx === group.ids.length - 1;
-                return (
-                  <li
-                    key={id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "6px 10px",
-                      background: "var(--bg-subtle)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 4,
-                      fontSize: 13,
-                      color: "var(--text)",
-                    }}
+            {group.ids.map((id, idx) => {
+              const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id);
+              const labelKey = descriptor?.labelKey ?? "";
+              const enabled = config.right_side_bar[id] !== false;
+              const isFirst = idx === 0;
+              const isLast = idx === group.ids.length - 1;
+              return (
+                <SettingsRow
+                  key={id}
+                  title={(
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          color: enabled ? "var(--text-muted)" : "var(--text-dim)",
+                        }}
+                      >
+                        {descriptor?.icon({ size: 14, active: false })}
+                      </span>
+                      <span style={{ color: enabled ? "var(--text)" : "var(--text-dim)" }}>
+                        {t(labelKey)}
+                      </span>
+                    </span>
+                  )}
+                >
+                  <ToggleSwitch
+                    size="sm"
+                    on={enabled}
+                    onChange={() => handleRightBarToggle(id)}
+                    label={enabled ? t("Disable button") : t("Enable button")}
+                  />
+                  <IconButton
+                    label={t("Move up")}
+                    onClick={() => handleRightBarMove(id, "up", group.sessionBound)}
+                    disabled={isFirst}
                   >
-                    <span style={{ minWidth: 20, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 12, textAlign: "right" }}>
-                      {idx + 1}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: 18,
-                        flexShrink: 0,
-                        color: enabled ? "var(--text)" : "var(--text-dim)",
-                      }}
-                    >
-                      {descriptor?.icon({ size: 14, active: false })}
-                    </span>
-                    <span style={{ flex: 1, color: enabled ? "var(--text)" : "var(--text-dim)" }}>
-                      {t(labelKey)}
-                    </span>
-                    <SecondaryButton
-                      onClick={() => handleRightBarToggle(id)}
-                      style={{ height: 24, padding: "2px 10px", fontSize: 11 }}
-                    >
-                      {enabled ? t("Disable button") : t("Enable button")}
-                    </SecondaryButton>
-                    <SecondaryButton
-                      onClick={() => handleRightBarMove(id, "up", group.sessionBound)}
-                      disabled={isFirst}
-                      ariaLabel={t("Move up")}
-                      style={{ height: 24, minWidth: 28, padding: "2px 8px", fontSize: 11 }}
-                    >
-                      ↑
-                    </SecondaryButton>
-                    <SecondaryButton
-                      onClick={() => handleRightBarMove(id, "down", group.sessionBound)}
-                      disabled={isLast}
-                      ariaLabel={t("Move down")}
-                      style={{ height: 24, minWidth: 28, padding: "2px 8px", fontSize: 11 }}
-                    >
-                      ↓
-                    </SecondaryButton>
-                  </li>
-                );
-              })}
-            </ol>
+                    ↑
+                  </IconButton>
+                  <IconButton
+                    label={t("Move down")}
+                    onClick={() => handleRightBarMove(id, "down", group.sessionBound)}
+                    disabled={isLast}
+                  >
+                    ↓
+                  </IconButton>
+                </SettingsRow>
+              );
+            })}
           </div>
         ))}
-      </div>
+      </SettingsGroup>
 
-      <div style={{ marginTop: 20, paddingTop: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
-            {t("Session-bound button alignment")}
-          </h4>
-        </div>
-        <div role="radiogroup" aria-label={t("Session-bound button alignment")} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {([
-            { value: "top" as const,    labelKey: "Align session-bound buttons to the top" },
-            { value: "bottom" as const, labelKey: "Align session-bound buttons to the bottom (default)" },
-            { value: "inline" as const, labelKey: "Inline with button order (legacy)" },
-          ]).map((opt) => {
-            const checked = currentAlignment === opt.value;
-            return (
-              <label
-                key={opt.value}
-                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--text)" }}
-              >
-                <input
-                  type="radio"
-                  name="right-bar-session-bound-alignment"
-                  value={opt.value}
-                  checked={checked}
-                  onChange={() => handleRightBarAlignmentChange(opt.value)}
-                  style={{ width: 14, height: 14, accentColor: "var(--accent)", cursor: "pointer" }}
-                />
-                <span>{t(opt.labelKey)}</span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
+      <SettingsGroup title={t("Session-bound button alignment")}>
+        {([
+          { value: "top" as const,    labelKey: "Align session-bound buttons to the top" },
+          { value: "bottom" as const, labelKey: "Align session-bound buttons to the bottom (default)" },
+          { value: "inline" as const, labelKey: "Inline with button order (legacy)" },
+        ]).map((opt) => {
+          const checked = currentAlignment === opt.value;
+          return (
+            <SettingsRow
+              key={opt.value}
+              title={t(opt.labelKey)}
+            >
+              <input
+                type="radio"
+                name="right-bar-session-bound-alignment"
+                value={opt.value}
+                checked={checked}
+                onChange={() => handleRightBarAlignmentChange(opt.value)}
+                aria-label={t(opt.labelKey)}
+                style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: "pointer" }}
+              />
+            </SettingsRow>
+          );
+        })}
+      </SettingsGroup>
     </>
   );
 }

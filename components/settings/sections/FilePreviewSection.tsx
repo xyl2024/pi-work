@@ -3,7 +3,8 @@
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import { FileViewerLimitRow } from "../rows";
+import { NumericField } from "@/components/ui/NumericField";
+import { SettingsGroup, SettingsRow } from "../rows";
 import { FILE_VIEWER_UI } from "../constants";
 import {
   FILE_VIEWER_LIMITS,
@@ -44,20 +45,26 @@ export function FilePreviewSection({
   );
 
   return (
-    <>
+    <SettingsGroup>
       {FILE_VIEWER_UI.map(({ kind, labelKey }) => {
         const { min, max } = FILE_VIEWER_LIMITS[kind];
         return (
-          <FileViewerLimitRow
+          <SettingsRow
             key={kind}
-            label={t(labelKey)}
-            min={min}
-            max={max}
-            value={config.file_viewer.max_size_mb[kind]}
-            onCommit={(next) => void handleChange(kind, next)}
-          />
+            title={t(labelKey)}
+            description={t("Range: {min}–{max} MB", { min, max })}
+          >
+            <NumericField
+              value={config.file_viewer.max_size_mb[kind]}
+              onCommit={(next) => { if (next !== null) void handleChange(kind, next); }}
+              min={min}
+              max={max}
+              unit="MB"
+              ariaLabel={t(labelKey)}
+            />
+          </SettingsRow>
         );
       })}
-    </>
+    </SettingsGroup>
   );
 }

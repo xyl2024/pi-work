@@ -109,17 +109,17 @@ export function NumericField({
   const atMax = value !== null && Number.isInteger(value) && value >= max;
   const inputStyle: CSSProperties = {
     width,
-    height: 32,
+    height: 34,
     padding: "4px 9px",
-    border: `1px solid ${error ? "var(--error)" : focused ? "var(--accent)" : "var(--border)"}`,
-    borderRadius: 6,
+    border: `1px solid ${error ? "var(--error)" : focused ? "var(--accent)" : "transparent"}`,
+    borderRadius: 8,
     background: "var(--bg-panel)",
     color: "var(--text)",
     fontSize: 12,
     fontFamily: "var(--font-mono)",
     fontVariantNumeric: "tabular-nums",
     textAlign: "left",
-    boxShadow: focused ? "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)" : "none",
+    boxShadow: focused ? "0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)" : "none",
   };
 
   return (
@@ -165,16 +165,14 @@ function stepButtonStyle(side: "left" | "right", disabled: boolean): CSSProperti
   return {
     width: 28,
     minWidth: 28,
-    height: 32,
+    height: 34,
     padding: 0,
-    border: "1px solid var(--border)",
-    borderRight: side === "left" ? "none" : "1px solid var(--border)",
-    borderLeft: side === "right" ? "none" : "1px solid var(--border)",
-    borderRadius: side === "left" ? "6px 0 0 6px" : "0 6px 6px 0",
+    border: "none",
+    borderRadius: side === "left" ? "8px 0 0 8px" : "0 8px 8px 0",
     background: "var(--bg-panel)",
     color: disabled ? "var(--text-dim)" : "var(--text-muted)",
     cursor: disabled ? "default" : "pointer",
-    fontSize: 18,
+    fontSize: 17,
     lineHeight: 1,
   };
 }

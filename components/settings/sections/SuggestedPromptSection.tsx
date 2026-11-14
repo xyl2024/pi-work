@@ -3,6 +3,7 @@
 import { useI18n } from "@/hooks/useI18n";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { ModelSelect } from "../ModelSelect";
+import { SettingsGroup, SettingsRow } from "../rows";
 import type { PiWorkConfig, SuggestedPromptConfig } from "@/lib/shared/config-types";
 
 const DEFAULT_MODEL_VALUE = "default";
@@ -29,26 +30,25 @@ export function SuggestedPromptSection({
   };
 
   return (
-    <>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 13, color: "var(--text)" }}>
-          {t("Enable suggested prompts")}
-        </span>
+    <SettingsGroup>
+      <SettingsRow
+        title={t("Enable suggested prompts")}
+        description={t("Offer follow-up questions after each reply.")}
+      >
         <ToggleSwitch
           on={settings.enabled}
           onChange={(next) => update({ enabled: next })}
           label={t("Enable suggested prompts")}
         />
-      </div>
-
-      <div style={{ maxWidth: 320 }}>
+      </SettingsRow>
+      <SettingsRow title={t("Model")}>
         <ModelSelect
-          label={t("Model")}
           value={settings.model}
           leadingOption={{ value: DEFAULT_MODEL_VALUE, label: t("Default model") }}
           onChange={(model) => update({ model })}
+          width={220}
         />
-      </div>
-    </>
+      </SettingsRow>
+    </SettingsGroup>
   );
 }

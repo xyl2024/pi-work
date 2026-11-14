@@ -1,0 +1,241 @@
+.backdrop {
+  background: color-mix(in srgb, #000 42%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.panel {
+  display: flex;
+  width: min(920px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 72px));
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.24),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 216px;
+  min-height: 0;
+  padding: 22px 12px 16px;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+
+.railTitle {
+  flex: none;
+  padding: 0 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.group + .group {
+  margin-top: 18px;
+}
+
+.groupLabel {
+  padding: 0 10px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.navItem:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.navItemActive {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.navItemActive:hover {
+  background: var(--bg);
+}
+
+.navItem:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.navIcon {
+  display: flex;
+  flex: none;
+  opacity: 0.62;
+}
+
+.navItemActive .navIcon {
+  opacity: 1;
+}
+
+.navLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dirtyDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.contentHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  padding: 22px 24px 12px 26px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.pageDescription {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.close:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 26px 28px;
+}
+
+.page {
+  max-width: 640px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(920px, calc(100vw - 40px));
+  height: 200px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.statusError {
+  color: var(--error);
+}
+
+@media (max-width: 720px) {
+  .panel {
+    width: calc(100vw - 20px);
+    height: calc(100vh - 32px);
+  }
+
+  .rail {
+    width: 168px;
+    padding: 18px 8px 14px;
+  }
+
+  .railTitle {
+    padding: 0 8px 12px;
+  }
+
+  .groupLabel,
+  .navItem {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .contentHeader {
+    padding: 18px 16px 10px 18px;
+  }
+
+  .scroll {
+    padding: 0 18px 22px;
+  }
+}

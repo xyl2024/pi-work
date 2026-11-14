@@ -78,3 +78,7 @@ export const MinimizeIcon = (props: IconProps) => <Icon {...props}><polyline poi
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 3v11" /><polyline points="7 10 12 15 17 10" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></Icon>;
 export const NotificationIcon = (props: IconProps) => <Icon {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Icon>;
 export const CompressIcon = (props: IconProps) => <Icon {...props}><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="15" y2="12" /><line x1="4" y1="17" x2="10" y2="17" /></Icon>;
+export const UserIcon = (props: IconProps) => <Icon {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Icon>;
+export const PaletteIcon = (props: IconProps) => <Icon {...props}><path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 1.6-3.2 2 2 0 0 1 1.6-3.2H18a3 3 0 0 0 3-3.2A9 9 0 0 0 12 3Z" /><circle cx="8" cy="9" r="1" /><circle cx="12" cy="7" r="1" /><circle cx="16" cy="9" r="1" /></Icon>;
+export const VolumeIcon = (props: IconProps) => <Icon {...props}><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18.5 5.5a9 9 0 0 1 0 13" /></Icon>;
+export const KeyIcon = (props: IconProps) => <Icon {...props}><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M16 4l3 3M14 6l3 3" /></Icon>;

@@ -3,6 +3,7 @@
 import { useI18n } from "@/hooks/useI18n";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { SettingsGroup, SettingsRow } from "../rows";
 
 export function AssistantSection({
   config,
@@ -15,15 +16,19 @@ export function AssistantSection({
   const shown = config.assistant.sidebar_entry;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ fontSize: 13, color: "var(--text)" }}>{t("Sidebar entry")}</span>
-      <ToggleSwitch
-        on={shown}
-        onChange={(next) => {
-          void apply((prev) => ({ ...prev, assistant: { sidebar_entry: next } }));
-        }}
-        label={t("Sidebar entry")}
-      />
-    </div>
+    <SettingsGroup>
+      <SettingsRow
+        title={t("Sidebar entry")}
+        description={t("Show the assistant entry in the sidebar.")}
+      >
+        <ToggleSwitch
+          on={shown}
+          onChange={(next) => {
+            void apply((prev) => ({ ...prev, assistant: { sidebar_entry: next } }));
+          }}
+          label={t("Sidebar entry")}
+        />
+      </SettingsRow>
+    </SettingsGroup>
   );
 }

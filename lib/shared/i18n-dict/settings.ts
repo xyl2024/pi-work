@@ -220,4 +220,26 @@ export const settings = {
 
   "Suggested prompt": "建议问题",
   "Enable suggested prompts": "启用建议问题",
+
+  "Events": "事件",
+  "API key": "API 密钥",
+  "Language of the interface.": "界面语言。",
+  "Show the assistant entry in the sidebar.": "在侧栏显示助手入口。",
+  "Show quick actions next to selected text.": "选中文本时显示快捷操作。",
+  "Offer follow-up questions after each reply.": "每次回复后给出可追问的问题建议。",
+  "Let the agent keep notes about you and your work across sessions.":
+    "让 agent 跨会话记住关于你和你的工作的笔记。",
+  "Base delay": "基础延迟",
+  "Backoff sequence: {sequence}": "退避序列：{sequence}",
+  "HTTP request timeout": "HTTP 请求超时",
+  "Max server-requested delay": "服务端建议的最大延迟",
+  "Range: {min}–{max}": "范围：{min}–{max}",
+  "Failed to save retry config": "保存重试配置失败",
+  "Include Pi's built-in documentation in the system prompt.": "在系统提示词中包含 Pi 内置文档。",
+  "Open quick menu": "打开快捷菜单",
+  "Range: {min}–{max} (empty = SDK default)": "范围：{min}–{max}（留空使用 SDK 默认值）",
+  "Retry config not loaded": "重试配置尚未加载",
+  "Retry failed agent runs with exponential backoff.": "用指数退避重试失败的 agent 运行。",
+  "SDK default": "SDK 默认值",
+  "no retries": "不重试",
 } as const;

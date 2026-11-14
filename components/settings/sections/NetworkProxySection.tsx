@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { SecondaryButton, TextInput } from "../controls";
+import { SettingsGroup, SettingsNote, SettingsRow } from "../rows";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { ALWAYS_BYPASS_HOSTS, type PiWorkConfig } from "@/lib/shared/config-types";
 import type { DirtyReporter } from "../use-unsaved-changes";
@@ -103,88 +104,86 @@ export function NetworkProxySection({
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <label htmlFor="network-proxy-url" style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {t("Proxy address")}
-        </label>
-        <TextInput
-          id="network-proxy-url"
-          value={url}
-          onChange={setUrl}
-          placeholder="http://127.0.0.1:7897"
-          mono
-        />
-        {!canUseProxy && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {t("Enter a proxy address first — it is required to enable or test the proxy.")}
+      <SettingsGroup
+        action={(
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <UnsavedHint show={dirty} />
+            <SaveButton
+              canSave={dirty}
+              saving={saving}
+              saved={saveOk}
+              onClick={() => persist()}
+            />
           </div>
         )}
+      >
+        <SettingsRow
+          title={t("Proxy address")}
+          stacked
+        >
+          <TextInput
+            id="network-proxy-url"
+            value={url}
+            onChange={setUrl}
+            placeholder="http://127.0.0.1:7897"
+            mono
+          />
+          {!canUseProxy && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {t("Enter a proxy address first — it is required to enable or test the proxy.")}
+            </span>
+          )}
+        </SettingsRow>
 
-        <label style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-          {t("Bypass list (optional)")}
-        </label>
-        <TextInput
-          value={noProxy}
-          onChange={setNoProxy}
-          placeholder="10.0.0.0/8,.internal.example.com"
-          mono
-        />
-        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-          {t("Comma-separated hosts or suffixes. {hosts} are always bypassed.", {
+        <SettingsRow
+          title={t("Bypass list (optional)")}
+          description={t("Comma-separated hosts or suffixes. {hosts} are always bypassed.", {
             hosts: ALWAYS_BYPASS_HOSTS.join(", "),
           })}
-        </div>
-      </div>
+          stacked
+        >
+          <TextInput
+            value={noProxy}
+            onChange={setNoProxy}
+            placeholder="10.0.0.0/8,.internal.example.com"
+            mono
+          />
+        </SettingsRow>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--text)" }}>
-          <span>{t("Use proxy")}</span>
+        <SettingsRow
+          title={t("Use proxy")}
+          description={(
+            <span style={{ color: active ? "var(--success)" : "var(--text-muted)" }}>
+              {active
+                ? t("Proxy enabled — {url}", { url: saved.url })
+                : t("Proxy disabled")}
+            </span>
+          )}
+        >
           <ToggleSwitch
             on={saved.enabled}
             disabled={!canUseProxy}
             onChange={() => persist(!saved.enabled)}
             label={t("Use proxy")}
           />
-        </div>
+        </SettingsRow>
 
-        <SaveButton
-          canSave={dirty}
-          saving={saving}
-          saved={saveOk}
-          onClick={() => persist()}
-        />
-        <SecondaryButton onClick={runTest} disabled={!canUseProxy || testing}>
-          {testing ? t("Testing…") : t("Test connection")}
-        </SecondaryButton>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: active ? "var(--success)" : "var(--text-dim)" }}>
-          {active
-            ? t("Proxy enabled — {url}", { url: saved.url })
-            : t("Proxy disabled")}
-        </span>
-        <UnsavedHint show={dirty} />
-      </div>
+        <SettingsRow title={t("Test connection")}>
+          <SecondaryButton onClick={runTest} disabled={!canUseProxy || testing}>
+            {testing ? t("Testing…") : t("Test connection")}
+          </SecondaryButton>
+        </SettingsRow>
+      </SettingsGroup>
 
       {probeMessage && (
-        <div
-          style={{
-            fontSize: 12,
-            marginTop: 8,
-            color: probe?.ok ? "var(--success)" : "var(--error)",
-            lineHeight: 1.5,
-          }}
-        >
-          {probeMessage}
-        </div>
+        <SettingsNote tone={probe?.ok ? "success" : "error"}>{probeMessage}</SettingsNote>
       )}
 
-      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 10, lineHeight: 1.5 }}>
+      <SettingsNote>
         {t("The connection test sends one request to {url} through the proxy. Only http:// and https:// proxies are supported.", {
           url: "https://www.google.com/generate_204",
         })}
-      </div>
+      </SettingsNote>
     </>
   );
 }

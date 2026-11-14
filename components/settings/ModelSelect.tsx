@@ -19,8 +19,10 @@ export function ModelSelect({
   value,
   onChange,
   leadingOption,
+  width,
 }: {
-  label: string;
+  label?: string;
+  width?: number;
   value: ModelSelection | null;
   onChange: (value: ModelSelection | null) => void;
   leadingOption: { value: string; label: string };
@@ -50,28 +52,29 @@ export function ModelSelect({
     return [...groups.entries()];
   }, [models]);
 
-  return (
-    <Field label={label}>
-      <GroupedSelect
-        value={value ? `${value.provider}:${value.modelId}` : leadingOption.value}
-        disabled={models.length === 0}
-        leadingOption={leadingOption}
-        groups={groupedModels.map(([provider, providerModels]) => ({
-          label: provider,
-          options: providerModels.map((model) => ({
-            value: `${model.provider}:${model.id}`,
-            label: model.name,
-          })),
-        }))}
-        onChange={(next) => {
-          if (next === leadingOption.value) {
-            onChange(null);
-            return;
-          }
-          const [provider, ...id] = next.split(":");
-          onChange({ provider, modelId: id.join(":") });
-        }}
-      />
-    </Field>
+  const select = (
+    <GroupedSelect
+      value={value ? `${value.provider}:${value.modelId}` : leadingOption.value}
+      disabled={models.length === 0}
+      leadingOption={leadingOption}
+      groups={groupedModels.map(([provider, providerModels]) => ({
+        label: provider,
+        options: providerModels.map((model) => ({
+          value: `${model.provider}:${model.id}`,
+          label: model.name,
+        })),
+      }))}
+      onChange={(next) => {
+        if (next === leadingOption.value) {
+          onChange(null);
+          return;
+        }
+        const [provider, ...id] = next.split(":");
+        onChange({ provider, modelId: id.join(":") });
+      }}
+      style={width === undefined ? undefined : { width }}
+    />
   );
+  if (label === undefined) return select;
+  return <Field label={label}>{select}</Field>;
 }

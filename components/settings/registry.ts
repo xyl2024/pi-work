@@ -1,3 +1,5 @@
+import type { IconName } from "@/components/ui/icons";
+
 export type SettingsGroupId = "personal" | "appearance" | "agent" | "integrations" | "developer";
 
 export interface SettingsGroupSpec {
@@ -30,6 +32,7 @@ export interface SettingsSectionSpec {
   id: SettingsSectionId;
   labelKey: string;
   group: SettingsGroupId;
+  icon: IconName;
 }
 
 export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
@@ -48,28 +51,28 @@ export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
 ];
 
 export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
-  { id: "profile", labelKey: "Profile", group: "personal" },
+  { id: "profile", labelKey: "Profile", group: "personal", icon: "user" },
 
-  { id: "appearance", labelKey: "Theme & language", group: "appearance" },
-  { id: "right-bar", labelKey: "Right-side buttons", group: "appearance" },
-  { id: "assistant", labelKey: "Assistant", group: "appearance" },
-  { id: "text-selection-toolbar", labelKey: "Text selection toolbar", group: "appearance" },
-  { id: "ui-sounds", labelKey: "UI Sounds", group: "appearance" },
-  { id: "file-preview", labelKey: "File preview limits", group: "appearance" },
+  { id: "appearance", labelKey: "Theme & language", group: "appearance", icon: "palette" },
+  { id: "right-bar", labelKey: "Right-side buttons", group: "appearance", icon: "panelRight" },
+  { id: "assistant", labelKey: "Assistant", group: "appearance", icon: "sparkle" },
+  { id: "text-selection-toolbar", labelKey: "Text selection toolbar", group: "appearance", icon: "edit" },
+  { id: "ui-sounds", labelKey: "UI Sounds", group: "appearance", icon: "volume" },
+  { id: "file-preview", labelKey: "File preview limits", group: "appearance", icon: "folder" },
 
-  { id: "append-system", labelKey: "System Prompt", group: "agent" },
-  { id: "memory", labelKey: "Memory", group: "agent" },
-  { id: "compaction", labelKey: "Context compaction", group: "agent" },
-  { id: "dangerous-commands", labelKey: "Dangerous commands", group: "agent" },
-  { id: "subagent", labelKey: "Subagent settings", group: "agent" },
-  { id: "retry", labelKey: "Agent retry", group: "agent" },
-  { id: "suggested-prompt", labelKey: "Suggested prompt", group: "agent" },
+  { id: "append-system", labelKey: "System Prompt", group: "agent", icon: "book" },
+  { id: "memory", labelKey: "Memory", group: "agent", icon: "canvas" },
+  { id: "compaction", labelKey: "Context compaction", group: "agent", icon: "compress" },
+  { id: "dangerous-commands", labelKey: "Dangerous commands", group: "agent", icon: "shield" },
+  { id: "subagent", labelKey: "Subagent settings", group: "agent", icon: "conversationTree" },
+  { id: "retry", labelKey: "Agent retry", group: "agent", icon: "refresh" },
+  { id: "suggested-prompt", labelKey: "Suggested prompt", group: "agent", icon: "star" },
 
-  { id: "network-proxy", labelKey: "Network proxy", group: "integrations" },
-  { id: "deepseek-key", labelKey: "DeepSeek API Key", group: "integrations" },
+  { id: "network-proxy", labelKey: "Network proxy", group: "integrations", icon: "globe" },
+  { id: "deepseek-key", labelKey: "DeepSeek API Key", group: "integrations", icon: "key" },
 
-  { id: "toast-test", labelKey: "Toast Test", group: "developer" },
-  { id: "about", labelKey: "About Pi Work", group: "developer" },
+  { id: "toast-test", labelKey: "Toast Test", group: "developer", icon: "notification" },
+  { id: "about", labelKey: "About Pi Work", group: "developer", icon: "gear" },
 ];
 
 export function sectionsForGroup(group: SettingsGroupId): SettingsSectionSpec[] {

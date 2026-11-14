@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import type { DeepSeekApiKeyStatus } from "@/lib/shared/deepseek";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { DangerButton, SecretTextInput } from "../controls";
+import { SettingsGroup, SettingsNote, SettingsRow } from "../rows";
 import type { DirtyReporter } from "../use-unsaved-changes";
 
 const ENDPOINT = "/api/settings/deepseek-key";
@@ -101,50 +102,53 @@ export function DeepSeekKeySection({ onDirtyChange }: { onDirtyChange?: DirtyRep
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 4 }}>
-        <UnsavedHint show={keyDirty} />
-        <SaveButton
-          canSave={keyDirty && !saving && !clearing}
-          saving={saving}
-          saved={saveOk}
-          onClick={saveKey}
-        />
-      </div>
-
-      <div
-        style={{
-          fontSize: 12,
-          color: status?.configured ? "var(--success)" : "var(--text-dim)",
-          margin: "0 0 12px 0",
-          lineHeight: 1.5,
-        }}
+      <SettingsGroup
+        action={(
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <UnsavedHint show={keyDirty} />
+            <SaveButton
+              canSave={keyDirty && !saving && !clearing}
+              saving={saving}
+              saved={saveOk}
+              onClick={saveKey}
+            />
+          </div>
+        )}
       >
-        {loading ? t("Loading...") : statusLabel}
-      </div>
-
-      <SecretTextInput
-        value={key}
-        onChange={setKey}
-        mono
-        placeholder={
-          status?.configured
-            ? t("API Key configured; enter a new key to replace")
-            : t("Enter the DeepSeek API Key")
-        }
-      />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        <DangerButton
-          onClick={clearKey}
-          disabled={status?.source !== "file" || saving || clearing}
+        <SettingsRow
+          title={t("API key")}
+          description={(
+            <span style={{ color: status?.configured ? "var(--success)" : "var(--text-muted)" }}>
+              {loading ? t("Loading...") : statusLabel}
+            </span>
+          )}
+          stacked
         >
-          {clearing ? t("Clearing...") : t("Clear")}
-        </DangerButton>
-      </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <SecretTextInput
+              value={key}
+              onChange={setKey}
+              mono
+              style={{ flex: 1, minWidth: 0 }}
+              placeholder={
+                status?.configured
+                  ? t("API Key configured; enter a new key to replace")
+                  : t("Enter the DeepSeek API Key")
+              }
+            />
+            <DangerButton
+              onClick={clearKey}
+              disabled={status?.source !== "file" || saving || clearing}
+            >
+              {clearing ? t("Clearing...") : t("Clear")}
+            </DangerButton>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
 
-      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 10, lineHeight: 1.5 }}>
+      <SettingsNote>
         {t("The key is stored in the Pi Work data directory with 0600 permissions and takes priority over the DEEPSEEK_API_KEY environment variable.")}
-      </div>
+      </SettingsNote>
     </>
   );
 }

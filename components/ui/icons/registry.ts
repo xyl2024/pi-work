@@ -25,6 +25,7 @@ import {
   GitDiffGlyphIcon,
   GlobeIcon,
   JsonIcon,
+  KeyIcon,
   LanguageIcon,
   LlmAuditGlyphIcon,
   MinusIcon,
@@ -32,6 +33,7 @@ import {
   MaximizeIcon,
   MoonIcon,
   NotificationIcon,
+  PaletteIcon,
   PanelRightIcon,
   PlusIcon,
   RefreshIcon,
@@ -46,6 +48,8 @@ import {
   TokensChartIcon,
   ToolIcon,
   TrashIcon,
+  UserIcon,
+  VolumeIcon,
 } from "./primitives";
 import { GitBranchIcon, TerminalBoxIcon } from "./filled";
 import {
@@ -85,6 +89,7 @@ export const ICONS = {
   gitDiff: GitDiffGlyphIcon,
   globe: GlobeIcon,
   json: JsonIcon,
+  key: KeyIcon,
   language: LanguageIcon,
   llmAudit: LlmAuditGlyphIcon,
   minus: MinusIcon,
@@ -92,6 +97,7 @@ export const ICONS = {
   minimize: MinimizeIcon,
   moon: MoonIcon,
   notification: NotificationIcon,
+  palette: PaletteIcon,
   panelRight: PanelRightIcon,
   plus: PlusIcon,
   refresh: RefreshIcon,
@@ -108,6 +114,8 @@ export const ICONS = {
   gitBranch: GitBranchIcon,
   tool: ToolIcon,
   trash: TrashIcon,
+  user: UserIcon,
+  volume: VolumeIcon,
 } as const satisfies Record<string, ComponentType<never>>;
 
 export const ANIMATED_ICONS = {
