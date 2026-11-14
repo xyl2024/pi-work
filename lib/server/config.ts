@@ -144,11 +144,14 @@ const RESERVED_RIGHT_SIDEBAR_KEYS: ReadonlySet<string> = new Set([
   "session_bound_alignment",
 ]);
 
+const RETIRED_RIGHT_SIDEBAR_KEYS: ReadonlySet<string> = new Set(["canvas", "json"]);
+
 function legacyRightSideBarKeys(obj: Record<string, unknown>): Record<string, boolean> {
   const out: Record<string, boolean> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value !== "boolean") continue;
     if (RESERVED_RIGHT_SIDEBAR_KEYS.has(key)) continue;
+    if (RETIRED_RIGHT_SIDEBAR_KEYS.has(key)) continue;
     if ((CONFIGURABLE_BUTTON_IDS as readonly string[]).includes(key)) continue;
     out[key] = value;
   }
