@@ -147,6 +147,10 @@ export function DeepSeekKeySection({ onDirtyChange }: { onDirtyChange?: DirtyRep
       </SettingsGroup>
 
       <SettingsNote>
+        {t("Web search/fetch and voice transcription share this key")}
+      </SettingsNote>
+
+      <SettingsNote>
         {t("The key is stored in the Pi Work data directory with 0600 permissions and takes priority over the DEEPSEEK_API_KEY environment variable.")}
       </SettingsNote>
     </>

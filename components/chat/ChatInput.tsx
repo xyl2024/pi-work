@@ -20,6 +20,7 @@ import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/use
 import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
 import { canToggleVoiceInput } from "@/lib/shared/chat-shortcuts";
+import { voiceInputErrorMessageKey } from "@/lib/shared/voice-input";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import { createComposerPicker } from "@/lib/client/composer-picker";
@@ -455,6 +456,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <path d="M3 3v5h5" />
             </svg>
             {t("Retrying")} ({retryInfo.attempt}/{retryInfo.maxAttempts})…{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
+          </div>
+        )}
+        {voiceInput.error && (
+          <div
+            role="status"
+            style={{
+              marginBottom: 8,
+              fontSize: 12,
+              color: "#ef4444",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {t(voiceInputErrorMessageKey(voiceInput.error))}
           </div>
         )}
         {!hideToolbar && (

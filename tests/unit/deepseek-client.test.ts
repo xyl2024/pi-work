@@ -265,8 +265,9 @@ describe("DeepSeek client transcription", () => {
     [429, "rate_limited"],
     [503, "busy"],
     [504, "timeout"],
+    [408, "timeout"],
     [500, "failed"],
-    [401, "failed"],
+    [401, "missing_key"],
   ] as const)("maps upstream %i to %s", async (status, code) => {
     const client = createDeepSeekClient({
       baseUrl: "http://deepseek.test",

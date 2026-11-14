@@ -8,9 +8,12 @@ import {
   VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS,
   VOICE_INPUT_WARN_REMAINING_MS,
   isVoiceInputNearLimit,
+  VOICE_INPUT_ERROR_CODES,
+  voiceInputErrorCodeForRecorderError,
   voiceInputErrorMessageKey,
   type VoiceInputErrorCode,
 } from "@/lib/shared/voice-input";
+import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 
 function ascii(bytes: Uint8Array, start: number, length: number): string {
   return String.fromCharCode(...bytes.subarray(start, start + length));
@@ -111,5 +114,33 @@ describe("voiceInputErrorMessageKey", () => {
 
   it.each(Object.entries(keys))("maps %s to a stable English key", (code, expected) => {
     expect(voiceInputErrorMessageKey(code as VoiceInputErrorCode)).toBe(expected);
+  });
+
+  it.each(VOICE_INPUT_ERROR_CODES)("has a zh and en message for %s", (code) => {
+    const key = voiceInputErrorMessageKey(code);
+    expect(ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS]).toBeTruthy();
+    expect(EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS]).toBeTruthy();
+  });
+
+  it("explains the shared DeepSeek key in both languages", () => {
+    const key = "Web search/fetch and voice transcription share this key";
+    expect(ZH_TRANSLATIONS[key]).toBe("网页搜索/抓取、语音转写共用此 key");
+    expect(EN_TRANSLATIONS[key]).toBe("Web search/fetch and voice transcription share this key");
+  });
+});
+
+describe("voiceInputErrorCodeForRecorderError", () => {
+  it("treats denied and blocked microphone access as a permission problem", () => {
+    expect(voiceInputErrorCodeForRecorderError(new DOMException("denied", "NotAllowedError"))).toBe(
+      "permission_denied",
+    );
+    expect(voiceInputErrorCodeForRecorderError(new DOMException("blocked", "SecurityError"))).toBe(
+      "permission_denied",
+    );
+  });
+
+  it("falls back to a generic failure for other recorder errors", () => {
+    expect(voiceInputErrorCodeForRecorderError(new Error("no device"))).toBe("failed");
+    expect(voiceInputErrorCodeForRecorderError("boom")).toBe("failed");
   });
 });

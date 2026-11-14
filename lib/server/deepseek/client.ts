@@ -144,6 +144,8 @@ function fetchErrorCode(error: unknown): DeepSeekTranscriptionErrorCode {
 
 function upstreamErrorCode(status: number): DeepSeekTranscriptionErrorCode {
   if (status === 400) return "invalid_audio";
+  if (status === 401) return "missing_key";
+  if (status === 408) return "timeout";
   if (status === 413) return "too_large";
   if (status === 429) return "rate_limited";
   if (status === 503) return "busy";

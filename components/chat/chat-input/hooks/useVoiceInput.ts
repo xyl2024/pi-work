@@ -6,6 +6,7 @@ import { transcribeVoiceAudio } from "@/lib/client/voice-transcribe-io";
 import type { VoiceRecorder, VoiceRecorderResult } from "@/lib/client/voice-recorder";
 import {
   VOICE_INPUT_MIN_DURATION_MS,
+  voiceInputErrorCodeForRecorderError,
   type VoiceInputErrorCode,
   type VoiceInputState,
 } from "@/lib/shared/voice-input";
@@ -27,6 +28,7 @@ export interface VoiceInputController {
   phase: VoiceInputState["phase"];
   elapsedMs: number;
   level: number;
+  error: VoiceInputErrorCode | null;
   toggle: () => Promise<void>;
   cancel: () => Promise<void>;
 }
@@ -45,8 +47,17 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
   });
   const [snapshot, setSnapshot] = useState<VoiceInputState>(() => recorder?.getSnapshot() ?? IDLE);
   const [transcribing, setTranscribing] = useState(false);
+  const [error, setError] = useState<VoiceInputErrorCode | null>(null);
   const transcribingRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
+
+  const reportError = useCallback(
+    (code: VoiceInputErrorCode) => {
+      setError(code);
+      onError?.(code);
+    },
+    [onError],
+  );
 
   useEffect(() => {
     if (!recorder) return;
@@ -59,6 +70,7 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     inFlightRef.current = null;
     transcribingRef.current = false;
     setTranscribing(false);
+    setError(null);
     await recorder?.cancel();
   }, [recorder]);
 
@@ -85,17 +97,17 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
       setTranscribing(false);
 
       if (!outcome.ok) {
-        onError?.(outcome.code);
+        reportError(outcome.code);
         return;
       }
       const transcript = outcome.text.trim();
       if (!transcript) {
-        onError?.("empty_transcript");
+        reportError("empty_transcript");
         return;
       }
       insertText(transcript);
     },
-    [insertText, onError],
+    [insertText, reportError],
   );
 
   useEffect(() => {
@@ -108,24 +120,25 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     if (!recorder || transcribingRef.current) return;
     const current = recorder.getSnapshot();
     if (current.phase === "idle") {
+      setError(null);
       try {
         await recorder.start();
-      } catch (error) {
-        const denied = error instanceof Error && error.name === "NotAllowedError";
-        onError?.(denied ? "permission_denied" : "failed");
+      } catch (recorderError) {
+        reportError(voiceInputErrorCodeForRecorderError(recorderError));
       }
       return;
     }
     if (current.phase !== "recording") return;
 
     await finish(await recorder.stop());
-  }, [recorder, finish, onError]);
+  }, [recorder, finish, reportError]);
 
   return {
     supported: recorder !== null,
     phase: transcribing ? "transcribing" : snapshot.phase,
     elapsedMs: snapshot.elapsedMs,
     level: snapshot.level,
+    error,
     toggle,
     cancel,
   };

@@ -117,6 +117,8 @@ describe("POST /api/voice/transcribe", () => {
 
   it.each([
     [400, 400, "invalid_audio"],
+    [401, 409, "missing_key"],
+    [408, 504, "timeout"],
     [413, 413, "too_large"],
     [429, 429, "rate_limited"],
     [503, 503, "busy"],
