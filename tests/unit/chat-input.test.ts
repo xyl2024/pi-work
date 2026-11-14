@@ -287,13 +287,26 @@ describe("ChatInput voice input", () => {
     }
   }
 
-  function findButton(labelKey: "Start voice input" | "Finish voice input") {
-    const labels: string[] = [ZH_TRANSLATIONS[labelKey], labelKey];
+  function findButton(labelKey: string) {
+    const labels: string[] = [ZH_TRANSLATIONS[labelKey as keyof typeof ZH_TRANSLATIONS], labelKey];
     return (
       Array.from(container.querySelectorAll("button")).find((button) =>
         labels.includes(button.getAttribute("aria-label") ?? ""),
       ) ?? null
     );
+  }
+
+  function ariaLabelMatches(button: Element | null, labelKey: string) {
+    return button?.getAttribute("aria-label") === ZH_TRANSLATIONS[labelKey as keyof typeof ZH_TRANSLATIONS] ||
+      button?.getAttribute("aria-label") === labelKey;
+  }
+
+  function dispatchShortcut(target: EventTarget, init: KeyboardEventInit = {}) {
+    act(() => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "m", shiftKey: true, bubbles: true, cancelable: true, ...init }),
+      );
+    });
   }
 
   it("inserts the transcript at the cursor without sending or touching the rest", async () => {
@@ -429,5 +442,102 @@ describe("ChatInput voice input", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(findButton("Start voice input")).not.toBeNull();
     expect(container.textContent).not.toContain(ZH_TRANSLATIONS["Didn't catch that, say it again"]);
+  });
+  it("toggles recording from the focused composer with the meta shortcut", async () => {
+    const { textarea } = renderInput(createFakeRecorder().recorder);
+    textarea.focus();
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(ariaLabelMatches(findButton("Finish voice input"), "Finish voice input")).toBe(true);
+  });
+
+  it("toggles recording from outside the composer with the control shortcut", async () => {
+    renderInput(createFakeRecorder().recorder);
+
+    dispatchShortcut(window, { ctrlKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(ariaLabelMatches(findButton("Finish voice input"), "Finish voice input")).toBe(true);
+  });
+
+  it("stops and transcribes when pressed again while recording", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      return setTimeout(() => callback(0), 0);
+    });
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ text: "voice text" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { textarea, onSend } = renderInput(createFakeRecorder().recorder);
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe("voice text");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("labels each state and ignores the shortcut while transcribing", async () => {
+    let finishTranscription: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn<typeof fetch>(
+      () => new Promise<Response>((resolve) => {
+        finishTranscription = resolve;
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const recorder = createFakeRecorder().recorder;
+    const startSpy = vi.spyOn(recorder, "start");
+    const { textarea } = renderInput(recorder);
+
+    expect(ariaLabelMatches(findButton("Start voice input"), "Start voice input")).toBe(true);
+    expect(findButton("Start voice input")?.getAttribute("title")).toContain("⌘⇧M");
+    expect(findButton("Start voice input")?.getAttribute("aria-keyshortcuts")).toBe("Meta+Shift+M Control+Shift+M");
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(ariaLabelMatches(findButton("Finish voice input"), "Finish voice input")).toBe(true);
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(ariaLabelMatches(findButton("Transcribing..."), "Transcribing...")).toBe(true);
+
+    dispatchShortcut(textarea, { metaKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishTranscription?.(new Response(JSON.stringify({ text: "voice text" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe("voice text");
   });
 });

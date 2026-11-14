@@ -637,6 +637,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     <>
       <ChatInput
         ref={chatInputRef}
+        voiceInputShortcutActive={isActive && foreground}
         onSend={handleSend}
         onAbort={handleAbort}
         isStreaming={agentRunning}

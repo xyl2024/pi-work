@@ -26,6 +26,8 @@ export const chat = {
   "Stop": "停止",
   "Start voice input": "开始语音输入",
   "Finish voice input": "结束语音输入",
+  "Start voice input (⌘⇧M / Ctrl+Shift+M)": "开始语音输入（⌘⇧M / Ctrl+Shift+M）",
+  "Finish voice input (⌘⇧M / Ctrl+Shift+M)": "结束语音输入（⌘⇧M / Ctrl+Shift+M）",
   "Transcribing...": "正在转写...",
   "Input level": "输入电平",
   "Voice input nearing limit": "语音输入即将达到上限",

@@ -19,6 +19,7 @@ import { VoiceInputButton } from "./chat-input/VoiceInputButton";
 import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/useVoiceInput";
 import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
+import { canToggleVoiceInput } from "@/lib/shared/chat-shortcuts";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
 import { selectSuggestedPromptPlaceholder } from "@/lib/client/suggested-prompt-state";
 import { createComposerPicker } from "@/lib/client/composer-picker";
@@ -75,6 +76,7 @@ interface Props {
   notifyChannelId?: string | null;
   onNotifyChannelChange?: (channelId: string | null) => void;
   voiceRecorderFactory?: VoiceRecorderFactory;
+  voiceInputShortcutActive?: boolean;
 }
 
 export interface ChatInputHandle {
@@ -107,6 +109,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   notifyChannelId = null,
   onNotifyChannelChange,
   voiceRecorderFactory,
+  voiceInputShortcutActive = true,
 }: Props, ref) {
   const { t } = useI18n();
   const { contextUsage, sessionStats, contextComposition } = useSessionUiState();
@@ -227,6 +230,39 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     insertText: insertTextAtCursor,
     recorderFactory: voiceRecorderFactory,
   });
+
+  const voiceInputSupported = voiceInput.supported;
+  const voiceInputPhase = voiceInput.phase;
+  const toggleVoiceInput = voiceInput.toggle;
+
+  useEffect(() => {
+    if (!voiceInputShortcutActive || !voiceInputSupported) return;
+    const handler = (event: globalThis.KeyboardEvent) => {
+      if (!canToggleVoiceInput({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        menuOpen: slashMenuOpen || mentionMenuOpen,
+        phase: voiceInputPhase,
+        disabled,
+        supported: voiceInputSupported,
+      })) return;
+      event.preventDefault();
+      void toggleVoiceInput();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    voiceInputShortcutActive,
+    voiceInputSupported,
+    voiceInputPhase,
+    toggleVoiceInput,
+    slashMenuOpen,
+    mentionMenuOpen,
+    disabled,
+  ]);
 
   const {
     isInHistoryMode,
