@@ -15,6 +15,7 @@ import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
+import { VolumeIcon } from "../../ui/icons";
 import { BlockView } from "./blocks";
 import { CallMetricsBadges, formatTime, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
@@ -423,9 +424,7 @@ function AssistantMessageViewInner({
                   <rect x="14" y="4" width="4" height="16" rx="1" />
                 </svg>
               ) : (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true">
-                  <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z" />
-                </svg>
+                <VolumeIcon size={12} strokeWidth={1.8} style={{ flexShrink: 0 }} />
               )}
             </button>
           </Tooltip>
