@@ -27,4 +27,7 @@ export const renderers = {
   "Translation failed": "翻译失败",
   "Prompt preview": "提示词预览",
   "Reset to default": "恢复默认",
+
+  "Expand {n} lines": "展开 {n} 行",
+  "Truncated, {total} lines in total": "已截断，共 {total} 行",
 } as const;

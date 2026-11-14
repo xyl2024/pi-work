@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseDiffBlock } from "@/lib/shared/diff-block";
+import type { DiffLine } from "@/lib/shared/diff-block";
+import {
+  parseDiffBlock,
+  diffRows,
+  isDiffFoldable,
+  foldDiffRows,
+  truncateDiffRows,
+} from "@/lib/shared/diff-block";
 
 const unified = [
   "diff --git a/src/a.ts b/src/a.ts",
@@ -153,5 +160,86 @@ describe("parseDiffBlock", () => {
   it("falls back on malformed hunk-only content", () => {
     const result = parseDiffBlock("@@@ broken @@@\n");
     expect(result.renderable).toBe(false);
+  });
+});
+
+describe("diff fold and truncate", () => {
+  const ctx = (n: number) => Array.from({ length: n }, (_, i) => ` line ${i}`);
+  const changedFile = (ctxBefore: number, dels: number, adds: number, ctxAfter: number) => {
+    const lines = [
+      ...ctx(ctxBefore).map((l) => ` ${l}`),
+      ...Array.from({ length: dels }, () => "-old"),
+      ...Array.from({ length: adds }, () => "+new"),
+      ...ctx(ctxAfter).map((l) => ` ${l}`),
+    ];
+    return parseDiffBlock(lines.join("\n")).files[0];
+  };
+
+  it("does not fold when total rows are at or below the threshold", () => {
+    expect(isDiffFoldable(40, false)).toBe(false);
+    expect(isDiffFoldable(41, false)).toBe(true);
+  });
+
+  it("never folds while streaming", () => {
+    expect(isDiffFoldable(1000, true)).toBe(false);
+  });
+
+  it("keeps 3 context rows around each change run and collapses the rest", () => {
+    const file = changedFile(10, 1, 1, 10);
+    const rows = diffRows(file);
+    const segments = foldDiffRows(rows);
+    const collapsed = segments.filter((s) => s.kind === "collapsed");
+    expect(segments[0]).toEqual({ kind: "collapsed", start: 0, count: 7 });
+    expect(collapsed).toHaveLength(2);
+    expect(collapsed[1]).toEqual({ kind: "collapsed", start: 15, count: 7 });
+    const visible = segments.filter((s) => s.kind === "visible");
+    expect(visible).toEqual([{ kind: "visible", start: 7, end: 14 }]);
+  });
+
+  it("merges kept ranges of adjacent change runs without collapsing between them", () => {
+    const file = changedFile(10, 1, 1, 10);
+    const rows = diffRows(file);
+    rows[9] = { ...rows[9], type: "del" as const, text: "more" };
+    const segments = foldDiffRows(rows);
+    expect(segments.filter((s) => s.kind === "collapsed")).toHaveLength(2);
+    expect(segments.filter((s) => s.kind === "visible")).toHaveLength(1);
+  });
+
+  it("returns one visible segment when there is no change row", () => {
+    const rows: DiffLine[] = ctx(5).map((text) => ({ type: "context" as const, text }));
+    expect(foldDiffRows(rows)).toEqual([
+      { kind: "visible", start: 0, end: 4 },
+    ]);
+  });
+
+  it("truncates rows beyond the limit and reports the total", () => {
+    const file = changedFile(3100, 1, 1, 0);
+    const { rows, truncated, total } = truncateDiffRows(diffRows(file), 3000);
+    expect(truncated).toBe(true);
+    expect(total).toBe(3102);
+    expect(rows).toHaveLength(3000);
+  });
+
+  it("does not truncate at or below the limit", () => {
+    const file = changedFile(2998, 1, 1, 0);
+    const { rows, truncated, total } = truncateDiffRows(diffRows(file), 3000);
+    expect(truncated).toBe(false);
+    expect(total).toBe(3000);
+    expect(rows).toHaveLength(3000);
+  });
+
+  it("excludes meta and file header rows from the fold row count", () => {
+    const text = [
+      "diff --git a/a.ts b/a.ts",
+      "index 1..2 100644",
+      "--- a/a.ts",
+      "+++ b/a.ts",
+      "@@ -1,2 +1,2 @@",
+      "+x",
+      ...ctx(50).map((l) => ` ${l}`),
+    ].join("\n");
+    const result = parseDiffBlock(text);
+    const total = result.files.reduce((n, f) => n + diffRows(f).length, 0);
+    expect(total).toBe(52);
   });
 });

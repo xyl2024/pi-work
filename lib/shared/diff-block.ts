@@ -199,3 +199,63 @@ export function parseDiffBlock(text: string): DiffParseResult {
     deletions: state.deletions,
   };
 }
+
+export const DIFF_FOLD_THRESHOLD = 40;
+export const DIFF_TRUNCATE_LIMIT = 3000;
+export const DIFF_CONTEXT_LINES = 3;
+
+export type DiffFoldSegment =
+  | { kind: "visible"; start: number; end: number }
+  | { kind: "collapsed"; start: number; count: number };
+
+export function diffRows(file: DiffFile): DiffLine[] {
+  return file.lines.filter((line) => line.type !== "meta" && line.type !== "file");
+}
+
+export function isDiffFoldable(totalRows: number, isStreaming: boolean): boolean {
+  return !isStreaming && totalRows > DIFF_FOLD_THRESHOLD;
+}
+
+export function truncateDiffRows(
+  rows: DiffLine[],
+  limit: number = DIFF_TRUNCATE_LIMIT,
+): { rows: DiffLine[]; truncated: boolean; total: number } {
+  if (rows.length <= limit) {
+    return { rows, truncated: false, total: rows.length };
+  }
+  return { rows: rows.slice(0, limit), truncated: true, total: rows.length };
+}
+
+export function foldDiffRows(rows: DiffLine[], context: number = DIFF_CONTEXT_LINES): DiffFoldSegment[] {
+  if (!rows.some((row) => row.type === "add" || row.type === "del")) {
+    return rows.length === 0 ? [] : [{ kind: "visible", start: 0, end: rows.length - 1 }];
+  }
+
+  const keep = new Array<boolean>(rows.length).fill(false);
+  rows.forEach((row, i) => {
+    if (row.type !== "add" && row.type !== "del") return;
+    for (let j = Math.max(0, i - context); j <= Math.min(rows.length - 1, i + context); j++) {
+      keep[j] = true;
+    }
+  });
+
+  if (keep.every(Boolean)) {
+    return rows.length === 0 ? [] : [{ kind: "visible", start: 0, end: rows.length - 1 }];
+  }
+
+  const segments: DiffFoldSegment[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (keep[i]) {
+      let end = i;
+      while (end + 1 < rows.length && keep[end + 1]) end++;
+      segments.push({ kind: "visible", start: i, end });
+      i = end + 1;
+    } else {
+      const start = i;
+      while (i < rows.length && !keep[i]) i++;
+      segments.push({ kind: "collapsed", start, count: i - start });
+    }
+  }
+  return segments;
+}
