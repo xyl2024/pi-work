@@ -20,6 +20,14 @@
 - **评论**：在文件末尾 `## Comments` 下追加。
 - **关闭**：把 `Status:` 行的值改成 `wontfix` 之类，或按需删除文件；不要删除他人未完成的 ticket。
 
+## Worktree 协作约定
+
+worktree 是新 checkout，`.scratch/` 不在 git 里，worktree 里看不到它。
+
+- ticket 文件永远用**主仓库的绝对路径**读写（`/home/alone/p/pi-work/.scratch/<feature-slug>/…`），不要复制进 worktree，也不要在 worktree 里重建一份
+- 子代理领取 / 完成 ticket 时直接改主仓库那份；一人一票，并行实现者不会写同一个文件
+- `map.md` 这类多 session 会追加的文件由 orchestrator 独占写入
+
 ## PR 作为分诊入口
 
 **PR as a request surface: no。** 本地 tracker 不参与 PR 分诊。
