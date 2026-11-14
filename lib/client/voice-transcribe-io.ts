@@ -62,7 +62,11 @@ export async function transcribeVoiceAudio(
   try {
     response = await fetch("/api/voice/transcribe", { method: "POST", body: form, signal });
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") return { ok: false, code: "timeout" };
+    const name =
+      typeof error === "object" && error !== null && "name" in error
+        ? (error as { name: unknown }).name
+        : null;
+    if (name === "TimeoutError") return { ok: false, code: "timeout" };
     return { ok: false, code: "failed" };
   }
 

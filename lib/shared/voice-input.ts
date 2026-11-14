@@ -38,16 +38,19 @@ export interface VoiceInputState {
   level: number;
 }
 
-export type VoiceInputErrorCode =
-  | "missing_key"
-  | "permission_denied"
-  | "empty_transcript"
-  | "rate_limited"
-  | "too_large"
-  | "busy"
-  | "timeout"
-  | "invalid_audio"
-  | "failed";
+export const VOICE_INPUT_ERROR_CODES = [
+  "missing_key",
+  "permission_denied",
+  "empty_transcript",
+  "rate_limited",
+  "too_large",
+  "busy",
+  "timeout",
+  "invalid_audio",
+  "failed",
+] as const;
+
+export type VoiceInputErrorCode = (typeof VOICE_INPUT_ERROR_CODES)[number];
 
 const ERROR_MESSAGE_KEYS: Record<VoiceInputErrorCode, string> = {
   missing_key: "DeepSeek API key is not configured",
@@ -63,6 +66,15 @@ const ERROR_MESSAGE_KEYS: Record<VoiceInputErrorCode, string> = {
 
 export function voiceInputErrorMessageKey(code: VoiceInputErrorCode): string {
   return ERROR_MESSAGE_KEYS[code];
+}
+
+export function voiceInputErrorCodeForRecorderError(error: unknown): VoiceInputErrorCode {
+  const name =
+    typeof error === "object" && error !== null && "name" in error
+      ? (error as { name: unknown }).name
+      : null;
+  if (name === "NotAllowedError" || name === "SecurityError") return "permission_denied";
+  return "failed";
 }
 
 function writeAscii(view: DataView, offset: number, value: string): void {

@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/hooks/useI18n";
 import { ChatInputAttachments } from "@/components/chat/ChatInputAttachments";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
+import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 import type { VoiceRecorder, VoiceRecorderResult } from "@/lib/client/voice-recorder";
-import type { VoiceRecorderFactory } from "@/components/chat/chat-input/hooks/useVoiceInput";
+import { useVoiceInput, type VoiceRecorderFactory } from "@/components/chat/chat-input/hooks/useVoiceInput";
 import {
   VOICE_INPUT_MAX_DURATION_MS,
   VOICE_INPUT_MIN_DURATION_MS,
@@ -467,6 +467,119 @@ describe("ChatInput voice input", () => {
     expect(findButton("Start voice input")).not.toBeNull();
     expect(container.textContent).not.toContain(ZH_TRANSLATIONS["Didn't catch that, say it again"]);
   });
+
+  function messageText(key: string) {
+    return [
+      ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS],
+      EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS],
+    ].filter(Boolean) as string[];
+  }
+
+  function countMessage(key: string) {
+    const text = container.textContent ?? "";
+    return messageText(key).reduce((total, message) => total + text.split(message).length - 1, 0);
+  }
+
+  async function runFailure(fetchResult: () => Promise<Response>) {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0));
+    vi.stubGlobal("fetch", vi.fn(fetchResult));
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder);
+    typeInto(textarea, "keep this draft");
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+    await act(async () => {
+      findButton("Finish voice input")?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    return textarea;
+  }
+
+  const failureCases: Array<{
+    name: string;
+    fetchResult: () => Promise<Response>;
+    key: string;
+  }> = [
+    {
+      name: "a missing DeepSeek key",
+      fetchResult: async () => new Response(JSON.stringify({ error: "missing_key" }), { status: 409 }),
+      key: "DeepSeek API key is not configured",
+    },
+    {
+      name: "an empty transcript",
+      fetchResult: async () => new Response(JSON.stringify({ text: "" }), { status: 200 }),
+      key: "Didn't catch that, say it again",
+    },
+    {
+      name: "rate limiting",
+      fetchResult: async () => new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }),
+      key: "Voice input is busy, try again",
+    },
+    {
+      name: "invalid audio",
+      fetchResult: async () => new Response(JSON.stringify({ error: "invalid_audio" }), { status: 400 }),
+      key: "Voice input failed",
+    },
+    {
+      name: "a busy service",
+      fetchResult: async () => new Response(JSON.stringify({ error: "busy" }), { status: 503 }),
+      key: "Voice input is busy, try again",
+    },
+    {
+      name: "an upstream timeout",
+      fetchResult: async () => new Response(JSON.stringify({ error: "timeout" }), { status: 504 }),
+      key: "Voice input timed out",
+    },
+    {
+      name: "a client timeout",
+      fetchResult: async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+      key: "Voice input timed out",
+    },
+  ];
+
+  it.each(failureCases)("shows one neutral message for $name and resets the button", async ({ fetchResult, key }) => {
+    const textarea = await runFailure(fetchResult);
+
+    expect(countMessage(key)).toBe(1);
+    expect(container.textContent).not.toContain("secret upstream detail");
+    expect(findButton("Start voice input")).not.toBeNull();
+    expect(findButton("Transcribing...")).toBeNull();
+    expect(textarea.value).toBe("keep this draft");
+  });
+
+  it("shows the permission message when microphone access is denied", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>());
+    const fake = createFakeRecorder();
+    vi.spyOn(fake.recorder, "start").mockRejectedValue(new DOMException("denied", "NotAllowedError"));
+    const { textarea } = renderInput(fake.recorder);
+    typeInto(textarea, "keep this draft");
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+      await Promise.resolve();
+    });
+
+    expect(countMessage("Microphone access was denied")).toBe(1);
+    expect(findButton("Start voice input")).not.toBeNull();
+    expect(textarea.value).toBe("keep this draft");
+  });
+
+  it("clears the message once a new recording starts", async () => {
+    await runFailure(async () => new Response(JSON.stringify({ error: "busy" }), { status: 503 }));
+    expect(countMessage("Voice input is busy, try again")).toBe(1);
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+    });
+
+    expect(countMessage("Voice input is busy, try again")).toBe(0);
+  });
   it("toggles recording from the focused composer with the meta shortcut", async () => {
     const { textarea } = renderInput(createFakeRecorder().recorder);
     textarea.focus();
@@ -705,5 +818,53 @@ describe("ChatInput voice input", () => {
     expect(container.textContent).not.toContain("查询订阅模型服务用量");
     expect(fake.cancelSpy).not.toHaveBeenCalled();
     expect(findButton("Finish voice input")).not.toBeNull();
+  });
+
+  it("drops a late failure after cancel without showing a message", async () => {
+    let settle: ((response: Response) => void) | undefined;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => {
+      settle = resolve;
+    })));
+    const fake = createFakeRecorder();
+    const cancelRef: { current: (() => Promise<void>) | null } = { current: null };
+
+    function Harness() {
+      const voice = useVoiceInput({
+        insertText: () => undefined,
+        recorderFactory: () => fake.recorder,
+      });
+      cancelRef.current = voice.cancel;
+      return createElement(
+        "div",
+        null,
+        createElement("button", { "aria-label": "voice-toggle", onClick: () => void voice.toggle() }),
+        voice.error ? createElement("p", { "data-error": voice.error }, voice.error) : null,
+      );
+    }
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(createElement(I18nProvider, null, createElement(Harness)));
+    });
+    const toggle = () => container.querySelector<HTMLButtonElement>("[aria-label=voice-toggle]");
+
+    await act(async () => {
+      toggle()?.click();
+    });
+    await act(async () => {
+      toggle()?.click();
+      await Promise.resolve();
+    });
+    expect(container.querySelector("p")).toBeNull();
+
+    await act(async () => {
+      await cancelRef.current?.();
+      settle?.(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(container.querySelector("[data-error]")).toBeNull();
   });
 });
