@@ -13,6 +13,13 @@ const VENDORED_PREFIXES = ["public/", "volumes/"];
 const TOOL_DIRECTIVE =
   /^(\/\/\s*(eslint-(disable|enable)\b|@ts-(ignore|expect-error|nocheck|check)\b|@vitest-environment\b)|\/\*\*?\s*@type\b)/;
 
+const CSS_TEMPLATE_KINDS = new Set([
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+  ts.SyntaxKind.TemplateHead,
+  ts.SyntaxKind.TemplateMiddle,
+  ts.SyntaxKind.TemplateTail,
+]);
+
 const OPAQUE_STRING_KINDS = new Set([
   ts.SyntaxKind.StringLiteral,
   ts.SyntaxKind.NoSubstitutionTemplateLiteral,
@@ -74,7 +81,7 @@ function templateCssCommentsIn(source: string, kind: ts.ScriptKind): Comment[] {
   const file = ts.createSourceFile("source", source, ts.ScriptTarget.Latest, true, kind);
   const comments: Comment[] = [];
   const visit = (node: ts.Node) => {
-    if (OPAQUE_STRING_KINDS.has(node.kind)) {
+    if (CSS_TEMPLATE_KINDS.has(node.kind)) {
       const start = node.getStart(file);
       const raw = source.slice(start, node.end);
       if (/\{[\s\S]*;/.test(raw)) comments.push(...offsetComments(source, raw, start));
