@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { dataPath } from "./data-dir";
+import { directorySignature } from "./dir-signature";
 import {
   DEFAULT_PERMISSION_MODE,
   isPermissionMode,
@@ -43,6 +44,7 @@ export function writeSessionPermissionMode(sessionId: string, mode: PermissionMo
   try {
     writeFileSync(tmp, payload, "utf8");
     renameSync(tmp, target);
+    invalidateSessionPermissionModesCache();
     return true;
   } catch {
     try {
@@ -65,7 +67,24 @@ export function readSessionPermissionMode(sessionId: string): PermissionMode {
   }
 }
 
+interface PermissionModesCache {
+  signature: string;
+  modes: Record<string, PermissionMode>;
+}
+
+declare global {
+  var __piSessionPermissionModesCache: PermissionModesCache | undefined;
+}
+
+export function invalidateSessionPermissionModesCache(): void {
+  globalThis.__piSessionPermissionModesCache = undefined;
+}
+
 export function readSessionPermissionModes(): Record<string, PermissionMode> {
+  const signature = directorySignature(getDir());
+  const cached = globalThis.__piSessionPermissionModesCache;
+  if (cached && signature !== null && cached.signature === signature) return cached.modes;
+
   const out: Record<string, PermissionMode> = {};
   let entries: string[];
   try {
@@ -80,6 +99,7 @@ export function readSessionPermissionModes(): Record<string, PermissionMode> {
     const mode = readSessionPermissionMode(sessionId);
     if (mode !== DEFAULT_PERMISSION_MODE) out[sessionId] = mode;
   }
+  if (signature !== null) globalThis.__piSessionPermissionModesCache = { signature, modes: out };
   return out;
 }
 
@@ -88,6 +108,7 @@ export function deleteSessionPermissionMode(sessionId: string): void {
   if (id === null) return;
   try {
     unlinkSync(join(getDir(), `${id}.json`));
+    invalidateSessionPermissionModesCache();
   } catch {
   }
 }

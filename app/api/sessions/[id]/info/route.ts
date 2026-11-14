@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
+import { isSessionIndexLoaded, listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { resolveSessionPermission, sessionPermissionFields } from "@/lib/server/session-permission-visibility";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
@@ -22,7 +22,7 @@ export async function GET(
     log.debug("session info served", {
       id,
       cwd: info.cwd,
-      cacheHit: !!(globalThis as { __piSessionListHeaderCache?: unknown }).__piSessionListHeaderCache,
+      indexLoaded: isSessionIndexLoaded(),
       durationMs: elapsedMs(startedAt),
     });
     return NextResponse.json({

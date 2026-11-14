@@ -17,7 +17,7 @@ import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { VoiceInputButton } from "./chat-input/VoiceInputButton";
 import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/useVoiceInput";
-import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
+import { BUILTIN_SLASH_ACTIONS } from "./chat-input/constants";
 import { chatInputMetrics, VOICE_INPUT_ACCENT_COLOR, voiceInputMetrics } from "./chat-input/metrics";
 import { canToggleVoiceInput } from "@/lib/shared/chat-shortcuts";
 import { canCancelVoiceInput, decideVoiceInputEscape, voiceInputErrorMessageKey } from "@/lib/shared/voice-input";
@@ -508,11 +508,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: chatInputMetrics.boxGap,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
+            border: "1.5px solid var(--border)",
             borderRadius: chatInputMetrics.boxBorderRadius,
             padding: chatInputMetrics.boxPadding,
             boxShadow: "none",
-            transition: "border-color var(--dur-base), background var(--dur-base)",
+            transition: "background var(--dur-base)",
             position: "relative",
           } as React.CSSProperties}
         >

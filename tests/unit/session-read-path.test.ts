@@ -58,11 +58,9 @@ function writeSession(agentDir: string, fileName: string, header: string, ...lin
 
 function clearCaches(): void {
   const g = globalThis as Record<string, unknown>;
-  delete g.__piSessionPathCache;
-  delete g.__piSessionListCache;
-  delete g.__piSessionListHeaderCache;
-  delete g.__piSessionListInflight;
-  delete g.__piSessionListHeaderInflight;
+  for (const key of Object.keys(g)) {
+    if (key.startsWith("__piSession")) delete g[key];
+  }
 }
 
 afterEach(() => {
@@ -119,10 +117,10 @@ describe("readSessionDetails: no global session scan", () => {
     expect(body).toContain("resolveParentSessionId(");
   });
 
-  it("tries the header-only listing before the full scan", () => {
+  it("resolves paths through the session index instead of a full rescan", () => {
     const body = functionSource(READER, "export async function resolveSessionPath");
-    expect(body).toContain("listAllSessionsHeaderOnly()");
-    expect(body.indexOf("listAllSessionsHeaderOnly()")).toBeLessThan(body.indexOf("listAllSessions()"));
+    expect(body).toContain("sessionPathFromIndex(");
+    expect(read(READER)).not.toContain("SessionManager.listAll()");
   });
 });
 

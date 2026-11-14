@@ -1,5 +1,4 @@
-import { closeSync, openSync, readSync, statSync } from "fs";
-import { StringDecoder } from "string_decoder";
+import { statSync } from "fs";
 import {
   SessionManager,
   buildSessionContext as piBuildSessionContext,
@@ -16,21 +15,27 @@ import type {
   SessionEntry,
   SessionInfo,
 } from "@/lib/shared/types";
-import type {
-  SessionEntry as PiSessionEntry,
-  SessionInfo as PiSessionInfo,
-} from "@earendil-works/pi-coding-agent";
-import { listSessionNames } from "@/lib/server/session-names";
+import type { SessionEntry as PiSessionEntry } from "@earendil-works/pi-coding-agent";
 import { isMessageOriginEntryData, MESSAGE_ORIGIN_ENTRY_TYPE } from "@/lib/shared/message-origin";
-import { ASSISTANT_SESSION_ENTRY_TYPE, isAssistantSessionMarkerData } from "@/lib/shared/assistant-marker";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import { cleanFirstMessage } from "@/lib/shared/session-title";
 import {
   SUBAGENT_ACTIVITY_DEFAULT_LIMIT,
   SUBAGENT_ACTIVITY_MAX_LIMIT,
 } from "@/lib/shared/subagent";
+import { extractMessageText, readSessionHeader, type SessionHeaderScan } from "./header";
+import {
+  listSessionsFromIndex,
+  invalidateSessionIndex,
+  invalidateSessionIndexEntry,
+  isSessionIndexLoaded,
+  sessionPathFromIndex,
+} from "./index-store";
 
+export { readSessionHeader, isSessionIndexLoaded };
+export type { SessionHeaderScan };
 export { getAgentDir };
+
 
 export function stripSessionInfoNodes<T extends { entry: { type?: string; parentId?: string | null }; children: T[] }>(nodes: T[]): T[] {
   const out: T[] = [];
@@ -65,309 +70,16 @@ export function fallbackSessionLeafId(
   return cur;
 }
 
-export async function listAllSessions(cwd?: string): Promise<SessionInfo[]> {
-  const all = await loadAllSessionsCached();
-  if (!cwd) return all;
-  return all.filter((s) => s.cwd === cwd);
-}
-
-const LIST_CACHE_TTL_MS = 5_000;
-
-declare global {
-  var __piSessionListCache: { list: SessionInfo[]; loadedAt: number } | undefined;
-  var __piSessionListInflight: Promise<SessionInfo[]> | undefined;
-}
-
-function toSessionInfo(piSessions: PiSessionInfo[]): SessionInfo[] {
-  const pathToId = new Map<string, string>();
-  for (const s of piSessions) pathToId.set(s.path, s.id);
-
-  const cache = getPathCache();
-  return piSessions.map((s) => {
-    cache.set(s.id, s.path);
-    return {
-      path: s.path,
-      id: s.id,
-      cwd: s.cwd,
-      name: s.name,
-      created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
-      modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
-      messageCount: s.messageCount,
-      firstMessage: cleanFirstMessage(s.firstMessage),
-      parentSessionId: s.parentSessionPath ? pathToId.get(s.parentSessionPath) : undefined,
-      running: false,
-    };
-  });
-}
-
-async function loadAllSessionsCached(): Promise<SessionInfo[]> {
-  const now = Date.now();
-  const cached = globalThis.__piSessionListCache;
-  if (cached && now - cached.loadedAt < LIST_CACHE_TTL_MS) {
-    return cached.list;
-  }
-
-  if (globalThis.__piSessionListInflight) {
-    return globalThis.__piSessionListInflight;
-  }
-
-  const loadPromise = (async () => {
-    const piSessions = await SessionManager.listAll();
-    return toSessionInfo(piSessions);
-  })();
-
-  globalThis.__piSessionListInflight = loadPromise;
-  try {
-    const list = await loadPromise;
-    globalThis.__piSessionListCache = { list, loadedAt: Date.now() };
-    return list;
-  } finally {
-    globalThis.__piSessionListInflight = undefined;
-  }
-}
-
 export function invalidateSessionListCache(): void {
-  globalThis.__piSessionListCache = undefined;
-  globalThis.__piSessionListHeaderCache = undefined;
-}
-
-const HEADER_SCAN_CHUNK_BYTES = 16 * 1024;
-const HEADER_SCAN_MAX_BYTES = 1024 * 1024;
-
-export interface SessionHeaderScan {
-  id: string;
-  cwd: string;
-  created: string;
-  parentSessionPath?: string;
-  name?: string;
-  firstMessage?: string;
-  assistant?: boolean;
-}
-
-function extractMessageText(content: unknown): string | undefined {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (
-        block &&
-        typeof block === "object" &&
-        (block as { type?: string }).type === "text" &&
-        typeof (block as { text?: unknown }).text === "string"
-      ) {
-        return (block as { text: string }).text;
-      }
-    }
-  }
-  return undefined;
-}
-
-export function readSessionHeader(filePath: string): SessionHeaderScan | null {
-  let fd: number;
-  try {
-    fd = openSync(filePath, "r");
-  } catch {
-    return null;
-  }
-  try {
-    const decoder = new StringDecoder("utf8");
-    const chunk = Buffer.allocUnsafe(HEADER_SCAN_CHUNK_BYTES);
-
-    let id: string | undefined;
-    let cwd: string | undefined;
-    let created: string | undefined;
-    let parentSessionPath: string | undefined;
-    let name: string | undefined;
-    let firstMessage: string | undefined;
-    let assistant = false;
-    let headerSeen = false;
-    let pending = "";
-    let offset = 0;
-    let eof = false;
-
-    while (!eof && offset < HEADER_SCAN_MAX_BYTES) {
-      let bytesRead = 0;
-      try {
-        bytesRead = readSync(fd, chunk, 0, chunk.length, offset);
-      } catch {
-        break;
-      }
-      if (bytesRead === 0) eof = true;
-      offset += bytesRead;
-
-      const lines = (pending + decoder.write(chunk.subarray(0, bytesRead))).split("\n");
-      pending = eof ? "" : lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line) continue;
-        let entry: Record<string, unknown>;
-        try {
-          entry = JSON.parse(line) as Record<string, unknown>;
-        } catch {
-          continue;
-        }
-        if (!entry || typeof entry !== "object") continue;
-
-        const entryType = (entry as { type?: unknown }).type;
-        if (!headerSeen && entryType === "session" && typeof (entry as { id?: unknown }).id === "string") {
-          id = (entry as { id: string }).id;
-          const cwdVal = (entry as { cwd?: unknown }).cwd;
-          cwd = typeof cwdVal === "string" ? cwdVal : "";
-          const tsVal = (entry as { timestamp?: unknown }).timestamp;
-          created = typeof tsVal === "string" ? tsVal : undefined;
-          const parentVal = (entry as { parentSession?: unknown }).parentSession;
-          parentSessionPath = typeof parentVal === "string" ? parentVal : undefined;
-          headerSeen = true;
-          continue;
-        }
-        if (!headerSeen) continue;
-
-        if (
-          entryType === "custom" &&
-          (entry as { customType?: unknown }).customType === ASSISTANT_SESSION_ENTRY_TYPE &&
-          isAssistantSessionMarkerData((entry as { data?: unknown }).data)
-        ) {
-          assistant = true;
-        } else if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
-          const trimmed = ((entry as { name: string }).name).trim();
-          if (trimmed) name = trimmed;
-        } else if (entryType === "message" && firstMessage === undefined) {
-          const msg = (entry as { message?: { role?: unknown; content?: unknown } }).message;
-          if (msg && (msg.role === "user" || msg.role === "assistant")) {
-            const text_ = extractMessageText(msg.content);
-            if (text_) firstMessage = text_;
-          }
-        }
-      }
-
-      if (name !== undefined && firstMessage !== undefined) break;
-      if (firstMessage !== undefined && offset >= HEADER_SCAN_CHUNK_BYTES) break;
-    }
-
-    if (!id || !created) return null;
-    const result: SessionHeaderScan = { id, cwd: cwd ?? "", created };
-    if (parentSessionPath !== undefined) result.parentSessionPath = parentSessionPath;
-    if (name !== undefined) result.name = name;
-    if (firstMessage !== undefined) result.firstMessage = firstMessage;
-    if (assistant) result.assistant = true;
-    return result;
-  } catch {
-    return null;
-  } finally {
-    closeSync(fd);
-  }
-}
-
-function safeStatMtime(filePath: string): Date | null {
-  try {
-    return statSync(filePath).mtime;
-  } catch {
-    return null;
-  }
-}
-
-declare global {
-  var __piSessionListHeaderCache: { list: SessionInfo[]; loadedAt: number } | undefined;
-  var __piSessionListHeaderInflight: Promise<SessionInfo[]> | undefined;
-}
-
-async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
-  const now = Date.now();
-  const cached = globalThis.__piSessionListHeaderCache;
-  if (cached && now - cached.loadedAt < LIST_CACHE_TTL_MS) {
-    return cached.list;
-  }
-  if (globalThis.__piSessionListHeaderInflight) {
-    return globalThis.__piSessionListHeaderInflight;
-  }
-
-  const sessionsDir = `${getAgentDir()}/sessions`;
-  const loadPromise = (async (): Promise<SessionInfo[]> => {
-    const { readdir } = await import("fs/promises");
-    const { join } = await import("path");
-    let subdirs: string[] = [];
-    try {
-      const entries = await readdir(sessionsDir, { withFileTypes: true });
-      subdirs = entries
-        .filter((e) => e.isDirectory() || e.isSymbolicLink())
-        .map((e) => join(sessionsDir, e.name));
-    } catch {
-      return [];
-    }
-    const allFiles: string[] = [];
-    for (const dir of subdirs) {
-      try {
-        const files = await readdir(dir);
-        for (const f of files) {
-          if (f.endsWith(".jsonl")) allFiles.push(join(dir, f));
-        }
-      } catch {
-      }
-    }
-
-    const pathToId = new Map<string, string>();
-    const seen = new Set<string>();
-    const out: SessionInfo[] = [];
-    for (const filePath of allFiles) {
-      const mtime = safeStatMtime(filePath);
-      if (!mtime) continue;
-      const header = readSessionHeader(filePath);
-      if (!header) continue;
-      if (seen.has(header.id)) continue;
-      seen.add(header.id);
-      pathToId.set(filePath, header.id);
-      const info: SessionInfo = {
-        path: filePath,
-        id: header.id,
-        cwd: header.cwd,
-        name: header.name,
-        created: header.created,
-        modified: mtime.toISOString(),
-        messageCount: 0,
-        firstMessage: cleanFirstMessage(header.firstMessage),
-        parentSessionId: undefined,
-        running: false,
-        ...(header.assistant ? { assistant: true } : {}),
-      };
-      if (header.parentSessionPath) {
-        info.parentSessionId = pathToId.get(header.parentSessionPath);
-      }
-      out.push(info);
-    }
-
-    out.sort((a, b) => b.modified.localeCompare(a.modified));
-
-    if (out.length > 0) {
-      const names = await listSessionNames();
-      if (names.size > 0) {
-        for (const s of out) {
-          const fromSidecar = names.get(s.id);
-          if (fromSidecar) s.name = fromSidecar.name;
-        }
-      }
-    }
-
-    const pathCache = globalThis.__piSessionPathCache;
-    if (pathCache) {
-      for (const s of out) pathCache.set(s.id, s.path);
-    }
-    return out;
-  })();
-
-  globalThis.__piSessionListHeaderInflight = loadPromise;
-  try {
-    const list = await loadPromise;
-    globalThis.__piSessionListHeaderCache = { list, loadedAt: Date.now() };
-    return list;
-  } finally {
-    globalThis.__piSessionListHeaderInflight = undefined;
-  }
+  invalidateSessionIndex();
 }
 
 export async function listAllSessionsHeaderOnly(cwd?: string): Promise<SessionInfo[]> {
-  const all = await listAllSessionsHeaderOnlyUnfiltered();
+  const all = await listSessionsFromIndex();
   if (!cwd) return all;
   return all.filter((s) => s.cwd === cwd);
 }
+
 
 declare global {
   var __piSessionPathCache: Map<string, string> | undefined;
@@ -382,12 +94,12 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   const cached = getPathCache().get(sessionId);
   if (cached) return cached;
 
-  await listAllSessionsHeaderOnly();
-  const fromHeaderScan = getPathCache().get(sessionId);
-  if (fromHeaderScan) return fromHeaderScan;
-
-  await listAllSessions();
-  return getPathCache().get(sessionId) ?? null;
+  const fromIndex = await sessionPathFromIndex(sessionId);
+  if (fromIndex) {
+    getPathCache().set(sessionId, fromIndex);
+    return fromIndex;
+  }
+  return null;
 }
 
 export function cacheSessionPath(sessionId: string, filePath: string): void {
@@ -396,6 +108,7 @@ export function cacheSessionPath(sessionId: string, filePath: string): void {
 
 export function invalidateSessionPathCache(sessionId: string): void {
   getPathCache().delete(sessionId);
+  invalidateSessionIndexEntry(sessionId);
 }
 
 export function isAssistantSessionFile(filePath: string): boolean {

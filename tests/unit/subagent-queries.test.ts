@@ -42,10 +42,9 @@ function resetGlobals(): void {
   delete g.__piSubagentLiveCache;
   delete g.__piSubagentStatsCache;
   delete g.__piSessionPathCache;
-  delete g.__piSessionListCache;
-  delete g.__piSessionListHeaderCache;
-  delete g.__piSessionListInflight;
-  delete g.__piSessionListHeaderInflight;
+  for (const key of Object.keys(g)) {
+    if (key.startsWith("__piSession")) delete g[key];
+  }
 }
 
 beforeAll(() => {

@@ -9,7 +9,7 @@ import type {
   SessionSearchResponse,
   SessionSearchResult,
 } from "@/lib/shared/types";
-import { getAgentDir, listAllSessions } from "./reader";
+import { getAgentDir, listAllSessionsHeaderOnly } from "./reader";
 
 function getSessionsDir(): string {
   return `${getAgentDir()}/sessions`;
@@ -196,7 +196,7 @@ export async function searchSessionsPaged(
   const nextCursor =
     hasMore && page.length > 0 ? page[page.length - 1].id : null;
 
-  const allSessions = await listAllSessions(cwd);
+  const allSessions = await listAllSessionsHeaderOnly(cwd);
   const byId = new Map(allSessions.map((s) => [s.id, s]));
 
   const results: SessionSearchPagedResult[] = page.map((m) => {

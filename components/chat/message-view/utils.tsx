@@ -7,6 +7,7 @@ import { MermaidBlock } from "@/components/renderers/MermaidBlock";
 import { EchartsBlock } from "@/components/renderers/EchartsBlock";
 import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
+import { DiffBlock } from "@/components/renderers/DiffBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { ExternalLinkIcon } from "@/components/ui/icons";
 import { resolveFileLink } from "@/lib/shared/file-link";
@@ -93,6 +94,9 @@ export function useMarkdownComponents(
           }
           if (lang === "echarts") {
             return <EchartsBlock key={raw} code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+          }
+          if (lang === "diff") {
+            return <DiffBlock key={raw} code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
           }
           return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
         }

@@ -113,6 +113,11 @@
   --error-bg: rgba(220, 38, 38, 0.1);
   --info: #4176e6;
   --info-bg: rgba(65, 118, 230, 0.1);
+  --diff-add-bg: rgba(22, 163, 74, 0.12);
+  --diff-add-text: #15803d;
+  --diff-del-bg: rgba(220, 38, 38, 0.1);
+  --diff-del-text: #b91c1c;
+  --diff-hunk-bg: rgba(38, 49, 72, 0.04);
   --danger: var(--error);
   --danger-bg: var(--error-bg);
 }
@@ -162,6 +167,11 @@
   --error-bg: rgba(242, 90, 90, 0.14);
   --info: #7aaaff;
   --info-bg: rgba(122, 170, 255, 0.14);
+  --diff-add-bg: rgba(78, 209, 126, 0.15);
+  --diff-add-text: #4ed17e;
+  --diff-del-bg: rgba(242, 90, 90, 0.15);
+  --diff-del-text: #f25a5a;
+  --diff-hunk-bg: rgba(255, 255, 255, 0.05);
   --danger: var(--error);
   --danger-bg: var(--error-bg);
 }
@@ -259,11 +269,20 @@ body {
 
 [data-scroll-side] {
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
+}
+[data-scroll-side]:hover {
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
 }
 [data-scroll-side]::-webkit-scrollbar {
   width: 4px;
   height: 4px;
+}
+[data-scroll-side]::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+[data-scroll-side]:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 [data-scroll-inset] {
@@ -275,7 +294,6 @@ body {
   height: 6px;
 }
 
-[data-scroll-side]:hover,
 [data-scroll-inset]:hover {
   scrollbar-color: var(--scrollbar-thumb-hover) transparent;
 }
