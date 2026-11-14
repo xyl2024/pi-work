@@ -1,4 +1,9 @@
 import {
+  DEEPSEEK_ASR_PATH,
+  type DeepSeekTranscription,
+  type DeepSeekTranscriptionErrorCode,
+} from "@/lib/shared/deepseek";
+import {
   clampInteger,
   WEB_FETCH_DEFAULT_MAX_CHARS,
   WEB_FETCH_MAX_CHARS,
@@ -44,6 +49,14 @@ export type DeepSeekResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
+export type DeepSeekTranscriptionResult =
+  | { ok: true; data: DeepSeekTranscription }
+  | { ok: false; code: DeepSeekTranscriptionErrorCode; error: string };
+
+type DeepSeekRawResult =
+  | { ok: true; rawBody: string }
+  | { ok: false; code: DeepSeekTranscriptionErrorCode; error: string };
+
 export interface DeepSeekClientOptions {
   baseUrl?: string;
   apiKey?: string | null;
@@ -65,9 +78,16 @@ export interface DeepSeekFetchInput {
   signal?: AbortSignal;
 }
 
+export interface DeepSeekTranscribeInput {
+  audio: Uint8Array;
+  mimeType: string;
+  signal?: AbortSignal;
+}
+
 export interface DeepSeekClient {
   search(input: DeepSeekSearchInput): Promise<DeepSeekResult<DeepSeekSearchResult>>;
   fetchPage(input: DeepSeekFetchInput): Promise<DeepSeekResult<DeepSeekFetchResult>>;
+  transcribe(input: DeepSeekTranscribeInput): Promise<DeepSeekTranscriptionResult>;
 }
 
 export const DEEPSEEK_MISSING_KEY_ERROR =
@@ -114,6 +134,31 @@ function mapFetchError(error: unknown, timeoutMs: number): string {
   return `DeepSeek API request failed: ${String(error)}`;
 }
 
+function fetchErrorCode(error: unknown): DeepSeekTranscriptionErrorCode {
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError") return "timeout";
+    if (error.name === "AbortError") return "aborted";
+  }
+  return "failed";
+}
+
+function upstreamErrorCode(status: number): DeepSeekTranscriptionErrorCode {
+  if (status === 400) return "invalid_audio";
+  if (status === 413) return "too_large";
+  if (status === 429) return "rate_limited";
+  if (status === 503) return "busy";
+  if (status === 504) return "timeout";
+  return "failed";
+}
+
+function parseTranscription(payload: unknown): DeepSeekTranscription {
+  const raw = (payload ?? {}) as Record<string, unknown>;
+  return {
+    text: text(raw.text),
+    durationMs: optionalNumber(raw.duration_ms),
+  };
+}
+
 function mapSearchResults(payload: unknown): DeepSeekSearchResult {
   const rawResults = (payload as { results?: unknown } | null)?.results;
   if (!Array.isArray(rawResults)) return { results: [] };
@@ -154,29 +199,25 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
     return options.apiKey !== undefined ? options.apiKey : loadDeepSeekApiKey();
   }
 
-  async function post(
+  async function request(
     path: string,
-    body: Record<string, unknown>,
+    init: RequestInit,
     signal: AbortSignal | undefined,
-  ): Promise<DeepSeekResult<unknown>> {
+  ): Promise<DeepSeekRawResult> {
     const key = apiKey();
-    if (!key) return { ok: false, error: DEEPSEEK_MISSING_KEY_ERROR };
+    if (!key) return { ok: false, code: "missing_key", error: DEEPSEEK_MISSING_KEY_ERROR };
 
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     let response: Response;
     try {
       response = await doFetch(`${baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(body),
+        ...init,
+        headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${key}` },
         signal: requestSignal,
       });
     } catch (error) {
-      return { ok: false, error: mapFetchError(error, timeoutMs) };
+      return { ok: false, code: fetchErrorCode(error), error: mapFetchError(error, timeoutMs) };
     }
 
     let rawBody: string;
@@ -185,17 +226,19 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
       if (Number.isFinite(declaredLength) && declaredLength > maxResponseBytes) {
         return {
           ok: false,
+          code: "failed",
           error: `DeepSeek API response exceeded the ${maxResponseBytes}-byte limit.`,
         };
       }
       rawBody = await response.text();
     } catch (error) {
-      return { ok: false, error: mapFetchError(error, timeoutMs) };
+      return { ok: false, code: fetchErrorCode(error), error: mapFetchError(error, timeoutMs) };
     }
 
     if (Buffer.byteLength(rawBody, "utf8") > maxResponseBytes) {
       return {
         ok: false,
+        code: "failed",
         error: `DeepSeek API response exceeded the ${maxResponseBytes}-byte limit.`,
       };
     }
@@ -205,14 +248,51 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
       const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
       return {
         ok: false,
+        code: upstreamErrorCode(response.status),
         error: `DeepSeek API error (${status})${summary ? `: ${summary}` : ""}`,
       };
     }
 
+    return { ok: true, rawBody };
+  }
+
+  async function post(
+    path: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+  ): Promise<DeepSeekResult<unknown>> {
+    const result = await request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      signal,
+    );
+    if (!result.ok) return { ok: false, error: result.error };
     try {
-      return { ok: true, data: JSON.parse(rawBody) };
+      return { ok: true, data: JSON.parse(result.rawBody) };
     } catch {
       return { ok: false, error: "DeepSeek API returned a response that is not valid JSON." };
+    }
+  }
+
+  async function transcribe(input: DeepSeekTranscribeInput): Promise<DeepSeekTranscriptionResult> {
+    const form = new FormData();
+    const bytes = new Uint8Array(input.audio.byteLength);
+    bytes.set(input.audio);
+    form.append("file", new Blob([bytes], { type: input.mimeType }), "voice-input.wav");
+    const result = await request(DEEPSEEK_ASR_PATH, { method: "POST", body: form }, input.signal);
+    if (!result.ok) return result;
+    try {
+      return { ok: true, data: parseTranscription(JSON.parse(result.rawBody)) };
+    } catch {
+      return {
+        ok: false,
+        code: "failed",
+        error: "DeepSeek API returned a response that is not valid JSON.",
+      };
     }
   }
 
@@ -241,6 +321,10 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
       const response = await post(DEEPSEEK_FETCH_PATH, { url: input.url }, input.signal);
       if (!response.ok) return response;
       return { ok: true, data: mapFetchResult(response.data, maxChars) };
+    },
+
+    transcribe(input) {
+      return transcribe(input);
     },
   };
 }

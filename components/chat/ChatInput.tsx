@@ -15,6 +15,8 @@ import { useToolsDropdown } from "./chat-input/hooks/useToolsDropdown";
 import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
+import { VoiceInputButton } from "./chat-input/VoiceInputButton";
+import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/useVoiceInput";
 import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { chatInputMetrics } from "./chat-input/metrics";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
@@ -72,6 +74,7 @@ interface Props {
   showNotifyPicker?: boolean;
   notifyChannelId?: string | null;
   onNotifyChannelChange?: (channelId: string | null) => void;
+  voiceRecorderFactory?: VoiceRecorderFactory;
 }
 
 export interface ChatInputHandle {
@@ -103,6 +106,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   showNotifyPicker = false,
   notifyChannelId = null,
   onNotifyChannelChange,
+  voiceRecorderFactory,
 }: Props, ref) {
   const { t } = useI18n();
   const { contextUsage, sessionStats, contextComposition } = useSessionUiState();
@@ -218,6 +222,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.style.height = `${Math.min(ta.scrollHeight, chatInputMetrics.textAreaMaxHeight)}px`;
     });
   }, []);
+
+  const voiceInput = useVoiceInput({
+    insertText: insertTextAtCursor,
+    recorderFactory: voiceRecorderFactory,
+  });
 
   const {
     isInHistoryMode,
@@ -483,6 +492,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
             data-hide-v-scrollbar
           />
+
+          {voiceInput.supported && (
+            <VoiceInputButton
+              phase={voiceInput.phase}
+              elapsedMs={voiceInput.elapsedMs}
+              level={voiceInput.level}
+              disabled={disabled}
+              onClick={() => {
+                void voiceInput.toggle();
+              }}
+            />
+          )}
 
           {isStreaming ? (
             <button

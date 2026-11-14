@@ -8,6 +8,8 @@ import { ChatInputAttachments } from "@/components/chat/ChatInputAttachments";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { SlashResource } from "@/lib/shared/slash-commands";
+import type { VoiceRecorder } from "@/lib/client/voice-recorder";
+import type { VoiceInputState } from "@/lib/shared/voice-input";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -183,5 +185,135 @@ describe("ChatInput builtin slash actions", () => {
 
     expect(onSlashAction).not.toHaveBeenCalled();
     expect(onSend).toHaveBeenCalledWith("/usage opencode", undefined);
+  });
+});
+
+describe("ChatInput voice input", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    vi.unstubAllGlobals();
+  });
+
+  function createFakeRecorder() {
+    const listeners = new Set<() => void>();
+    let snapshot: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
+    const emit = () => {
+      for (const listener of listeners) listener();
+    };
+    const recorder: VoiceRecorder = {
+      async start() {
+        snapshot = { phase: "recording", elapsedMs: 0, level: 0.2 };
+        emit();
+      },
+      async stop() {
+        snapshot = { phase: "idle", elapsedMs: 1200, level: 0 };
+        emit();
+        return { wav: new Uint8Array([1, 2, 3, 4]), durationMs: 1200 };
+      },
+      async cancel() {
+        snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
+        emit();
+      },
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      getSnapshot() {
+        return snapshot;
+      },
+    };
+    return recorder;
+  }
+
+  function renderInput(recorder: VoiceRecorder) {
+    const onSend = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        createElement(
+          I18nProvider,
+          null,
+          createElement(ChatInput, {
+            onSend,
+            onAbort: () => undefined,
+            isStreaming: false,
+            voiceRecorderFactory: () => recorder,
+          }),
+        ),
+      );
+    });
+    const textarea = container.querySelector("textarea");
+    if (!textarea) throw new Error("textarea not rendered");
+    return { textarea, onSend };
+  }
+
+  function typeInto(textarea: HTMLTextAreaElement, text: string) {
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    for (let end = 1; end <= text.length; end += 1) {
+      const next = text.slice(0, end);
+      act(() => {
+        valueSetter?.call(textarea, next);
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+  }
+
+  function findButton(labelKey: "Start voice input" | "Finish voice input") {
+    const labels: string[] = [ZH_TRANSLATIONS[labelKey], labelKey];
+    return (
+      Array.from(container.querySelectorAll("button")).find((button) =>
+        labels.includes(button.getAttribute("aria-label") ?? ""),
+      ) ?? null
+    );
+  }
+
+  it("inserts the transcript at the cursor without sending or touching the rest", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      return setTimeout(() => callback(0), 0);
+    });
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ text: "voice text" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { textarea, onSend } = renderInput(createFakeRecorder());
+    typeInto(textarea, "Hello  world");
+    act(() => {
+      textarea.setSelectionRange(6, 6);
+      textarea.dispatchEvent(new Event("select", { bubbles: true }));
+    });
+
+    const startButton = findButton("Start voice input");
+    expect(startButton).not.toBeNull();
+    await act(async () => {
+      startButton?.click();
+    });
+
+    const finishButton = findButton("Finish voice input");
+    expect(finishButton).not.toBeNull();
+    await act(async () => {
+      finishButton?.click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requestedUrl] = fetchMock.mock.calls[0];
+    expect(String(requestedUrl)).toBe("/api/voice/transcribe");
+    expect(textarea.value).toBe("Hello voice text world");
+    expect(textarea.selectionStart).toBe(6 + "voice text".length);
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

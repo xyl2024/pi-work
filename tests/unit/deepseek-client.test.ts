@@ -5,6 +5,7 @@ import {
   DEEPSEEK_MISSING_KEY_ERROR,
   DEEPSEEK_SEARCH_PATH,
 } from "@/lib/server/deepseek/client";
+import { DEEPSEEK_ASR_PATH } from "@/lib/shared/deepseek";
 
 function jsonResponse(payload: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(payload), {
@@ -197,5 +198,125 @@ describe("DeepSeek client", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toContain("timed out after 1234ms");
+  });
+});
+
+describe("DeepSeek client transcription", () => {
+  it("uploads the audio as a multipart file and reads the transcript", async () => {
+    let requestedUrl = "";
+    let requestedInit: RequestInit | undefined;
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "deepseek-key",
+      fetch: (async (url: string, init: RequestInit) => {
+        requestedUrl = String(url);
+        requestedInit = init;
+        return jsonResponse({ request_id: "req", text: "transcribed words", duration_ms: 2400 });
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({
+      audio: new Uint8Array([1, 2, 3, 4]),
+      mimeType: "audio/wav",
+    });
+
+    expect(requestedUrl).toBe(`http://deepseek.test${DEEPSEEK_ASR_PATH}`);
+    expect(requestedInit?.method).toBe("POST");
+    expect((requestedInit?.headers as Record<string, string>).Authorization).toBe("Bearer deepseek-key");
+    expect(requestedInit?.body).toBeInstanceOf(FormData);
+    const sent = (requestedInit?.body as FormData).get("file");
+    expect(sent).toBeInstanceOf(File);
+    expect((sent as File).type).toBe("audio/wav");
+    expect((sent as File).size).toBe(4);
+    expect(result).toEqual({ ok: true, data: { text: "transcribed words", durationMs: 2400 } });
+  });
+
+  it("keeps a missing duration as null and an empty transcript as empty text", async () => {
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "key",
+      fetch: (async () => jsonResponse({ request_id: "req", text: "" })) as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({ audio: new Uint8Array([0]), mimeType: "audio/wav" });
+
+    expect(result).toEqual({ ok: true, data: { text: "", durationMs: null } });
+  });
+
+  it("returns missing_key without calling the network", async () => {
+    const fetchMock = vi.fn();
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: null,
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({ audio: new Uint8Array([1]), mimeType: "audio/wav" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("missing_key");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [400, "invalid_audio"],
+    [413, "too_large"],
+    [429, "rate_limited"],
+    [503, "busy"],
+    [504, "timeout"],
+    [500, "failed"],
+    [401, "failed"],
+  ] as const)("maps upstream %i to %s", async (status, code) => {
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "key",
+      fetch: (async () => jsonResponse({ error: { message: "nope" } }, { status })) as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({ audio: new Uint8Array([1]), mimeType: "audio/wav" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe(code);
+    expect(result.error).toContain(String(status));
+  });
+
+  it("maps a fetch timeout to the timeout code", async () => {
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "key",
+      timeoutMs: 500,
+      fetch: (async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({ audio: new Uint8Array([1]), mimeType: "audio/wav" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("timeout");
+  });
+
+  it("maps a caller abort to the aborted code", async () => {
+    const controller = new AbortController();
+    const client = createDeepSeekClient({
+      baseUrl: "http://deepseek.test",
+      apiKey: "key",
+      fetch: (async () => {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await client.transcribe({
+      audio: new Uint8Array([1]),
+      mimeType: "audio/wav",
+      signal: controller.signal,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("aborted");
   });
 });
