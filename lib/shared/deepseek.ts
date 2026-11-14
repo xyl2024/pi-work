@@ -2,6 +2,8 @@ export const DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com";
 
 export const DEEPSEEK_ASR_PATH = "/v1/tools/asr";
 
+export const DEEPSEEK_TTS_PATH = "/v1/tools/tts";
+
 export type DeepSeekTranscriptionErrorCode =
   | "missing_key"
   | "invalid_audio"
@@ -30,6 +32,35 @@ export function deepSeekTranscriptionErrorCodeForStatus(
     [DeepSeekTranscriptionErrorCode, number]
   >;
   return entries.find(([, value]) => value === status)?.[0] ?? "failed";
+}
+
+export type DeepSeekSynthesisErrorCode =
+  | "missing_key"
+  | "too_long"
+  | "blocked"
+  | "rate_limited"
+  | "busy"
+  | "timeout"
+  | "failed";
+
+export const DEEPSEEK_SYNTHESIS_ERROR_STATUS = {
+  missing_key: 409,
+  too_long: 413,
+  blocked: 422,
+  rate_limited: 429,
+  busy: 503,
+  timeout: 504,
+  failed: 502,
+} as const satisfies Record<DeepSeekSynthesisErrorCode, number>;
+
+export function deepSeekSynthesisErrorCodeForStatus(status: number): DeepSeekSynthesisErrorCode {
+  if (status === 400 || status === 422) return "blocked";
+  if (status === 401) return "missing_key";
+  if (status === 408 || status === 504) return "timeout";
+  if (status === 413) return "too_long";
+  if (status === 429) return "rate_limited";
+  if (status === 503) return "busy";
+  return "failed";
 }
 
 export interface DeepSeekTranscription {

@@ -1,8 +1,15 @@
 import {
   DEEPSEEK_ASR_PATH,
+  DEEPSEEK_TTS_PATH,
+  deepSeekSynthesisErrorCodeForStatus,
+  type DeepSeekSynthesisErrorCode,
   type DeepSeekTranscription,
   type DeepSeekTranscriptionErrorCode,
 } from "@/lib/shared/deepseek";
+import {
+  READ_ALOUD_MAX_AUDIO_BYTES,
+  READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
+} from "@/lib/shared/read-aloud";
 import {
   clampInteger,
   WEB_FETCH_DEFAULT_MAX_CHARS,
@@ -53,6 +60,15 @@ export type DeepSeekTranscriptionResult =
   | { ok: true; data: DeepSeekTranscription }
   | { ok: false; code: DeepSeekTranscriptionErrorCode; error: string };
 
+export interface DeepSeekSynthesis {
+  audio: Uint8Array;
+  contentType: string;
+}
+
+export type DeepSeekSynthesisResult =
+  | { ok: true; data: DeepSeekSynthesis }
+  | { ok: false; code: DeepSeekSynthesisErrorCode; error: string };
+
 type DeepSeekRawResult =
   | { ok: true; rawBody: string }
   | { ok: false; code: DeepSeekTranscriptionErrorCode; error: string };
@@ -63,6 +79,7 @@ export interface DeepSeekClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   maxResponseBytes?: number;
+  maxAudioBytes?: number;
 }
 
 export interface DeepSeekSearchInput {
@@ -84,10 +101,17 @@ export interface DeepSeekTranscribeInput {
   signal?: AbortSignal;
 }
 
+export interface DeepSeekSynthesizeInput {
+  text: string;
+  voiceId: string;
+  signal?: AbortSignal;
+}
+
 export interface DeepSeekClient {
   search(input: DeepSeekSearchInput): Promise<DeepSeekResult<DeepSeekSearchResult>>;
   fetchPage(input: DeepSeekFetchInput): Promise<DeepSeekResult<DeepSeekFetchResult>>;
   transcribe(input: DeepSeekTranscribeInput): Promise<DeepSeekTranscriptionResult>;
+  synthesize(input: DeepSeekSynthesizeInput): Promise<DeepSeekSynthesisResult>;
 }
 
 export const DEEPSEEK_MISSING_KEY_ERROR =
@@ -138,6 +162,14 @@ function fetchErrorCode(error: unknown): DeepSeekTranscriptionErrorCode {
   if (error instanceof Error) {
     if (error.name === "TimeoutError") return "timeout";
     if (error.name === "AbortError") return "aborted";
+  }
+  return "failed";
+}
+
+function synthesisFetchErrorCode(error: unknown): DeepSeekSynthesisErrorCode {
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError") return "timeout";
+    if (error.name === "AbortError") return "failed";
   }
   return "failed";
 }
@@ -195,6 +227,7 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
   const doFetch = options.fetch ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEEPSEEK_REQUEST_TIMEOUT_MS;
   const maxResponseBytes = options.maxResponseBytes ?? DEEPSEEK_MAX_RESPONSE_BYTES;
+  const maxAudioBytes = options.maxAudioBytes ?? READ_ALOUD_MAX_AUDIO_BYTES;
   const baseUrl = (options.baseUrl ?? deepSeekBaseUrl()).replace(/\/+$/, "");
 
   function apiKey(): string | null {
@@ -298,6 +331,88 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
     }
   }
 
+  async function synthesize(input: DeepSeekSynthesizeInput): Promise<DeepSeekSynthesisResult> {
+    const key = apiKey();
+    if (!key) return { ok: false, code: "missing_key", error: DEEPSEEK_MISSING_KEY_ERROR };
+
+    const timeoutSignal = AbortSignal.timeout(
+      options.timeoutMs ?? READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
+    );
+    const requestSignal = input.signal
+      ? AbortSignal.any([input.signal, timeoutSignal])
+      : timeoutSignal;
+
+    let response: Response;
+    try {
+      response = await doFetch(`${baseUrl}${DEEPSEEK_TTS_PATH}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          text: input.text,
+          voice_id: input.voiceId,
+          format: "wav",
+          filter_markdown: true,
+        }),
+        signal: requestSignal,
+      });
+    } catch (error) {
+      return { ok: false, code: synthesisFetchErrorCode(error), error: mapFetchError(error, timeoutMs) };
+    }
+
+    if (!response.ok) {
+      let summary = "";
+      try {
+        summary = errorBodySummary(await response.text());
+      } catch {
+        summary = "";
+      }
+      const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+      return {
+        ok: false,
+        code: deepSeekSynthesisErrorCodeForStatus(response.status),
+        error: `DeepSeek synthesis error (${status})${summary ? `: ${summary}` : ""}`,
+      };
+    }
+
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxAudioBytes) {
+      return {
+        ok: false,
+        code: "too_long",
+        error: `DeepSeek synthesis response exceeded the ${maxAudioBytes}-byte limit.`,
+      };
+    }
+
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await response.arrayBuffer();
+    } catch (error) {
+      return { ok: false, code: "failed", error: mapFetchError(error, timeoutMs) };
+    }
+
+    if (buffer.byteLength === 0) {
+      return { ok: false, code: "failed", error: "DeepSeek synthesis returned no audio." };
+    }
+    if (buffer.byteLength > maxAudioBytes) {
+      return {
+        ok: false,
+        code: "too_long",
+        error: `DeepSeek synthesis response exceeded the ${maxAudioBytes}-byte limit.`,
+      };
+    }
+
+    return {
+      ok: true,
+      data: {
+        audio: new Uint8Array(buffer),
+        contentType: response.headers.get("content-type") ?? "audio/wav",
+      },
+    };
+  }
+
   return {
     async search(input) {
       const count = clampInteger(
@@ -327,6 +442,10 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
 
     transcribe(input) {
       return transcribe(input);
+    },
+
+    synthesize(input) {
+      return synthesize(input);
     },
   };
 }
