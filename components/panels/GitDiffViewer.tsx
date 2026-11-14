@@ -27,7 +27,7 @@ export function GitDiffViewer({ diff, truncated }: { diff: string; truncated: bo
         <div style={{
           margin: "4px 10px", padding: "6px 10px", fontSize: 11,
           background: "var(--warning-bg)", color: "var(--warning)",
-          border: "1px solid rgba(234,179,8,0.3)", borderRadius: "var(--radius-sm)",
+          border: "1px solid color-mix(in srgb, var(--warning) 25%, transparent)", borderRadius: "var(--radius-sm)",
         }}>
           {t("Diff truncated")}
         </div>
@@ -40,14 +40,14 @@ export function GitDiffViewer({ diff, truncated }: { diff: string; truncated: bo
             whiteSpace: "pre",
           };
           if (type === "add") {
-            style.background = "rgba(34,197,94,0.13)";
-            style.color = "#16a34a";
+            style.background = "var(--diff-add-bg)";
+            style.color = "var(--diff-add-text)";
           } else if (type === "del") {
-            style.background = "rgba(239,68,68,0.13)";
-            style.color = "#ef4444";
+            style.background = "var(--diff-del-bg)";
+            style.color = "var(--diff-del-text)";
           } else if (type === "hunk") {
-            style.background = "rgba(59,130,246,0.1)";
-            style.color = "#3b82f6";
+            style.background = "var(--diff-hunk-bg)";
+            style.color = "var(--info)";
           } else if (type === "file") {
             style.color = "var(--text-muted)";
             style.fontWeight = 600;
