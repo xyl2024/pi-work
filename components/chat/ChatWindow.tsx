@@ -1002,7 +1002,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     turnDiffStats: isCurrentTurnInProgress ? undefined : turnDiffStats,
                     onOpenFile: handleOpenFile,
                     inStreamingViewport: isCurrentTurnInProgress,
-                    readAloud: true,
+                    readAloud: !isCurrentTurnInProgress,
                   }),
                 );
 

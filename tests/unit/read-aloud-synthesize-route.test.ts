@@ -17,9 +17,10 @@ import {
   SYNTHESIS_CACHE_MAX_ENTRY_BYTES,
   synthesisCacheKey,
 } from "@/lib/server/synthesis-cache";
-import { DEEPSEEK_TTS_PATH } from "@/lib/shared/deepseek";
+import { DEEPSEEK_SYNTHESIS_PATH } from "@/lib/shared/deepseek";
 import {
   READ_ALOUD_DEFAULT_VOICE_ID,
+  READ_ALOUD_MAX_AUDIO_BYTES,
   READ_ALOUD_MAX_BILLING_CHARS,
 } from "@/lib/shared/read-aloud";
 
@@ -96,7 +97,7 @@ describe("POST /api/read-aloud/synthesize", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`http://deepseek.test${DEEPSEEK_TTS_PATH}`);
+    expect(url).toBe(`http://deepseek.test${DEEPSEEK_SYNTHESIS_PATH}`);
     expect(url).not.toContain(encodeURIComponent("请朗读这段话"));
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer route-key-1234");
@@ -133,11 +134,11 @@ describe("POST /api/read-aloud/synthesize", () => {
     expect(JSON.parse(init.body as string).voice_id).toBe("tide");
   });
 
-  it("rejects an empty or missing text without calling upstream", async () => {
+  it("rejects an empty, missing or malformed text as an invalid request", async () => {
     for (const payload of [{ text: "   " }, {}, "not json"]) {
       const response = await POST(post(payload));
       expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error: "blocked" });
+      expect(await response.json()).toEqual({ error: "invalid_request" });
     }
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -190,6 +191,24 @@ describe("POST /api/read-aloud/synthesize", () => {
 
   it("treats an audio stream that breaks midway as a failure", async () => {
     fetchMock.mockImplementation(async () => brokenAudioResponse());
+
+    const response = await POST(post({ text: "hello" }));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "failed" });
+  });
+
+  it("treats audio above the client byte ceiling as a neutral failure", async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(WAV, {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/wav",
+            "Content-Length": String(READ_ALOUD_MAX_AUDIO_BYTES + 1),
+          },
+        }),
+    );
 
     const response = await POST(post({ text: "hello" }));
 

@@ -6,11 +6,10 @@ import {
   createSynthesisCache,
   synthesisCacheKey,
 } from "@/lib/server/synthesis-cache";
-import { DEEPSEEK_SYNTHESIS_ERROR_STATUS } from "@/lib/shared/deepseek";
 import type { DeepSeekSynthesisErrorCode } from "@/lib/shared/deepseek";
 import {
   READ_ALOUD_MAX_BILLING_CHARS,
-  READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
+  READ_ALOUD_SERVER_ERROR_STATUS,
   hasReadableReadAloudText,
   readAloudBillingChars,
   readAloudVoiceId,
@@ -37,16 +36,25 @@ export async function POST(req: Request) {
     try {
       body = (await req.json()) as SynthesisRequestBody;
     } catch {
-      return NextResponse.json({ error: "blocked" }, { status: 400 });
+      return NextResponse.json(
+        { error: "invalid_request" },
+        { status: READ_ALOUD_SERVER_ERROR_STATUS.invalid_request },
+      );
     }
 
     const text = shapeReadAloudText(typeof body.text === "string" ? body.text : "");
     if (!hasReadableReadAloudText(text)) {
-      return NextResponse.json({ error: "blocked" }, { status: 400 });
+      return NextResponse.json(
+        { error: "invalid_request" },
+        { status: READ_ALOUD_SERVER_ERROR_STATUS.invalid_request },
+      );
     }
     const billingChars = readAloudBillingChars(text);
     if (billingChars > READ_ALOUD_MAX_BILLING_CHARS) {
-      return NextResponse.json({ error: "too_long" }, { status: 413 });
+      return NextResponse.json(
+        { error: "too_long" },
+        { status: READ_ALOUD_SERVER_ERROR_STATUS.too_long },
+      );
     }
 
     const voiceId = readAloudVoiceId(body.voiceId);
@@ -57,9 +65,7 @@ export async function POST(req: Request) {
       const cached = await cache.read(key);
       if (cached) return { ok: true, audio: cached, cached: true };
 
-      const synthesized = await createDeepSeekClient({
-        timeoutMs: READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
-      }).synthesize({ text, voiceId });
+      const synthesized = await createDeepSeekClient().synthesize({ text, voiceId });
       if (!synthesized.ok) return { ok: false, code: synthesized.code };
 
       await cache.write(key, synthesized.data.audio);
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
     });
 
     if (!result.ok) {
-      const status = DEEPSEEK_SYNTHESIS_ERROR_STATUS[result.code];
+      const status = READ_ALOUD_SERVER_ERROR_STATUS[result.code];
       log.error("read-aloud synthesis failed", {
         code: result.code,
         status,

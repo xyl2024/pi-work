@@ -213,7 +213,7 @@ describe("createReadAloudPlayer", () => {
   });
 
   it("does not retry failures that a retry cannot fix", async () => {
-    for (const code of ["missing_key", "too_long", "blocked", "rate_limited", "failed"] as const) {
+    for (const code of ["missing_key", "too_long", "blocked", "rate_limited", "failed", "invalid_request"] as const) {
       const synthesize = vi.fn(async () => ({ ok: false, code }) as ReadAloudSynthesisResult);
       const waitForRetry = vi.fn(async () => true);
       const player = createReadAloudPlayer({ ...createHarness(), synthesize, waitForRetry });

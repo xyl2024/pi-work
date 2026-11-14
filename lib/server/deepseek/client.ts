@@ -1,15 +1,12 @@
 import {
   DEEPSEEK_ASR_PATH,
-  DEEPSEEK_TTS_PATH,
+  DEEPSEEK_SYNTHESIS_PATH,
   deepSeekSynthesisErrorCodeForStatus,
   type DeepSeekSynthesisErrorCode,
   type DeepSeekTranscription,
   type DeepSeekTranscriptionErrorCode,
 } from "@/lib/shared/deepseek";
-import {
-  READ_ALOUD_MAX_AUDIO_BYTES,
-  READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
-} from "@/lib/shared/read-aloud";
+import { READ_ALOUD_MAX_AUDIO_BYTES } from "@/lib/shared/read-aloud";
 import {
   clampInteger,
   WEB_FETCH_DEFAULT_MAX_CHARS,
@@ -62,7 +59,6 @@ export type DeepSeekTranscriptionResult =
 
 export interface DeepSeekSynthesis {
   audio: Uint8Array;
-  contentType: string;
 }
 
 export type DeepSeekSynthesisResult =
@@ -335,16 +331,14 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
     const key = apiKey();
     if (!key) return { ok: false, code: "missing_key", error: DEEPSEEK_MISSING_KEY_ERROR };
 
-    const timeoutSignal = AbortSignal.timeout(
-      options.timeoutMs ?? READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
-    );
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const requestSignal = input.signal
       ? AbortSignal.any([input.signal, timeoutSignal])
       : timeoutSignal;
 
     let response: Response;
     try {
-      response = await doFetch(`${baseUrl}${DEEPSEEK_TTS_PATH}`, {
+      response = await doFetch(`${baseUrl}${DEEPSEEK_SYNTHESIS_PATH}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -381,7 +375,7 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
     if (Number.isFinite(declaredLength) && declaredLength > maxAudioBytes) {
       return {
         ok: false,
-        code: "too_long",
+        code: "failed",
         error: `DeepSeek synthesis response exceeded the ${maxAudioBytes}-byte limit.`,
       };
     }
@@ -399,7 +393,7 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
     if (buffer.byteLength > maxAudioBytes) {
       return {
         ok: false,
-        code: "too_long",
+        code: "failed",
         error: `DeepSeek synthesis response exceeded the ${maxAudioBytes}-byte limit.`,
       };
     }
@@ -408,7 +402,6 @@ export function createDeepSeekClient(options: DeepSeekClientOptions = {}): DeepS
       ok: true,
       data: {
         audio: new Uint8Array(buffer),
-        contentType: response.headers.get("content-type") ?? "audio/wav",
       },
     };
   }

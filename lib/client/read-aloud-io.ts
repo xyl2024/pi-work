@@ -1,7 +1,7 @@
+import { deepSeekSynthesisErrorCodeForStatus } from "@/lib/shared/deepseek";
 import {
   READ_ALOUD_SYNTHESIZE_TIMEOUT_MS,
   isReadAloudErrorCode,
-  readAloudErrorCodeForStatus,
   type ReadAloudErrorCode,
 } from "@/lib/shared/read-aloud";
 
@@ -18,9 +18,9 @@ async function errorCodeFrom(response: Response): Promise<ReadAloudErrorCode> {
     const body = (await response.json()) as { error?: unknown };
     if (isReadAloudErrorCode(body.error)) return body.error;
   } catch {
-    return readAloudErrorCodeForStatus(response.status);
+    return deepSeekSynthesisErrorCodeForStatus(response.status);
   }
-  return readAloudErrorCodeForStatus(response.status);
+  return deepSeekSynthesisErrorCodeForStatus(response.status);
 }
 
 export async function synthesizeReadAloud(

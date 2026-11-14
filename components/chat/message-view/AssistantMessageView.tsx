@@ -62,6 +62,7 @@ function AssistantMessageViewInner({
   onOpenFile,
   cwd,
   sessionId,
+  entryId,
   readAloud,
 }: AssistantMessageViewProps) {
   const { t } = useI18n();
@@ -98,7 +99,7 @@ function AssistantMessageViewInner({
   blocksRef.current = blocks;
 
   const readAloudState = useReadAloud();
-  const readAloudKey = String(message.timestamp);
+  const readAloudKey = entryId ?? String(message.timestamp);
   const readAloudActive = readAloudState.key === readAloudKey;
   const readAloudPhase = readAloudActive ? readAloudState.phase : "idle";
   const readAloudText = useMemo(

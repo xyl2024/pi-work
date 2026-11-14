@@ -178,6 +178,7 @@ export const EN_TRANSLATIONS = {
   "Read aloud timed out, try again later": "Read aloud timed out, try again later",
   "Network error, try again": "Network error, try again",
   "Read aloud failed, try again": "Read aloud failed, try again",
+  "Nothing to read aloud": "Nothing to read aloud",
   "Web search/fetch, voice transcription and read-aloud share this key": "Web search/fetch, voice transcription and read-aloud share this key",
   "Back to chat": "Back to chat",
   "Edit provider": "Edit provider",

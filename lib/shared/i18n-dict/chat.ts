@@ -49,6 +49,7 @@ export const chat = {
   "Read aloud timed out, try again later": "朗读超时，稍后再试",
   "Network error, try again": "网络异常，请再试一次",
   "Read aloud failed, try again": "朗读失败，请再试一次",
+  "Nothing to read aloud": "没有可朗读的内容",
   "Remove": "移除",
   "Type / to select a skill, @ to select a file": "输入 / 选择技能，输入 @ 选择文件",
   "Upload image": "上传图片",

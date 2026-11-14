@@ -4,13 +4,15 @@ import {
   READ_ALOUD_ERROR_CODES,
   READ_ALOUD_MAX_BILLING_CHARS,
   READ_ALOUD_RETRY_DELAY_MS,
+  READ_ALOUD_SERVER_ERROR_CODES,
+  READ_ALOUD_SERVER_ERROR_STATUS,
   hasReadableReadAloudText,
   isReadAloudRetryableError,
   readAloudBillingChars,
-  readAloudErrorCodeForStatus,
   readAloudErrorMessageKey,
   readAloudTextFromMessage,
 } from "@/lib/shared/read-aloud";
+import { deepSeekSynthesisErrorCodeForStatus } from "@/lib/shared/deepseek";
 import { EN_TRANSLATIONS } from "@/lib/shared/i18n-dict/en";
 import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { AssistantMessage } from "@/lib/shared/types";
@@ -33,15 +35,24 @@ describe("read-aloud shared logic", () => {
   });
 
   it("maps upstream statuses onto stable read-aloud error codes", () => {
-    expect(readAloudErrorCodeForStatus(400)).toBe("blocked");
-    expect(readAloudErrorCodeForStatus(401)).toBe("missing_key");
-    expect(readAloudErrorCodeForStatus(408)).toBe("timeout");
-    expect(readAloudErrorCodeForStatus(413)).toBe("too_long");
-    expect(readAloudErrorCodeForStatus(429)).toBe("rate_limited");
-    expect(readAloudErrorCodeForStatus(503)).toBe("busy");
-    expect(readAloudErrorCodeForStatus(504)).toBe("timeout");
-    expect(readAloudErrorCodeForStatus(500)).toBe("failed");
-    expect(readAloudErrorCodeForStatus(418)).toBe("failed");
+    expect(deepSeekSynthesisErrorCodeForStatus(400)).toBe("blocked");
+    expect(deepSeekSynthesisErrorCodeForStatus(401)).toBe("missing_key");
+    expect(deepSeekSynthesisErrorCodeForStatus(408)).toBe("timeout");
+    expect(deepSeekSynthesisErrorCodeForStatus(413)).toBe("too_long");
+    expect(deepSeekSynthesisErrorCodeForStatus(429)).toBe("rate_limited");
+    expect(deepSeekSynthesisErrorCodeForStatus(503)).toBe("busy");
+    expect(deepSeekSynthesisErrorCodeForStatus(504)).toBe("timeout");
+    expect(deepSeekSynthesisErrorCodeForStatus(500)).toBe("failed");
+    expect(deepSeekSynthesisErrorCodeForStatus(418)).toBe("failed");
+  });
+
+  it("derives the server error codes and statuses from the shared error list", () => {
+    expect(READ_ALOUD_SERVER_ERROR_CODES).not.toContain("network");
+    expect(READ_ALOUD_SERVER_ERROR_CODES).toHaveLength(READ_ALOUD_ERROR_CODES.length - 1);
+    expect(READ_ALOUD_SERVER_ERROR_STATUS.invalid_request).toBe(400);
+    for (const code of READ_ALOUD_SERVER_ERROR_CODES) {
+      expect(READ_ALOUD_SERVER_ERROR_STATUS[code]).toBeGreaterThanOrEqual(400);
+    }
   });
 
   it("extracts only the final answer text, never process blocks", () => {
@@ -62,6 +73,12 @@ describe("read-aloud shared logic", () => {
     expect(hasReadableReadAloudText("hello")).toBe(true);
   });
 
+  it("treats non-Latin scripts as readable", () => {
+    for (const text of ["สวัสดี", "مرحبا", "Привет", "こんにちは", "नमस्ते"]) {
+      expect(hasReadableReadAloudText(text)).toBe(true);
+    }
+  });
+
   it("has a localized message key for every error code", () => {
     for (const code of READ_ALOUD_ERROR_CODES) {
       const key = readAloudErrorMessageKey(code);
@@ -78,6 +95,7 @@ describe("read-aloud shared logic", () => {
   it("separates the too-long hint from the blocked hint", () => {
     expect(readAloudErrorMessageKey("too_long")).toContain("shorten");
     expect(readAloudErrorMessageKey("blocked")).toContain("rephrasing");
+    expect(readAloudErrorMessageKey("invalid_request")).toBe("Nothing to read aloud");
   });
 
   it("retries only busy, timeout and network failures", () => {
@@ -91,6 +109,7 @@ describe("read-aloud shared logic", () => {
       "blocked",
       "rate_limited",
       "failed",
+      "invalid_request",
     ] as const) {
       expect(isReadAloudRetryableError(code)).toBe(false);
     }

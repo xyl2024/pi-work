@@ -2,7 +2,7 @@ export const DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com";
 
 export const DEEPSEEK_ASR_PATH = "/v1/tools/asr";
 
-export const DEEPSEEK_TTS_PATH = "/v1/tools/tts";
+export const DEEPSEEK_SYNTHESIS_PATH = "/v1/tools/tts";
 
 export type DeepSeekTranscriptionErrorCode =
   | "missing_key"

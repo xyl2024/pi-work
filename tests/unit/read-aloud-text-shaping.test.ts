@@ -36,6 +36,21 @@ describe("shapeReadAloudText", () => {
     expect(shapeReadAloudText("正文。\n\n```js\nconst half = ")).toBe("正文。");
   });
 
+  it("skips indented code blocks and the blank lines inside them", () => {
+    const markdown = [
+      "Intro paragraph.",
+      "",
+      "    const answer = 42;",
+      "    console.log(answer);",
+      "",
+      "\tconst tabbed = true;",
+      "",
+      "Outro paragraph.",
+    ].join("\n");
+
+    expect(shapeReadAloudText(markdown)).toBe("Intro paragraph.\n\nOutro paragraph.");
+  });
+
   it("skips inline code", () => {
     expect(shapeReadAloudText("Run `pnpm test` before pushing.")).toBe("Run before pushing.");
     expect(shapeReadAloudText("用 ``a`b`` 表示代码。")).toBe("用 表示代码。");
