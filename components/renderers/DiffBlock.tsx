@@ -45,20 +45,6 @@ function fileLabel(file: DiffFile): string {
   return file.newPath ?? file.oldPath ?? "";
 }
 
-function HunkSeparator() {
-  return (
-    <div
-      aria-hidden
-      style={{
-        height: 8,
-        background: "var(--diff-hunk-bg)",
-        borderTop: "1px solid var(--border-soft)",
-        borderBottom: "1px solid var(--border-soft)",
-      }}
-    />
-  );
-}
-
 function FoldButton({ count, onClick }: { count: number; onClick: () => void }) {
   const { t } = useI18n();
   return (
@@ -147,9 +133,7 @@ function VisibleRange({
   const nodes: React.ReactNode[] = [];
   for (let i = start; i <= end; i++) {
     const line = plan.rows[i];
-    if (line.type === "hunk") {
-      nodes.push(<HunkSeparator key={`h-${i}`} />);
-    } else {
+    if (line.type !== "hunk") {
       nodes.push(<LineRow key={`l-${i}`} line={line} hasHunks={hasHunks} />);
     }
   }
