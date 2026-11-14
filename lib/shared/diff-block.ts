@@ -1,3 +1,10 @@
+import {
+  countDisplayDiffLines,
+  countUnifiedPatchLines,
+  sumDiffStats,
+  type ToolDiffStats,
+} from "./tool-diff-stats";
+
 export type DiffLineType = "file" | "hunk" | "add" | "del" | "context" | "meta";
 
 export interface DiffLine {
@@ -44,6 +51,33 @@ const META_PREFIXES = [
 
 
 const DIFF_GIT_PREFIX = "diff --git ";
+
+function fileSegments(text: string): string[] {
+  const segments: string[][] = [];
+  for (const raw of text.split("\n")) {
+    if (raw.startsWith(DIFF_GIT_PREFIX) || segments.length === 0) {
+      segments.push([raw]);
+    } else {
+      segments[segments.length - 1].push(raw);
+    }
+  }
+  return segments.map((lines) => lines.join("\n"));
+}
+
+function overallStats(text: string): ToolDiffStats {
+  const perFile = fileSegments(text).map((segment) => {
+    const hasHunk = segment.split("\n").some((line) => HUNK_HEADER.test(line));
+    if (hasHunk) return countUnifiedPatchLines(segment);
+    return countDisplayDiffLines(
+      segment
+        .split("\n")
+        .filter((line) => !line.startsWith("--- ") && !line.startsWith("+++ "))
+        .join("\n"),
+    );
+  });
+  return sumDiffStats(perFile) ?? { additions: 0, deletions: 0 };
+}
+
 const RENAME_PREFIXES = ["rename from ", "rename to "];
 
 function stripPathPrefix(path: string): string | null {
@@ -188,6 +222,7 @@ export function parseDiffBlock(text: string): DiffParseResult {
 
   const renderable = state.additions > 0 || state.deletions > 0;
   const hasHunks = state.files.some((f) => f.lines.some((l) => l.type === "hunk"));
+  const stats = overallStats(text);
   if (!renderable) {
     return { renderable: false, hasHunks, files: [], additions: 0, deletions: 0 };
   }
@@ -195,7 +230,7 @@ export function parseDiffBlock(text: string): DiffParseResult {
     renderable: true,
     hasHunks,
     files: state.files,
-    additions: state.additions,
-    deletions: state.deletions,
+    additions: stats.additions,
+    deletions: stats.deletions,
   };
 }

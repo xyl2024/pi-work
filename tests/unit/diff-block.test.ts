@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseDiffBlock } from "@/lib/shared/diff-block";
+import { countDisplayDiffLines, countUnifiedPatchLines } from "@/lib/shared/tool-diff-stats";
 
 const unified = [
   "diff --git a/src/a.ts b/src/a.ts",
@@ -148,6 +149,46 @@ describe("parseDiffBlock", () => {
   it("falls back on empty input", () => {
     expect(parseDiffBlock("").renderable).toBe(false);
     expect(parseDiffBlock("   \n  \n").renderable).toBe(false);
+  });
+
+  it("computes overall stats from countUnifiedPatchLines for hunk-bearing patches", () => {
+    const patch = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "index 1111111..2222222 100644",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,3 +1,4 @@",
+      " const a = 1;",
+      "-const b = 2;",
+      "+const b = 3;",
+      "+const c = 4;",
+      " const d = 5;",
+    ].join("\n");
+    const result = parseDiffBlock(patch);
+    expect(result.additions).toBe(countUnifiedPatchLines(patch).additions);
+    expect(result.deletions).toBe(countUnifiedPatchLines(patch).deletions);
+    expect(result.additions).toBe(2);
+    expect(result.deletions).toBe(1);
+  });
+
+  it("excludes ---/+++ metadata from stats in fragments without hunks", () => {
+    const fragment = [
+      "diff --git a/old.ts b/old.ts",
+      "--- a/old.ts",
+      "+++ b/old.ts",
+      "-x",
+      "+y",
+    ].join("\n");
+    const result = parseDiffBlock(fragment);
+    expect(result.additions).toBe(1);
+    expect(result.deletions).toBe(1);
+    expect(result.additions).toBe(countDisplayDiffLines("-x\n+y").additions);
+  });
+
+  it("sums stats across file segments", () => {
+    const result = parseDiffBlock(unified);
+    expect(result.additions).toBe(3);
+    expect(result.deletions).toBe(2);
   });
 
   it("falls back on malformed hunk-only content", () => {
