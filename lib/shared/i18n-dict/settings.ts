@@ -217,7 +217,7 @@ export const settings = {
   "Clearing...": "正在清除...",
   "The key is stored in the Pi Work data directory with 0600 permissions and takes priority over the DEEPSEEK_API_KEY environment variable.":
     "密钥保存在 Pi Work 数据目录，权限为 0600，并优先于 DEEPSEEK_API_KEY 环境变量。",
-  "Web search/fetch and voice transcription share this key": "网页搜索/抓取、语音转写共用此 key",
+  "Web search/fetch, voice transcription and read-aloud share this key": "网页搜索/抓取、语音转写、朗读共用此 key",
 
   "Suggested prompt": "建议问题",
   "Enable suggested prompts": "启用建议问题",

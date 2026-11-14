@@ -15,10 +15,17 @@ import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
+import { VolumeIcon } from "../../ui/icons";
 import { BlockView } from "./blocks";
 import { CallMetricsBadges, formatTime, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
 import { countContentChars, extractMessageText, imageContentSrc } from "@/lib/shared/message-content";
+import { readAloudPlayer, useReadAloud } from "@/lib/client/read-aloud-player";
+import {
+  hasReadableReadAloudText,
+  readAloudErrorMessageKey,
+  readAloudTextFromMessage,
+} from "@/lib/shared/read-aloud";
 import { modelDisplayName } from "@/lib/shared/model-display";
 import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 
@@ -38,6 +45,7 @@ interface AssistantMessageViewProps {
   cwd?: string | null;
   sessionId?: string | null;
   entryId?: string;
+  readAloud?: boolean;
 }
 
 function AssistantMessageViewInner({
@@ -55,6 +63,8 @@ function AssistantMessageViewInner({
   onOpenFile,
   cwd,
   sessionId,
+  entryId,
+  readAloud,
 }: AssistantMessageViewProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -88,6 +98,33 @@ function AssistantMessageViewInner({
   const [tps, setTps] = useState<number | null>(null);
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
+
+  const readAloudState = useReadAloud();
+  const readAloudKey = entryId ?? String(message.timestamp);
+  const readAloudActive = readAloudState.key === readAloudKey;
+  const readAloudPhase = readAloudActive ? readAloudState.phase : "idle";
+  const readAloudText = useMemo(
+    () => (readAloud ? readAloudTextFromMessage(message) : ""),
+    [message, readAloud],
+  );
+  const readAloudLabel = t(
+    readAloudPhase === "synthesizing"
+      ? "Synthesizing..."
+      : readAloudPhase === "playing"
+        ? "Pause read aloud"
+        : "Read aloud",
+  );
+  const readAloudErrorSeenRef = useRef(readAloudState.errorId);
+
+  useEffect(() => {
+    if (readAloudState.errorId === readAloudErrorSeenRef.current) return;
+    readAloudErrorSeenRef.current = readAloudState.errorId;
+    if (!readAloudState.error || readAloudState.errorKey !== readAloudKey) return;
+    toast.show({
+      kind: "error",
+      message: t(readAloudErrorMessageKey(readAloudState.error)),
+    });
+  }, [readAloudState.errorId, readAloudState.error, readAloudState.errorKey, readAloudKey, t, toast]);
 
   const textContent = useMemo(() => extractMessageText(message), [message]);
   const copyableContent = useMemo(
@@ -350,6 +387,44 @@ function AssistantMessageViewInner({
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
+              )}
+            </button>
+          </Tooltip>
+        )}
+        {!isStreaming && readAloud && hasReadableReadAloudText(readAloudText) && (
+          <Tooltip content={readAloudLabel}>
+            <button
+              onClick={() => readAloudPlayer.toggle(readAloudKey, readAloudText)}
+              disabled={readAloudPhase === "synthesizing"}
+              aria-label={readAloudLabel}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                padding: 0,
+                background: "none",
+                border: "none",
+                borderRadius: 5,
+                color: readAloudActive ? "var(--accent)" : "var(--text-dim)",
+                cursor: readAloudPhase === "synthesizing" ? "wait" : "pointer",
+                transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => { if (!readAloudActive) e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { if (!readAloudActive) e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              {readAloudPhase === "synthesizing" ? (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              ) : readAloudPhase === "playing" ? (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <VolumeIcon size={12} strokeWidth={1.8} style={{ flexShrink: 0 }} />
               )}
             </button>
           </Tooltip>

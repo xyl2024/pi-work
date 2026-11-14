@@ -27,9 +27,10 @@ interface Props {
   onOpenFile?: (filePath: string, fileName: string) => void;
   cwd?: string | null;
   sessionId?: string | null;
+  readAloud?: boolean;
 }
 
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, branchAnchorEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, branchAnchorEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, readFiles, turnDiffStats, onOpenFile, cwd, sessionId, readAloud }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
   const fileLinkHandler = useMemo(
     () => (onOpenFile ? { openFile: onOpenFile, cwd } : null),
@@ -47,7 +48,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
     return (
       <div className={isFocused ? "search-flash" : undefined}>
         <FileLinkProvider value={fileLinkHandler}>
-          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} />
+          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} readAloud={readAloud} />
         </FileLinkProvider>
       </div>
     );

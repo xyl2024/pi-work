@@ -40,6 +40,7 @@ import LoadingState from "../ui/LoadingState";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useI18n } from "@/hooks/useI18n";
+import { readAloudPlayer } from "@/lib/client/read-aloud-player";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { CompactionDivider } from "./CompactionDivider";
@@ -525,6 +526,10 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     : null;
 
   const sessionId = session?.id;
+
+  useEffect(() => {
+    readAloudPlayer.stop();
+  }, [sessionId]);
   const confirm = useConfirm();
 
   const {
@@ -796,6 +801,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                   readFiles?: ReadFileInfo[];
                   turnDiffStats?: ToolDiffStats | null;
                   onOpenFile?: (filePath: string, fileName: string) => void;
+                  readAloud?: boolean;
                 } = {},
               ): React.ReactNode => {
                 const msg = opts.messageOverride ?? messages[idx];
@@ -840,6 +846,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     onOpenFile={opts.onOpenFile}
                     cwd={session?.cwd ?? cwd}
                     sessionId={session?.id ?? null}
+                    readAloud={opts.readAloud}
                   />
                 );
                 if (currentRefIdx === -1) return view;
@@ -995,6 +1002,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                     turnDiffStats: isCurrentTurnInProgress ? undefined : turnDiffStats,
                     onOpenFile: handleOpenFile,
                     inStreamingViewport: isCurrentTurnInProgress,
+                    readAloud: !isCurrentTurnInProgress,
                   }),
                 );
 
