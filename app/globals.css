@@ -605,6 +605,21 @@ summary::-webkit-details-marker {
 .syntax-highlighted-code .token {
   display: inline !important;
 }
+.syntax-highlighted-code {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+.syntax-highlighted-code::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.syntax-highlighted-code::-webkit-scrollbar-track {
+  background: transparent;
+}
+.syntax-highlighted-code::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-pill);
+}
 .markdown-body pre::-webkit-scrollbar,
 .markdown-file-preview pre::-webkit-scrollbar {
   width: 4px;

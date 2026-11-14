@@ -198,4 +198,7 @@ export const EN_TRANSLATIONS = {
 
   "Suggested prompt": "Suggested prompt",
   "Enable suggested prompts": "Enable suggested prompts",
+
+  "Expand {n} lines": "Expand {n} lines",
+  "Truncated, {total} lines in total": "Truncated, {total} lines in total",
 } as const;
