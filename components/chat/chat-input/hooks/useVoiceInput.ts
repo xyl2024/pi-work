@@ -18,6 +18,7 @@ export type VoiceRecorderFactory = (options: VoiceRecorderFactoryOptions) => Voi
 
 export interface UseVoiceInputOptions {
   insertText: (text: string) => void;
+  sessionKey?: string | null;
   recorderFactory?: VoiceRecorderFactory;
   onError?: (code: VoiceInputErrorCode) => void;
 }
@@ -34,7 +35,7 @@ export interface VoiceInputController {
 const IDLE: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
 
 export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputController {
-  const { insertText, recorderFactory, onError } = options;
+  const { insertText, sessionKey, recorderFactory, onError } = options;
   const autoStopRef = useRef<(result: VoiceRecorderResult) => void>(() => undefined);
   const [recorder] = useState<VoiceRecorder | null>(() => {
     const factoryOptions: VoiceRecorderFactoryOptions = {
@@ -62,9 +63,18 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     await recorder?.cancel();
   }, [recorder]);
 
+  const sessionKeyRef = useRef(sessionKey);
+  useEffect(() => {
+    if (sessionKeyRef.current === sessionKey) return;
+    sessionKeyRef.current = sessionKey;
+    void cancel();
+  }, [sessionKey, cancel]);
+
   useEffect(() => {
     return () => {
       inFlightRef.current?.abort();
+      inFlightRef.current = null;
+      transcribingRef.current = false;
       void recorder?.cancel();
     };
   }, [recorder]);

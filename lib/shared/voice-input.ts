@@ -16,6 +16,22 @@ export function isVoiceInputNearLimit(elapsedMs: number): boolean {
   return elapsedMs >= VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS;
 }
 
+export function canCancelVoiceInput(phase: VoiceInputPhase): boolean {
+  return phase !== "idle";
+}
+
+export type VoiceInputEscapeAction = "close-menu" | "cancel" | "ignore";
+
+export interface VoiceInputEscapeFacts {
+  menuOpen: boolean;
+  phase: VoiceInputPhase;
+}
+
+export function decideVoiceInputEscape(facts: VoiceInputEscapeFacts): VoiceInputEscapeAction {
+  if (facts.menuOpen) return "close-menu";
+  return canCancelVoiceInput(facts.phase) ? "cancel" : "ignore";
+}
+
 export interface VoiceInputState {
   phase: VoiceInputPhase;
   elapsedMs: number;

@@ -7,6 +7,8 @@ import {
   VOICE_INPUT_SAMPLE_RATE,
   VOICE_INPUT_TRANSCRIBE_TIMEOUT_MS,
   VOICE_INPUT_WARN_REMAINING_MS,
+  canCancelVoiceInput,
+  decideVoiceInputEscape,
   isVoiceInputNearLimit,
   voiceInputErrorMessageKey,
   type VoiceInputErrorCode,
@@ -41,6 +43,29 @@ describe("isVoiceInputNearLimit", () => {
     expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS - 1)).toBe(false);
     expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS - VOICE_INPUT_WARN_REMAINING_MS)).toBe(true);
     expect(isVoiceInputNearLimit(VOICE_INPUT_MAX_DURATION_MS)).toBe(true);
+  });
+});
+
+describe("voice input cancellation", () => {
+  it("cancels from recording and from transcribing", () => {
+    expect(decideVoiceInputEscape({ menuOpen: false, phase: "recording" })).toBe("cancel");
+    expect(decideVoiceInputEscape({ menuOpen: false, phase: "transcribing" })).toBe("cancel");
+  });
+
+  it("leaves escape alone while idle", () => {
+    expect(decideVoiceInputEscape({ menuOpen: false, phase: "idle" })).toBe("ignore");
+  });
+
+  it("leaves escape to an open menu first", () => {
+    expect(decideVoiceInputEscape({ menuOpen: true, phase: "recording" })).toBe("close-menu");
+    expect(decideVoiceInputEscape({ menuOpen: true, phase: "transcribing" })).toBe("close-menu");
+    expect(decideVoiceInputEscape({ menuOpen: true, phase: "idle" })).toBe("close-menu");
+  });
+
+  it("reports whether there is anything to cancel", () => {
+    expect(canCancelVoiceInput("recording")).toBe(true);
+    expect(canCancelVoiceInput("transcribing")).toBe(true);
+    expect(canCancelVoiceInput("idle")).toBe(false);
   });
 });
 

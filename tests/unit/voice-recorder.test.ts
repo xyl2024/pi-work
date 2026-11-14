@@ -16,7 +16,6 @@ function createFakeAdapter() {
       opened += 1;
     },
     async close() {
-      handlers = null;
       closed += 1;
     },
   };
@@ -101,6 +100,89 @@ describe("createVoiceRecorder", () => {
     expect(fake.closed).toBe(1);
     expect(recorder.getSnapshot().phase).toBe("idle");
     fake.emit([8]);
+    expect(await recorder.stop()).toBeNull();
+  });
+
+  it("never mixes samples that arrive after cancel into a later recording", async () => {
+    const fake = createFakeAdapter();
+    const recorder = createVoiceRecorder({ adapter: fake.adapter, now: () => 0 });
+
+    await recorder.start();
+    fake.emit([7]);
+    await recorder.cancel();
+    fake.emit([8]);
+    await recorder.start();
+    fake.emit([9]);
+    const result = await recorder.stop();
+
+    expect(result).not.toBeNull();
+    expect(pcmValues(result!.wav)).toEqual([9]);
+    expect(fake.opened).toBe(2);
+    expect(fake.closed).toBe(2);
+  });
+
+  it("excludes samples that arrive while stop is releasing the adapter", async () => {
+    const state: {
+      handlers: VoiceRecorderAdapterHandlers | null;
+      releaseClose: (() => void) | null;
+    } = { handlers: null, releaseClose: null };
+    const adapter: VoiceRecorderAdapter = {
+      async open(next) {
+        state.handlers = next;
+      },
+      close() {
+        return new Promise<void>((resolve) => {
+          state.releaseClose = resolve;
+        });
+      },
+    };
+    const recorder = createVoiceRecorder({ adapter, now: () => 0 });
+
+    await recorder.start();
+    state.handlers?.onSamples(Int16Array.from([1]));
+    const stopping = recorder.stop();
+    state.handlers?.onSamples(Int16Array.from([2]));
+    state.releaseClose?.();
+    const result = await stopping;
+
+    expect(result).not.toBeNull();
+    expect(pcmValues(result!.wav)).toEqual([1]);
+  });
+
+  it("releases the adapter once across repeated and concurrent cancels", async () => {
+    const fake = createFakeAdapter();
+    const recorder = createVoiceRecorder({ adapter: fake.adapter, now: () => 0 });
+
+    await recorder.start();
+    await Promise.all([recorder.cancel(), recorder.cancel()]);
+    await recorder.cancel();
+
+    expect(fake.closed).toBe(1);
+    expect(recorder.getSnapshot()).toEqual({ phase: "idle", elapsedMs: 0, level: 0 });
+  });
+
+  it("releases the adapter when cancelled while opening", async () => {
+    let releaseOpen: (() => void) | undefined;
+    let closed = 0;
+    const adapter: VoiceRecorderAdapter = {
+      open() {
+        return new Promise<void>((resolve) => {
+          releaseOpen = resolve;
+        });
+      },
+      async close() {
+        closed += 1;
+      },
+    };
+    const recorder = createVoiceRecorder({ adapter, now: () => 0 });
+
+    const starting = recorder.start();
+    await recorder.cancel();
+    releaseOpen?.();
+    await starting;
+
+    expect(closed).toBe(1);
+    expect(recorder.getSnapshot().phase).toBe("idle");
     expect(await recorder.stop()).toBeNull();
   });
 

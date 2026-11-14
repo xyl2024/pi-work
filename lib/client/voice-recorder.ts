@@ -38,13 +38,18 @@ export interface VoiceRecorderOptions {
 
 const TICK_MS = 100;
 
+const IDLE: VoiceRecorderSnapshot = { phase: "idle", elapsedMs: 0, level: 0 };
+
 export function createVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorder {
   const now = options.now ?? (() => Date.now());
   const listeners = new Set<() => void>();
-  let snapshot: VoiceRecorderSnapshot = { phase: "idle", elapsedMs: 0, level: 0 };
+  let snapshot: VoiceRecorderSnapshot = IDLE;
   let chunks: Int16Array[] = [];
   let startedAt = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let acceptingSamples = false;
+  let releasePromise: Promise<void> | null = null;
+  let startToken = 0;
 
   function emit(): void {
     for (const listener of listeners) listener();
@@ -65,31 +70,62 @@ export function createVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorde
     return Math.max(0, now() - startedAt);
   }
 
+  function release(): Promise<void> {
+    if (!releasePromise) {
+      releasePromise = options.adapter.close().finally(() => {
+        releasePromise = null;
+      });
+    }
+    return releasePromise;
+  }
+
+  function takeChunks(): Int16Array[] {
+    acceptingSamples = false;
+    const taken = chunks;
+    chunks = [];
+    return taken;
+  }
+
   async function stop(): Promise<VoiceRecorderResult | null> {
     if (snapshot.phase !== "recording") return null;
     clearTimer();
     const durationMs = elapsed();
-    await options.adapter.close();
-    const wav = encodePcm16Wav(chunks, VOICE_INPUT_SAMPLE_RATE);
-    chunks = [];
-    patch({ phase: "idle", elapsedMs: 0, level: 0 });
-    return { wav, durationMs };
+    const taken = takeChunks();
+    patch(IDLE);
+    await release();
+    return { wav: encodePcm16Wav(taken, VOICE_INPUT_SAMPLE_RATE), durationMs };
   }
 
   return {
     async start() {
       if (snapshot.phase !== "idle") return;
-      await options.adapter.open({
-        onSamples(samples) {
-          if (snapshot.phase !== "recording") return;
-          chunks.push(samples);
-        },
-        onLevel(level) {
-          if (snapshot.phase !== "recording") return;
-          patch({ ...snapshot, level });
-        },
-      });
+      if (releasePromise) await releasePromise;
+      if (snapshot.phase !== "idle") return;
+
+      const token = (startToken += 1);
+      try {
+        await options.adapter.open({
+          onSamples(samples) {
+            if (!acceptingSamples) return;
+            chunks.push(samples);
+          },
+          onLevel(level) {
+            if (!acceptingSamples) return;
+            patch({ ...snapshot, level });
+          },
+        });
+      } catch (error) {
+        if (token !== startToken) return;
+        throw error;
+      }
+
+      if (token !== startToken) {
+        await release();
+        return;
+      }
+
       chunks = [];
+      acceptingSamples = true;
       startedAt = now();
       patch({ phase: "recording", elapsedMs: 0, level: 0 });
       timer = setInterval(() => {
@@ -108,11 +144,12 @@ export function createVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorde
     stop,
 
     async cancel() {
+      startToken += 1;
       if (snapshot.phase !== "recording") return;
       clearTimer();
-      await options.adapter.close();
-      chunks = [];
-      patch({ phase: "idle", elapsedMs: 0, level: 0 });
+      takeChunks();
+      patch(IDLE);
+      await release();
     },
 
     subscribe(listener) {
