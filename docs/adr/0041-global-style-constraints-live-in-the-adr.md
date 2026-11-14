@@ -4,13 +4,14 @@
 
 **我们决定**：
 
-- **滚动条是三个预设加一个独立语义。** 滚动区靠 `data-scroll-<role>` 选：`wide` 10px（聊天主区、大弹层、主面板列表，静止隐藏、进出淡入淡出）、`side` 4px（侧栏会话与文件列表，静止隐藏、悬停硬显）、`inset` 6px（`maxHeight ≤ ~320px` 的小浮层，同上）。`data-hide-v-scrollbar` 与它们无关，表示「彻底隐藏但仍可用滚轮/触摸/方向键滚动」（如聊天输入框）。
-- **静止态 thumb 的底色必须不透明。** Chromium 把全透明 thumb 当作不存在，此后 `:hover` 永远不生效；所以静止态用 `--bg-panel` 着色——每个主题里它与 `--bg` 只差几档，看起来等同背景。
-- **显示/隐藏只动 opacity。** `-webkit-scrollbar-thumb` 的 `background-color` 过渡在 Chromium 各版本上不一致；Firefox 的 `scrollbar-color` 根本不能过渡，只能硬切——这是接受的降级。
+- **滚动条是三个预设加一个独立语义。** 滚动区靠 `data-scroll-<role>` 选：`wide` 12px（聊天主区、大弹层、主面板列表，滑块 4px 宽、靠 `border` + `background-clip: content-box` 内缩，悬停加深）、`side` 4px（侧栏会话与文件列表）、`inset` 6px（`maxHeight ≤ ~320px` 的小浮层）。`data-hide-v-scrollbar` 与它们无关，表示「彻底隐藏但仍可用滚轮/触摸/方向键滚动」（如聊天输入框）。
+- **静止态 thumb 的底色必须不透明。** Chromium 把全透明 thumb 当作不存在，此后 `:hover` 永远不生效；所以静止态用 `--scrollbar-thumb`（主题里一档 14%~16% 的黑/白）着色，只在容器悬停时换 `--scrollbar-thumb-hover`。
+- **颜色切换不要靠 `opacity` 动效。** `-webkit-scrollbar-thumb` 的 `background-color` 过渡在 Chromium 各版本上不一致；Firefox 的 `scrollbar-color` 根本不能过渡，只能硬切——这是接受的降级。
 - **Firefox 的 `scrollbar-color` 会级联给后代可滚动元素。** 所以聊天容器用 `wide` 时，markdown 代码块必须把 4px 常显值钉死，否则会继承「悬停才显」并带错轨道色。
-- **全局剥掉了 UA 的焦点 outline。** 这是 `*:focus` 级的一刀切，代价是 WCAG 2.4.7「焦点可见」不再满足，键盘用户失去标准焦点指示。少数输入类控件用 `box-shadow` 焦点环或 `border-color` 换代保留提示（`.show-file-carousel:focus-visible`、`.timepicker-wheel:focus-visible`、`.scheduler-text-input:focus`），它们是刻意的，不要为了「统一」改回 outline 或一并删掉。
+- **焦点环由全局 `:focus-visible` 提供，指针操作不显形。** `:focus` 仍然清掉 outline，但 `:focus-visible` 统一画 `--focus-ring-width`（2px）`--focus-ring-color`（浅 `#4176e6` / 深 `#7aaaff`）并留 2px 偏移。表单控件（`input`/`textarea`/`select`）从这条规则里排除，它们各自用边框变色或 `box-shadow` 环表达焦点（`.show-file-carousel:focus-visible`、`.timepicker-wheel:focus-visible`、`.scheduler-text-input:focus`、设置弹窗的输入皮肤），两套环叠在一起会糊成双描边。新增的可点击元素不需要自己写焦点样式，除非它要画在圆角容器内部。
 - **聊天区永远不出现横向滚动条。** 一个轴 `auto` + 另一个轴 `visible` 会被浏览器算成双 `auto`，聊天里一个宽元素（长路径的表格单元格、不自适应的内嵌 SVG）就能把整栏顶歪；因此 `.markdown-body` 直接 `overflow-x: hidden`，换行与裁剪交给内部元素。
-- **浮动卡片几何是四个锁在一起的值。** `--panel-padding` 12px / `--panel-gap` 10px / `--panel-gap-stack` 4px / `--panel-radius` 12px：改 gap 要同步 radius，否则圆角不是显紧就是显松。侧栏与右栏在浮动模式下把自己的 `margin` 串进同一段 `cubic-bezier(.25,1,.5,1)`，关闭时 gap 与宽度一起塌，不会留下一条孤儿 `--bg` 竖条。`flex-grow` 参与 normal ↔ expanded 过渡，是为了让内联的 32% 宽度仍然可插值。
+- **浮动卡片几何是四个锁在一起的值。** `--panel-padding` 10px / `--panel-gap` 8px / `--panel-gap-stack` 4px / `--panel-radius` 16px：改 gap 要同步 radius，否则圆角不是显紧就是显松。侧栏与右栏在浮动模式下把自己的 `margin` 串进同一段 `cubic-bezier(.25,1,.5,1)`，关闭时 gap 与宽度一起塌，不会留下一条孤儿 `--bg` 竖条。`flex-grow` 参与 normal ↔ expanded 过渡，是为了让内联的 32% 宽度仍然可插值。
+- **应用底色与卡片底色是两个 token。** 外壳与 `html/body` 用 `--bg-app`（浅 `#f2f3f5` / 深 `#161618`），浮在它上面的面板、卡片、聊天区用 `--bg`；侧栏、输入底座等次级面用 `--bg-panel`，浮层（菜单、tooltip、toast、对话框）用 `--bg-elevated`。混用会让外壳与卡片同级，浮起关系就没了。
 - **字体只有三个角色变量。** 组件消费 `--font-ui-stack` / `--font-mono-stack` / `--font-display-stack`（`:root` 定义栈，`@theme` 暴露 Tailwind 别名），不直接写平台字体栈。
 - **Electron 的原生标题栏按钮画在应用自己让出的一条上。** 该条高度取 `env(titlebar-area-height)`（普通浏览器与无 overlay 的窗口为 0px），只作拖拽区、不绘制任何东西；这不是平台分叉，是浏览器特性。同样的理由让外壳的 `errorPage` 自带一条 `.drag` 区：服务没连上时应用还没渲染出自己的拖拽条，否则那个窗口拖不动。
 - **全局 keyframes 的名字是跨文件契约。** `AudioPlayer`、`SessionItem`、`ToastCard`、`ThinkingPicker`、`TranslatePanel`、`TextSelectionToolbar`、`SaveButton`、`GrokBot` 以 inline style 引用这些名字，重命名等于静默废掉动画；`prefers-reduced-motion` 的抑制统一在全局声明，不在各组件各写一份。
