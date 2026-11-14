@@ -171,6 +171,10 @@ _Avoid_: 思考级别、思考强度（历史叫法，已统一废弃）
 会话当前送入模型的上下文内容与容量；压缩（compact）是对它的操作。
 _Avoid_: context、上下文洞察面板（那只是它的一个面板视图）、React Context
 
+**上下文压缩（Compaction）**：
+把较早的对话换成一段摘要以腾出上下文空间的动作；`manual` 由用户点出，`threshold` / `overflow` 由 pi 自主触发（阈值 = 模型窗口 − `reserveTokens`）。Pi Work 只渲染它、并露出 pi 的三个可调项，判定不在本项目。
+_Avoid_: 用「摘要」「总结」指代这次动作（那是压缩产物）；把它当作 Pi Work 自己的功能
+
 **上下文构成（Context Composition）**：
 一个上下文窗口由哪些来源组成、各占多少；来源分为基础系统提示、项目上下文文件、Skills、系统工具定义与各类消息。
 _Avoid_: 用「Token 构成」指代它（那属于 Token 审计）；把它当作上下文窗口本身

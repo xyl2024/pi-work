@@ -1,5 +1,5 @@
 import type { SettingsSectionId } from "@/components/settings/registry";
-import type { AgentRetryConfig } from "@/lib/shared/agent-settings-types";
+import type { AgentRetryConfig, CompactionConfig } from "@/lib/shared/agent-settings-types";
 import type { DangerousRuleSetSnapshot } from "@/lib/shared/dangerous-commands";
 import type { MemoryUsageReport } from "@/lib/shared/memory";
 import type { SubagentProfile } from "@/lib/shared/subagent";
@@ -16,6 +16,7 @@ export const SETTINGS_PAGE_DATA_KEYS = [
   "dangerous-commands",
   "subagent",
   "retry",
+  "compaction",
 ] as const satisfies readonly SettingsSectionId[];
 
 export type SettingsPageDataKey = (typeof SETTINGS_PAGE_DATA_KEYS)[number];
@@ -26,6 +27,7 @@ export interface SettingsPageDataMap {
   "dangerous-commands": DangerousRuleSetSnapshot;
   subagent: SubagentProfile[];
   retry: AgentRetryConfig;
+  compaction: CompactionConfig;
 }
 
 export interface SettingsPageDataCache {

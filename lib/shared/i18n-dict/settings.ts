@@ -150,6 +150,15 @@ export const settings = {
   "{seconds}s, {seconds2}s, {seconds3}s… (exponential, max {max} retries)": "{seconds}s, {seconds2}s, {seconds3}s…（指数退避，最多 {max} 次）",
   "Applies to new sessions only — active sessions keep their current settings.": "只对新会话生效——当前会话仍使用原有设置。",
 
+  "Context compaction": "上下文压缩",
+  "Auto compaction": "自动压缩",
+  "Reserve tokens": "预留 tokens",
+  "Keep recent tokens": "保留最近 tokens",
+  "Compacts when the context exceeds the model window minus the reserve.": "上下文超过「模型窗口 − 预留 tokens」时自动压缩。",
+  "Reset compaction config": "压缩配置已恢复默认",
+  "Compaction config not loaded": "压缩配置尚未加载",
+  "Failed to save compaction config": "保存压缩配置失败",
+
   "UI Sounds": "界面音效",
   "Restore sound defaults": "恢复音效默认",
   "Sound defaults restored": "音效默认已恢复",

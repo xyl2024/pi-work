@@ -16,6 +16,7 @@ export type SettingsSectionId =
   | "file-preview"
   | "append-system"
   | "memory"
+  | "compaction"
   | "dangerous-commands"
   | "subagent"
   | "retry"
@@ -58,6 +59,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
 
   { id: "append-system", labelKey: "System Prompt", group: "agent" },
   { id: "memory", labelKey: "Memory", group: "agent" },
+  { id: "compaction", labelKey: "Context compaction", group: "agent" },
   { id: "dangerous-commands", labelKey: "Dangerous commands", group: "agent" },
   { id: "subagent", labelKey: "Subagent settings", group: "agent" },
   { id: "retry", labelKey: "Agent retry", group: "agent" },

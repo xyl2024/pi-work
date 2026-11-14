@@ -3,13 +3,16 @@ import { homedir } from "os";
 import { join } from "path";
 import { createLogger } from "./logger";
 import {
+  COMPACTION_LIMITS,
+  DEFAULT_AGENT_COMPACTION,
   DEFAULT_AGENT_RETRY,
   type AgentRetryConfig,
+  type CompactionConfig,
   type ProviderRetryConfig,
 } from "../shared/agent-settings-types";
 
 export { DEFAULT_AGENT_RETRY };
-export type { AgentRetryConfig, ProviderRetryConfig };
+export type { AgentRetryConfig, CompactionConfig, ProviderRetryConfig };
 
 const log = createLogger("agent-settings");
 
@@ -172,4 +175,61 @@ export async function resetAgentRetry(): Promise<Record<string, unknown>> {
   void _drop;
   await writeRawSettingsAtomic(rest);
   return rest;
+}
+
+function parseCompaction(raw: unknown): CompactionConfig {
+  if (!isPlainObject(raw)) return { ...DEFAULT_AGENT_COMPACTION };
+  const numberInRange = (value: unknown, range: { min: number; max: number }, fallback: number): number =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= range.min && value <= range.max
+      ? value
+      : fallback;
+  return {
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : DEFAULT_AGENT_COMPACTION.enabled,
+    reserveTokens: numberInRange(
+      raw.reserveTokens,
+      COMPACTION_LIMITS.reserveTokens,
+      DEFAULT_AGENT_COMPACTION.reserveTokens,
+    ),
+    keepRecentTokens: numberInRange(
+      raw.keepRecentTokens,
+      COMPACTION_LIMITS.keepRecentTokens,
+      DEFAULT_AGENT_COMPACTION.keepRecentTokens,
+    ),
+  };
+}
+
+export async function readAgentCompaction(): Promise<CompactionConfig> {
+  const raw = await readRawSettings();
+  return parseCompaction(raw.compaction);
+}
+
+export async function writeAgentCompaction(next: CompactionConfig): Promise<Record<string, unknown>> {
+  const current = await readRawSettings();
+  const existing = isPlainObject(current.compaction) ? current.compaction : {};
+  const merged: Record<string, unknown> = {
+    ...current,
+    compaction: {
+      ...existing,
+      enabled: next.enabled,
+      reserveTokens: next.reserveTokens,
+      keepRecentTokens: next.keepRecentTokens,
+    },
+  };
+  await writeRawSettingsAtomic(merged);
+  return merged;
+}
+
+export async function resetAgentCompaction(): Promise<Record<string, unknown>> {
+  const current = await readRawSettings();
+  if (!isPlainObject(current.compaction)) return current;
+  const { enabled: _enabled, reserveTokens: _reserveTokens, keepRecentTokens: _keepRecentTokens, ...rest } =
+    current.compaction;
+  void _enabled;
+  void _reserveTokens;
+  void _keepRecentTokens;
+  const nextSettings: Record<string, unknown> = { ...current };
+  if (Object.keys(rest).length > 0) nextSettings.compaction = rest;
+  else delete nextSettings.compaction;
+  await writeRawSettingsAtomic(nextSettings);
+  return nextSettings;
 }

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
-import { RetryNumberRow } from "../rows";
+import { NumberRow } from "../rows";
 import { SecondaryButton } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
@@ -163,7 +163,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 12 }}>
-            <RetryNumberRow
+            <NumberRow
               label={t("Max retries")}
               min={RETRY_LIMITS.maxRetries.min}
               max={RETRY_LIMITS.maxRetries.max}
@@ -172,7 +172,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
               optional={false}
               onCommit={handleRetryMaxRetriesChange}
             />
-            <RetryNumberRow
+            <NumberRow
               label={t("Base delay (ms)")}
               min={RETRY_LIMITS.baseDelayMs.min}
               max={RETRY_LIMITS.baseDelayMs.max}
@@ -198,7 +198,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
             {t("Provider retry settings (advanced)")}
           </h4>
 
-          <RetryNumberRow
+          <NumberRow
             label={t("HTTP request timeout (ms)")}
             min={RETRY_LIMITS.provider.timeoutMs.min}
             max={RETRY_LIMITS.provider.timeoutMs.max}
@@ -208,7 +208,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
             unitSuffix="ms"
             onCommit={(n) => handleRetryProviderFieldChange("timeoutMs", n)}
           />
-          <RetryNumberRow
+          <NumberRow
             label={t("Provider retries")}
             min={RETRY_LIMITS.provider.maxRetries.min}
             max={RETRY_LIMITS.provider.maxRetries.max}
@@ -217,7 +217,7 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
             optional={true}
             onCommit={(n) => handleRetryProviderFieldChange("maxRetries", n)}
           />
-          <RetryNumberRow
+          <NumberRow
             label={t("Max server-requested delay (ms)")}
             min={RETRY_LIMITS.provider.maxRetryDelayMs.min}
             max={RETRY_LIMITS.provider.maxRetryDelayMs.max}

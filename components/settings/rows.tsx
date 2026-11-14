@@ -35,7 +35,7 @@ export function FileViewerLimitRow({
   );
 }
 
-export function RetryNumberRow({
+export function NumberRow({
   label,
   min,
   max,

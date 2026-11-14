@@ -20,6 +20,23 @@ export const DEFAULT_AGENT_RETRY: AgentRetryConfig = {
   },
 };
 
+export interface CompactionConfig {
+  enabled: boolean;
+  reserveTokens: number;
+  keepRecentTokens: number;
+}
+
+export const DEFAULT_AGENT_COMPACTION: CompactionConfig = {
+  enabled: true,
+  reserveTokens: 16384,
+  keepRecentTokens: 20000,
+};
+
+export const COMPACTION_LIMITS = {
+  reserveTokens: { min: 0, max: 500_000 },
+  keepRecentTokens: { min: 0, max: 1_000_000 },
+} as const;
+
 export const RETRY_LIMITS = {
   maxRetries: { min: 0, max: 10 },
   baseDelayMs: { min: 100, max: 60_000 },

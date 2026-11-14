@@ -9,6 +9,7 @@ import type { DirtyReporter } from "./use-unsaved-changes";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { MemorySection } from "./sections/MemorySection";
+import { CompactionSection } from "./sections/CompactionSection";
 import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { RightBarSection } from "./sections/RightBarSection";
@@ -71,6 +72,7 @@ export const SETTINGS_PAGES = {
     />
   ),
   subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
+  compaction: ({ pageCache }) => <CompactionSection pageCache={pageCache} />,
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,
   "suggested-prompt": ({ config, apply }) => (
     <SuggestedPromptSection config={config} apply={apply} />
