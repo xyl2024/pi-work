@@ -172,6 +172,119 @@ describe("createReadAloudPlayer", () => {
     });
   });
 
+  it("retries a busy failure once and plays the retried audio", async () => {
+    const harness = createHarness();
+    const synthesize = vi
+      .fn<() => Promise<ReadAloudSynthesisResult>>()
+      .mockResolvedValueOnce({ ok: false, code: "busy" })
+      .mockResolvedValueOnce(okAudio());
+    const waitForRetry = vi.fn(async () => true);
+    const player = createReadAloudPlayer({ ...harness, synthesize, waitForRetry });
+
+    player.toggle("m1", "hello");
+    await flush();
+    await flush();
+
+    expect(synthesize).toHaveBeenCalledTimes(2);
+    expect(waitForRetry).toHaveBeenCalledTimes(1);
+    expect(player.getSnapshot()).toMatchObject({ phase: "playing", key: "m1", error: null });
+  });
+
+  it("retries timeouts and network errors too", async () => {
+    for (const code of ["timeout", "network"] as const) {
+      const harness = createHarness();
+      const synthesize = vi
+        .fn<() => Promise<ReadAloudSynthesisResult>>()
+        .mockResolvedValueOnce({ ok: false, code })
+        .mockResolvedValueOnce(okAudio());
+      const player = createReadAloudPlayer({
+        ...harness,
+        synthesize,
+        waitForRetry: async () => true,
+      });
+
+      player.toggle("m1", "hello");
+      await flush();
+      await flush();
+
+      expect(synthesize).toHaveBeenCalledTimes(2);
+      expect(player.getSnapshot().phase).toBe("playing");
+    }
+  });
+
+  it("does not retry failures that a retry cannot fix", async () => {
+    for (const code of ["missing_key", "too_long", "blocked", "rate_limited", "failed"] as const) {
+      const synthesize = vi.fn(async () => ({ ok: false, code }) as ReadAloudSynthesisResult);
+      const waitForRetry = vi.fn(async () => true);
+      const player = createReadAloudPlayer({ ...createHarness(), synthesize, waitForRetry });
+
+      player.toggle("m1", "hello");
+      await flush();
+
+      expect(synthesize).toHaveBeenCalledTimes(1);
+      expect(waitForRetry).not.toHaveBeenCalled();
+      expect(player.getSnapshot()).toMatchObject({ phase: "idle", error: code });
+    }
+  });
+
+  it("reports the failure after the single retry also fails", async () => {
+    const synthesize = vi.fn(async () => ({ ok: false, code: "busy" }) as ReadAloudSynthesisResult);
+    const player = createReadAloudPlayer({
+      ...createHarness(),
+      synthesize,
+      waitForRetry: async () => true,
+    });
+
+    player.toggle("m1", "hello");
+    await flush();
+    await flush();
+
+    expect(synthesize).toHaveBeenCalledTimes(2);
+    expect(player.getSnapshot()).toMatchObject({
+      phase: "idle",
+      key: null,
+      error: "busy",
+      errorKey: "m1",
+    });
+  });
+
+  it("maps a thrown synthesis to a network failure", async () => {
+    const synthesize = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    const player = createReadAloudPlayer({
+      ...createHarness(),
+      synthesize,
+      waitForRetry: async () => true,
+    });
+
+    player.toggle("m1", "hello");
+    await flush();
+    await flush();
+
+    expect(synthesize).toHaveBeenCalledTimes(2);
+    expect(player.getSnapshot()).toMatchObject({ phase: "idle", error: "network" });
+  });
+
+  it("drops the retry when playback is stopped during the wait", async () => {
+    const synthesize = vi.fn(async () => ({ ok: false, code: "busy" }) as ReadAloudSynthesisResult);
+    const player = createReadAloudPlayer({
+      ...createHarness(),
+      synthesize,
+      waitForRetry: async (signal) => {
+        player.stop();
+        return !signal.aborted;
+      },
+    });
+
+    player.toggle("m1", "hello");
+    await flush();
+    await flush();
+
+    expect(synthesize).toHaveBeenCalledTimes(1);
+    expect(player.getSnapshot()).toMatchObject({ phase: "idle", key: null, error: null });
+  });
+
   it("aborts the in-flight synthesis when stopped", async () => {
     const harness = createHarness();
     const pending = deferred<ReadAloudSynthesisResult>();

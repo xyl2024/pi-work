@@ -44,7 +44,7 @@ export async function synthesizeReadAloud(
         ? (error as { name: unknown }).name
         : null;
     if (name === "TimeoutError") return { ok: false, code: "timeout" };
-    return { ok: false, code: "failed" };
+    return { ok: false, code: "network" };
   }
 
   if (!response.ok) return { ok: false, code: await errorCodeFrom(response) };
@@ -54,6 +54,6 @@ export async function synthesizeReadAloud(
     if (audio.size === 0) return { ok: false, code: "failed" };
     return { ok: true, audio };
   } catch {
-    return { ok: false, code: "failed" };
+    return { ok: false, code: "network" };
   }
 }

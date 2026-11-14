@@ -149,9 +149,11 @@ describe("voiceInputErrorMessageKey", () => {
   });
 
   it("explains the shared DeepSeek key in both languages", () => {
-    const key = "Web search/fetch and voice transcription share this key";
-    expect(ZH_TRANSLATIONS[key]).toBe("网页搜索/抓取、语音转写共用此 key");
-    expect(EN_TRANSLATIONS[key]).toBe("Web search/fetch and voice transcription share this key");
+    const key = "Web search/fetch, voice transcription and read-aloud share this key";
+    expect(ZH_TRANSLATIONS[key]).toBe("网页搜索/抓取、语音转写、朗读共用此 key");
+    expect(EN_TRANSLATIONS[key]).toBe(
+      "Web search/fetch, voice transcription and read-aloud share this key",
+    );
   });
 });
 

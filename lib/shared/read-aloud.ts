@@ -17,7 +17,7 @@ export const READ_ALOUD_SYNTHESIZE_TIMEOUT_MS = 120_000;
 
 export const READ_ALOUD_MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
-export const READ_ALOUD_ERROR_CODES = [
+const READ_ALOUD_SERVER_ERROR_CODES = [
   "missing_key",
   "too_long",
   "blocked",
@@ -27,20 +27,35 @@ export const READ_ALOUD_ERROR_CODES = [
   "failed",
 ] as const satisfies readonly DeepSeekSynthesisErrorCode[];
 
+export const READ_ALOUD_ERROR_CODES = [...READ_ALOUD_SERVER_ERROR_CODES, "network"] as const;
+
 export type ReadAloudErrorCode = (typeof READ_ALOUD_ERROR_CODES)[number];
 
+export const READ_ALOUD_RETRY_DELAY_MS = 1000;
+
+const RETRYABLE_ERROR_CODES: ReadonlySet<ReadAloudErrorCode> = new Set([
+  "busy",
+  "timeout",
+  "network",
+]);
+
 const ERROR_MESSAGE_KEYS: Record<ReadAloudErrorCode, string> = {
-  missing_key: "Read aloud failed, try again",
-  too_long: "Read aloud failed, try again",
-  blocked: "Read aloud failed, try again",
-  rate_limited: "Read aloud failed, try again",
-  busy: "Read aloud failed, try again",
-  timeout: "Read aloud failed, try again",
+  missing_key: "Read aloud needs a DeepSeek key",
+  too_long: "Too long for read aloud, shorten the answer",
+  blocked: "The voice service blocked this answer, try rephrasing it",
+  rate_limited: "Read aloud is rate limited, try again later",
+  busy: "Read aloud is busy, try again later",
+  timeout: "Read aloud timed out, try again later",
+  network: "Network error, try again",
   failed: "Read aloud failed, try again",
 };
 
 export function readAloudErrorMessageKey(code: ReadAloudErrorCode): string {
   return ERROR_MESSAGE_KEYS[code];
+}
+
+export function isReadAloudRetryableError(code: ReadAloudErrorCode): boolean {
+  return RETRYABLE_ERROR_CODES.has(code);
 }
 
 export function isReadAloudErrorCode(value: unknown): value is ReadAloudErrorCode {
