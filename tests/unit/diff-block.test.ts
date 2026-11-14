@@ -202,6 +202,21 @@ describe("parseDiffBlock", () => {
     const result = parseDiffBlock("@@@ broken @@@\n");
     expect(result.renderable).toBe(false);
   });
+
+  it("falls back when a hunk header is structurally malformed", () => {
+    const result = parseDiffBlock("@@ -x +y @@\n-a\n+b\n");
+    expect(result.renderable).toBe(false);
+    expect(result.files).toHaveLength(0);
+    expect(parseDiffBlock("diff --git a/a.ts b/a.ts\n@@ bad @@\n-a\n+b\n").renderable).toBe(false);
+  });
+
+  it("counts overall stats once from the main parse loop", () => {
+    const result = parseDiffBlock(unified);
+    expect(result.additions).toBe(3);
+    expect(result.deletions).toBe(2);
+    expect(result.files.reduce((n, f) => n + f.additions, 0)).toBe(result.additions);
+    expect(result.files.reduce((n, f) => n + f.deletions, 0)).toBe(result.deletions);
+  });
 });
 
 describe("diff fold and truncate", () => {
@@ -267,6 +282,13 @@ describe("diff fold and truncate", () => {
     expect(truncated).toBe(false);
     expect(total).toBe(3000);
     expect(rows).toHaveLength(3000);
+  });
+
+  it("folds after truncation", () => {
+    const file = changedFile(1500, 1, 1, 1598);
+    const { rows } = truncateDiffRows(diffRows(file), 3000);
+    expect(isDiffFoldable(rows.length, false)).toBe(true);
+    expect(foldDiffRows(rows).some((s) => s.kind === "collapsed")).toBe(true);
   });
 
   it("excludes meta and file header rows from the fold row count", () => {

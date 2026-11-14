@@ -182,12 +182,9 @@ export function DiffBlock({ code, isStreaming }: Props) {
 
   const plan = useMemo<FilePlan[]>(() => {
     if (!result.renderable) return [];
-    const fold = isDiffFoldable(
-      result.files.reduce((n, f) => n + diffRows(f).length, 0),
-      Boolean(isStreaming),
-    );
     return result.files.map((file) => {
       const { rows, truncated, total } = truncateDiffRows(diffRows(file), DIFF_TRUNCATE_LIMIT);
+      const fold = isDiffFoldable(rows.length, Boolean(isStreaming));
       const segments: DiffFoldSegment[] = fold
         ? foldDiffRows(rows)
         : [{ kind: "visible", start: 0, end: rows.length - 1 }];

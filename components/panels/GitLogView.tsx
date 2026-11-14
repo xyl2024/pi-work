@@ -402,7 +402,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
                     </div>
                   )}
                   {detail.commit.isMerge ? (
-                    <div style={{ marginTop: 6, padding: "6px 10px", fontSize: 11, background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid color-mix(in srgb, var(--info) 25%, transparent)", borderRadius: "var(--radius-sm)" }}>
+                    <div style={{ marginTop: 6, padding: "6px 10px", fontSize: 11, background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "var(--radius-sm)" }}>
                       {t("Merge commit")} — {t("Per-file stats are unavailable for merge commits")}
                     </div>
                   ) : (

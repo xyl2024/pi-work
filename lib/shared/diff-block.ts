@@ -1,10 +1,3 @@
-import {
-  countDisplayDiffLines,
-  countUnifiedPatchLines,
-  sumDiffStats,
-  type ToolDiffStats,
-} from "./tool-diff-stats";
-
 export type DiffLineType = "file" | "hunk" | "add" | "del" | "context" | "meta";
 
 export interface DiffLine {
@@ -50,35 +43,7 @@ const META_PREFIXES = [
 ];
 
 
-const DIFF_GIT_PREFIX = "diff --git ";
-
-function fileSegments(text: string): string[] {
-  const segments: string[][] = [];
-  for (const raw of text.split("\n")) {
-    if (raw.startsWith(DIFF_GIT_PREFIX) || segments.length === 0) {
-      segments.push([raw]);
-    } else {
-      segments[segments.length - 1].push(raw);
-    }
-  }
-  return segments.map((lines) => lines.join("\n"));
-}
-
-function overallStats(text: string): ToolDiffStats {
-  const perFile = fileSegments(text).map((segment) => {
-    const hasHunk = segment.split("\n").some((line) => HUNK_HEADER.test(line));
-    if (hasHunk) return countUnifiedPatchLines(segment);
-    return countDisplayDiffLines(
-      segment
-        .split("\n")
-        .filter((line) => !line.startsWith("--- ") && !line.startsWith("+++ "))
-        .join("\n"),
-    );
-  });
-  return sumDiffStats(perFile) ?? { additions: 0, deletions: 0 };
-}
-
-const RENAME_PREFIXES = ["rename from ", "rename to "];
+const DIFF_GIT_PREFIX = "diff --git ";const RENAME_PREFIXES = ["rename from ", "rename to "];
 
 function stripPathPrefix(path: string): string | null {
   if (path === "/dev/null") return null;
@@ -109,6 +74,7 @@ interface ParseState {
   deletions: number;
   oldNo: number;
   newNo: number;
+  malformedHunk: boolean;
 }
 
 function ensureFile(state: ParseState, oldPath: string | null, newPath: string | null): DiffFile {
@@ -146,6 +112,7 @@ export function parseDiffBlock(text: string): DiffParseResult {
     deletions: 0,
     oldNo: 0,
     newNo: 0,
+    malformedHunk: false,
   };
   state.files.push(state.current);
 
@@ -179,6 +146,7 @@ export function parseDiffBlock(text: string): DiffParseResult {
         state.newNo = header.newStart ?? 0;
         push(state, { type: "hunk", text: "", ...header });
       } else {
+        state.malformedHunk = true;
         push(state, { type: "meta", text: raw });
       }
       continue;
@@ -220,18 +188,16 @@ export function parseDiffBlock(text: string): DiffParseResult {
     if (state.newNo > 0) state.newNo++;
   }
 
-  const renderable = state.additions > 0 || state.deletions > 0;
   const hasHunks = state.files.some((f) => f.lines.some((l) => l.type === "hunk"));
-  const stats = overallStats(text);
-  if (!renderable) {
+  if (state.malformedHunk || (state.additions === 0 && state.deletions === 0)) {
     return { renderable: false, hasHunks, files: [], additions: 0, deletions: 0 };
   }
   return {
     renderable: true,
     hasHunks,
     files: state.files,
-    additions: stats.additions,
-    deletions: stats.deletions,
+    additions: state.additions,
+    deletions: state.deletions,
   };
 }
 
