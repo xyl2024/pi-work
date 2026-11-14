@@ -12,6 +12,7 @@ import {
   isVoiceInputNearLimit,
   VOICE_INPUT_ERROR_CODES,
   voiceInputErrorCodeForRecorderError,
+  voiceInputErrorCodeForStatus,
   voiceInputErrorMessageKey,
   type VoiceInputErrorCode,
 } from "@/lib/shared/voice-input";
@@ -151,6 +152,21 @@ describe("voiceInputErrorMessageKey", () => {
     const key = "Web search/fetch and voice transcription share this key";
     expect(ZH_TRANSLATIONS[key]).toBe("网页搜索/抓取、语音转写共用此 key");
     expect(EN_TRANSLATIONS[key]).toBe("Web search/fetch and voice transcription share this key");
+  });
+});
+
+describe("voiceInputErrorCodeForStatus", () => {
+  it.each([
+    [400, "invalid_audio"],
+    [409, "missing_key"],
+    [413, "too_large"],
+    [429, "rate_limited"],
+    [502, "failed"],
+    [503, "busy"],
+    [504, "timeout"],
+    [418, "failed"],
+  ] as const)("maps status %i back to %s", (status, code) => {
+    expect(voiceInputErrorCodeForStatus(status)).toBe(code);
   });
 });
 
