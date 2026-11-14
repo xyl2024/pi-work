@@ -121,6 +121,22 @@ describe("createVoiceRecorder", () => {
     expect(fake.closed).toBe(2);
   });
 
+  it("stays idle when the adapter refuses to open", async () => {
+    const denial = new DOMException("denied", "NotAllowedError");
+    const adapter: VoiceRecorderAdapter = {
+      async open() {
+        throw denial;
+      },
+      async close() {},
+    };
+    const recorder = createVoiceRecorder({ adapter, now: () => 0 });
+
+    await expect(recorder.start()).rejects.toBe(denial);
+
+    expect(recorder.getSnapshot()).toEqual({ phase: "idle", elapsedMs: 0, level: 0 });
+    expect(await recorder.stop()).toBeNull();
+  });
+
   it("excludes samples that arrive while stop is releasing the adapter", async () => {
     const state: {
       handlers: VoiceRecorderAdapterHandlers | null;

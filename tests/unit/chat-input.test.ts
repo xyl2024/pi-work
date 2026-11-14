@@ -8,7 +8,12 @@ import { ChatInputAttachments } from "@/components/chat/ChatInputAttachments";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { EN_TRANSLATIONS, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import type { SlashResource } from "@/lib/shared/slash-commands";
-import type { VoiceRecorder, VoiceRecorderResult } from "@/lib/client/voice-recorder";
+import {
+  createVoiceRecorder,
+  type VoiceRecorder,
+  type VoiceRecorderAdapter,
+  type VoiceRecorderResult,
+} from "@/lib/client/voice-recorder";
 import { useVoiceInput, type VoiceRecorderFactory } from "@/components/chat/chat-input/hooks/useVoiceInput";
 import {
   VOICE_INPUT_MAX_DURATION_MS,
@@ -208,6 +213,8 @@ describe("ChatInput voice input", () => {
     const listeners = new Set<() => void>();
     let snapshot: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
     let autoStop: ((result: VoiceRecorderResult) => void) | null = null;
+    let slowStop = false;
+    let releasePendingStop: (() => void) | null = null;
     const emit = () => {
       for (const listener of listeners) listener();
     };
@@ -223,6 +230,12 @@ describe("ChatInput voice input", () => {
       async stop() {
         snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
         emit();
+        if (slowStop) {
+          slowStop = false;
+          await new Promise<void>((resolve) => {
+            releasePendingStop = resolve;
+          });
+        }
         return { wav: new Uint8Array([1, 2, 3, 4]), durationMs };
       },
       cancel: cancelSpy,
@@ -245,6 +258,13 @@ describe("ChatInput voice input", () => {
       advance(elapsedMs: number, level: number) {
         snapshot = { ...snapshot, elapsedMs, level };
         emit();
+      },
+      holdNextStop() {
+        slowStop = true;
+      },
+      releaseStop() {
+        releasePendingStop?.();
+        releasePendingStop = null;
       },
       autoStop(at = VOICE_INPUT_MAX_DURATION_MS) {
         snapshot = { phase: "idle", elapsedMs: 0, level: 0 };
@@ -699,6 +719,61 @@ describe("ChatInput voice input", () => {
     expect(findButton("Start voice input")).not.toBeNull();
   });
 
+  it("drops the transcription when escape lands while the recorder is releasing", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea } = renderInput(fake.recorder);
+    typeInto(textarea, "draft");
+
+    await startRecording();
+    fake.holdNextStop();
+    await act(async () => {
+      findButton("Finish voice input")?.click();
+      await Promise.resolve();
+    });
+
+    pressKey(textarea, "Escape");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fake.cancelSpy).toHaveBeenCalled();
+
+    await act(async () => {
+      fake.releaseStop();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("draft");
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
+  it("drops the transcription when the session changes while the recorder is releasing", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { rerender } = renderInput(fake.recorder, undefined, { sessionId: "session-a" });
+
+    await startRecording();
+    fake.holdNextStop();
+    await act(async () => {
+      findButton("Finish voice input")?.click();
+      await Promise.resolve();
+    });
+
+    act(() => rerender({ sessionId: "session-b" }));
+    await act(async () => {
+      fake.releaseStop();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(fake.cancelSpy).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain(ZH_TRANSLATIONS["Didn't catch that, say it again"]);
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
   it("aborts the in-flight transcription on escape and never inserts the late response", async () => {
     let finishTranscription: ((response: Response) => void) | undefined;
     const fetchMock = vi.fn<typeof fetch>(
@@ -763,6 +838,24 @@ describe("ChatInput voice input", () => {
     expect(fake.cancelSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("discards the recording when sending an empty draft", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const fake = createFakeRecorder();
+    const { textarea, onSend } = renderInput(fake.recorder);
+
+    await startRecording();
+    pressKey(textarea, "Enter", { ctrlKey: true });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fake.cancelSpy).toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(findButton("Start voice input")).not.toBeNull();
+  });
+
   it("sends the existing draft on enter while recording and never transcribes", async () => {
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetchMock);
@@ -818,6 +911,59 @@ describe("ChatInput voice input", () => {
     expect(container.textContent).not.toContain("查询订阅模型服务用量");
     expect(fake.cancelSpy).not.toHaveBeenCalled();
     expect(findButton("Finish voice input")).not.toBeNull();
+  });
+
+  it("does not render the mic button when the browser cannot capture audio", async () => {
+    Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        createElement(
+          I18nProvider,
+          null,
+          createElement(ChatInput, {
+            onSend: vi.fn(),
+            onAbort: () => undefined,
+            isStreaming: false,
+          }),
+        ),
+      );
+    });
+
+    expect(findButton("Start voice input")).toBeNull();
+    expect(container.textContent).not.toContain(ZH_TRANSLATIONS["Start voice input"]);
+    expect(container.textContent).not.toContain("语音输入");
+  });
+
+  it.each([
+    [
+      "the microphone is denied",
+      new DOMException("denied", "NotAllowedError"),
+      "Microphone access was denied",
+    ],
+    ["the capture pipeline breaks", new Error("boom"), "Voice input failed"],
+  ])("shows one neutral message and stays idle when %s", async (_name, error, key) => {
+    const adapter: VoiceRecorderAdapter = {
+      async open() {
+        throw error;
+      },
+      async close() {},
+    };
+    const recorder = createVoiceRecorder({ adapter });
+    const { textarea } = renderInput(recorder);
+    typeInto(textarea, "keep this draft");
+
+    await act(async () => {
+      findButton("Start voice input")?.click();
+      await Promise.resolve();
+    });
+
+    expect(countMessage(key)).toBe(1);
+    expect(findButton("Start voice input")).not.toBeNull();
+    expect(findButton("Finish voice input")).toBeNull();
+    expect(textarea.value).toBe("keep this draft");
   });
 
   it("drops a late failure after cancel without showing a message", async () => {

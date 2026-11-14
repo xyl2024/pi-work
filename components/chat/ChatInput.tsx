@@ -18,7 +18,7 @@ import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { VoiceInputButton } from "./chat-input/VoiceInputButton";
 import { useVoiceInput, type VoiceRecorderFactory } from "./chat-input/hooks/useVoiceInput";
 import { BUILTIN_SLASH_ACTIONS, THINKING_BORDER_COLOR } from "./chat-input/constants";
-import { chatInputMetrics } from "./chat-input/metrics";
+import { chatInputMetrics, VOICE_INPUT_ACCENT_COLOR, voiceInputMetrics } from "./chat-input/metrics";
 import { canToggleVoiceInput } from "@/lib/shared/chat-shortcuts";
 import { canCancelVoiceInput, decideVoiceInputEscape, voiceInputErrorMessageKey } from "@/lib/shared/voice-input";
 import { decideSuggestedPromptTab } from "@/lib/shared/suggested-prompt";
@@ -305,9 +305,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   const handleSend = useCallback(() => {
     const msg = buildMessage(value);
+    if (canCancelVoiceInput(voiceInputPhase)) void cancelVoiceInput();
     if (!msg && !attachedImages.length) return;
     if (isStreaming) return;
-    if (canCancelVoiceInput(voiceInputPhase)) void cancelVoiceInput();
     onSend(msg, attachedImages.length ? attachedImages : undefined);
     exitHistoryMode();
     setValue("");
@@ -481,9 +481,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div
             role="status"
             style={{
-              marginBottom: 8,
-              fontSize: 12,
-              color: "#ef4444",
+              marginBottom: voiceInputMetrics.errorMarginBottom,
+              fontSize: voiceInputMetrics.errorFont,
+              color: VOICE_INPUT_ACCENT_COLOR,
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",

@@ -21,7 +21,6 @@ export interface UseVoiceInputOptions {
   insertText: (text: string) => void;
   sessionKey?: string | null;
   recorderFactory?: VoiceRecorderFactory;
-  onError?: (code: VoiceInputErrorCode) => void;
 }
 
 export interface VoiceInputController {
@@ -37,7 +36,7 @@ export interface VoiceInputController {
 const IDLE: VoiceInputState = { phase: "idle", elapsedMs: 0, level: 0 };
 
 export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputController {
-  const { insertText, sessionKey, recorderFactory, onError } = options;
+  const { insertText, sessionKey, recorderFactory } = options;
   const autoStopRef = useRef<(result: VoiceRecorderResult) => void>(() => undefined);
   const [recorder] = useState<VoiceRecorder | null>(() => {
     const factoryOptions: VoiceRecorderFactoryOptions = {
@@ -51,14 +50,7 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
   const [error, setError] = useState<VoiceInputErrorCode | null>(null);
   const transcribingRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
-
-  const reportError = useCallback(
-    (code: VoiceInputErrorCode) => {
-      setError(code);
-      onError?.(code);
-    },
-    [onError],
-  );
+  const epochRef = useRef(0);
 
   useEffect(() => {
     if (!recorder) return;
@@ -67,6 +59,7 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
   }, [recorder]);
 
   const cancel = useCallback(async () => {
+    epochRef.current += 1;
     inFlightRef.current?.abort();
     inFlightRef.current = null;
     transcribingRef.current = false;
@@ -84,6 +77,7 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
 
   useEffect(() => {
     return () => {
+      epochRef.current += 1;
       inFlightRef.current?.abort();
       inFlightRef.current = null;
       transcribingRef.current = false;
@@ -91,40 +85,45 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
     };
   }, [recorder]);
 
-  const finish = useCallback(
-    async (result: VoiceRecorderResult | null) => {
-      if (!result || result.durationMs < VOICE_INPUT_MIN_DURATION_MS) return;
-      if (transcribingRef.current) return;
+  const transcribe = useCallback(
+    async (result: VoiceRecorderResult | null, epoch: number) => {
+      if (!result || result.durationMs < VOICE_INPUT_MIN_DURATION_MS) {
+        transcribingRef.current = false;
+        setTranscribing(false);
+        return;
+      }
 
-      transcribingRef.current = true;
-      setTranscribing(true);
       const controller = new AbortController();
       inFlightRef.current = controller;
       const outcome = await transcribeVoiceAudio(result.wav, { signal: controller.signal });
-      if (inFlightRef.current !== controller) return;
+      if (epochRef.current !== epoch) return;
+
       inFlightRef.current = null;
       transcribingRef.current = false;
       setTranscribing(false);
 
       if (!outcome.ok) {
-        reportError(outcome.code);
+        setError(outcome.code);
         return;
       }
       const transcript = outcome.text.trim();
       if (!transcript) {
-        reportError("empty_transcript");
+        setError("empty_transcript");
         return;
       }
       insertText(transcript);
     },
-    [insertText, reportError],
+    [insertText],
   );
 
   useEffect(() => {
     autoStopRef.current = (result) => {
-      void finish(result);
+      if (transcribingRef.current) return;
+      transcribingRef.current = true;
+      setTranscribing(true);
+      void transcribe(result, epochRef.current);
     };
-  }, [finish]);
+  }, [transcribe]);
 
   const toggle = useCallback(async () => {
     if (!recorder || transcribingRef.current) return;
@@ -134,14 +133,19 @@ export function useVoiceInput(options: UseVoiceInputOptions): VoiceInputControll
       try {
         await recorder.start();
       } catch (recorderError) {
-        reportError(voiceInputErrorCodeForRecorderError(recorderError));
+        setError(voiceInputErrorCodeForRecorderError(recorderError));
       }
       return;
     }
     if (current.phase !== "recording") return;
 
-    await finish(await recorder.stop());
-  }, [recorder, finish, reportError]);
+    const epoch = epochRef.current;
+    transcribingRef.current = true;
+    setTranscribing(true);
+    const result = await recorder.stop();
+    if (epochRef.current !== epoch) return;
+    await transcribe(result, epoch);
+  }, [recorder, transcribe]);
 
   return {
     supported: recorder !== null,
