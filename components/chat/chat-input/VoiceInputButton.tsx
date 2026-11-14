@@ -18,6 +18,12 @@ const LABEL_KEYS: Record<VoiceInputPhase, string> = {
   transcribing: "Transcribing...",
 };
 
+const TITLE_KEYS: Record<VoiceInputPhase, string> = {
+  idle: "Start voice input (⌘⇧M / Ctrl+Shift+M)",
+  recording: "Finish voice input (⌘⇧M / Ctrl+Shift+M)",
+  transcribing: "Transcribing...",
+};
+
 function MicIcon() {
   return (
     <svg width={chatInputMetrics.sendIcon} height={chatInputMetrics.sendIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,6 +49,7 @@ function SpinnerIcon() {
 export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = false }: VoiceInputButtonProps) {
   const { t } = useI18n();
   const label = t(LABEL_KEYS[phase]);
+  const title = t(TITLE_KEYS[phase]);
   const active = phase === "recording";
   const progress = Math.min(1, elapsedMs / VOICE_INPUT_MAX_DURATION_MS);
 
@@ -52,7 +59,8 @@ export function VoiceInputButton({ phase, elapsedMs, level, onClick, disabled = 
       onClick={onClick}
       disabled={disabled || phase === "transcribing"}
       aria-label={label}
-      title={label}
+      aria-keyshortcuts="Meta+Shift+M Control+Shift+M"
+      title={title}
       style={{
         flexShrink: 0,
         alignSelf: "flex-end",

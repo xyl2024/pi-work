@@ -155,6 +155,8 @@ export const EN_TRANSLATIONS = {
   "Type / to select a skill, @ to select a file": "Type / to select a skill, @ to select a file",
   "Start voice input": "Start voice input",
   "Finish voice input": "Finish voice input",
+  "Start voice input (⌘⇧M / Ctrl+Shift+M)": "Start voice input (⌘⇧M / Ctrl+Shift+M)",
+  "Finish voice input (⌘⇧M / Ctrl+Shift+M)": "Finish voice input (⌘⇧M / Ctrl+Shift+M)",
   "Transcribing...": "Transcribing...",
   "DeepSeek API key is not configured": "DeepSeek API key is not configured",
   "Microphone access was denied": "Microphone access was denied",

@@ -26,6 +26,8 @@ export const chat = {
   "Stop": "停止",
   "Start voice input": "开始语音输入",
   "Finish voice input": "结束语音输入",
+  "Start voice input (⌘⇧M / Ctrl+Shift+M)": "开始语音输入（⌘⇧M / Ctrl+Shift+M）",
+  "Finish voice input (⌘⇧M / Ctrl+Shift+M)": "结束语音输入（⌘⇧M / Ctrl+Shift+M）",
   "Transcribing...": "正在转写...",
   "DeepSeek API key is not configured": "尚未配置 DeepSeek API Key",
   "Microphone access was denied": "麦克风权限被拒绝",
