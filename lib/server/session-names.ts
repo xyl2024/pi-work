@@ -9,6 +9,7 @@ import {
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { dataPath } from "./data-dir";
+import { directorySignature } from "./dir-signature";
 
 export interface SessionNameEntry {
   name: string;
@@ -47,6 +48,7 @@ export function writeSessionName(sessionId: string, name: string): boolean {
   try {
     writeFileSync(tmp, payload);
     renameSync(tmp, target);
+    invalidateSessionNamesCache();
     return true;
   } catch (error) {
     try {
@@ -62,6 +64,7 @@ export function deleteSessionName(sessionId: string): void {
   if (id === null) return;
   try {
     unlinkSync(join(getSideCarDir(), `${id}.json`));
+    invalidateSessionNamesCache();
   } catch {
   }
 }
@@ -99,24 +102,53 @@ async function readSessionNameAsync(
   }
 }
 
+interface SessionNamesCache {
+  signature: string;
+  names: Map<string, SessionNameEntry>;
+}
+
+declare global {
+  var __piSessionNamesCache: SessionNamesCache | undefined;
+  var __piSessionNamesInflight: Promise<Map<string, SessionNameEntry>> | undefined;
+}
+
+export function invalidateSessionNamesCache(): void {
+  globalThis.__piSessionNamesCache = undefined;
+}
+
 export async function listSessionNames(): Promise<Map<string, SessionNameEntry>> {
-  const out = new Map<string, SessionNameEntry>();
-  let entries: string[];
-  try {
-    entries = await readdir(getSideCarDir());
-  } catch {
+  const signature = directorySignature(getSideCarDir());
+  const cached = globalThis.__piSessionNamesCache;
+  if (cached && signature !== null && cached.signature === signature) return cached.names;
+  if (globalThis.__piSessionNamesInflight) return globalThis.__piSessionNamesInflight;
+
+  const load = (async (): Promise<Map<string, SessionNameEntry>> => {
+    const out = new Map<string, SessionNameEntry>();
+    let entries: string[];
+    try {
+      entries = await readdir(getSideCarDir());
+    } catch {
+      return out;
+    }
+    const tasks: Promise<[string, SessionNameEntry] | null>[] = [];
+    for (const file of entries) {
+      if (!file.endsWith(".json") || file.includes(".tmp.")) continue;
+      const id = file.slice(0, -".json".length);
+      if (!SAFE_ID_RE.test(id)) continue;
+      tasks.push(readSessionNameAsync(id, join(getSideCarDir(), file)));
+    }
+    const results = await Promise.all(tasks);
+    for (const r of results) {
+      if (r) out.set(r[0], r[1]);
+    }
+    if (signature !== null) globalThis.__piSessionNamesCache = { signature, names: out };
     return out;
+  })();
+
+  globalThis.__piSessionNamesInflight = load;
+  try {
+    return await load;
+  } finally {
+    globalThis.__piSessionNamesInflight = undefined;
   }
-  const tasks: Promise<[string, SessionNameEntry] | null>[] = [];
-  for (const file of entries) {
-    if (!file.endsWith(".json") || file.includes(".tmp.")) continue;
-    const id = file.slice(0, -".json".length);
-    if (!SAFE_ID_RE.test(id)) continue;
-    tasks.push(readSessionNameAsync(id, join(getSideCarDir(), file)));
-  }
-  const results = await Promise.all(tasks);
-  for (const r of results) {
-    if (r) out.set(r[0], r[1]);
-  }
-  return out;
 }

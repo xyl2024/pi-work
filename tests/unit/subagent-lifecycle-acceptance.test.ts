@@ -41,7 +41,9 @@ function resetGlobals(): void {
   delete g.__piSubagentsDb;
   delete g.__piSubagentProfilesSeeded;
   delete g.__piSubagentTaskManager;
-  delete g.__piSessionListCache;
+  for (const key of Object.keys(g)) {
+    if (key.startsWith("__piSession")) delete g[key];
+  }
   delete g.__piSessionPathCache;
 }
 

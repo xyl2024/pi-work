@@ -235,6 +235,14 @@ _Avoid_: 与「重命名」混用（那是用户直接改名）；把它当作�
 侧栏行、会话标签页与浏览器标签页共用的一条规则：名字 → 第一条用户消息（截断）→ id 短桩，对应 `lib/shared/session-title.ts` 的 `sessionDisplayTitle`。没人起名（含自动起名没拿到答案）时走的是同一条规则。
 _Avoid_: 把 pi 列出来的 `firstMessage` 占位串 `(no messages)` 当标题显示——它是数据不是文案，读层已归一成空串
 
+**会话索引（Session index）**：
+会话列表与工作区列表共用的那份会话元数据（id、cwd、名字、首条消息、时间、父会话、助理标记），按会话文件的 mtime + size 增量维护并落盘复用；它不是真值，删掉只会让下一次刷新变慢。见 ADR-0047。
+_Avoid_: 把它当作会话列表本身（那是从索引派生的一份快照）；把它当作 pi SDK 的 `SessionManager`（那读的是单个会话的完整对话）
+
+**首条消息（First message）**：
+会话文件里第一条 user 或 assistant 消息的文本，用于标题回退；图片首条消息与空文件都归一成空串。
+_Avoid_: 与「会话标题」混用（那是显示规则，这是它的一个输入）
+
 **会话行注意指示（Session row attention）**：
 侧栏会话行上一次只显示一个的“需要你”圆点，由 `lib/shared/session-attention.ts` 从两个来源合并：待回答的 `ask_user_questions`（`askUserQuestionsStore`，琥珀色）与待确认的命令执行（`usePendingPermissions` 的队列，红色）。命令确认优先于提问；同一会话的多条请求收敛成一个点。
 _Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「未读」或「运行中」（运行中看标题呼吸）
