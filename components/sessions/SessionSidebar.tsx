@@ -815,7 +815,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           </div>
         </div>
       </div>
-      <SidebarDivider />
       <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
         {onCreateSessionDraft && (
           <SidebarNavButton onClick={onCreateSessionDraft}>
@@ -887,7 +886,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
       {!assistantActive && (
       <>
-      <SidebarDivider />
       <SidebarSection
         title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
@@ -960,7 +958,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
       {explorerCwd && (
         <>
-        <SidebarDivider />
         <SidebarSection
           title={t("Explorer")}
           open={explorerOpen}
@@ -1011,6 +1008,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         </SidebarSection>
         </>
       )}
+
+      <SidebarDivider />
 
       {onOpenSettings && (
         <ProfileBlock

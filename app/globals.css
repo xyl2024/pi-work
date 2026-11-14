@@ -259,11 +259,20 @@ body {
 
 [data-scroll-side] {
   scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-color: transparent transparent;
+}
+[data-scroll-side]:hover {
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
 }
 [data-scroll-side]::-webkit-scrollbar {
   width: 4px;
   height: 4px;
+}
+[data-scroll-side]::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+[data-scroll-side]:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 [data-scroll-inset] {
@@ -275,7 +284,6 @@ body {
   height: 6px;
 }
 
-[data-scroll-side]:hover,
 [data-scroll-inset]:hover {
   scrollbar-color: var(--scrollbar-thumb-hover) transparent;
 }
