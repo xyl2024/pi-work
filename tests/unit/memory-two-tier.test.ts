@@ -1,29 +1,38 @@
 import { describe, expect, it } from "vitest";
 import {
-  MEMORY_EMPTY_STATE,
-  MEMORY_GUIDANCE,
   MEMORY_INDEX_BUDGET,
   MEMORY_INDEX_FILE,
   MEMORY_ARCHIVE_SUFFIX,
   planMemoryMigration,
   renderMemoryIndex,
+  renderMemoryEmptyState,
+  renderMemoryGuidance,
   renderMemoryInjection,
   type MemoryMigrationPlan,
 } from "@/lib/shared/memory-two-tier";
 
+const MEMORY_DIR = "/data/pi-work/memory";
+
 describe("renderMemoryInjection", () => {
   it("returns guidance plus index when index has content", () => {
-    const block = renderMemoryInjection("# 记忆索引\n\n- user-profile.md — 用户资料");
-    expect(block).toContain(MEMORY_GUIDANCE);
+    const block = renderMemoryInjection("# 记忆索引\n\n- user-profile.md — 用户资料", MEMORY_DIR);
+    expect(block).toContain(renderMemoryGuidance(MEMORY_DIR));
     expect(block).toContain("## 当前记忆索引");
     expect(block).toContain("- user-profile.md — 用户资料");
   });
 
+  it("guides with absolute paths derived from the injected memory dir", () => {
+    const block = renderMemoryInjection("", MEMORY_DIR);
+    expect(block).toContain(`${MEMORY_DIR}/INDEX.md`);
+    expect(block).toContain(`${MEMORY_DIR}/<分类>.md`);
+    expect(block).toContain(String(MEMORY_INDEX_BUDGET));
+  });
+
   it("returns guidance with empty-state text when index is blank", () => {
     for (const indexContent of ["", "   \n  "]) {
-      const block = renderMemoryInjection(indexContent);
-      expect(block).toContain(MEMORY_GUIDANCE);
-      expect(block).toContain(MEMORY_EMPTY_STATE);
+      const block = renderMemoryInjection(indexContent, MEMORY_DIR);
+      expect(block).toContain(renderMemoryGuidance(MEMORY_DIR));
+      expect(block).toContain(renderMemoryEmptyState(MEMORY_DIR));
       expect(block).not.toContain("## 当前记忆索引");
     }
   });

@@ -7,7 +7,7 @@ import { loadMemoryPromptBlock } from "@/lib/server/memory-injection";
 import { readSessionToolSelection, writeSessionToolSelection } from "@/lib/server/session-tools-config";
 import { restrictSubagentTools, subagentChildSessionStartOptions } from "@/lib/server/subagent-restore";
 import type { SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
-import { MEMORY_GUIDANCE } from "@/lib/shared/memory-two-tier";
+import { renderMemoryGuidance } from "@/lib/shared/memory-two-tier";
 import {
   buildToolChecklistRows,
   declarableToolNames,
@@ -97,7 +97,7 @@ describe("memory in the session sidecar", () => {
     expect(readSessionToolSelection("memory-selection-0001")).toEqual(["read", "bash"]);
 
     const block = loadMemoryPromptBlock(true);
-    expect(block).toContain(MEMORY_GUIDANCE);
+    expect(block).toContain(renderMemoryGuidance(join(sandbox.dataDir, "memory")));
     expect(block).toContain("用户偏好中文");
   });
 

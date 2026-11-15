@@ -8,8 +8,6 @@ export const EN_TRANSLATIONS = {
   "This cannot be undone.": "This cannot be undone.",
   "This entry was written externally, not separated by the entry separator. Deleting it loses this handwritten text; it has been backed up to a .bak file.": "This entry was written externally, not separated by the entry separator. Deleting it loses this handwritten text; it has been backed up to a .bak file.",
   "Delete failed: {error}": "Delete failed: {error}",
-  "This entry changed after the panel loaded. Refresh and try again.": "This entry changed after the panel loaded. Refresh and try again.",
-  "This entry is no longer at that position. Refresh and try again.": "This entry is no longer at that position. Refresh and try again.",
   "Turn memory on in Settings first": "Turn memory on in Settings first",
   "Set default tools": "Set default tools",
   "Default tools for this project": "Default tools for this project",

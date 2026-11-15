@@ -5,7 +5,7 @@ import { createSandbox, type Sandbox } from "./sandbox";
 import { composeAppendSystemPrompt, composeOverrideSystemPrompt } from "@/lib/server/web-tool-guidance";
 import { loadMemoryPromptBlock, resolveMemoryInjectionForSession } from "@/lib/server/memory-injection";
 import { readMemoryCwdOverrides, writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
-import { MEMORY_GUIDANCE, MEMORY_EMPTY_STATE, MEMORY_INDEX_FILE } from "@/lib/shared/memory-two-tier";
+import { renderMemoryGuidance, renderMemoryEmptyState, MEMORY_INDEX_FILE } from "@/lib/shared/memory-two-tier";
 
 function seedIndex(sandbox: Sandbox, content: string): string {
   const file = join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE);
@@ -16,6 +16,14 @@ function seedIndex(sandbox: Sandbox, content: string): string {
 
 function indexPath(sandbox: Sandbox): string {
   return join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE);
+}
+
+function memoryDir(sandbox: Sandbox): string {
+  return join(sandbox.dataDir, "memory");
+}
+
+function expectedGuidance(sandbox: Sandbox): string {
+  return renderMemoryGuidance(memoryDir(sandbox));
 }
 
 describe("memory injection: prompt placement", () => {
@@ -73,10 +81,11 @@ describe("memory injection: block contents", () => {
 
     const block = loadMemoryPromptBlock(true)!;
 
-    expect(block).toContain(MEMORY_GUIDANCE);
+    expect(block).toContain(expectedGuidance(sandbox));
+    expect(block).toContain(join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE));
     expect(block).toContain("## 当前记忆索引");
     expect(block).toContain("- user-profile.md — 用户资料");
-    expect(block.indexOf(MEMORY_GUIDANCE)).toBeLessThan(block.indexOf("## 当前记忆索引"));
+    expect(block.indexOf(expectedGuidance(sandbox))).toBeLessThan(block.indexOf("## 当前记忆索引"));
   });
 
   it("injects the empty-state guidance when the directory has no index file and creates nothing", () => {
@@ -84,8 +93,8 @@ describe("memory injection: block contents", () => {
 
     const block = loadMemoryPromptBlock(true);
 
-    expect(block).toContain(MEMORY_GUIDANCE);
-    expect(block).toContain(MEMORY_EMPTY_STATE);
+    expect(block).toContain(expectedGuidance(sandbox));
+    expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
     expect(block).not.toContain("## 当前记忆索引");
     expect(existsSync(join(sandbox.dataDir, "memory"))).toBe(false);
   });
@@ -96,7 +105,7 @@ describe("memory injection: block contents", () => {
 
     const block = loadMemoryPromptBlock(true);
 
-    expect(block).toContain(MEMORY_EMPTY_STATE);
+    expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
     expect(block).not.toContain("## 当前记忆索引");
   });
 

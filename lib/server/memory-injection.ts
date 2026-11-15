@@ -5,6 +5,7 @@ import {
   MEMORY_INDEX_FILE,
   renderMemoryInjection,
 } from "@/lib/shared/memory-two-tier";
+import { dirname } from "node:path";
 import { createLogger } from "./logger";
 import { isMemoryEnabledForCwd } from "./memory-cwd-store";
 import { dataPath } from "./data-dir";
@@ -35,7 +36,7 @@ function loadMemoryBlock(enabled: boolean): string | null {
   if (!enabled) return null;
   const indexContent = readIndexContent();
   if (indexContent === null) return null;
-  return renderMemoryInjection(indexContent);
+  return renderMemoryInjection(indexContent, dirname(memoryIndexPath()));
 }
 
 export function loadMemoryPromptBlock(enabled: boolean): string | null {

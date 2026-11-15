@@ -24,7 +24,9 @@ export function runMemoryMigration(memoryDir: string = dataPath("memory")): void
     const plan = planMemoryMigration({ memoryRaw, userRaw });
     if (plan) {
       for (const file of [...plan.files, plan.index]) {
-        writeFileAtomic(join(memoryDir, file.path), file.content);
+        const targetPath = join(memoryDir, file.path);
+        if (existsSync(targetPath) && readFileSync(targetPath, "utf8").trim().length > 0) continue;
+        writeFileAtomic(targetPath, file.content);
       }
     }
     for (const name of LEGACY_FILES) {

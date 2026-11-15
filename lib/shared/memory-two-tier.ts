@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { MEMORY_ENTRY_SEPARATOR } from "./memory";
 
 export const MEMORY_DIR_NAME = "memory";
@@ -5,26 +6,30 @@ export const MEMORY_INDEX_FILE = "INDEX.md";
 export const MEMORY_INDEX_BUDGET = 2000;
 export const MEMORY_ARCHIVE_SUFFIX = ".bak";
 
-export const MEMORY_GUIDANCE = [
-  "## 记忆管理",
-  "",
-  "记忆以两级 Markdown 文件存储在记忆数据目录 memory/ 下：",
-  "- 索引：memory/INDEX.md，会话开始时冻结注入（见下方索引内容），运行中改动不会刷新本次注入。",
-  "- 明细：memory/<分类>.md，按分类存放细节，用 read / write / edit 实时读写。",
-  "",
-  "约定：",
-  "1. 新事实写入对应明细文件；没有合适分类就新建文件，文件名用小写连字符。",
-  "2. 写完明细后同步更新索引：每个现存分类一行（相对路径 + 一句话说明），并维护用户偏好摘要。",
-  "3. 索引保持在 2000 字符以内：只放分类目录与高价值摘要，细节一律进明细文件。",
-  "4. 读记忆时先看索引定位分类，再按需读取对应明细，不要全量读取。",
-  "5. 记忆是全局的，与当前工作目录无关；不要把某个项目专属信息写进记忆。",
-].join("\n");
+export function renderMemoryGuidance(memoryDir: string): string {
+  return [
+    "## 记忆管理",
+    "",
+    `记忆以两级 Markdown 文件存储在记忆数据目录 ${memoryDir} 下：`,
+    `- 索引：${join(memoryDir, MEMORY_INDEX_FILE)}，会话开始时冻结注入（见下方索引内容），运行中改动不会刷新本次注入。`,
+    `- 明细：${memoryDir}/<分类>.md，按分类存放细节，用 read / write / edit 实时读写。`,
+    "",
+    "约定：",
+    "1. 新事实写入对应明细文件；没有合适分类就新建文件，文件名用小写连字符，落在上面明细目录下。",
+    `2. 写完明细后同步更新索引：每个现存分类一行（绝对路径 + 一句话说明），并维护用户偏好摘要。`,
+    `3. 索引保持在 ${MEMORY_INDEX_BUDGET} 字符以内：只放分类目录与高价值摘要，细节一律进明细文件。`,
+    "4. 读记忆时先看索引定位分类，再按需读取对应明细，不要全量读取。",
+    "5. 记忆是全局的，与当前工作目录无关；不要把某个项目专属信息写进记忆。",
+  ].join("\n");
+}
 
-export const MEMORY_EMPTY_STATE = [
-  "当前索引为空：还没有任何记忆。",
-  "按需惰性创建：先用户新学到事实时再创建 memory/INDEX.md 与对应分类明细，",
-  "不要预先批量创建文件，也不要在没有事实时写占位内容。",
-].join(" ");
+export function renderMemoryEmptyState(memoryDir: string): string {
+  return [
+    "当前索引为空：还没有任何记忆。",
+    `按需惰性创建：先用户新学到事实时再创建 ${join(memoryDir, MEMORY_INDEX_FILE)} 与对应分类明细，`,
+    "不要预先批量创建文件，也不要在没有事实时写占位内容。",
+  ].join(" ");
+}
 
 export interface MemoryIndexCategory {
   file: string;
@@ -48,12 +53,12 @@ export function renderMemoryIndex(categories: readonly MemoryIndexCategory[]): s
   return lines.join("\n");
 }
 
-export function renderMemoryInjection(indexContent: string): string {
+export function renderMemoryInjection(indexContent: string, memoryDir: string): string {
   const trimmed = indexContent.trim();
   if (trimmed.length === 0) {
-    return `${MEMORY_GUIDANCE}\n\n${MEMORY_EMPTY_STATE}`;
+    return `${renderMemoryGuidance(memoryDir)}\n\n${renderMemoryEmptyState(memoryDir)}`;
   }
-  return `${MEMORY_GUIDANCE}\n\n## 当前记忆索引\n\n${trimmed}`;
+  return `${renderMemoryGuidance(memoryDir)}\n\n## 当前记忆索引\n\n${trimmed}`;
 }
 
 const MIGRATED_CATEGORIES = {
