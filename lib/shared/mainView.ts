@@ -6,6 +6,7 @@ export interface MainViewParams {
   skills: undefined;
   channels: undefined;
   tokens: undefined;
+  memory: undefined;
 }
 
 export type MainViewKind = keyof MainViewParams;
@@ -82,6 +83,18 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       {
         labelKey: "Open token audit",
         keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
+      },
+    ],
+  },
+  memory: {
+    kind: "memory",
+    navPriority: 6,
+    labelKey: "Memory management",
+    backLabelKey: "Back to chat",
+    commands: [
+      {
+        labelKey: "Open memory management",
+        keywords: ["memory", "memories", "index", "记忆", "记忆管理"],
       },
     ],
   },
