@@ -34,7 +34,6 @@ import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } fro
 import { celebrateTool } from "./celebrate-tool";
 import { resolveMemoryInjectionForSession } from "./memory-injection";
 import type { SessionMemorySnapshot } from "../shared/memory";
-import { memoryTool } from "./memory-tool";
 import { getRegistry } from "./session-registry";
 import { subagentWebTools } from "./web-tools";
 import {
@@ -843,7 +842,6 @@ export async function startRpcSession(
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     let appendSystemPromptLoaderOption: string[] | undefined;
-    let memoryEnabled = false;
     let memoryPromptBlock: string | null = null;
     let memorySnapshot: SessionMemorySnapshot | null = null;
     let disabledSkillPaths = new Set<string>();
@@ -851,7 +849,6 @@ export async function startRpcSession(
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       const memory = resolveMemoryInjectionForSession(cwd, cfg.memory.enabled === true);
-      memoryEnabled = memory.enabled;
       memoryPromptBlock = memory.block;
       memorySnapshot = memory.snapshot;
       if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
@@ -1057,7 +1054,6 @@ export async function startRpcSession(
         }),
         celebrateTool,
         piWorkCallTool,
-        ...(memoryEnabled ? [memoryTool] : []),
       ],
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
       excludeTools: [...agentToolDenylist(process.platform)],

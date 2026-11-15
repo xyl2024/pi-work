@@ -34,7 +34,7 @@ export function runMemoryMigration(memoryDir: string = dataPath("memory")): void
   } catch (error) {
     log.warn(
       "memory migration failed, continuing:",
-      error instanceof Error ? error.message : error,
+      { error },
     );
   }
 }
