@@ -20,6 +20,7 @@ export async function register(): Promise<void> {
   await safeBootstrap("network-proxy", () => import("@/lib/server/network-proxy"));
   await safeBootstrap("allowed-roots", () => import("@/lib/server/file-access-prewarm"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
+  await safeBootstrap("memory-migration", () => import("@/lib/server/memory-migration").then((m) => ({ bootstrap: () => m.runMemoryMigration() })));
   await safeBootstrap("subagents", () => import("@/lib/server/subagent-startup"));
   await safeBootstrap("terminal",  () => import("@/lib/server/terminal/startup"));
 }
