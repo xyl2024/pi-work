@@ -163,6 +163,11 @@ export const rightPanels = {
   "File name": "文件名",
   'Delete "{file}"': '删除「{file}」',
   "Its registration line in the memory index will also be removed.": "记忆索引中该文件的登记行也会一并移除。",
+  "File changed since it was opened": "文件在打开之后被修改过",
+  "My version": "我保存的版本",
+  "Current version on disk": "磁盘上的当前版本",
+  "Overwrite": "覆盖保存",
+  "Discard my changes": "放弃我的改动",
 
   "LLM API audit": "LLM API 审计",
   "Open LLM API audit": "打开 LLM API 审计",

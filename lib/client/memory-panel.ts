@@ -6,6 +6,7 @@ import {
   type PanelViewStore,
 } from "./panel-view-store";
 import {
+  MemoryConflictError,
   createMemoryFile,
   deleteMemoryFile,
   fetchMemoryFile,
@@ -36,6 +37,8 @@ export interface MemoryViewState {
   createError: string | null;
   deleting: boolean;
   deleteError: string | null;
+  openedMtime: string | null;
+  conflict: { diskContent: string; diskMtime: string } | null;
 }
 
 const INITIAL: MemoryViewState = {
@@ -54,6 +57,8 @@ const INITIAL: MemoryViewState = {
   createError: null,
   deleting: false,
   deleteError: null,
+  openedMtime: null,
+  conflict: null,
 };
 
 const ROOT_PAGE: MemoryPage = { kind: "browse" };
@@ -89,6 +94,8 @@ async function openMemoryFile(file: string | null): Promise<boolean> {
     content: "",
     baseline: "",
     saveError: null,
+    openedMtime: null,
+    conflict: null,
   });
   try {
     const detail = await fetchMemoryFile(file);
@@ -97,6 +104,7 @@ async function openMemoryFile(file: string | null): Promise<boolean> {
       detailLoading: false,
       content: detail.content,
       baseline: detail.content,
+      openedMtime: detail.mtime,
     });
   } catch (e) {
     if (memoryPanel.get().selectedFile !== file) return true;
@@ -119,14 +127,24 @@ export async function saveMemoryChanges(): Promise<void> {
   if (file === null || state.saving || !isMemoryContentDirty(state)) return;
   memoryPanel.patch({ saving: true, saveError: null });
   try {
-    await saveMemoryFile(file, state.content);
+    await saveMemoryFile(file, state.content, { openedMtime: state.openedMtime });
     const files = await fetchMemoryFiles().catch(() => null);
     memoryPanel.patch({
       saving: false,
       baseline: state.content,
+      openedMtime: null,
+      conflict: null,
       files: files ?? state.files,
     });
   } catch (e) {
+    if (e instanceof MemoryConflictError) {
+      memoryPanel.patch({
+        saving: false,
+        saveError: null,
+        conflict: { diskContent: e.content, diskMtime: e.mtime },
+      });
+      return;
+    }
     memoryPanel.patch({ saving: false, saveError: errorMessage(e) });
   }
 }
@@ -160,6 +178,40 @@ export async function deleteMemoryCategory(file: string): Promise<void> {
   } catch (e) {
     memoryPanel.patch({ deleting: false, deleteError: errorMessage(e) });
   }
+}
+
+export function resolveMemoryConflict(mode: "overwrite" | "discard"): void {
+  const state = memoryPanel.get();
+  if (state.conflict === null || state.saving) return;
+  if (mode === "discard") {
+    memoryPanel.patch({
+      content: state.conflict.diskContent,
+      baseline: state.conflict.diskContent,
+      openedMtime: state.conflict.diskMtime,
+      conflict: null,
+      saveError: null,
+    });
+    void fetchMemoryFiles()
+      .then((files) => memoryPanel.patch({ files }))
+      .catch(() => {});
+    return;
+  }
+  memoryPanel.patch({ saving: true, saveError: null });
+  void (async () => {
+    try {
+      await saveMemoryFile(state.selectedFile ?? "", state.content, { force: true });
+      const files = await fetchMemoryFiles().catch(() => null);
+      memoryPanel.patch({
+        saving: false,
+        baseline: state.content,
+        openedMtime: null,
+        conflict: null,
+        files: files ?? state.files,
+      });
+    } catch (e) {
+      memoryPanel.patch({ saving: false, saveError: errorMessage(e) });
+    }
+  })();
 }
 
 function requestMemoryLeave(intent: MainViewLeaveIntent): Promise<boolean> {

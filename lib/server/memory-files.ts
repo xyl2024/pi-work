@@ -50,11 +50,26 @@ export function readMemoryFile(name: string): { content: string; mtime: string }
   }
 }
 
-export function writeMemoryFile(name: string, content: string): { mtime: string } | null {
+export type MemoryWriteResult =
+  | { status: "written"; mtime: string }
+  | { status: "conflict"; content: string; mtime: string }
+  | null;
+
+export function writeMemoryFile(
+  name: string,
+  content: string,
+  options: { openedMtime?: string; force?: boolean } = {},
+): MemoryWriteResult {
   const filePath = memoryFilePath(name);
   if (filePath === null) return null;
+  if (options.openedMtime !== undefined && options.force !== true) {
+    const current = { mtime: statMtime(filePath) };
+    if (current.mtime !== options.openedMtime) {
+      return { status: "conflict", content: readFileSync(filePath, "utf8"), ...current };
+    }
+  }
   writeFileAtomic(filePath, content);
-  return { mtime: statMtime(filePath) };
+  return { status: "written", mtime: statMtime(filePath) };
 }
 
 export function createMemoryFile(name: string): "invalid" | "exists" | "index" | "created" {

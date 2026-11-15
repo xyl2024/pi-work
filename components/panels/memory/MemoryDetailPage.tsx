@@ -7,6 +7,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SaveButton, UnsavedHint } from "@/components/settings/staged-save";
 import { TextArea } from "@/components/settings/controls";
 import { requestMainViewLeave } from "@/lib/client/main-view-leave";
+import { MemoryConflictDialog } from "./MemoryConflictDialog";
 import {
   deleteMemoryCategory,
   isMemoryContentDirty,
@@ -19,7 +20,7 @@ export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const { view } = useMemoryPanel();
-  const { selectedFile, detailLoading, detailError, content, saving, saveError, deleting, deleteError } = view;
+  const { selectedFile, detailLoading, detailError, content, saving, saveError, deleting, deleteError, conflict } = view;
   const dirty = isMemoryContentDirty(view);
   const [saved, setSaved] = useState(false);
 
@@ -123,6 +124,7 @@ export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
           </div>
         )}
       </div>
+      {conflict && <MemoryConflictDialog conflict={conflict} myContent={content} />}
     </div>
   );
 }
