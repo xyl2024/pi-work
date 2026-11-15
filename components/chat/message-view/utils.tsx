@@ -262,9 +262,8 @@ export function UsageIcons({ usage, durationMs }: UsageIconsProps) {
   );
 }
 
-export function CallMetricsBadges({ metrics, hidden }: {
+export function CallMetricsBadges({ metrics }: {
   metrics?: MessageCallMetrics | null;
-  hidden?: boolean;
 }) {
   const parts: string[] = [];
   const ttft = metrics?.ttftMs;
@@ -284,8 +283,6 @@ export function CallMetricsBadges({ metrics, hidden }: {
         gap: 8,
         color: "var(--text-dim)",
         fontSize: 11,
-        opacity: hidden ? 0 : 1,
-        transition: "opacity var(--dur-base)",
       }}
     >
       {parts.join(" ")}

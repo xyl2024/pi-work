@@ -89,7 +89,6 @@ function AssistantMessageViewInner({
     return out;
   }, [blocks]);
   const lightbox = useImageLightbox(gallery);
-  const [hovered, setHovered] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
   const [downloading, setDownloading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -214,8 +213,6 @@ function AssistantMessageViewInner({
     <div
       ref={messageRef}
       style={{ marginBottom: 16 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div
         style={{
@@ -233,7 +230,7 @@ function AssistantMessageViewInner({
             <span>{message.provider} - {modelDisplayName(modelNames, message.provider, message.model)}</span>
           </>
         )}
-        {!isStreaming && <CallMetricsBadges metrics={callMetrics} hidden={!hovered} />}
+        {!isStreaming && <CallMetricsBadges metrics={callMetrics} />}
         {isStreaming && (() => {
           const est = Math.round(streamChars / 4);
           return (
@@ -438,9 +435,6 @@ function AssistantMessageViewInner({
             display: "flex",
             alignItems: "center",
             gap: 6,
-            opacity: hovered ? 1 : 0,
-            pointerEvents: hovered ? "auto" : "none",
-            transition: "opacity var(--dur-base)",
           }}>
             <UsageIcons usage={message.usage} durationMs={message.durationMs} />
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
