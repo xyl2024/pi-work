@@ -243,23 +243,25 @@ export function DiffBlock({ code, isStreaming }: Props) {
         >
           {result.files.map((file, fi) => (
             <div key={fi}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "5px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--text)",
-                  background: "var(--bg-elevated)",
-                  borderTop: fi > 0 ? "1px solid var(--border-soft)" : undefined,
-                  borderBottom: "1px solid var(--border-soft)",
-                }}
-              >
-                {fileLabel(file)}
-              </div>
+              {fileLabel(file) && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text)",
+                    background: "var(--bg-elevated)",
+                    borderTop: fi > 0 ? "1px solid var(--border-soft)" : undefined,
+                    borderBottom: "1px solid var(--border-soft)",
+                  }}
+                >
+                  {fileLabel(file)}
+                </div>
+              )}
               {plan[fi].segments.map((segment, si) => {
                 if (segment.kind === "collapsed") {
                   const key = `${fi}-${segment.start}`;
