@@ -1,17 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   clearSkillSelection,
-  closeSkillsForm,
   skillsPanel,
   useSkillsPanel,
 } from "@/lib/client/skills-panel";
 import { MainViewMasterDetail } from "./MainViewMasterDetail";
 import { SkillsList } from "./skills/SkillsList";
 import { SkillDetailPage } from "./skills/SkillDetailPage";
-import { SkillsAddPage } from "./skills/SkillsAddPage";
-import { SkillSelectHint, SkillsInstallGuide } from "./skills/SkillsEmptyStates";
+import { SkillSelectHint } from "./skills/SkillsEmptyStates";
 
 export function SkillsPanel({
   cwd,
@@ -29,17 +27,10 @@ export function SkillsPanel({
     skillsPanel.open(cwd);
   }, [cwd]);
 
-  const page = skillsPanel.currentPage();
-  const { loaded, skills, selectedFilePath } = view;
-
-  const backToBrowse = useCallback(() => {
-    void closeSkillsForm();
-  }, []);
+  const { selectedFilePath } = view;
 
   const renderDetail = (onBack?: () => void) =>
-    loaded && skills.length === 0 ? (
-      <SkillsInstallGuide />
-    ) : selectedFilePath === null ? (
+    selectedFilePath === null ? (
       <SkillSelectHint />
     ) : (
       <SkillDetailPage key={selectedFilePath} filePath={selectedFilePath} onBack={onBack} />
@@ -48,16 +39,15 @@ export function SkillsPanel({
   return (
     <MainViewMasterDetail
       containerRef={containerRef}
-      titleKey={page.kind === "form" ? "Add Skill" : null}
-      onBack={page.kind === "form" ? backToBrowse : null}
-      full={page.kind === "form" ? <SkillsAddPage /> : null}
+      titleKey={null}
+      onBack={null}
       list={<SkillsList />}
       detail={renderDetail}
       hasDetail={selectedFilePath !== null}
       onClearDetail={clearSkillSelection}
       onExit={onExit}
       visible={visible}
-      focusKey={`${page.kind}:${selectedFilePath ?? ""}`}
+      focusKey={selectedFilePath ?? ""}
     />
   );
 }

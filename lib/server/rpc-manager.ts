@@ -33,8 +33,6 @@ import { resolveCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool } from "./celebrate-tool";
 import { resolveMemoryInjectionForSession } from "./memory-injection";
-import type { SessionMemorySnapshot } from "../shared/memory";
-import { memoryTool } from "./memory-tool";
 import { getRegistry } from "./session-registry";
 import { subagentWebTools } from "./web-tools";
 import {
@@ -89,7 +87,6 @@ export class AgentSessionWrapper {
   private _permissionMode: SessionPermissionMode = DEFAULT_PERMISSION_MODE;
   private readonly piDocsManaged: boolean;
   private readonly background: boolean;
-  private readonly _memorySnapshot: SessionMemorySnapshot | null;
   private contextComposition: ContextComposition | null = null;
   private compositionRefreshId = 0;
   private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
@@ -109,13 +106,11 @@ export class AgentSessionWrapper {
     options: {
       piDocsManaged?: boolean;
       background?: boolean;
-      memorySnapshot?: SessionMemorySnapshot | null;
     } = {},
   ) {
     this._permissionMode = permissionMode;
     this.piDocsManaged = options.piDocsManaged ?? false;
     this.background = options.background ?? false;
-    this._memorySnapshot = options.memorySnapshot ?? null;
     this.gates = new InteractionGates({
       emit: (event) => this.emit(event),
       permissionMode: () => this._permissionMode,
@@ -170,10 +165,6 @@ export class AgentSessionWrapper {
 
   get isBackgroundSession(): boolean {
     return this.background;
-  }
-
-  get memorySnapshot(): SessionMemorySnapshot | null {
-    return this._memorySnapshot;
   }
 
   isAlive(): boolean {
@@ -575,7 +566,6 @@ export class AgentSessionWrapper {
           permissionMode: this.permissionMode,
           background: this.isBackgroundSession,
           toolNames: this.toolSelection,
-          memorySnapshot: this.memorySnapshot,
         };
       }
 
@@ -843,17 +833,13 @@ export async function startRpcSession(
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     let appendSystemPromptLoaderOption: string[] | undefined;
-    let memoryEnabled = false;
     let memoryPromptBlock: string | null = null;
-    let memorySnapshot: SessionMemorySnapshot | null = null;
     let disabledSkillPaths = new Set<string>();
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       const memory = resolveMemoryInjectionForSession(cwd, cfg.memory.enabled === true);
-      memoryEnabled = memory.enabled;
       memoryPromptBlock = memory.block;
-      memorySnapshot = memory.snapshot;
       if (options.systemPromptPrefix || systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
@@ -1057,7 +1043,6 @@ export async function startRpcSession(
         }),
         celebrateTool,
         piWorkCallTool,
-        ...(memoryEnabled ? [memoryTool] : []),
       ],
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
       excludeTools: [...agentToolDenylist(process.platform)],
@@ -1099,7 +1084,7 @@ export async function startRpcSession(
       background
         ? resolveBackgroundPermissionMode(options.permissionMode)
         : readSessionPermissionMode(inner.sessionId),
-      { piDocsManaged, background, memorySnapshot },
+      { piDocsManaged, background },
     );
     wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;

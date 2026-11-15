@@ -4,11 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createSandbox, type Sandbox } from "./sandbox";
 import { agentToolDenylist } from "@/lib/server/agent-tool-denylist";
 import { loadMemoryPromptBlock } from "@/lib/server/memory-injection";
-import { memoryTool } from "@/lib/server/memory-tool";
 import { readSessionToolSelection, writeSessionToolSelection } from "@/lib/server/session-tools-config";
 import { restrictSubagentTools, subagentChildSessionStartOptions } from "@/lib/server/subagent-restore";
 import type { SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
-import { MEMORY_TOOL_NAME } from "@/lib/shared/memory-tool-types";
+import { renderMemoryGuidance } from "@/lib/shared/memory-two-tier";
 import {
   buildToolChecklistRows,
   declarableToolNames,
@@ -18,7 +17,7 @@ import {
 } from "@/lib/shared/tool-selection";
 
 const CATALOG = [
-  { name: memoryTool.name, description: memoryTool.description },
+  { name: "memory", description: "Manage cross-session memory" },
   { name: "read", description: "Read a file" },
   { name: "bash", description: "Run a command" },
 ];
@@ -34,28 +33,23 @@ function rowOf(name: string) {
 }
 
 function seedMemory(sandbox: Sandbox, entries: string[]): void {
-  const file = join(sandbox.dataDir, "memory", "MEMORY.md");
+  const file = join(sandbox.dataDir, "memory", "INDEX.md");
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, entries.join("\n§\n"), "utf8");
+  writeFileSync(file, `# 记忆索引\n\n${entries.join("\n")}`, "utf8");
 }
 
-describe("memory in the tool catalog", () => {
+describe("a custom tool in the catalog", () => {
   it("lists memory under its own name with the description from its definition", () => {
-    expect(memoryTool.name).toBe(MEMORY_TOOL_NAME);
-    expect(memoryTool.name).toBe("memory");
-
     expect(rowOf("memory")).toEqual({
       key: "memory",
       name: "memory",
       group: null,
       memberCount: 0,
-      description: memoryTool.description,
+      description: "Manage cross-session memory",
     });
-    expect(rowOf("memory").description).toContain("cross-session memory");
   });
 
   it("stays declarable so all three pickers can offer it", () => {
-    expect(declarableToolNames([memoryTool])).toEqual(["memory"]);
     expect(declarableToolNames(CATALOG)).toEqual(ALL_NAMES);
   });
 
@@ -102,7 +96,9 @@ describe("memory in the session sidecar", () => {
     expect(writeSessionToolSelection("memory-selection-0001", ["read", "bash"])).toBe(true);
     expect(readSessionToolSelection("memory-selection-0001")).toEqual(["read", "bash"]);
 
-    expect(loadMemoryPromptBlock(true)).toContain("用户偏好中文");
+    const block = loadMemoryPromptBlock(true);
+    expect(block).toContain(renderMemoryGuidance(join(sandbox.dataDir, "memory")));
+    expect(block).toContain("用户偏好中文");
   });
 
   it("stores memory as an ordinary member of the selection", () => {

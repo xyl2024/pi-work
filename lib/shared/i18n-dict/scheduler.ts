@@ -59,8 +59,6 @@ export const scheduler = {
   "e.g. daily report, hourly checks": "例如每日工作报告、每小时巡检",
   "Next: {time}": "下次：{time}",
   "Save changes": "保存修改",
-  "Skill installed": "技能已安装",
-  "Failed to install skill": "安装技能失败",
   "File saved": "文件已保存",
   "Failed to save file": "保存文件失败",
   "Message card exported": "消息卡片已导出",

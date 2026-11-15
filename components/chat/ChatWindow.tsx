@@ -1013,7 +1013,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
                   {rendered}
                   {liveTurnActive && (
                     <>
-                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent || trailingNodes.length > 0) && (
+                      {(streamingStartedThisTurn || streamingStoreHasContent || streamingRendered.length > 0 || trailingNodes.length > 0) && (
                         <StreamingMessageViewport
                           tabId={streamingKey}
                           maxHeight={streamingViewportMaxHeight}

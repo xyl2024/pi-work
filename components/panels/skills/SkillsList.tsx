@@ -7,7 +7,6 @@ import { filterSkills, groupSkills } from "@/lib/shared/skills";
 import { toggleSkillInvocation } from "@/lib/client/skills-panel";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
-  openSkillsForm,
   reloadSkills,
   selectSkill,
   setSkillsQuery,
@@ -17,42 +16,18 @@ import {
 export function SkillsList() {
   const { t } = useI18n();
   const { view } = useSkillsPanel();
-  const { cwd, skills, loading, loaded, loadError, query, selectedFilePath, install, toggleBusy } = view;
+  const { cwd, skills, loading, loaded, loadError, query, selectedFilePath, toggleBusy } = view;
 
   const groups = useMemo(() => groupSkills(filterSkills(skills, query)), [skills, query]);
   const searching = query.trim() !== "";
-  const installingPackage = install.phase === "running" ? install.request?.package ?? null : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 16px 8px", flexShrink: 0 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{t("Skills")}</span>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-dim)" }}>
           {skills.length > 0 ? t("{n} skills", { n: skills.length }) : ""}
         </span>
-        <button
-          type="button"
-          onClick={() => void openSkillsForm()}
-          aria-label={t("Add Skill")}
-          title={t("Add Skill")}
-          style={{
-            marginLeft: "auto",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 26,
-            height: 26,
-            padding: 0,
-            background: "var(--accent)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          <PlusGlyph />
-        </button>
       </div>
 
       <div style={{ padding: "0 16px 8px", flexShrink: 0 }}>
@@ -90,50 +65,6 @@ export function SkillsList() {
       </div>
 
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 8px 18px" }}>
-        {installingPackage !== null && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 8px",
-              marginBottom: 6,
-              borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--border)",
-              fontSize: 12,
-              color: "var(--text-muted)",
-            }}
-            title={installingPackage}
-          >
-            <span
-              style={{
-                flexShrink: 0,
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                border: "2px solid var(--accent)",
-                borderTopColor: "transparent",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontFamily: "var(--font-mono)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {installingPackage}
-            </span>
-            <span style={{ flexShrink: 0, fontSize: 11, color: "var(--text-dim)" }}>
-              {t("Installing...")}
-            </span>
-          </div>
-        )}
-
         {cwd === null ? (
           <Muted>{t("No skills found")}</Muted>
         ) : loadError ? (
@@ -245,25 +176,6 @@ export function SkillsList() {
         )}
       </div>
     </div>
-  );
-}
-
-function PlusGlyph() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
   );
 }
 

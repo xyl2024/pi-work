@@ -1,11 +1,30 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createSandbox, seedMemoryLibrary } from "./sandbox";
+import { createSandbox, type Sandbox } from "./sandbox";
 import { composeAppendSystemPrompt, composeOverrideSystemPrompt } from "@/lib/server/web-tool-guidance";
 import { loadMemoryPromptBlock, resolveMemoryInjectionForSession } from "@/lib/server/memory-injection";
 import { readMemoryCwdOverrides, writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
-import { applyMemoryOperations } from "@/lib/server/memory-store";
+import { renderMemoryGuidance, renderMemoryEmptyState, MEMORY_INDEX_FILE } from "@/lib/shared/memory-two-tier";
+
+function seedIndex(sandbox: Sandbox, content: string): string {
+  const file = join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE);
+  mkdirSync(join(sandbox.dataDir, "memory"), { recursive: true });
+  writeFileSync(file, content, "utf8");
+  return file;
+}
+
+function indexPath(sandbox: Sandbox): string {
+  return join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE);
+}
+
+function memoryDir(sandbox: Sandbox): string {
+  return join(sandbox.dataDir, "memory");
+}
+
+function expectedGuidance(sandbox: Sandbox): string {
+  return renderMemoryGuidance(memoryDir(sandbox));
+}
 
 describe("memory injection: prompt placement", () => {
   it("appends the memory block after user content in default mode", () => {
@@ -56,53 +75,65 @@ describe("memory injection: prompt placement", () => {
 });
 
 describe("memory injection: block contents", () => {
-  it("renders both libraries with separators, titles, usage and §-joined entries", () => {
+  it("injects guidance plus the current index when the index file has content", () => {
     const sandbox = createSandbox("pi-work-memory-injection-");
-    seedMemoryLibrary(sandbox, "memory", ["x".repeat(506)]);
-    seedMemoryLibrary(sandbox, "user", ["用户偏好中文", "回复要简短"]);
+    seedIndex(sandbox, "# 记忆索引\n\n- user-profile.md — 用户资料");
+
+    const block = loadMemoryPromptBlock(true)!;
+
+    expect(block).toContain(expectedGuidance(sandbox));
+    expect(block).toContain(join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE));
+    expect(block).toContain("## 当前记忆索引");
+    expect(block).toContain("- user-profile.md — 用户资料");
+    expect(block.indexOf(expectedGuidance(sandbox))).toBeLessThan(block.indexOf("## 当前记忆索引"));
+  });
+
+  it("injects the empty-state guidance when the directory has no index file and creates nothing", () => {
+    const sandbox = createSandbox("pi-work-memory-injection-");
 
     const block = loadMemoryPromptBlock(true);
 
-    expect(block).not.toBeNull();
-    const text = block!;
-    const rule = "═".repeat(46);
-    expect(text).toContain(rule);
-    expect(text).toContain("MEMORY (your personal notes) [23% — 506/2,200 chars]");
-    expect(text).toContain("USER PROFILE (who the user is) [1% — 14/1,375 chars]");
-    expect(text).toContain(`用户偏好中文\n§\n回复要简短`);
-    expect(text.indexOf("MEMORY (your personal notes)")).toBeLessThan(
-      text.indexOf("USER PROFILE (who the user is)"),
-    );
+    expect(block).toContain(expectedGuidance(sandbox));
+    expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
+    expect(block).not.toContain("## 当前记忆索引");
+    expect(existsSync(join(sandbox.dataDir, "memory"))).toBe(false);
   });
 
-  it("injects nothing when both libraries are empty", () => {
-    createSandbox("pi-work-memory-injection-");
-
-    expect(loadMemoryPromptBlock(true)).toBeNull();
-  });
-
-  it("injects only the library that has entries", () => {
+  it("treats a blank index file as the empty state", () => {
     const sandbox = createSandbox("pi-work-memory-injection-");
-    seedMemoryLibrary(sandbox, "user", ["用户叫 Al"]);
+    seedIndex(sandbox, "   \n  ");
 
-    const text = loadMemoryPromptBlock(true);
+    const block = loadMemoryPromptBlock(true);
 
-    expect(text).toContain("USER PROFILE (who the user is)");
-    expect(text).not.toContain("MEMORY (your personal notes)");
+    expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
+    expect(block).not.toContain("## 当前记忆索引");
   });
 
-  it("does not read the memory files when the switch is off", () => {
+  it("injects nothing when the switch is off, even with an index on disk", () => {
     const sandbox = createSandbox("pi-work-memory-injection-");
-    writeFileSync(join(sandbox.dataDir, "memory"), "not a directory", "utf8");
+    seedIndex(sandbox, "# 记忆索引\n\n- user-profile.md — 用户资料");
 
     expect(loadMemoryPromptBlock(false)).toBeNull();
   });
 
-  it("keeps a captured block unchanged when a later write lands on disk", async () => {
+  it("injects nothing when the index file is unreadable", () => {
     const sandbox = createSandbox("pi-work-memory-injection-");
-    seedMemoryLibrary(sandbox, "memory", ["旧事实"]);
+    mkdirSync(indexPath(sandbox), { recursive: true });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(loadMemoryPromptBlock(true)).toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps the block captured at session creation unchanged when the index changes later", () => {
+    const sandbox = createSandbox("pi-work-memory-injection-");
+    seedIndex(sandbox, "# 记忆索引\n\n- 旧分类.md — 旧说明");
 
     const captured = loadMemoryPromptBlock(true);
+    seedIndex(sandbox, "# 记忆索引\n\n- 新分类.md — 新说明");
     const composed = composeAppendSystemPrompt({
       mode: "default",
       baseAppend: [],
@@ -111,49 +142,53 @@ describe("memory injection: block contents", () => {
       memoryBlock: captured,
     });
 
-    await applyMemoryOperations("memory", [{ action: "add", content: "新事实" }]);
-
-    expect(loadMemoryPromptBlock(true)).toContain("新事实");
-    expect(composed.join("\n")).toContain("旧事实");
-    expect(composed.join("\n")).not.toContain("新事实");
+    expect(loadMemoryPromptBlock(true)).toContain("新分类.md");
+    expect(composed.join("\n")).toContain("旧分类.md");
+    expect(composed.join("\n")).not.toContain("新分类.md");
   });
 });
 
 describe("memory injection: cwd switch decides at session start", () => {
   it("injects when the global switch is on and the cwd is unrecorded", () => {
     const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
+    seedIndex(sandbox, "# 记忆索引\n\n- user-profile.md — 用户资料");
 
     const session = resolveMemoryInjectionForSession("/work/plain", true);
 
     expect(session.enabled).toBe(true);
-    expect(session.block).toContain("用户偏好中文");
+    expect(session.block).toContain("- user-profile.md — 用户资料");
   });
 
-  it("injects nothing for a cwd recorded off and leaves the files untouched", () => {
+  it("injects nothing for a cwd recorded off and leaves the index file untouched", () => {
     const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
-    seedMemoryLibrary(sandbox, "user", ["用户叫 Al"]);
+    const indexFile = seedIndex(sandbox, "# 记忆索引\n\n- user-profile.md — 用户资料");
     writeMemoryCwdEnabled("/work/secret", false);
-    const memoryFile = join(sandbox.dataDir, "memory", "MEMORY.md");
 
     const session = resolveMemoryInjectionForSession("/work/secret", true);
 
     expect(session).toMatchObject({ enabled: false, block: null });
-    expect(readFileSync(memoryFile, "utf8")).toBe("用户偏好中文");
+    expect(readFileSync(indexFile, "utf8")).toContain("user-profile.md");
     expect(readMemoryCwdOverrides()).toEqual({ "/work/secret": false });
   });
 
   it("injects nothing anywhere while the global switch is off", () => {
-    const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
+    createSandbox("pi-work-memory-cwd-session-");
 
     expect(resolveMemoryInjectionForSession("/work/plain", false)).toMatchObject({ enabled: false, block: null });
   });
 
-  it("restores injection and the tool for the next session after turning the cwd back on", () => {
+  it("cwd off overrides the global switch being on", () => {
     const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
+    seedIndex(sandbox, "# 记忆索引");
+    writeMemoryCwdEnabled("/work/secret", false);
+
+    expect(resolveMemoryInjectionForSession("/work/secret", true).enabled).toBe(false);
+    expect(resolveMemoryInjectionForSession("/work/plain", true).enabled).toBe(true);
+  });
+
+  it("restores injection for the next session after turning the cwd back on", () => {
+    const sandbox = createSandbox("pi-work-memory-cwd-session-");
+    seedIndex(sandbox, "# 记忆索引\n\n- user-profile.md — 用户资料");
     writeMemoryCwdEnabled("/work/secret", false);
 
     expect(resolveMemoryInjectionForSession("/work/secret", true).enabled).toBe(false);
@@ -162,12 +197,12 @@ describe("memory injection: cwd switch decides at session start", () => {
 
     const session = resolveMemoryInjectionForSession("/work/secret", true);
     expect(session.enabled).toBe(true);
-    expect(session.block).toContain("用户偏好中文");
+    expect(session.block).toContain("user-profile.md");
   });
 
   it("keeps memory off and logs a warning when the cwd override file is corrupt", () => {
     const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["用户偏好中文"]);
+    seedIndex(sandbox, "# 记忆索引");
     writeFileSync(join(sandbox.dataDir, "memory-cwd.json"), "{ not json", "utf8");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -179,9 +214,9 @@ describe("memory injection: cwd switch decides at session start", () => {
     }
   });
 
-  it("keeps a session created before the switch changed on its captured snapshot", () => {
+  it("keeps a session created before the switch changed on its captured block", () => {
     const sandbox = createSandbox("pi-work-memory-cwd-session-");
-    seedMemoryLibrary(sandbox, "memory", ["旧事实"]);
+    seedIndex(sandbox, "# 记忆索引\n\n- 旧分类.md — 旧说明");
 
     const existing = resolveMemoryInjectionForSession("/work/plain", true);
     const composed = composeAppendSystemPrompt({
@@ -195,6 +230,6 @@ describe("memory injection: cwd switch decides at session start", () => {
     writeMemoryCwdEnabled("/work/plain", false);
 
     expect(resolveMemoryInjectionForSession("/work/plain", true)).toMatchObject({ enabled: false, block: null });
-    expect(composed.join("\n")).toContain("旧事实");
+    expect(composed.join("\n")).toContain("旧分类.md");
   });
 });

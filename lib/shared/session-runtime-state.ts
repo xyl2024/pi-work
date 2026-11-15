@@ -1,6 +1,5 @@
 import type { AgentMessage, SessionTreeNode, ToolInfo, ToolSelection, ToolResultMessage } from "./types";
 import type { ContextComposition } from "./context-composition";
-import type { SessionMemorySnapshot } from "./memory";
 import type { ThinkingLevelOption } from "./thinking-level-utils";
 import { DEFAULT_PERMISSION_MODE, type SessionPermissionMode } from "./permission-mode";
 
@@ -32,7 +31,6 @@ export interface SessionSnapshotPayload {
     permissionMode?: SessionPermissionMode;
     background?: boolean;
     toolNames?: ToolSelection;
-    memorySnapshot?: SessionMemorySnapshot | null;
   };
 }
 

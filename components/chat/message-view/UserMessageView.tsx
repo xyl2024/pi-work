@@ -45,7 +45,6 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
 }) {
   const { t } = useI18n();
   const [copied, flashCopied] = useTransientFlag();
-  const [hovered, setHovered] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarOk, setAvatarOk] = useState(true);
   const [avatarCacheKey] = useState(() => `${Date.now()}`);
@@ -96,8 +95,6 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
   return (
     <div
       style={{ marginBottom: 16 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div
         style={{
@@ -393,7 +390,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, branchAnchorEntr
               </Tooltip>
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity var(--dur-base)" }}>{time}</span>}
+          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>}
         </div>
       )}
       {lightbox.lightbox}
