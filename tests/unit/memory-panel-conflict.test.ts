@@ -4,6 +4,7 @@ import {
   resolveMemoryConflict,
   saveMemoryChanges,
   selectMemoryFile,
+  setMemoryContent,
 } from "@/lib/client/memory-panel";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -91,8 +92,55 @@ describe("memory panel save conflict", () => {
     const state = memoryPanel.get();
     expect(state.baseline).toBe("我的修改");
     expect(state.saving).toBe(false);
+    expect(state.openedMtime).toBe("2026-01-02T00:00:00.000Z");
     const forcePut = log.find((entry) => entry.body.force === true);
     expect(forcePut?.body.content).toBe("我的修改");
+  });
+
+  it("refreshes the opened mtime after a successful save so later agent changes still conflict", async () => {
+    const log: RequestLog[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+        log.push({ url, method, body });
+        if (url === "/api/memory/files") {
+          return jsonResponse(200, { files: [{ file: "notes.md", isIndex: false, mtime: "2026-01-01T00:00:00.000Z", description: "" }] });
+        }
+        if (url === "/api/memory/file?file=notes.md" && method === "GET") {
+          return jsonResponse(200, { content: "打开时的内容", mtime: "2026-01-01T00:00:00.000Z" });
+        }
+        if (url === "/api/memory/file" && method === "PUT") {
+          if (body.mtime === "2026-01-01T00:00:00.000Z") {
+            return jsonResponse(200, { mtime: "2026-01-02T00:00:00.000Z" });
+          }
+          return jsonResponse(409, {
+            error: "Memory file changed on disk",
+            content: "agent 改过的新内容",
+            mtime: "2026-01-02T12:00:00.000Z",
+          });
+        }
+        return jsonResponse(404, { error: "not found" });
+      }),
+    );
+    await openDetailWithContent("我的修改");
+
+    await saveMemoryChanges();
+    expect(memoryPanel.get().conflict).toBeNull();
+    expect(memoryPanel.get().openedMtime).toBe("2026-01-02T00:00:00.000Z");
+
+    setMemoryContent("我的第二轮修改");
+    await saveMemoryChanges();
+
+    const state = memoryPanel.get();
+    expect(state.conflict).toEqual({
+      diskContent: "agent 改过的新内容",
+      diskMtime: "2026-01-02T12:00:00.000Z",
+    });
+    const puts = log.filter((entry) => entry.method === "PUT");
+    expect(puts[1]?.body.mtime).toBe("2026-01-02T00:00:00.000Z");
   });
 
   it("discarding my changes returns to the disk content", async () => {

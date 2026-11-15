@@ -127,12 +127,12 @@ export async function saveMemoryChanges(): Promise<void> {
   if (file === null || state.saving || !isMemoryContentDirty(state)) return;
   memoryPanel.patch({ saving: true, saveError: null });
   try {
-    await saveMemoryFile(file, state.content, { openedMtime: state.openedMtime });
+    const written = await saveMemoryFile(file, state.content, { openedMtime: state.openedMtime });
     const files = await fetchMemoryFiles().catch(() => null);
     memoryPanel.patch({
       saving: false,
       baseline: state.content,
-      openedMtime: null,
+      openedMtime: written.mtime,
       conflict: null,
       files: files ?? state.files,
     });
@@ -164,6 +164,9 @@ export async function createMemoryCategory(name: string): Promise<void> {
 export async function deleteMemoryCategory(file: string): Promise<void> {
   const state = memoryPanel.get();
   if (state.deleting) return;
+  if (state.selectedFile === file && isMemoryContentDirty(state)) {
+    if (!(await requestMemoryLeave("select_task"))) return;
+  }
   memoryPanel.patch({ deleting: true, deleteError: null });
   try {
     await deleteMemoryFile(file);
@@ -199,12 +202,12 @@ export function resolveMemoryConflict(mode: "overwrite" | "discard"): void {
   memoryPanel.patch({ saving: true, saveError: null });
   void (async () => {
     try {
-      await saveMemoryFile(state.selectedFile ?? "", state.content, { force: true });
+      const written = await saveMemoryFile(state.selectedFile ?? "", state.content, { force: true });
       const files = await fetchMemoryFiles().catch(() => null);
       memoryPanel.patch({
         saving: false,
         baseline: state.content,
-        openedMtime: null,
+        openedMtime: written.mtime,
         conflict: null,
         files: files ?? state.files,
       });

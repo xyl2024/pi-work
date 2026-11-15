@@ -157,7 +157,6 @@ export const rightPanels = {
   "Turn memory on in settings to see and edit memory files here.": "到设置中开启记忆后，即可在这里查看与编辑记忆文件。",
   "Open in settings": "去设置开启",
   "No memory files yet.": "还没有记忆文件。",
-  "{n} files": "{n} 个文件",
   "Failed to load memory files": "加载记忆文件失败",
   "New category": "新建分类",
   "File name": "文件名",

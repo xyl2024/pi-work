@@ -14,6 +14,7 @@ export function MemoryList() {
   const { loading, loaded, loadError, disabled, files, selectedFile, createError } = view;
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [nameFocused, setNameFocused] = useState(false);
 
   const startCreate = () => {
     setCreating(true);
@@ -62,7 +63,11 @@ export function MemoryList() {
               if (e.key === "Enter") submitCreate();
               if (e.key === "Escape") setCreating(false);
             }}
-            onBlur={() => setCreating(false)}
+            onFocus={() => setNameFocused(true)}
+            onBlur={() => {
+              setNameFocused(false);
+              setCreating(false);
+            }}
             placeholder={t("File name")}
             style={{
               width: "100%",
@@ -71,7 +76,8 @@ export function MemoryList() {
               fontSize: 12.5,
               fontFamily: "var(--font-mono)",
               borderRadius: "var(--radius-sm)",
-              border: "1px solid var(--border)",
+              border: `1px solid ${nameFocused ? "var(--accent)" : "var(--border)"}`,
+              boxShadow: nameFocused ? "inset 0 0 0 1px var(--accent)" : "none",
               background: "var(--bg)",
               color: "var(--text)",
               outline: "none",
@@ -131,7 +137,7 @@ export function MemoryList() {
                           fontSize: 10,
                           padding: "1px 5px",
                           borderRadius: "var(--radius-xs)",
-                          background: "rgba(120,120,120,0.12)",
+                          background: "var(--bg-hover)",
                           color: "var(--text-dim)",
                         }}
                       >

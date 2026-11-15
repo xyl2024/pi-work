@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { dataPath } from "./data-dir";
 import { writeFileAtomic } from "./atomic-write";
@@ -12,10 +12,6 @@ export function memoryDir(): string {
 function memoryFilePath(name: string): string | null {
   if (!isAllowedMemoryFileName(name)) return null;
   return join(memoryDir(), name);
-}
-
-export function isValidMemoryFileName(name: string): boolean {
-  return isAllowedMemoryFileName(name);
 }
 
 function statMtime(filePath: string): string {
@@ -91,8 +87,9 @@ export function deleteMemoryFile(name: string): "invalid" | "index" | "missing" 
   try {
     const indexContent = readFileSync(indexPath, "utf8");
     const cleaned = removeMemoryIndexEntry(indexContent, name);
-    if (cleaned !== indexContent) writeFileSync(indexPath, cleaned, "utf8");
-  } catch {
+    if (cleaned !== indexContent) writeFileAtomic(indexPath, cleaned);
+  } catch (error) {
+    console.error(`Failed to clean memory index after deleting ${name}`, error);
   }
   return "deleted";
 }

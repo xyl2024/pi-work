@@ -9,6 +9,7 @@ vi.mock("@/lib/client/memory-io", () => ({
   deleteMemoryFile: vi.fn(),
 }));
 
+import { setMainViewLeaveConfirm } from "@/lib/client/main-view-leave";
 import { createMemoryFile, deleteMemoryFile, fetchMemoryFiles } from "@/lib/client/memory-io";
 import {
   createMemoryCategory,
@@ -92,6 +93,48 @@ describe("deleting a category file", () => {
     expect(state.selectedFile).toBeNull();
     expect(state.deleting).toBe(false);
     expect(state.deleteError).toBeNull();
+  });
+
+  it("asks for leave confirmation before deleting the selected file with unsaved changes", async () => {
+    vi.mocked(deleteMemoryFile).mockResolvedValue({ deleted: true });
+    memoryPanel.patch({ content: "我的修改", baseline: "" });
+    const confirm = vi.fn(async () => false);
+    setMainViewLeaveConfirm(confirm);
+
+    await deleteMemoryCategory("agent-notes.md");
+
+    expect(confirm).toHaveBeenCalled();
+    expect(deleteMemoryFile).not.toHaveBeenCalled();
+    const state = memoryPanel.get();
+    expect(state.selectedFile).toBe("agent-notes.md");
+    expect(state.deleting).toBe(false);
+    setMainViewLeaveConfirm(null);
+  });
+
+  it("deletes the selected dirty file after leave confirmation", async () => {
+    vi.mocked(deleteMemoryFile).mockResolvedValue({ deleted: true });
+    seedFiles([{ file: "INDEX.md" }]);
+    memoryPanel.patch({ content: "我的修改", baseline: "" });
+    setMainViewLeaveConfirm(async () => true);
+
+    await deleteMemoryCategory("agent-notes.md");
+
+    expect(deleteMemoryFile).toHaveBeenCalledWith("agent-notes.md");
+    expect(memoryPanel.get().selectedFile).toBeNull();
+    setMainViewLeaveConfirm(null);
+  });
+
+  it("deletes an unselected file without asking for leave confirmation", async () => {
+    vi.mocked(deleteMemoryFile).mockResolvedValue({ deleted: true });
+    memoryPanel.patch({ content: "我的修改", baseline: "" });
+    const confirm = vi.fn(async () => false);
+    setMainViewLeaveConfirm(confirm);
+
+    await deleteMemoryCategory("INDEX.md");
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(deleteMemoryFile).toHaveBeenCalledWith("INDEX.md");
+    setMainViewLeaveConfirm(null);
   });
 
   it("surfaces delete failures without clearing the selection", async () => {

@@ -69,13 +69,13 @@ export function MemoryConflictDialog({
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
               {t("My version")}
             </div>
-            <div style={READONLY_STYLE}>{myContent}</div>
+            <div data-scroll-wide style={READONLY_STYLE}>{myContent}</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
               {t("Current version on disk")}
             </div>
-            <div style={READONLY_STYLE}>{conflict.diskContent}</div>
+            <div data-scroll-wide style={READONLY_STYLE}>{conflict.diskContent}</div>
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
