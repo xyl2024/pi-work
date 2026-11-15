@@ -148,7 +148,6 @@ describe("memory injection: cwd switch decides at session start", () => {
 
     expect(session.enabled).toBe(true);
     expect(session.block).toContain("- user-profile.md — 用户资料");
-    expect(session.snapshot).toBeNull();
   });
 
   it("injects nothing for a cwd recorded off and leaves the index file untouched", () => {

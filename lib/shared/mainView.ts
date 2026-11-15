@@ -5,7 +5,6 @@ export interface MainViewParams {
   modelsConfig: undefined;
   skills: undefined;
   channels: undefined;
-  memory: undefined;
   tokens: undefined;
 }
 
@@ -74,21 +73,9 @@ export const MAIN_VIEW_SPEC_BY_KIND = {
       },
     ],
   },
-  memory: {
-    kind: "memory",
-    navPriority: 5,
-    labelKey: "Memory management",
-    backLabelKey: "Back to chat",
-    commands: [
-      {
-        labelKey: "Open memory",
-        keywords: ["memory", "memories", "remember", "记忆", "记住"],
-      },
-    ],
-  },
   tokens: {
     kind: "tokens",
-    navPriority: 6,
+    navPriority: 5,
     labelKey: "Token audit",
     backLabelKey: "Back to chat",
     commands: [

@@ -382,7 +382,7 @@ describe("panelTabs registry", () => {
   });
 
   it("no longer carries main views", () => {
-    for (const kind of ["scheduler", "modelsConfig", "skills", "channels", "memory", "tokens"]) {
+    for (const kind of ["scheduler", "modelsConfig", "skills", "channels", "tokens"]) {
       expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(kind);
       expect(RIGHT_BAR_BUTTON_IDS as readonly string[]).not.toContain(kind);
       expect((RIGHT_BAR_DESCRIPTOR_BY_ID as ReadonlyMap<string, unknown>).has(kind)).toBe(false);
@@ -687,7 +687,7 @@ describe("panelTabs registry → command palette", () => {
     expect(toggled).toEqual([]);
   });
 
-  it("reaches memory and token usage through the main view registry, entering instead of toggling", () => {
+  it("reaches token usage through the main view registry, entering instead of toggling", () => {
     const entered: MainViewKind[] = [];
     const toggled: PanelViewKind[] = [];
     const ctx = commandCtx({
@@ -696,14 +696,14 @@ describe("panelTabs registry → command palette", () => {
     });
 
     const commands = buildCommands(ctx, (key) => key).filter(
-      (cmd) => cmd.title === "Open memory" || cmd.title === "Open token audit",
+      (cmd) => cmd.title === "Open token audit",
     );
 
-    expect(commands.map((cmd) => cmd.id)).toEqual(["mainView.memory", "mainView.tokens"]);
+    expect(commands.map((cmd) => cmd.id)).toEqual(["mainView.tokens"]);
 
     for (const cmd of commands) cmd.run(ctx);
 
-    expect(entered).toEqual(["memory", "tokens"]);
+    expect(entered).toEqual(["tokens"]);
     expect(toggled).toEqual([]);
   });
 
