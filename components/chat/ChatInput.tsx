@@ -3,10 +3,11 @@
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, forwardRef, KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
-import { ChatInputAttachments } from "./ChatInputAttachments";
+import { ChatInputAttachments, type PendingFollowUp } from "./ChatInputAttachments";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { FileMentionMenu } from "./FileMentionMenu";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
+import { Tooltip } from "../ui/Tooltip";
 import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { useImageAttachments } from "./chat-input/hooks/useImageAttachments";
@@ -33,8 +34,9 @@ export type { AttachedImage } from "./chat-input/types";
 import type { AttachedImage } from "./chat-input/types";
 
 interface Props {
-  onSend: (message: string, images?: AttachedImage[]) => void;
+  onSend: (message: string, images?: AttachedImage[]) => boolean | void | Promise<boolean>;
   onAbort: () => void;
+  onSteer?: (message: string, images?: AttachedImage[]) => void;
   isStreaming: boolean;
   sessionBusy?: boolean;
   model?: { provider: string; modelId: string } | null;
@@ -88,7 +90,7 @@ export interface ChatInputHandle {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
+  onSend, onAbort, onSteer, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
   toolSelection = "all", onToolSelectionChange,
   availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -320,6 +322,38 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
   }, [value, attachedImages, isStreaming, onSend, clearImages, buildMessage, exitHistoryMode, setSelectedSlashResource, setSlashMenuOpen, voiceInputPhase, cancelVoiceInput]);
 
+  const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
+  const followUpIdRef = useRef(0);
+
+  useEffect(() => {
+    setPendingFollowUps([]);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (isStreaming || pendingFollowUps.length === 0) return;
+    const [first, ...rest] = pendingFollowUps;
+    setPendingFollowUps(rest);
+    void onSend(first.message, first.images);
+  }, [isStreaming, pendingFollowUps, onSend]);
+
+  const sendQueued = useCallback((mode: "steer" | "followup") => {
+    const msg = buildMessage(value);
+    if (!msg && !attachedImages.length) return;
+    if (mode === "steer" && onSteer) {
+      onSteer(msg, attachedImages.length ? attachedImages : undefined);
+    } else if (mode === "followup") {
+      followUpIdRef.current += 1;
+      const id = followUpIdRef.current;
+      setPendingFollowUps((prev) => [...prev, { id, message: msg, images: attachedImages.length ? attachedImages : undefined }]);
+    }
+    setValue("");
+    setCursorPosition(0);
+    setSelectedSlashResource(null);
+    setSlashMenuOpen(false);
+    clearImages();
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  }, [value, attachedImages, onSteer, clearImages, buildMessage, setSelectedSlashResource, setSlashMenuOpen]);
+
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -343,10 +377,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         return true;
       }
       e.preventDefault();
-      handleSend();
+      if (isStreaming) {
+        sendQueued(onSteer ? "steer" : "followup");
+      } else {
+        handleSend();
+      }
       return true;
     },
-    [value, onSlashAction, handleSend, setSelectedSlashResource, setSlashMenuOpen, enterToSend],
+    [value, onSlashAction, handleSend, sendQueued, isStreaming, onSteer, setSelectedSlashResource, setSlashMenuOpen, enterToSend],
   );
 
   const handleShiftBackspaceClear = useCallback(
@@ -496,6 +534,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <ChatInputAttachments
             images={attachedImages}
             selectedSlashResource={selectedSlashResource}
+            pendingFollowUps={pendingFollowUps}
+            onRemoveFollowUp={(id) => setPendingFollowUps((prev) => prev.filter((entry) => entry.id !== id))}
             onRemoveImage={removeImage}
             onRemoveSlashResource={() => setSelectedSlashResource(null)}
           />
@@ -508,7 +548,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: chatInputMetrics.boxGap,
             alignItems: "center",
             background: "var(--bg)",
-            border: "1.5px solid var(--border)",
+            border: `1.5px solid ${isStreaming
+              ? "color-mix(in srgb, var(--warning) 45%, transparent)"
+              : "var(--border)"}`,
             borderRadius: chatInputMetrics.boxBorderRadius,
             padding: chatInputMetrics.boxPadding,
             boxShadow: "none",
@@ -545,7 +587,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             placeholder={selectSuggestedPromptPlaceholder({
               suggestion: suggestedPrompt,
               inputText: value,
-              fallback: t("Type / to select a skill, @ to select a file"),
+              fallback: isStreaming
+                ? t("Steer immediately / queue follow-up...")
+                : t("Type / to select a skill, @ to select a file"),
             })}
             disabled={disabled}
             style={{
@@ -576,6 +620,63 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             />
           )}
 
+          {isStreaming && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
+              {onSteer && (
+                <Tooltip content={t("Interrupt the running agent and inject this message")}>
+                  <button
+                    type="button"
+                    onClick={() => sendQueued("steer")}
+                    disabled={disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 10px",
+                      background: "none",
+                      border: "1px solid color-mix(in srgb, var(--warning) 35%, transparent)",
+                      borderRadius: chatInputMetrics.boxBorderRadius,
+                      color: disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource)
+                        ? "var(--text-dim)"
+                        : "var(--warning)",
+                      cursor: disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource) ? "not-allowed" : "pointer",
+                      fontSize: chatInputMetrics.font, fontWeight: 600,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" />
+                    </svg>
+                    {t("Steer")}
+                  </button>
+                </Tooltip>
+              )}
+              {(
+                <Tooltip content={t("Queue this message after the agent finishes")}>
+                  <button
+                    type="button"
+                    onClick={() => sendQueued("followup")}
+                    disabled={disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 10px",
+                      background: "none",
+                      border: "1px solid color-mix(in srgb, var(--accent) 35%, transparent)",
+                      borderRadius: chatInputMetrics.boxBorderRadius,
+                      color: disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource)
+                        ? "var(--text-dim)"
+                        : "var(--accent)",
+                      cursor: disabled || (!value.trim() && !attachedImages.length && !selectedSlashResource) ? "not-allowed" : "pointer",
+                      fontSize: chatInputMetrics.font, fontWeight: 600,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" />
+                      <line x1="2" y1="9" x2="8" y2="9" />
+                    </svg>
+                    {t("Follow-up")}
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          )}
           {isStreaming ? (
             <button
               type="button"

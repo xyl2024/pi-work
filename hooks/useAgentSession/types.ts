@@ -175,6 +175,7 @@ export interface UseAgentSessionResult {
   userJustSentRef: MutableRefObject<boolean>;
   handleSend: (message: string, images?: AttachedImage[]) => Promise<boolean>;
   handleAbort: () => Promise<void>;
+  handleSteer: (message: string, images?: AttachedImage[]) => Promise<void>;
   handleNavigate: (entryId: string) => Promise<void>;
   handleModelChange: (provider: string, modelId: string) => Promise<void>;
   handleToolSelectionChange: (selection: ToolSelection) => Promise<void>;

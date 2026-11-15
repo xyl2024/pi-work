@@ -147,7 +147,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef,
-    handleSend, handleAbort, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleSteer, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handlePermissionModeChange,
     handleCompact,
@@ -645,6 +645,7 @@ function ChatWindowContent({ tabId, isActive = true, foreground = true, session,
         voiceInputShortcutActive={isActive && foreground}
         onSend={handleSend}
         onAbort={handleAbort}
+        onSteer={agentRunning ? handleSteer : undefined}
         isStreaming={agentRunning}
         sessionBusy={agentRunning}
         model={displayModelValue}

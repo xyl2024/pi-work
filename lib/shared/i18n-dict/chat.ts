@@ -24,6 +24,11 @@ export const chat = {
 
   "Send": "发送",
   "Stop": "停止",
+  "Steer": "插话",
+  "Follow-up": "排队发送",
+  "Steer immediately / queue follow-up...": "插话立即注入 / 追问排队发送...",
+  "Interrupt the running agent and inject this message": "打断 Agent 当前运行，立即注入消息",
+  "Queue this message after the agent finishes": "在 Agent 完成后排队发送",
   "Start voice input": "开始语音输入",
   "Finish voice input": "结束语音输入",
   "Start voice input (⌘⇧M / Ctrl+Shift+M)": "开始语音输入（⌘⇧M / Ctrl+Shift+M）",

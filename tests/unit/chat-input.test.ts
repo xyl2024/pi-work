@@ -123,30 +123,34 @@ describe("ChatInput builtin slash actions", () => {
     container?.remove();
   });
 
-  function renderInput(options: { enterToSend?: boolean } = {}) {
+  function renderInput(options: { enterToSend?: boolean; streaming?: boolean; onSteer?: (m: string) => void } = {}) {
     const onSend = vi.fn();
     const onSlashAction = vi.fn();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => {
-      root.render(
-        createElement(
-          I18nProvider,
-          null,
-          createElement(ChatInput, {
-            onSend,
-            onAbort: () => undefined,
-            isStreaming: false,
-            onSlashAction,
-            enterToSend: options.enterToSend,
-          }),
-        ),
-      );
-    });
+    const render = (streaming: boolean) => {
+      act(() => {
+        root.render(
+          createElement(
+            I18nProvider,
+            null,
+            createElement(ChatInput, {
+              onSend,
+              onAbort: () => undefined,
+              isStreaming: streaming,
+              onSteer: options.onSteer,
+              onSlashAction,
+              enterToSend: options.enterToSend,
+            }),
+          ),
+        );
+      });
+    };
+    render(options.streaming ?? false);
     const textarea = container.querySelector("textarea");
     if (!textarea) throw new Error("textarea not rendered");
-    return { textarea, onSend, onSlashAction };
+    return { textarea, onSend, onSlashAction, render };
   }
 
   function typeInto(textarea: HTMLTextAreaElement, text: string) {
@@ -197,6 +201,78 @@ describe("ChatInput builtin slash actions", () => {
     expect(onSlashAction).not.toHaveBeenCalled();
     expect(onSend).toHaveBeenCalledWith("/usage opencode", undefined);
   });
+  function findButtonByText(label: string) {
+    const buttons = Array.from(container.querySelectorAll("button"));
+    return buttons.find((button) => button.textContent?.includes(label));
+  }
+
+  it("steers via the onSteer callback while streaming and Enter defaults to steer", () => {
+    const onSteer = vi.fn();
+    const { textarea, onSend } = renderInput({ streaming: true, onSteer, enterToSend: true });
+    typeInto(textarea, "hello");
+
+    const steerButton = findButtonByText("Steer");
+    expect(steerButton).toBeTruthy();
+    act(() => steerButton!.click());
+
+    expect(onSteer).toHaveBeenCalledWith("hello", undefined);
+    expect(textarea.value).toBe("");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("queues a follow-up chip and sends it after the agent finishes", () => {
+    const { textarea, onSend, render } = renderInput({ streaming: true, enterToSend: true });
+    typeInto(textarea, "next step");
+
+    const followUpButton = findButtonByText("Follow-up");
+    expect(followUpButton).toBeTruthy();
+    act(() => followUpButton!.click());
+
+    expect(textarea.value).toBe("");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("next step");
+
+    act(() => render(false));
+
+    expect(onSend).toHaveBeenCalledWith("next step", undefined);
+  });
+
+  it("drops a queued follow-up when its chip is removed", () => {
+    const { textarea, onSend, render } = renderInput({ streaming: true, enterToSend: true });
+    typeInto(textarea, "next step");
+
+    act(() => findButtonByText("Follow-up")!.click());
+    const chip = Array.from(container.querySelectorAll("button")).find((button) => button.closest("span")?.textContent?.includes("next step") && !button.textContent?.includes("Follow-up"));
+    expect(chip).toBeTruthy();
+    act(() => chip!.click());
+
+    act(() => render(false));
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("sends Enter as follow-up while streaming when steer is unavailable", () => {
+    const { textarea, onSend, render } = renderInput({ streaming: true, enterToSend: true });
+    typeInto(textarea, "hello");
+
+    pressEnter(textarea);
+
+    expect(onSend).not.toHaveBeenCalled();
+    act(() => render(false));
+    expect(onSend).toHaveBeenCalledWith("hello", undefined);
+  });
+
+  it("sends Enter as steer while streaming when only steer is available", () => {
+    const onSteer = vi.fn();
+    const { textarea, onSend } = renderInput({ streaming: true, onSteer, enterToSend: true });
+    typeInto(textarea, "hello");
+
+    pressEnter(textarea);
+
+    expect(onSteer).toHaveBeenCalledWith("hello", undefined);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
 });
 
 describe("ChatInput voice input", () => {

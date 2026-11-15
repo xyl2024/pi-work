@@ -456,6 +456,23 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     return true;
   }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, assistantSession, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, loadSession, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
+  const handleSteer = useCallback(async (message: string, images?: AttachedImage[]) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    setMessages((prev) => [...prev, { role: "user", content: `[steer] ${message}`, timestamp: Date.now() } as AgentMessage]);
+    const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
+    try {
+      await sendAgentCommand(sid, {
+        type: "steer",
+        message,
+        ...(piImages?.length ? { images: piImages } : {}),
+      });
+    } catch (e) {
+      console.error("Failed to steer:", e);
+      showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to send message") });
+    }
+  }, [setMessages, showToast, t]);
+
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -778,7 +795,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     userMessageHistory,
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, userJustSentRef,
-    handleSend, handleAbort, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleSteer, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handlePermissionModeChange,
     handleCompact,
