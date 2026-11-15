@@ -28,6 +28,7 @@ import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { ContextInsightPanel } from "../panels/ContextInsightPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
+import { MemoryPanel } from "../panels/memory/MemoryPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
@@ -148,6 +149,7 @@ interface MainViewBodyCtx {
   selectedSessionId: string | null;
   openSessionById: (sessionId: string) => void;
   onExit: () => void;
+  openSettings: () => void;
   visible: boolean;
 }
 
@@ -164,6 +166,7 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onExit={ctx.onExit} visible={ctx.visible} />,
   channels: (ctx) => <ChannelsMainView onExit={ctx.onExit} visible={ctx.visible} />,
   tokens: () => <TokensPanel />,
+  memory: (ctx) => <MemoryPanel onExit={ctx.onExit} onOpenSettings={ctx.openSettings} visible={ctx.visible} />,
 };
 
 function formatTokenCount(tokens: number): string {
@@ -1286,6 +1289,7 @@ export function AppShell() {
     selectedSessionId,
     openSessionById: handleOpenScheduledSession,
     onExit: handleLeaveMainView,
+    openSettings: () => setSettingsConfigOpen(true),
   };
   const mainViewBadges = renderMainViewBadges();
   const mainViewHidden = activeMainViewKind === null || terminalFullscreen;

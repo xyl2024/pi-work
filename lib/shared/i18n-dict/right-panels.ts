@@ -149,6 +149,17 @@ export const rightPanels = {
   "Scheduled": "定时任务",
   "Avg duration": "平均耗时",
 
+  "Memory management": "记忆管理",
+  "Open memory management": "打开记忆管理",
+  "Memory": "记忆",
+  "Index": "索引",
+  "Memory is disabled": "记忆未开启",
+  "Turn memory on in settings to see and edit memory files here.": "到设置中开启记忆后，即可在这里查看与编辑记忆文件。",
+  "Open in settings": "去设置开启",
+  "No memory files yet.": "还没有记忆文件。",
+  "{n} files": "{n} 个文件",
+  "Failed to load memory files": "加载记忆文件失败",
+
   "LLM API audit": "LLM API 审计",
   "Open LLM API audit": "打开 LLM API 审计",
   "Total calls": "总调用",
