@@ -24,7 +24,14 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
-4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
+4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch.
+
+   Worktree 脚手架（每张 ticket 一个，不要发明别的搭法）:
+   - 位置：`../pi-work-worktrees/<slug>-NN`（该目录已在 `.gitignore` 排除）；
+   - `git worktree add -b <branch> <位置> <integration-branch>`；
+   - `ln -s <主仓绝对路径>/node_modules <位置>/node_modules` —— worktree 不装依赖，一律软链主仓的；
+
+   Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
    - calls the Skill tool with `tdd` to build the ticket;
    - merges the integration branch tip into its own branch before reporting done;
