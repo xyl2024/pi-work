@@ -159,6 +159,10 @@ export const rightPanels = {
   "No memory files yet.": "还没有记忆文件。",
   "{n} files": "{n} 个文件",
   "Failed to load memory files": "加载记忆文件失败",
+  "New category": "新建分类",
+  "File name": "文件名",
+  'Delete "{file}"': '删除「{file}」',
+  "Its registration line in the memory index will also be removed.": "记忆索引中该文件的登记行也会一并移除。",
 
   "LLM API audit": "LLM API 审计",
   "Open LLM API audit": "打开 LLM API 审计",

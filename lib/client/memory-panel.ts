@@ -5,7 +5,14 @@ import {
   type PanelViewAdapter,
   type PanelViewStore,
 } from "./panel-view-store";
-import { fetchMemoryFile, fetchMemoryFiles, MemoryDisabledError, saveMemoryFile } from "./memory-io";
+import {
+  createMemoryFile,
+  deleteMemoryFile,
+  fetchMemoryFile,
+  fetchMemoryFiles,
+  MemoryDisabledError,
+  saveMemoryFile,
+} from "./memory-io";
 import { errorMessage } from "@/lib/shared/error-message";
 import type { MemoryFileEntry } from "@/lib/shared/memory-main-view";
 import type { MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
@@ -26,6 +33,9 @@ export interface MemoryViewState {
   baseline: string;
   saving: boolean;
   saveError: string | null;
+  createError: string | null;
+  deleting: boolean;
+  deleteError: string | null;
 }
 
 const INITIAL: MemoryViewState = {
@@ -41,6 +51,9 @@ const INITIAL: MemoryViewState = {
   baseline: "",
   saving: false,
   saveError: null,
+  createError: null,
+  deleting: false,
+  deleteError: null,
 };
 
 const ROOT_PAGE: MemoryPage = { kind: "browse" };
@@ -115,6 +128,37 @@ export async function saveMemoryChanges(): Promise<void> {
     });
   } catch (e) {
     memoryPanel.patch({ saving: false, saveError: errorMessage(e) });
+  }
+}
+
+export async function createMemoryCategory(name: string): Promise<void> {
+  memoryPanel.patch({ createError: null });
+  try {
+    await createMemoryFile(name);
+    const files = await fetchMemoryFiles().catch(() => null);
+    memoryPanel.patch({ files: files ?? memoryPanel.get().files });
+    await openMemoryFile(name);
+  } catch (e) {
+    memoryPanel.patch({ createError: errorMessage(e) });
+  }
+}
+
+export async function deleteMemoryCategory(file: string): Promise<void> {
+  const state = memoryPanel.get();
+  if (state.deleting) return;
+  memoryPanel.patch({ deleting: true, deleteError: null });
+  try {
+    await deleteMemoryFile(file);
+    const files = await fetchMemoryFiles().catch(() => null);
+    memoryPanel.patch({
+      deleting: false,
+      files: files ?? state.files,
+      selectedFile: state.selectedFile === file ? null : state.selectedFile,
+      content: "",
+      baseline: "",
+    });
+  } catch (e) {
+    memoryPanel.patch({ deleting: false, deleteError: errorMessage(e) });
   }
 }
 

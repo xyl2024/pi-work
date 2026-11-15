@@ -36,6 +36,13 @@ export function parseMemoryIndexDescriptions(indexContent: string): Record<strin
   return descriptions;
 }
 
+export function removeMemoryIndexEntry(indexContent: string, file: string): string {
+  const lines = indexContent.split("\n");
+  const pattern = new RegExp(`^- ${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} —(?: .*)?$`);
+  const kept = lines.filter((line) => !pattern.test(line.trim()));
+  return kept.join("\n");
+}
+
 export function orderMemoryFileNames(names: readonly string[]): string[] {
   return [...names].sort((a, b) => {
     if (a === MEMORY_INDEX_FILE) return -1;

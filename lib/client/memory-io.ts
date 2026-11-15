@@ -41,3 +41,16 @@ export async function saveMemoryFile(file: string, content: string): Promise<{ m
     body: JSON.stringify({ file, content }),
   });
 }
+
+export async function createMemoryFile(file: string): Promise<{ created: true }> {
+  return request<{ created: true }>("/api/memory/file", {
+    method: "POST",
+    body: JSON.stringify({ file }),
+  });
+}
+
+export async function deleteMemoryFile(file: string): Promise<{ deleted: true }> {
+  return request<{ deleted: true }>(`/api/memory/file?file=${encodeURIComponent(file)}`, {
+    method: "DELETE",
+  });
+}

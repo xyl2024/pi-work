@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ArrowLeftIcon } from "@/components/ui/icons";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { SaveButton, UnsavedHint } from "@/components/settings/staged-save";
 import { TextArea } from "@/components/settings/controls";
 import { requestMainViewLeave } from "@/lib/client/main-view-leave";
 import {
+  deleteMemoryCategory,
   isMemoryContentDirty,
   saveMemoryChanges,
   setMemoryContent,
@@ -15,12 +17,24 @@ import {
 
 export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const { view } = useMemoryPanel();
-  const { selectedFile, detailLoading, detailError, content, saving, saveError } = view;
+  const { selectedFile, detailLoading, detailError, content, saving, saveError, deleting, deleteError } = view;
   const dirty = isMemoryContentDirty(view);
   const [saved, setSaved] = useState(false);
 
   if (selectedFile === null) return null;
+
+  const isIndex = selectedFile === "INDEX.md";
+
+  const remove = async () => {
+    const ok = await confirm({
+      title: t('Delete "{file}"', { file: selectedFile }),
+      description: t("Its registration line in the memory index will also be removed."),
+      destructive: true,
+    });
+    if (ok) void deleteMemoryCategory(selectedFile);
+  };
 
   const save = () => {
     void saveMemoryChanges().then(() => {
@@ -66,6 +80,29 @@ export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
         </span>
         {dirty && <UnsavedHint show />}
         <SaveButton canSave={dirty} saving={saving} saved={saved && !dirty} onClick={save} />
+        {!isIndex && (
+          <button
+            type="button"
+            onClick={() => void remove()}
+            disabled={deleting}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: 24,
+              padding: "0 8px",
+              fontSize: 12,
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border)",
+              background: "var(--bg)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {t("Delete")}
+          </button>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "0 12px 12px" }}>
         {detailLoading ? (
@@ -80,9 +117,9 @@ export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
             style={{ flex: 1, minHeight: 0, width: "100%", resize: "none" }}
           />
         )}
-        {saveError && (
+        {(saveError || deleteError) && (
           <div style={{ marginTop: 6, fontSize: 12, color: "var(--error)", wordBreak: "break-word", flexShrink: 0 }}>
-            {saveError}
+            {saveError ?? deleteError}
           </div>
         )}
       </div>

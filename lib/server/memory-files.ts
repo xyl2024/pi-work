@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataPath } from "./data-dir";
 import { writeFileAtomic } from "./atomic-write";
+import { removeMemoryIndexEntry } from "@/lib/shared/memory-main-view";
 import { isAllowedMemoryFileName, MEMORY_INDEX_FILE, orderMemoryFileNames, parseMemoryIndexDescriptions } from "@/lib/shared/memory-main-view";
 
 export function memoryDir(): string {
@@ -54,4 +55,29 @@ export function writeMemoryFile(name: string, content: string): { mtime: string 
   if (filePath === null) return null;
   writeFileAtomic(filePath, content);
   return { mtime: statMtime(filePath) };
+}
+
+export function createMemoryFile(name: string): "invalid" | "exists" | "index" | "created" {
+  if (!isAllowedMemoryFileName(name)) return "invalid";
+  if (name === MEMORY_INDEX_FILE) return "index";
+  const filePath = memoryFilePath(name);
+  if (filePath === null || existsSync(filePath)) return "exists";
+  writeFileAtomic(filePath, "");
+  return "created";
+}
+
+export function deleteMemoryFile(name: string): "invalid" | "index" | "missing" | "deleted" {
+  if (!isAllowedMemoryFileName(name)) return "invalid";
+  if (name === MEMORY_INDEX_FILE) return "index";
+  const filePath = memoryFilePath(name);
+  if (filePath === null || !existsSync(filePath)) return "missing";
+  unlinkSync(filePath);
+  const indexPath = join(memoryDir(), MEMORY_INDEX_FILE);
+  try {
+    const indexContent = readFileSync(indexPath, "utf8");
+    const cleaned = removeMemoryIndexEntry(indexContent, name);
+    if (cleaned !== indexContent) writeFileSync(indexPath, cleaned, "utf8");
+  } catch {
+  }
+  return "deleted";
 }

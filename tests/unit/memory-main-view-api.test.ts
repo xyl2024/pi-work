@@ -2,7 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { GET as listFiles } from "@/app/api/memory/files/route";
-import { GET as readFile, PUT as writeFileRoute } from "@/app/api/memory/file/route";
+import {
+  DELETE as deleteFileRoute,
+  GET as readFile,
+  POST as createFileRoute,
+  PUT as writeFileRoute,
+} from "@/app/api/memory/file/route";
 import { readConfig, writeConfig } from "@/lib/server/config";
 import { createSandbox, resetPiWorkRuntimeState } from "./sandbox";
 
@@ -124,6 +129,119 @@ describe("memory main view api", () => {
       );
       expect(write.status).toBe(400);
     }
+    resetPiWorkRuntimeState();
+  });
+
+  it("creates an empty category file and rejects duplicates", async () => {
+    const { dataDir } = createSandbox("pi-work-memory-main-view-api-");
+    setMemoryEnabled(true);
+    await writeMemoryFile(dataDir, "INDEX.md", INDEX);
+
+    const create = await createFileRoute(
+      new Request("http://localhost/api/memory/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "new-category.md" }),
+      }),
+    );
+    expect(create.status).toBe(200);
+    const content = await readFile(
+      new Request("http://localhost/api/memory/file?file=new-category.md"),
+    );
+    expect((await json(content)).content).toBe("");
+
+    const duplicate = await createFileRoute(
+      new Request("http://localhost/api/memory/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "new-category.md" }),
+      }),
+    );
+    expect(duplicate.status).toBe(409);
+
+    const asIndex = await createFileRoute(
+      new Request("http://localhost/api/memory/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "INDEX.md" }),
+      }),
+    );
+    expect(asIndex.status).toBe(400);
+
+    const invalid = await createFileRoute(
+      new Request("http://localhost/api/memory/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "a/b.md" }),
+      }),
+    );
+    expect(invalid.status).toBe(400);
+    resetPiWorkRuntimeState();
+  });
+
+  it("deletes a category file and cleans its index registration line", async () => {
+    const { dataDir } = createSandbox("pi-work-memory-main-view-api-");
+    setMemoryEnabled(true);
+    await writeMemoryFile(dataDir, "INDEX.md", INDEX);
+    await writeMemoryFile(dataDir, "agent-notes.md", "笔记内容");
+    await writeMemoryFile(dataDir, "user-profile.md", "用户内容");
+
+    const remove = await deleteFileRoute(
+      new Request("http://localhost/api/memory/file?file=agent-notes.md", { method: "DELETE" }),
+    );
+    expect(remove.status).toBe(200);
+
+    const gone = await readFile(
+      new Request("http://localhost/api/memory/file?file=agent-notes.md"),
+    );
+    expect(gone.status).toBe(404);
+
+    const index = await readFile(new Request("http://localhost/api/memory/file?file=INDEX.md"));
+    expect((await json(index)).content).toBe(
+      INDEX.replace("- agent-notes.md — Agent 工作笔记\n", ""),
+    );
+    resetPiWorkRuntimeState();
+  });
+
+  it("rejects deleting INDEX.md and missing files", async () => {
+    const { dataDir } = createSandbox("pi-work-memory-main-view-api-");
+    setMemoryEnabled(true);
+    await writeMemoryFile(dataDir, "INDEX.md", INDEX);
+    await writeMemoryFile(dataDir, "agent-notes.md", "笔记内容");
+
+    const asIndex = await deleteFileRoute(
+      new Request("http://localhost/api/memory/file?file=INDEX.md", { method: "DELETE" }),
+    );
+    expect(asIndex.status).toBe(400);
+
+    const missing = await deleteFileRoute(
+      new Request("http://localhost/api/memory/file?file=missing-file.md", { method: "DELETE" }),
+    );
+    expect(missing.status).toBe(404);
+
+    const index = await readFile(new Request("http://localhost/api/memory/file?file=INDEX.md"));
+    expect((await json(index)).content).toBe(INDEX);
+    resetPiWorkRuntimeState();
+  });
+
+  it("rejects create and delete while memory is disabled", async () => {
+    const { dataDir } = createSandbox("pi-work-memory-main-view-api-");
+    await writeMemoryFile(dataDir, "agent-notes.md", "内容");
+    setMemoryEnabled(false);
+
+    const create = await createFileRoute(
+      new Request("http://localhost/api/memory/file", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: "new-category.md" }),
+      }),
+    );
+    expect(create.status).toBe(404);
+
+    const remove = await deleteFileRoute(
+      new Request("http://localhost/api/memory/file?file=agent-notes.md", { method: "DELETE" }),
+    );
+    expect(remove.status).toBe(404);
     resetPiWorkRuntimeState();
   });
 
