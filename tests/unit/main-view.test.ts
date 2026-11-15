@@ -137,16 +137,15 @@ describe("mainView registry", () => {
     expect(MAIN_VIEW_KINDS).toEqual(MAIN_VIEW_SPECS.map((spec) => spec.kind));
   });
 
-  it("orders the six registered main views by navigation priority", () => {
+  it("orders the five registered main views by navigation priority", () => {
     expect(MAIN_VIEW_SPECS.map((spec) => spec.kind)).toEqual([
       "scheduler",
       "modelsConfig",
       "skills",
       "channels",
-      "memory",
       "tokens",
     ]);
-    expect(MAIN_VIEW_SPECS.map((spec) => spec.navPriority)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(MAIN_VIEW_SPECS.map((spec) => spec.navPriority)).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("orders models config right after scheduled tasks in the navigation", () => {
@@ -170,11 +169,8 @@ describe("mainView registry", () => {
     );
   });
 
-  it("registers memory and token usage as later main views", () => {
-    expect(MAIN_VIEW_SPEC_BY_KIND.memory.navPriority).toBe(5);
-    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(6);
-    expect(MAIN_VIEW_KINDS.indexOf("memory")).toBeLessThan(MAIN_VIEW_KINDS.indexOf("tokens"));
-    expect(MAIN_VIEW_SPEC_BY_KIND.memory.labelKey).toBe("Memory management");
+  it("registers token usage as the last main view", () => {
+    expect(MAIN_VIEW_SPEC_BY_KIND.tokens.navPriority).toBe(5);
     expect(MAIN_VIEW_SPEC_BY_KIND.tokens.labelKey).toBe("Token audit");
   });
 

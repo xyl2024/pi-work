@@ -5,7 +5,6 @@ import {
   MEMORY_INDEX_FILE,
   renderMemoryInjection,
 } from "@/lib/shared/memory-two-tier";
-import type { SessionMemorySnapshot } from "@/lib/shared/memory";
 import { createLogger } from "./logger";
 import { isMemoryEnabledForCwd } from "./memory-cwd-store";
 import { dataPath } from "./data-dir";
@@ -15,7 +14,6 @@ const log = createLogger("memory-injection");
 export interface MemorySessionInjection {
   enabled: boolean;
   block: string | null;
-  snapshot: SessionMemorySnapshot | null;
 }
 
 export function memoryIndexPath(): string {
@@ -53,7 +51,7 @@ export function resolveMemoryInjectionForSession(
     enabled = isMemoryEnabledForCwd(cwd, globalEnabled);
   } catch (error) {
     log.warn("memory cwd overrides unreadable; memory stays off for this session", { cwd, error });
-    return { enabled: false, block: null, snapshot: null };
+    return { enabled: false, block: null };
   }
-  return { enabled, block: loadMemoryBlock(enabled), snapshot: null };
+  return { enabled, block: loadMemoryBlock(enabled) };
 }

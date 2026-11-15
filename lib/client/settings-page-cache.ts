@@ -1,7 +1,6 @@
 import type { SettingsSectionId } from "@/components/settings/registry";
 import type { AgentRetryConfig, CompactionConfig } from "@/lib/shared/agent-settings-types";
 import type { DangerousRuleSetSnapshot } from "@/lib/shared/dangerous-commands";
-import type { MemoryUsageReport } from "@/lib/shared/memory";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 
 export interface AppendSystemFile {
@@ -12,7 +11,6 @@ export interface AppendSystemFile {
 
 export const SETTINGS_PAGE_DATA_KEYS = [
   "append-system",
-  "memory",
   "dangerous-commands",
   "subagent",
   "retry",
@@ -23,7 +21,6 @@ export type SettingsPageDataKey = (typeof SETTINGS_PAGE_DATA_KEYS)[number];
 
 export interface SettingsPageDataMap {
   "append-system": AppendSystemFile;
-  memory: MemoryUsageReport;
   "dangerous-commands": DangerousRuleSetSnapshot;
   subagent: SubagentProfile[];
   retry: AgentRetryConfig;

@@ -25,11 +25,9 @@ import styles from "./SettingsModal.module.css";
 export function SettingsModal({
   onClose,
   onProfileSaved,
-  onOpenMemoryPanel,
 }: {
   onClose: () => void;
   onProfileSaved?: () => void;
-  onOpenMemoryPanel?: () => void;
 }) {
   const { t } = useI18n();
   const config = useSettings();
@@ -108,7 +106,6 @@ export function SettingsModal({
     apply,
     reportDirty,
     onProfileSaved,
-    onOpenMemoryPanel,
     pageCache,
   });
 

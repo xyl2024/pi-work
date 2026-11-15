@@ -28,7 +28,6 @@ import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { ContextInsightPanel } from "../panels/ContextInsightPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
-import { MemoryPanel } from "../panels/MemoryPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
@@ -164,7 +163,6 @@ const MAIN_VIEW_BODY_BY_KIND: Record<MainViewKind, (ctx: MainViewBodyCtx) => Rea
   modelsConfig: (ctx) => <ModelsConfigPanel onExit={ctx.onExit} visible={ctx.visible} />,
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onExit={ctx.onExit} visible={ctx.visible} />,
   channels: (ctx) => <ChannelsMainView onExit={ctx.onExit} visible={ctx.visible} />,
-  memory: (ctx) => <MemoryPanel sessionId={ctx.selectedSessionId} cwd={ctx.cwd} />,
   tokens: () => <TokensPanel />,
 };
 
@@ -818,11 +816,6 @@ export function AppShell() {
 
   const handleOpenSkillsPanel = useCallback(() => {
     void enterMainView("skills");
-  }, [enterMainView]);
-
-  const handleOpenMemoryPanel = useCallback(() => {
-    setSettingsConfigOpen(false);
-    void enterMainView("memory");
   }, [enterMainView]);
 
   useEffect(() => {
@@ -1697,7 +1690,6 @@ export function AppShell() {
       <SettingsModal
         onClose={() => setSettingsConfigOpen(false)}
         onProfileSaved={() => setProfileRefreshKey((k) => k + 1)}
-        onOpenMemoryPanel={handleOpenMemoryPanel}
       />
     )}
     <CwdPicker
