@@ -25,8 +25,6 @@ export const rightPanels = {
   "This cannot be undone.": "此操作无法撤销。",
   "This entry was written externally, not separated by the entry separator. Deleting it loses this handwritten text; it has been backed up to a .bak file.": "这条内容是外部写入、未按条目分隔。删除会丢失这段手写内容，已备份到 .bak 文件。",
   "Delete failed: {error}": "删除失败：{error}",
-  "This entry changed after the panel loaded. Refresh and try again.": "这条记忆在面板加载后已被改动，请刷新后重试。",
-  "This entry is no longer at that position. Refresh and try again.": "这条记忆已不在该位置，请刷新后重试。",
   "{n} files changed": "共 {n} 个文件变更",
 
   "Diff": "变更",
