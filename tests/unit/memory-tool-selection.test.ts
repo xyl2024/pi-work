@@ -9,6 +9,7 @@ import { readSessionToolSelection, writeSessionToolSelection } from "@/lib/serve
 import { restrictSubagentTools, subagentChildSessionStartOptions } from "@/lib/server/subagent-restore";
 import type { SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
 import { MEMORY_TOOL_NAME } from "@/lib/shared/memory-tool-types";
+import { MEMORY_GUIDANCE } from "@/lib/shared/memory-two-tier";
 import {
   buildToolChecklistRows,
   declarableToolNames,
@@ -34,9 +35,9 @@ function rowOf(name: string) {
 }
 
 function seedMemory(sandbox: Sandbox, entries: string[]): void {
-  const file = join(sandbox.dataDir, "memory", "MEMORY.md");
+  const file = join(sandbox.dataDir, "memory", "INDEX.md");
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, entries.join("\n§\n"), "utf8");
+  writeFileSync(file, `# 记忆索引\n\n${entries.join("\n")}`, "utf8");
 }
 
 describe("memory in the tool catalog", () => {
@@ -102,7 +103,9 @@ describe("memory in the session sidecar", () => {
     expect(writeSessionToolSelection("memory-selection-0001", ["read", "bash"])).toBe(true);
     expect(readSessionToolSelection("memory-selection-0001")).toEqual(["read", "bash"]);
 
-    expect(loadMemoryPromptBlock(true)).toContain("用户偏好中文");
+    const block = loadMemoryPromptBlock(true);
+    expect(block).toContain(MEMORY_GUIDANCE);
+    expect(block).toContain("用户偏好中文");
   });
 
   it("stores memory as an ordinary member of the selection", () => {
