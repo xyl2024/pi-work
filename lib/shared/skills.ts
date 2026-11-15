@@ -1,4 +1,4 @@
-export type SkillsPage = { kind: "browse" } | { kind: "form" };
+export type SkillsPage = { kind: "browse" };
 
 export interface Skill {
   name: string;
@@ -48,43 +48,6 @@ export interface SkillSubFileResponse {
   subFileContent: string;
   subFilePath: string;
 }
-
-export interface SkillSearchResult {
-  package: string;
-  installs: string;
-  url: string;
-  slug: string;
-  description: string;
-}
-
-export interface SkillSearchRequest {
-  query: string;
-  page?: number;
-  pageSize?: number;
-}
-
-export interface SkillSearchResponse {
-  results: SkillSearchResult[];
-  page: number;
-  pageSize: number;
-  hasMore: boolean;
-}
-
-export type SkillInstallScope = "global" | "project";
-
-export interface SkillInstallRequest {
-  package: string;
-  scope: SkillInstallScope;
-  cwd?: string;
-}
-
-export interface SkillInstallEvent {
-  type: "log" | "done" | "error";
-  line?: string;
-  message?: string;
-}
-
-export type SkillInstallPhase = "idle" | "running" | "done" | "error";
 
 export type SkillGroup = "pi-work" | "global" | "project" | "path";
 

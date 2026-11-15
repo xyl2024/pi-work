@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { MAIN_VIEW_KINDS, type MainViewKind } from "@/lib/shared/mainView";
 import { schedulerPanel } from "./scheduler-panel";
-import { skillsPanel } from "./skills-panel";
 import { channelsPanel } from "./channels-panel";
 import { selectModelsConfigChangeCount, useModelsConfigPanel } from "./models-config-panel";
 import { useSchedulerUnread } from "./scheduler-unread";
@@ -11,17 +10,6 @@ import {
   formatUnreadSegment,
   hasSchedulerUnread,
 } from "@/lib/shared/scheduler-unread";
-
-function SkillsInstallingBadge() {
-  const installing = skillsPanel.useStatus() === true;
-  if (!installing) return null;
-  return (
-    <span
-      aria-hidden="true"
-      style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }}
-    />
-  );
-}
 
 function ChannelsLoginBadge() {
   const loggingIn = channelsPanel.useStatus() === true;
@@ -107,7 +95,6 @@ function SchedulerBadge() {
 
 const MAIN_VIEW_BADGE_BY_KIND: Partial<Record<MainViewKind, () => ReactNode>> = {
   scheduler: SchedulerBadge,
-  skills: SkillsInstallingBadge,
   channels: ChannelsLoginBadge,
   modelsConfig: ModelsConfigDirtyBadge,
 };

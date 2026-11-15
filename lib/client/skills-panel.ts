@@ -5,32 +5,9 @@ import {
   type PanelViewAdapter,
   type PanelViewStore,
 } from "./panel-view-store";
-import { fetchSkills, installSkill, patchSkillInvocation } from "./skills-io";
+import { fetchSkills, patchSkillInvocation } from "./skills-io";
 import { errorMessage } from "@/lib/shared/error-message";
-import { isSkillInstallRunning } from "@/lib/shared/skills-close";
-import { registerMainViewLeaveGuard, requestMainViewLeave } from "./main-view-leave";
-import type {
-  Skill,
-  SkillInstallPhase,
-  SkillInstallRequest,
-  SkillsPage,
-} from "@/lib/shared/skills";
-
-export interface SkillsInstallState {
-  phase: SkillInstallPhase;
-  request: SkillInstallRequest | null;
-  logs: string[];
-  error: string | null;
-  installed: string[];
-}
-
-const IDLE_INSTALL: SkillsInstallState = {
-  phase: "idle",
-  request: null,
-  logs: [],
-  error: null,
-  installed: [],
-};
+import type { Skill, SkillsPage } from "@/lib/shared/skills";
 
 export interface SkillsViewState {
   cwd: string | null;
@@ -41,7 +18,6 @@ export interface SkillsViewState {
   toggleBusy: string[];
   query: string;
   selectedFilePath: string | null;
-  install: SkillsInstallState;
 }
 
 const INITIAL: SkillsViewState = {
@@ -53,69 +29,9 @@ const INITIAL: SkillsViewState = {
   toggleBusy: [],
   query: "",
   selectedFilePath: null,
-  install: IDLE_INSTALL,
 };
 
 const ROOT_PAGE: SkillsPage = { kind: "browse" };
-
-let installAbort: AbortController | null = null;
-let installGeneration = 0;
-
-export function startSkillInstall(
-  request: SkillInstallRequest,
-  onSuccess?: () => void,
-): void {
-  if (skillsPanel.get().install.phase === "running") return;
-  const generation = ++installGeneration;
-  const abort = new AbortController();
-  installAbort = abort;
-  const scope = skillsPanel.scope();
-  scope.patch({
-    install: {
-      phase: "running",
-      request,
-      logs: [],
-      error: null,
-      installed: scope.get().install.installed,
-    },
-  });
-
-  void installSkill(
-    request,
-    {
-      onLog: (line) => {
-        if (generation !== installGeneration) return;
-        scope.patch({ install: { ...scope.get().install, logs: [...scope.get().install.logs, line] } });
-      },
-    },
-    abort.signal,
-  )
-    .then(() => {
-      if (generation !== installGeneration) return;
-      installAbort = null;
-      const installed = scope.get().install.installed;
-      scope.patch({
-        install: {
-          ...scope.get().install,
-          phase: "done",
-          error: null,
-          installed: installed.includes(request.package)
-            ? installed
-            : [...installed, request.package],
-        },
-      });
-      if (skillsPanel.currentPage().kind !== "form") {
-        scope.resetPages();
-      }
-      reloadSkills();
-      onSuccess?.();
-    })
-    .catch((e: unknown) => {
-      if (generation !== installGeneration) return;
-      installAbort = null;
-      scope.patch({ install: { ...scope.get().install, phase: "error", error: errorMessage(e) } });
-    });
-}
 
 export function reloadSkills(): void {
   skillsPanel.reload();
@@ -157,27 +73,13 @@ export function setSkillsQuery(query: string): void {
   skillsPanel.patch({ query });
 }
 
-export async function openSkillsForm(): Promise<boolean> {
-  skillsPanel.openPage({ kind: "form" });
-  return true;
-}
-
-export async function closeSkillsForm(): Promise<boolean> {
-  if (!(await requestMainViewLeave({ view: "skills", intent: "back_to_browse" }))) return false;
-  discardSkillsForm();
-  return true;
-}
-
-function discardSkillsForm(): void {
-  if (skillsPanel.currentPage().kind === "form") skillsPanel.resetPages();
-}
-
 const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null, string | null> = {
   kind: "skills",
   initial: INITIAL,
   rootPage: ROOT_PAGE,
   loadPolicy: "once",
   key: (cwd) => cwd,
+  release() {},
   async load(cwd, { get, patch, signal, resetPages }) {
     if (cwd === null) {
       resetPages();
@@ -196,23 +98,10 @@ const skillsAdapter: PanelViewAdapter<SkillsViewState, SkillsPage, string | null
       patch({ loading: false, loaded: false, loadError: errorMessage(e) });
     }
   },
-  release() {
-    installGeneration += 1;
-    installAbort?.abort();
-    installAbort = null;
-  },
-  status(state) {
-    return state.install.phase === "running";
-  },
 };
 
 export const skillsPanel: PanelViewStore<SkillsViewState, SkillsPage, string | null> =
   createPanelViewStore(skillsAdapter);
-
-registerMainViewLeaveGuard("skills", {
-  dirty: () => isSkillInstallRunning(skillsPanel.get().install.phase),
-  discard: () => {},
-});
 
 export function useSkillsPanel() {
   return skillsPanel.useSnapshot();

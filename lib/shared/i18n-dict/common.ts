@@ -214,7 +214,6 @@ export const common = {
   "No skills found": "未找到技能",
   "Source files": "源文件",
   "No files": "无文件",
-  "Search more": "搜索更多",
   "No providers match": "没有匹配的提供商",
   "No models available": "没有可用模型",
   "No catalog data": "没有模型目录数据",
