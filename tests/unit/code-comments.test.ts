@@ -9,6 +9,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 const SCRIPT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs"]);
 const VENDORED_PREFIXES = ["public/", "volumes/"];
+const GUARD_SELF = "tests/unit/code-comments.test.ts";
 
 const TOOL_DIRECTIVE =
   /^(\/\/\s*(eslint-(disable|enable)\b|@ts-(ignore|expect-error|nocheck|check)\b|@vitest-environment\b)|\/\*\*?\s*@type\b)/;
@@ -111,7 +112,8 @@ function productSources(): string[] {
     (file) =>
       file.length > 0 &&
       (SCRIPT_EXTENSIONS.has(path.extname(file)) || file.endsWith(".css")) &&
-      !VENDORED_PREFIXES.some((prefix) => file.startsWith(prefix))
+      !VENDORED_PREFIXES.some((prefix) => file.startsWith(prefix)) &&
+      file !== GUARD_SELF
   );
 }
 
