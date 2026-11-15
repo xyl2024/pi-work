@@ -1,3 +1,4 @@
+import { MEMORY_INDEX_HEADING } from "./memory-two-tier";
 import { splitSystemPromptLeaves } from "./system-prompt-segments";
 import { formatContextTokensK } from "./context-usage";
 
@@ -193,6 +194,18 @@ function messageBuckets(messages: readonly ContextMessage[] | null | undefined, 
   return MESSAGE_COMPOSITION_LEAF_IDS.map((id) => ({ id, localTokens: totals.get(id) ?? 0 }));
 }
 
+function memoryPartEnds(systemPrompt: string, leaf: { start: number; end: number; text: string }): number[] {
+  const headingOffset = leaf.text.indexOf(MEMORY_INDEX_HEADING);
+  if (headingOffset < 0) return [leaf.end - 1];
+  const guidanceEnd = leaf.start + headingOffset;
+  const indexStart = leaf.start + headingOffset + MEMORY_INDEX_HEADING.length;
+  const closeOffset = leaf.text.lastIndexOf("</memory>");
+  const indexEnd = closeOffset > 0 ? leaf.start + closeOffset : leaf.end;
+  const indexBody = systemPrompt.slice(indexStart, indexEnd).replace(MEMORY_INDEX_HEADING, "");
+  if (!/[\S]/.test(indexBody)) return [leaf.end - 1];
+  return [guidanceEnd, indexEnd];
+}
+
 function systemPromptBuckets(
   systemPrompt: string | null | undefined,
   countTokens: (text: string) => number,
@@ -203,6 +216,17 @@ function systemPromptBuckets(
 
   let previousPrefix = 0;
   for (const leaf of splitSystemPromptLeaves(systemPrompt)) {
+    if (leaf.id === "memory") {
+      const ends = memoryPartEnds(systemPrompt, leaf);
+      const partIds = ends.length === 2 ? ["memory-guidance", "memory-index"] : ["memory-guidance"];
+      for (const [index, id] of partIds.entries()) {
+        const prefix = countLeaf(systemPrompt.slice(0, ends[index]), countTokens);
+        const localTokens = Math.max(0, prefix - previousPrefix);
+        previousPrefix = prefix;
+        prompt.push({ id, localTokens });
+      }
+      continue;
+    }
     const prefix = countLeaf(systemPrompt.slice(0, leaf.end), countTokens);
     const localTokens = Math.max(0, prefix - previousPrefix);
     previousPrefix = prefix;

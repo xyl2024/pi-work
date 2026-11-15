@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { MEMORY_ENTRY_SEPARATOR } from "./memory";
 
 export const MEMORY_DIR_NAME = "memory";
@@ -6,28 +5,29 @@ export const MEMORY_INDEX_FILE = "INDEX.md";
 export const MEMORY_INDEX_BUDGET = 2000;
 export const MEMORY_ARCHIVE_SUFFIX = ".bak";
 
+export const MEMORY_INDEX_HEADING = "Current memory index:";
+
 export function renderMemoryGuidance(memoryDir: string): string {
   return [
-    "## 记忆管理",
+    "Memory management guidelines:",
+    `- User memory is stored as two-level Markdown files in the memory data directory ${memoryDir}, divided into an index file and detail files.`,
+    `  - Index: ${memoryDir}/${MEMORY_INDEX_FILE}.`,
+    `  - Details: ${memoryDir}/<slug>.md, with details stored by category and read/written using read / write / edit / bash.`,
     "",
-    `记忆以两级 Markdown 文件存储在记忆数据目录 ${memoryDir} 下：`,
-    `- 索引：${join(memoryDir, MEMORY_INDEX_FILE)}，会话开始时冻结注入（见下方索引内容），运行中改动不会刷新本次注入。`,
-    `- 明细：${memoryDir}/<分类>.md，按分类存放细节，用 read / write / edit 实时读写。`,
-    "",
-    "约定：",
-    "1. 新事实写入对应明细文件；没有合适分类就新建文件，文件名用小写连字符，落在上面明细目录下。",
-    `2. 写完明细后同步更新索引：每个现存分类一行（绝对路径 + 一句话说明），并维护用户偏好摘要。`,
-    `3. 索引保持在 ${MEMORY_INDEX_BUDGET} 字符以内：只放分类目录与高价值摘要，细节一律进明细文件。`,
-    "4. 读记忆时先看索引定位分类，再按需读取对应明细，不要全量读取。",
-    "5. 记忆是全局的，与当前工作目录无关；不要把某个项目专属信息写进记忆。",
+    "Conventions:",
+    "1. Write new facts into the corresponding detail file; if there is no suitable category, create a new file with a lowercase hyphenated filename in the detail directory above.",
+    "2. After writing the details, update the index accordingly: one line per existing category (absolute path + one-sentence description), and maintain a summary of user preferences.",
+    `3. Keep the index within ${MEMORY_INDEX_BUDGET} characters: include only category directories and high-value summaries; all details must go into detail files.`,
+    "4. When reading memory, first look at the index to locate the category, then read the corresponding details as needed; do not read everything in full.",
+    "5. Memory is global and unrelated to the current working directory; do not write project-specific information into memory.",
   ].join("\n");
 }
 
 export function renderMemoryEmptyState(memoryDir: string): string {
   return [
-    "当前索引为空：还没有任何记忆。",
-    `按需惰性创建：先用户新学到事实时再创建 ${join(memoryDir, MEMORY_INDEX_FILE)} 与对应分类明细，`,
-    "不要预先批量创建文件，也不要在没有事实时写占位内容。",
+    "The current index is empty: there is no memory yet.",
+    `Create files lazily on demand: only create ${memoryDir}/${MEMORY_INDEX_FILE} and the corresponding detail files when a new fact is learned,`,
+    "never pre-create files in bulk and never write placeholder content when there is no fact.",
   ].join(" ");
 }
 
@@ -55,10 +55,11 @@ export function renderMemoryIndex(categories: readonly MemoryIndexCategory[]): s
 
 export function renderMemoryInjection(indexContent: string, memoryDir: string): string {
   const trimmed = indexContent.trim();
-  if (trimmed.length === 0) {
-    return `${renderMemoryGuidance(memoryDir)}\n\n${renderMemoryEmptyState(memoryDir)}`;
-  }
-  return `${renderMemoryGuidance(memoryDir)}\n\n## 当前记忆索引\n\n${trimmed}`;
+  const body =
+    trimmed.length === 0
+      ? `${renderMemoryGuidance(memoryDir)}\n\n${renderMemoryEmptyState(memoryDir)}`
+      : `${renderMemoryGuidance(memoryDir)}\n\n${MEMORY_INDEX_HEADING}\n${trimmed}`;
+  return `<memory>\n${body}\n</memory>`;
 }
 
 const MIGRATED_CATEGORIES = {

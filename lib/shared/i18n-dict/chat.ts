@@ -256,6 +256,9 @@ export const chat = {
   "Guidelines": "指南",
   "Pi documentation": "Pi 文档",
   "Append": "追加",
+  "Memory": "记忆",
+  "Memory guidance": "记忆指引",
+  "Memory index": "记忆索引",
 
   "Auto-name": "自动命名",
   "Auto-name session": "自动命名会话",

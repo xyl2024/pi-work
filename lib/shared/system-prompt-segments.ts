@@ -25,11 +25,14 @@ const SECTION_ANCHORS: Record<string, string> = {
   rules: "guidelines",
   docs: "pi-docs",
   addendum: "append",
+  memory: "memory",
   skills: "skills",
   cwd: "cwd",
 };
 
-const SECTION_RE = /<(tools|rules|docs|addendum|skills|cwd)>\n([\s\S]*?)\n<\/\1>/g;
+const SECTION_RE = /<(tools|rules|docs|addendum|memory|skills|cwd)>\n([\s\S]*?)\n<\/\1>/g;
+
+const NESTED_MEMORY_RE = /<memory>\n([\s\S]*?)\n<\/memory>/;
 
 const PROJECT_CONTEXT_WRAPPER_RE = /<project_context>\n|\n<\/project_context>/g;
 
@@ -94,18 +97,37 @@ export function splitBaseBlocks(text: string, offset = 0): BasePromptBlock[] {
     });
   };
 
+  const pushBlock = (anchor: string | null, start: number, end: number, text: string) => {
+    blocks.push({
+      anchor,
+      start: offset + start,
+      end: offset + end,
+      text,
+    });
+  };
+
   SECTION_RE.lastIndex = 0;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = SECTION_RE.exec(text)) !== null) {
     const start = match.index;
     pushFiller(cursor, start);
-    blocks.push({
-      anchor: SECTION_ANCHORS[match[1]] ?? null,
-      start: offset + start,
-      end: offset + start + match[0].length,
-      text: match[2],
-    });
+    const body = match[2];
+    const memory = match[1] === "addendum" ? NESTED_MEMORY_RE.exec(body) : null;
+    if (!memory) {
+      const anchor = SECTION_ANCHORS[match[1]] ?? null;
+      pushBlock(anchor, start, start + match[0].length, body);
+      cursor = start + match[0].length;
+      continue;
+    }
+    const bodyStart = start + "<addendum>\n".length;
+    const memoryBodyStart = bodyStart + memory.index;
+    const memoryBodyEnd = memoryBodyStart + memory[1].length;
+    const head = body.slice(0, memory.index);
+    const tail = body.slice(memory.index + memory[0].length);
+    if (head.trim()) pushBlock("append", bodyStart, memoryBodyStart, head);
+    pushBlock("memory", memoryBodyStart, memoryBodyEnd, memory[1]);
+    if (tail.trim()) pushBlock("append", memoryBodyEnd, bodyStart + body.length, tail);
     cursor = start + match[0].length;
   }
   pushFiller(cursor, text.length);
@@ -183,7 +205,7 @@ export function stripDefaultSystemPromptSections(prompt: string): string {
   out = rewriteSystemPromptSection(out, "tools", (body) => `Available tools:\n${body}`);
   out = rewriteSystemPromptSection(out, "rules", (body) => `Guidelines:\n${body}`);
   out = rewriteSystemPromptSection(out, "cwd", (body) => `Current working directory: ${body}`);
-  for (const name of ["addendum", "project_context", "skills"]) {
+  for (const name of ["addendum", "memory", "project_context", "skills"]) {
     out = rewriteSystemPromptSection(out, name, (body) => body);
   }
   return out.trim();

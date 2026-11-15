@@ -5,7 +5,7 @@ import { createSandbox, type Sandbox } from "./sandbox";
 import { composeAppendSystemPrompt, composeOverrideSystemPrompt } from "@/lib/server/web-tool-guidance";
 import { loadMemoryPromptBlock, resolveMemoryInjectionForSession } from "@/lib/server/memory-injection";
 import { readMemoryCwdOverrides, writeMemoryCwdEnabled } from "@/lib/server/memory-cwd-store";
-import { renderMemoryGuidance, renderMemoryEmptyState, MEMORY_INDEX_FILE } from "@/lib/shared/memory-two-tier";
+import { renderMemoryGuidance, renderMemoryEmptyState, MEMORY_INDEX_FILE, MEMORY_INDEX_HEADING } from "@/lib/shared/memory-two-tier";
 
 function seedIndex(sandbox: Sandbox, content: string): string {
   const file = join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE);
@@ -83,9 +83,9 @@ describe("memory injection: block contents", () => {
 
     expect(block).toContain(expectedGuidance(sandbox));
     expect(block).toContain(join(sandbox.dataDir, "memory", MEMORY_INDEX_FILE));
-    expect(block).toContain("## 当前记忆索引");
+    expect(block).toContain(MEMORY_INDEX_HEADING);
     expect(block).toContain("- user-profile.md — 用户资料");
-    expect(block.indexOf(expectedGuidance(sandbox))).toBeLessThan(block.indexOf("## 当前记忆索引"));
+    expect(block.indexOf(expectedGuidance(sandbox))).toBeLessThan(block.indexOf(MEMORY_INDEX_HEADING));
   });
 
   it("injects the empty-state guidance when the directory has no index file and creates nothing", () => {
@@ -95,7 +95,7 @@ describe("memory injection: block contents", () => {
 
     expect(block).toContain(expectedGuidance(sandbox));
     expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
-    expect(block).not.toContain("## 当前记忆索引");
+    expect(block).not.toContain(MEMORY_INDEX_HEADING);
     expect(existsSync(join(sandbox.dataDir, "memory"))).toBe(false);
   });
 
@@ -106,7 +106,7 @@ describe("memory injection: block contents", () => {
     const block = loadMemoryPromptBlock(true);
 
     expect(block).toContain(renderMemoryEmptyState(memoryDir(sandbox)));
-    expect(block).not.toContain("## 当前记忆索引");
+    expect(block).not.toContain(MEMORY_INDEX_HEADING);
   });
 
   it("injects nothing when the switch is off, even with an index on disk", () => {

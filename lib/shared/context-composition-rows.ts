@@ -12,8 +12,15 @@ export interface ContextCompositionRow {
   children: ContextCompositionRow[];
 }
 
+const MEMORY_PART_IDS = ["memory-guidance", "memory-index"] as const;
+
+function isMemoryPartId(leafId: string): boolean {
+  return (MEMORY_PART_IDS as readonly string[]).includes(leafId);
+}
+
 function systemPromptRowId(leafId: string): string {
-  if (leafId === "pi-docs" || leafId === "append" || leafId === "cwd") return leafId;
+  if (isMemoryPartId(leafId)) return "memory";
+  if (leafId === "pi-docs" || leafId === "append" || leafId === "memory" || leafId === "cwd") return leafId;
   if (leafId.startsWith("agents:")) return leafId;
   return "base";
 }
@@ -23,8 +30,9 @@ function systemPromptRowRank(rowId: string): number {
   if (rowId.startsWith("agents:")) return 1;
   if (rowId === "pi-docs") return 2;
   if (rowId === "append") return 3;
-  if (rowId === "cwd") return 4;
-  return 5;
+  if (rowId === "memory") return 4;
+  if (rowId === "cwd") return 5;
+  return 6;
 }
 
 function baseChildRowId(leafId: string): string {
@@ -61,6 +69,9 @@ function systemPromptRows(leaves: ContextCompositionLeafCount[]): ContextComposi
   const rows = foldIntoRows(leaves, systemPromptRowId);
   rows.sort((a, b) => systemPromptRowRank(a.id) - systemPromptRowRank(b.id));
   return rows.map((row) => {
+    if (row.id === "memory") {
+      return { ...row, children: row.leaves.map((leaf) => makeRow(leaf.id, [leaf])) };
+    }
     if (row.id !== "base") return row;
     const children = foldIntoRows(row.leaves, baseChildRowId);
     return children.length > 1 ? { ...row, children } : row;

@@ -3,6 +3,7 @@ import {
   MEMORY_INDEX_BUDGET,
   MEMORY_INDEX_FILE,
   MEMORY_ARCHIVE_SUFFIX,
+  MEMORY_INDEX_HEADING,
   planMemoryMigration,
   renderMemoryIndex,
   renderMemoryEmptyState,
@@ -17,14 +18,14 @@ describe("renderMemoryInjection", () => {
   it("returns guidance plus index when index has content", () => {
     const block = renderMemoryInjection("# 记忆索引\n\n- user-profile.md — 用户资料", MEMORY_DIR);
     expect(block).toContain(renderMemoryGuidance(MEMORY_DIR));
-    expect(block).toContain("## 当前记忆索引");
+    expect(block).toContain(MEMORY_INDEX_HEADING);
     expect(block).toContain("- user-profile.md — 用户资料");
   });
 
   it("guides with absolute paths derived from the injected memory dir", () => {
     const block = renderMemoryInjection("", MEMORY_DIR);
     expect(block).toContain(`${MEMORY_DIR}/INDEX.md`);
-    expect(block).toContain(`${MEMORY_DIR}/<分类>.md`);
+    expect(block).toContain(`${MEMORY_DIR}/<slug>.md`);
     expect(block).toContain(String(MEMORY_INDEX_BUDGET));
   });
 
@@ -33,7 +34,7 @@ describe("renderMemoryInjection", () => {
       const block = renderMemoryInjection(indexContent, MEMORY_DIR);
       expect(block).toContain(renderMemoryGuidance(MEMORY_DIR));
       expect(block).toContain(renderMemoryEmptyState(MEMORY_DIR));
-      expect(block).not.toContain("## 当前记忆索引");
+      expect(block).not.toContain(MEMORY_INDEX_HEADING);
     }
   });
 });
