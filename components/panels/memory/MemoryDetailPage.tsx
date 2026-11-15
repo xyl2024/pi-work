@@ -6,6 +6,7 @@ import { ArrowLeftIcon } from "@/components/ui/icons";
 import { SaveButton, UnsavedHint } from "@/components/settings/staged-save";
 import { TextArea } from "@/components/settings/controls";
 import { requestMainViewLeave } from "@/lib/client/main-view-leave";
+import { MemoryConflictDialog } from "./MemoryConflictDialog";
 import {
   isMemoryContentDirty,
   saveMemoryChanges,
@@ -16,7 +17,7 @@ import {
 export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
   const { t } = useI18n();
   const { view } = useMemoryPanel();
-  const { selectedFile, detailLoading, detailError, content, saving, saveError } = view;
+  const { selectedFile, detailLoading, detailError, content, saving, saveError, conflict } = view;
   const dirty = isMemoryContentDirty(view);
   const [saved, setSaved] = useState(false);
 
@@ -86,6 +87,7 @@ export function MemoryDetailPage({ onBack }: { onBack?: () => void }) {
           </div>
         )}
       </div>
+      {conflict && <MemoryConflictDialog conflict={conflict} myContent={content} />}
     </div>
   );
 }

@@ -5,7 +5,13 @@ import {
   type PanelViewAdapter,
   type PanelViewStore,
 } from "./panel-view-store";
-import { fetchMemoryFile, fetchMemoryFiles, MemoryDisabledError, saveMemoryFile } from "./memory-io";
+import {
+  fetchMemoryFile,
+  fetchMemoryFiles,
+  MemoryConflictError,
+  MemoryDisabledError,
+  saveMemoryFile,
+} from "./memory-io";
 import { errorMessage } from "@/lib/shared/error-message";
 import type { MemoryFileEntry } from "@/lib/shared/memory-main-view";
 import type { MainViewLeaveIntent } from "@/lib/shared/main-view-leave";
@@ -26,6 +32,8 @@ export interface MemoryViewState {
   baseline: string;
   saving: boolean;
   saveError: string | null;
+  openedMtime: string | null;
+  conflict: { diskContent: string; diskMtime: string } | null;
 }
 
 const INITIAL: MemoryViewState = {
@@ -41,6 +49,8 @@ const INITIAL: MemoryViewState = {
   baseline: "",
   saving: false,
   saveError: null,
+  openedMtime: null,
+  conflict: null,
 };
 
 const ROOT_PAGE: MemoryPage = { kind: "browse" };
@@ -76,6 +86,8 @@ async function openMemoryFile(file: string | null): Promise<boolean> {
     content: "",
     baseline: "",
     saveError: null,
+    openedMtime: null,
+    conflict: null,
   });
   try {
     const detail = await fetchMemoryFile(file);
@@ -84,6 +96,7 @@ async function openMemoryFile(file: string | null): Promise<boolean> {
       detailLoading: false,
       content: detail.content,
       baseline: detail.content,
+      openedMtime: detail.mtime,
     });
   } catch (e) {
     if (memoryPanel.get().selectedFile !== file) return true;
@@ -106,16 +119,60 @@ export async function saveMemoryChanges(): Promise<void> {
   if (file === null || state.saving || !isMemoryContentDirty(state)) return;
   memoryPanel.patch({ saving: true, saveError: null });
   try {
-    await saveMemoryFile(file, state.content);
+    await saveMemoryFile(file, state.content, { openedMtime: state.openedMtime });
     const files = await fetchMemoryFiles().catch(() => null);
     memoryPanel.patch({
       saving: false,
       baseline: state.content,
+      openedMtime: null,
+      conflict: null,
       files: files ?? state.files,
     });
   } catch (e) {
+    if (e instanceof MemoryConflictError) {
+      memoryPanel.patch({
+        saving: false,
+        saveError: null,
+        conflict: { diskContent: e.content, diskMtime: e.mtime },
+      });
+      return;
+    }
     memoryPanel.patch({ saving: false, saveError: errorMessage(e) });
   }
+}
+
+export function resolveMemoryConflict(mode: "overwrite" | "discard"): void {
+  const state = memoryPanel.get();
+  if (state.conflict === null || state.saving) return;
+  if (mode === "discard") {
+    memoryPanel.patch({
+      content: state.conflict.diskContent,
+      baseline: state.conflict.diskContent,
+      openedMtime: state.conflict.diskMtime,
+      conflict: null,
+      saveError: null,
+    });
+    void fetchMemoryFiles()
+      .then((files) => memoryPanel.patch({ files }))
+      .catch(() => {});
+    return;
+  }
+  memoryPanel.patch({ saving: true, saveError: null });
+  void (async () => {
+    try {
+      await saveMemoryFile(state.selectedFile ?? "", state.content, { force: true });
+      const files = await fetchMemoryFiles().catch(() => null);
+      memoryPanel.patch({
+        saving: false,
+        baseline: state.content,
+        openedMtime: null,
+        conflict: null,
+        files: files ?? state.files,
+      });
+    } catch (e) {
+      memoryPanel.patch({ saving: false, saveError: errorMessage(e) });
+    }
+  })();
 }
 
 function requestMemoryLeave(intent: MainViewLeaveIntent): Promise<boolean> {

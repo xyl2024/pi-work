@@ -48,7 +48,7 @@ export async function PUT(req: Request) {
     return response;
   }
   const body = (await req.json().catch(() => undefined)) as
-    | { file?: unknown; content?: unknown }
+    | { file?: unknown; content?: unknown; mtime?: unknown; force?: unknown }
     | undefined;
   if (typeof body?.file !== "string" || typeof body.content !== "string") {
     return NextResponse.json({ error: "file and content are required" }, { status: 400 });
@@ -57,9 +57,19 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Invalid memory file name" }, { status: 400 });
   }
   try {
-    const result = writeMemoryFile(body.file, body.content);
+    const result = writeMemoryFile(body.file, body.content, {
+      openedMtime: typeof body.mtime === "string" ? body.mtime : undefined,
+      force: body.force === true,
+    });
     if (result === null) {
       return NextResponse.json({ error: "Invalid memory file name" }, { status: 400 });
+    }
+    if (result.status === "conflict") {
+      log.info("memory file write conflicted", { file: body.file, durationMs: elapsedMs(startedAt) });
+      return NextResponse.json(
+        { error: "Memory file changed on disk", content: result.content, mtime: result.mtime },
+        { status: 409 },
+      );
     }
     log.info("memory file written", { file: body.file, durationMs: elapsedMs(startedAt) });
     return NextResponse.json(result);

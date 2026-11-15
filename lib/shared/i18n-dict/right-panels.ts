@@ -159,6 +159,11 @@ export const rightPanels = {
   "No memory files yet.": "还没有记忆文件。",
   "{n} files": "{n} 个文件",
   "Failed to load memory files": "加载记忆文件失败",
+  "File changed since it was opened": "文件在打开之后被修改过",
+  "My version": "我保存的版本",
+  "Current version on disk": "磁盘上的当前版本",
+  "Overwrite": "覆盖保存",
+  "Discard my changes": "放弃我的改动",
 
   "LLM API audit": "LLM API 审计",
   "Open LLM API audit": "打开 LLM API 审计",
